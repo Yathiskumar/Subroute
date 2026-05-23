@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, Github } from "lucide-react";
+import { Menu } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -51,16 +51,6 @@ export function MobileMenu({
               </Link>
             );
           })}
-          <div className="mt-6 border-t border-border-subtle pt-6">
-            <a
-              href="https://github.com"
-              target="_blank"
-              rel="noreferrer noopener"
-              className="inline-flex items-center gap-2 text-sm text-muted hover:text-foreground"
-            >
-              <Github className="h-4 w-4" /> View source on GitHub
-            </a>
-          </div>
         </div>
       </DialogContent>
     </Dialog>
