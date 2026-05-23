@@ -17,11 +17,11 @@ export default function NotFound() {
           404 · route not found
         </p>
         <h1 className="mt-3 text-balance text-3xl font-semibold tracking-tight md:text-4xl">
-          That subroute doesn't exist (yet).
+          That subroute doesn&apos;t exist (yet).
         </h1>
         <p className="mx-auto mt-3 max-w-md text-pretty text-muted">
-          Either the page hasn't been built or the URL drifted. Try the topic
-          library — that's where most of the action lives.
+          Either the page hasn&apos;t been built or the URL drifted. Try the topic
+          library — that&apos;s where most of the action lives.
         </p>
         <div className="mt-8 flex justify-center gap-2">
           <Button asChild>

@@ -46,7 +46,7 @@ export default function PlaygroundPage() {
             Want to suggest what lands here first?
           </h2>
           <p className="text-muted">
-            We're prioritizing playground features based on what people open
+            We&apos;re prioritizing playground features based on what people open
             most often. If you have a wishlist, drop it via the feedback
             widget on any concept page.
           </p>

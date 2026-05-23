@@ -135,7 +135,7 @@ export default function ConceptDetailPage({
                 <ProseRenderer blocks={content.howItWorks} />
               ) : (
                 <Callout variant="info" title="Content coming soon">
-                  This concept's full explanation is being written. The
+                  This concept&apos;s full explanation is being written. The
                   prototype below works today.
                 </Callout>
               )}
@@ -311,7 +311,7 @@ export default function ConceptDetailPage({
               ) : (
                 <div className="flex items-center gap-2 rounded-xl border border-dashed border-border-subtle p-5 text-sm text-subtle">
                   <CircleSlash className="h-4 w-4" />
-                  You're at the start of this track.
+                  You&apos;re at the start of this track.
                 </div>
               )}
               {next ? (
@@ -386,7 +386,7 @@ function PlaceholderProse() {
   return (
     <>
       <p className="mb-4 leading-7 text-foreground/85">
-        This concept's explanation is in progress. The prototype below works
+        This concept&apos;s explanation is in progress. The prototype below works
         today — try it while the words catch up.
       </p>
     </>

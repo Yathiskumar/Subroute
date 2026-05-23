@@ -16,7 +16,7 @@ export default function AboutPage() {
           <p className="kicker !text-accent">About Subroute</p>
         </div>
         <h1 className="mt-3 text-balance text-4xl font-semibold tracking-[-0.02em] md:text-5xl">
-          We're tired of static diagrams.
+          We&apos;re tired of static diagrams.
         </h1>
         <p className="mt-5 text-pretty text-lg text-muted">
           Subroute is an experiment in teaching technical concepts the way most

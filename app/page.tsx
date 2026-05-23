@@ -247,7 +247,7 @@ export default function HomePage() {
             </h2>
             <p className="text-pretty text-muted">
               The scaffold is here. Real prototypes and explanations are
-              landing topic-by-topic — start where you're curious.
+              landing topic-by-topic — start where you&apos;re curious.
             </p>
             <Button asChild size="lg" className="mt-2">
               <Link href="/topics">
