@@ -1,0 +1,597 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cache Write — Write-Around</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.14);
+        --success-border: rgba(92, 198, 111, 0.40);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.14);
+        --danger-border: rgba(240, 104, 104, 0.40);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.14);
+        --info-border: rgba(94, 159, 246, 0.40);
+        --warning: #f0b568;
+        --violet: #a89bff;
+        --violet-soft: rgba(168, 155, 255, 0.16);
+        --violet-border: rgba(168, 155, 255, 0.45);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0; padding: 0; min-height: 100%;
+        background: var(--bg); color: var(--fg);
+        font-family: var(--sans); font-size: 13px;
+      }
+      body {
+        padding: 14px 16px 16px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.025) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.025) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      .container { max-width: 980px; margin: 0 auto; }
+
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+      .stat .lbl { font-size: 11px; color: var(--muted); }
+      .stat .val { font-size: 18px; font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
+      .stat.violet { background: var(--violet-soft); border-color: var(--violet-border); }
+      .stat.violet .lbl { color: var(--violet); }
+      .stat.green { background: var(--success-soft); border-color: var(--success-border); }
+      .stat.green .lbl { color: var(--success); }
+
+      .stage {
+        position: relative;
+        display: grid;
+        grid-template-columns: 96px minmax(60px, 1fr) minmax(220px, 270px) minmax(60px, 1fr) minmax(160px, 180px);
+        align-items: stretch;
+        gap: 0;
+        padding: 18px 4px 56px; /* extra bottom padding for bypass arc */
+        margin-bottom: 14px;
+      }
+
+      .block {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 8px;
+        display: flex; flex-direction: column;
+        min-height: 0;
+        position: relative;
+        z-index: 1;
+      }
+      .block-head {
+        display: flex; justify-content: space-between; align-items: baseline;
+        padding: 0 2px 6px;
+        border-bottom: 1px solid var(--border);
+        margin-bottom: 6px;
+      }
+      .block-title { font-size: 11px; font-weight: 600; color: var(--fg); text-transform: uppercase; letter-spacing: 0.06em; }
+      .block-meta { font-size: 10px; color: var(--muted); font-family: var(--mono); }
+
+      .cpu { align-items: center; justify-content: center; background: var(--elevated); }
+      .cpu-icon {
+        width: 32px; height: 32px;
+        border-radius: 8px;
+        background: linear-gradient(135deg, rgba(94,159,246,0.20), rgba(94,159,246,0.05));
+        border: 1px solid var(--info-border);
+        display: grid; place-items: center;
+        color: var(--info); font-size: 18px;
+      }
+      .cpu-label { font-size: 11px; font-weight: 600; margin-top: 6px; }
+      .cpu-sub { font-size: 10px; color: var(--muted); font-family: var(--mono); }
+
+      .lines { display: flex; flex-direction: column; gap: 4px; }
+      .line {
+        display: grid;
+        grid-template-columns: 14px 1fr auto;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 7px;
+        height: 30px;
+        font-family: var(--mono);
+        font-size: 11px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        transition: background 250ms ease, border-color 250ms ease;
+      }
+      .line .ln-idx { color: var(--subtle); font-size: 10px; }
+      .line .ln-val { color: var(--fg); }
+      .line .ln-val .key { color: var(--muted); }
+      .line .ln-val .arrow { color: var(--subtle); margin: 0 3px; }
+      .line .ln-val .v { font-weight: 600; }
+      .line.empty .ln-val { color: var(--subtle); font-style: italic; }
+
+      .badge {
+        font-size: 9px; font-family: var(--mono);
+        padding: 1px 6px;
+        border-radius: 999px;
+        text-transform: uppercase; letter-spacing: 0.04em;
+        border: 1px solid;
+      }
+      .badge.empty { color: var(--subtle); border-color: var(--border); background: transparent; }
+      .badge.read { color: var(--info); border-color: var(--info-border); background: var(--info-soft); }
+
+      .cells { display: flex; flex-direction: column; gap: 3px; }
+      .cell {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 4px 8px;
+        height: 24px;
+        font-family: var(--mono); font-size: 11px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        transition: background 250ms ease;
+      }
+      .cell .addr { color: var(--muted); font-size: 10px; }
+      .cell .v { color: var(--fg); font-weight: 600; }
+
+      /* Top wire (reads only) — dimmed because writes bypass it */
+      .wire {
+        position: relative;
+        align-self: center;
+        height: 2px;
+        background: repeating-linear-gradient(to right, var(--border) 0 5px, transparent 5px 9px);
+        border-radius: 1px;
+      }
+      .wire .wire-label {
+        position: absolute;
+        top: -20px; left: 50%;
+        transform: translateX(-50%);
+        white-space: nowrap;
+        font-size: 10px;
+        color: var(--muted);
+        font-family: var(--mono);
+      }
+      .wire .arrowhead {
+        position: absolute;
+        right: -1px; top: 50%;
+        transform: translateY(-50%);
+        width: 0; height: 0;
+        border-left: 6px solid var(--border-strong);
+        border-top: 4px solid transparent;
+        border-bottom: 4px solid transparent;
+      }
+      .dot {
+        position: absolute;
+        top: 50%; left: 0;
+        width: 10px; height: 10px;
+        border-radius: 50%;
+        transform: translate(-50%, -50%);
+        opacity: 0;
+        pointer-events: none;
+        box-shadow: 0 0 12px currentColor, 0 0 4px currentColor;
+      }
+      .dot.blue { background: var(--info); color: var(--info); }
+      .dot.orange { background: var(--accent); color: var(--accent); }
+      .dot.fire { animation: dotFire 600ms ease-in-out forwards; }
+      @keyframes dotFire {
+        0% { opacity: 0; left: 0%; }
+        10% { opacity: 1; }
+        90% { opacity: 1; }
+        100% { opacity: 0; left: 100%; }
+      }
+
+      /* Bypass arc — SVG overlay covering full stage, drawn below blocks */
+      .bypass {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        z-index: 0;
+      }
+      .bypass-path {
+        fill: none;
+        stroke: var(--violet-border);
+        stroke-width: 2;
+        stroke-dasharray: 6 4;
+      }
+      .bypass-label {
+        font-size: 10px;
+        fill: var(--violet);
+        font-family: var(--mono);
+      }
+      .bypass-dot {
+        fill: var(--violet);
+        opacity: 0;
+        filter: drop-shadow(0 0 4px var(--violet)) drop-shadow(0 0 12px var(--violet));
+      }
+      .pulse-cache { animation: pulseCache 700ms ease-out; }
+      .pulse-invalid { animation: pulseInvalid 700ms ease-out; }
+      .pulse-mem { animation: pulseMem 700ms ease-out; }
+      @keyframes pulseCache {
+        0% { background: var(--info-soft); border-color: var(--info-border); }
+        100% { background: var(--bg); border-color: var(--border); }
+      }
+      @keyframes pulseInvalid {
+        0% { background: var(--danger-soft); border-color: var(--danger-border); }
+        100% { background: var(--bg); border-color: var(--border); }
+      }
+      @keyframes pulseMem {
+        0% { background: var(--violet-soft); border-color: var(--violet-border); }
+        100% { background: var(--bg); border-color: var(--border); }
+      }
+
+      .controls {
+        display: grid;
+        grid-template-columns: 1fr 1fr auto auto auto auto;
+        gap: 8px; align-items: end;
+        margin-bottom: 12px;
+      }
+      .controls .field-lbl { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+      input, select {
+        background: var(--elevated); color: var(--fg);
+        font: 12px/1 var(--mono);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 8px 10px;
+        width: 100%;
+        outline: none;
+      }
+      input:focus, select:focus { border-color: var(--accent); }
+      button {
+        background: var(--elevated); color: var(--fg);
+        font: 500 12px/1 var(--sans);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        cursor: pointer;
+        padding: 9px 12px;
+        transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease;
+        white-space: nowrap;
+      }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.45; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.10); background: var(--accent); border-color: transparent; }
+      button.ghost { background: transparent; }
+
+      .log {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 8px 12px;
+        min-height: 100px;
+        max-height: 130px;
+        overflow-y: auto;
+        font-family: var(--mono);
+        font-size: 11.5px;
+        color: var(--muted);
+        line-height: 1.7;
+      }
+      .log .row { padding: 1px 0; }
+      .log .ok { color: var(--success); }
+      .log .miss { color: var(--accent); }
+      .log .bypass { color: var(--violet); }
+      .log .inv { color: var(--danger); }
+
+      .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    </style>
+  </head>
+  <body>
+    <h2 class="sr-only">Write-around cache simulator. Writes bypass the cache entirely; only reads populate it.</h2>
+    <div class="container">
+
+      <div class="stats">
+        <div class="stat violet"><div class="lbl">Writes bypassed</div><div class="val" id="s-bypass">0</div></div>
+        <div class="stat green"><div class="lbl">Cache protected</div><div class="val" id="s-protect">0</div></div>
+        <div class="stat"><div class="lbl">Read hits</div><div class="val" id="s-hits">0</div></div>
+        <div class="stat"><div class="lbl">Read misses</div><div class="val" id="s-miss">0</div></div>
+      </div>
+
+      <div class="stage" id="stage">
+        <!-- bypass arc lives at z=0 behind blocks -->
+        <svg class="bypass" id="bypass-svg" preserveAspectRatio="none">
+          <path id="bypass-path" class="bypass-path"/>
+          <text id="bypass-label" class="bypass-label">write bypasses cache</text>
+          <circle id="bypass-dot" class="bypass-dot" r="5"/>
+        </svg>
+
+        <div class="block cpu">
+          <div class="cpu-icon"><i class="ti ti-cpu" aria-hidden="true"></i></div>
+          <div class="cpu-label">CPU</div>
+          <div class="cpu-sub">core</div>
+        </div>
+
+        <div class="wire" id="wire1">
+          <span class="wire-label">reads only</span>
+          <span class="arrowhead"></span>
+          <span class="dot blue" id="dot1"></span>
+        </div>
+
+        <div class="block">
+          <div class="block-head">
+            <span class="block-title">Cache</span>
+            <span class="block-meta">read-only · stays clean</span>
+          </div>
+          <div class="lines" id="cache-lines"></div>
+        </div>
+
+        <div class="wire" id="wire2">
+          <span class="wire-label">load on read miss</span>
+          <span class="arrowhead"></span>
+          <span class="dot orange" id="dot2"></span>
+        </div>
+
+        <div class="block">
+          <div class="block-head">
+            <span class="block-title">Memory</span>
+            <span class="block-meta">authoritative</span>
+          </div>
+          <div class="cells" id="mem-cells"></div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div>
+          <div class="field-lbl">Address</div>
+          <select id="addr"></select>
+        </div>
+        <div>
+          <div class="field-lbl">Value</div>
+          <input id="val" value="42" maxlength="6"/>
+        </div>
+        <button id="b-write" class="primary"><i class="ti ti-pencil" style="vertical-align:-2px; margin-right:3px"></i>Write</button>
+        <button id="b-read"><i class="ti ti-eye" style="vertical-align:-2px; margin-right:3px"></i>Read</button>
+        <button id="b-demo" class="ghost"><i class="ti ti-player-play" style="vertical-align:-2px; margin-right:3px"></i>Demo</button>
+        <button id="b-reset" class="ghost"><i class="ti ti-refresh" style="vertical-align:-2px; margin-right:3px"></i>Reset</button>
+      </div>
+
+      <div class="log" id="log"><div class="row">ready · writes curve around the cache to memory; reads populate the cache</div></div>
+
+    </div>
+
+    <script>
+      (function(){
+        const ADDRS = [0x00, 0x04, 0x08, 0x0C, 0x10, 0x14, 0x18, 0x1C];
+        const initialMem = {0x00:'A1', 0x04:'B2', 0x08:'C3', 0x0C:'D4', 0x10:'E5', 0x14:'F6', 0x18:'G7', 0x1C:'H8'};
+        const hex = a => '0x' + a.toString(16).toUpperCase().padStart(2,'0');
+        const idx = a => (a >> 2) % 4;
+
+        const st = {
+          memory: {...initialMem},
+          cache: Array.from({length:4}, ()=>({tag:null, value:null, valid:false})),
+          stats: {bypass:0, protect:0, hits:0, miss:0},
+          busy: false,
+        };
+
+        const addrSel = document.getElementById('addr');
+        ADDRS.forEach(a => {
+          const o = document.createElement('option');
+          o.value = a; o.textContent = hex(a);
+          addrSel.appendChild(o);
+        });
+
+        function renderCache() {
+          const host = document.getElementById('cache-lines');
+          host.innerHTML = '';
+          st.cache.forEach((ln, i) => {
+            const row = document.createElement('div');
+            row.id = 'cl-' + i;
+            row.className = 'line' + (ln.valid ? '' : ' empty');
+            if (!ln.valid) {
+              row.innerHTML = `
+                <span class="ln-idx">${i}</span>
+                <span class="ln-val">empty</span>
+                <span class="badge empty">—</span>`;
+            } else {
+              row.innerHTML = `
+                <span class="ln-idx">${i}</span>
+                <span class="ln-val"><span class="key">${hex(ln.tag)}</span><span class="arrow">→</span><span class="v">${ln.value}</span></span>
+                <span class="badge read">from read</span>`;
+            }
+            host.appendChild(row);
+          });
+        }
+        function renderMem() {
+          const host = document.getElementById('mem-cells');
+          host.innerHTML = '';
+          ADDRS.forEach(a => {
+            const c = document.createElement('div');
+            c.id = 'mc-' + a;
+            c.className = 'cell';
+            c.innerHTML = `<span class="addr">${hex(a)}</span><span class="v">${st.memory[a]}</span>`;
+            host.appendChild(c);
+          });
+        }
+        function renderStats() {
+          document.getElementById('s-bypass').textContent = st.stats.bypass;
+          document.getElementById('s-protect').textContent = st.stats.protect;
+          document.getElementById('s-hits').textContent = st.stats.hits;
+          document.getElementById('s-miss').textContent = st.stats.miss;
+        }
+        function pulseCache(i, kind = 'cache') {
+          const el = document.getElementById('cl-' + i);
+          if (!el) return;
+          const cls = kind === 'invalid' ? 'pulse-invalid' : 'pulse-cache';
+          el.classList.remove(cls);
+          void el.offsetWidth;
+          el.classList.add(cls);
+        }
+        function pulseMem(a) {
+          const el = document.getElementById('mc-' + a);
+          if (!el) return;
+          el.classList.remove('pulse-mem');
+          void el.offsetWidth;
+          el.classList.add('pulse-mem');
+        }
+        function fireDot(id) {
+          return new Promise(resolve => {
+            const d = document.getElementById(id);
+            d.classList.remove('fire');
+            void d.offsetWidth;
+            d.classList.add('fire');
+            setTimeout(resolve, 600);
+          });
+        }
+        function log(html) {
+          const l = document.getElementById('log');
+          if (l.children[0]?.textContent?.startsWith('ready')) l.innerHTML = '';
+          const div = document.createElement('div');
+          div.className = 'row';
+          div.innerHTML = html;
+          l.insertBefore(div, l.firstChild);
+          while (l.children.length > 8) l.removeChild(l.lastChild);
+        }
+
+        // === Bypass arc path: drawn between CPU's right edge and Memory's left edge,
+        //     curving DOWN under the Cache block. Recomputed on resize.
+        function layoutBypass() {
+          const stage = document.getElementById('stage');
+          const svg = document.getElementById('bypass-svg');
+          const path = document.getElementById('bypass-path');
+          const label = document.getElementById('bypass-label');
+          const rect = stage.getBoundingClientRect();
+          svg.setAttribute('viewBox', `0 0 ${rect.width} ${rect.height}`);
+
+          const cpu = stage.children[1].getBoundingClientRect();
+          const mem = stage.children[5].getBoundingClientRect();
+
+          const startX = cpu.right - rect.left;
+          const startY = cpu.top + cpu.height / 2 - rect.top;
+          const endX = mem.left - rect.left;
+          const endY = mem.top + mem.height / 2 - rect.top;
+          const dipY = rect.height - 8;  // curve drops to just inside the stage's bottom
+
+          const d = `M ${startX} ${startY}
+                     C ${startX + 60} ${dipY}, ${endX - 60} ${dipY}, ${endX} ${endY}`;
+          path.setAttribute('d', d);
+          label.setAttribute('x', (startX + endX) / 2);
+          label.setAttribute('y', dipY - 4);
+          label.setAttribute('text-anchor', 'middle');
+
+        }
+
+        function fireBypassDot() {
+          return new Promise(resolve => {
+            const d = document.getElementById('bypass-dot');
+            // animate along the path manually to avoid offset-path browser support issues
+            const path = document.getElementById('bypass-path');
+            const len = path.getTotalLength();
+            const dur = 750;
+            const start = performance.now();
+            d.setAttribute('opacity', '1');
+            function step(t) {
+              const p = Math.min(1, (t - start) / dur);
+              const pt = path.getPointAtLength(len * p);
+              d.setAttribute('cx', pt.x);
+              d.setAttribute('cy', pt.y);
+              if (p < 1) requestAnimationFrame(step);
+              else { d.setAttribute('opacity', '0'); resolve(); }
+            }
+            requestAnimationFrame(step);
+          });
+        }
+
+        async function doWrite(a, v) {
+          if (st.busy) return;
+          st.busy = true;
+          const i = idx(a);
+          const line = st.cache[i];
+          st.stats.bypass++;
+          const wasInCache = line.valid && line.tag === a;
+          let invMsg = '';
+          if (wasInCache) {
+            line.valid = false; line.tag = null; line.value = null;
+            invMsg = ` · <span class="inv">invalidated line ${i}</span>`;
+            pulseCache(i, 'invalid');
+          } else {
+            st.stats.protect++;
+          }
+          await fireBypassDot();
+          st.memory[a] = v;
+          renderCache(); renderMem(); renderStats();
+          pulseMem(a);
+          log(`<span class="bypass">BYPASS</span> ${hex(a)}=${v} → memory only, cache untouched${invMsg}`);
+          st.busy = false;
+        }
+
+        async function doRead(a) {
+          if (st.busy) return;
+          st.busy = true;
+          const i = idx(a);
+          const line = st.cache[i];
+          if (line.valid && line.tag === a) {
+            st.stats.hits++;
+            await fireDot('dot1');
+            pulseCache(i);
+            renderStats();
+            log(`<span class="ok">READ HIT</span>  ${hex(a)} → ${line.value} from cache`);
+          } else {
+            st.stats.miss++;
+            await fireDot('dot2');
+            line.tag = a; line.value = st.memory[a]; line.valid = true;
+            renderCache(); renderStats();
+            pulseCache(i);
+            log(`<span class="miss">READ MISS</span> ${hex(a)} → loaded ${st.memory[a]} into cache`);
+          }
+          st.busy = false;
+        }
+
+        function reset() {
+          st.memory = {...initialMem};
+          st.cache = Array.from({length:4}, ()=>({tag:null, value:null, valid:false}));
+          st.stats = {bypass:0, protect:0, hits:0, miss:0};
+          st.busy = false;
+          document.getElementById('log').innerHTML = '<div class="row">ready · writes curve around the cache to memory; reads populate the cache</div>';
+          renderCache(); renderMem(); renderStats();
+        }
+
+        async function runDemo() {
+          if (st.busy) return;
+          reset();
+          // The story: read a key (populates cache), write it (invalidates cache),
+          // write a different key (cache stays cold), read it back from memory.
+          const seq = [
+            ['r', 0x00, null],    // load 0x00 into cache
+            ['r', 0x04, null],    // load 0x04 into cache
+            ['w', 0x00, '99'],    // invalidate cached 0x00
+            ['w', 0x18, '77'],    // cold write — cache protected
+            ['w', 0x1C, '55'],    // another cold write
+            ['r', 0x00, null],    // now a miss because 0x00 was invalidated
+          ];
+          for (const [op, a, v] of seq) {
+            if (op === 'w') await doWrite(a, v);
+            else await doRead(a);
+            await new Promise(r => setTimeout(r, 450));
+          }
+        }
+
+        document.getElementById('b-write').addEventListener('click', () => {
+          const a = parseInt(addrSel.value);
+          const v = document.getElementById('val').value || '?';
+          doWrite(a, v);
+        });
+        document.getElementById('b-read').addEventListener('click', () => {
+          const a = parseInt(addrSel.value);
+          doRead(a);
+        });
+        document.getElementById('b-demo').addEventListener('click', runDemo);
+        document.getElementById('b-reset').addEventListener('click', reset);
+
+        renderCache(); renderMem(); renderStats();
+        // Lay out the bypass arc once rendered, and again on resize
+        requestAnimationFrame(layoutBypass);
+        const ro = new ResizeObserver(layoutBypass);
+        ro.observe(document.getElementById('stage'));
+      })();
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

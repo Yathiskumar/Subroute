@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Token Bucket — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-strong: #d56a1f;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.32);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+
+        /* aliases so original fragment vars keep working */
+        --color-background-primary: var(--bg);
+        --color-background-secondary: var(--surface);
+        --color-background-success: var(--success-soft);
+        --color-background-danger: var(--danger-soft);
+        --color-background-info: var(--info-soft);
+        --color-text-primary: var(--fg);
+        --color-text-secondary: var(--muted);
+        --color-text-success: var(--success);
+        --color-text-danger: var(--danger);
+        --color-text-info: var(--info);
+        --color-border-tertiary: var(--border);
+        --border-radius-md: var(--radius-md);
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 20px 20px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.025) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.025) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      .ts { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; fill: var(--muted); }
+      .th { font-family: var(--sans); font-size: 14px; font-weight: 500; fill: var(--fg); }
+      .c-blue rect { fill: var(--accent-soft); stroke: var(--accent-border); }
+      .c-gray rect { fill: var(--surface); stroke: var(--border); }
+      button {
+        background: var(--accent);
+        color: #1a1003;
+        font: 500 13px/1 var(--sans);
+        border: 1px solid transparent;
+        border-radius: var(--radius-md);
+        padding: 9px 14px;
+        cursor: pointer;
+        transition: filter 150ms ease, transform 100ms ease, background 150ms ease;
+      }
+      button:hover { filter: brightness(1.06); }
+      button:active { transform: scale(0.97); }
+      .tb-controls button:nth-of-type(n+2) {
+        background: var(--elevated);
+        color: var(--fg);
+        border-color: var(--border);
+      }
+      .tb-controls button:nth-of-type(n+2):hover { border-color: var(--border-strong); filter: none; background: var(--surface); }
+    </style>
+    <style>
+      .tb-wrap { padding: 0.25rem 0; }
+      .tb-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0; }
+      .tb-stat { background: var(--color-background-secondary); padding: 10px 12px; border-radius: var(--border-radius-md); border: 1px solid var(--border); }
+      .tb-stat-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-secondary); margin-bottom: 4px; }
+      .tb-stat-value { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+      .tb-controls { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+      .tb-outcome { padding: 10px 14px; border-radius: var(--border-radius-md); font-size: 13px; min-height: 22px; transition: background 0.15s, color 0.15s; border: 1px solid transparent; }
+      .tb-outcome.idle { background: var(--color-background-secondary); color: var(--color-text-secondary); border-color: var(--border); }
+      .tb-outcome.allow { background: var(--color-background-success); color: var(--color-text-success); border-color: rgba(92, 198, 111, 0.3); }
+      .tb-outcome.deny { background: var(--color-background-danger); color: var(--color-text-danger); border-color: rgba(240, 104, 104, 0.3); }
+    </style>
+  </head>
+  <body>
+    <div class="tb-wrap">
+      <svg width="100%" viewBox="0 0 680 240" role="img" aria-label="Token bucket">
+        <desc>Tokens fall from a faucet into a bucket. Each request consumes one token.</desc>
+        <defs>
+          <marker id="arrow-tb" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </marker>
+        </defs>
+        <text class="ts" x="160" y="28" text-anchor="middle">REFILL · 1 TOKEN / SEC</text>
+        <rect x="140" y="38" width="40" height="14" rx="3" fill="var(--border-strong)" opacity="0.7"/>
+        <rect x="155" y="52" width="10" height="14" fill="var(--border-strong)" opacity="0.7"/>
+        <circle id="tb-drop" cx="160" cy="76" r="5" fill="#fb863a" opacity="0"/>
+        <path d="M 250 88 L 260 215 L 350 215 L 360 88" fill="none" stroke="var(--color-text-primary)" stroke-width="2" stroke-linejoin="round"/>
+        <line x1="250" y1="88" x2="360" y2="88" stroke="var(--color-text-primary)" stroke-width="1" stroke-dasharray="3 3" opacity="0.35"/>
+        <g id="tb-tokens"></g>
+        <text class="ts" x="305" y="232" text-anchor="middle">CAPACITY = 10</text>
+        <text class="ts" x="455" y="146" text-anchor="middle">REQUEST</text>
+        <line x1="400" y1="155" x2="510" y2="155" stroke="var(--color-text-secondary)" stroke-width="1.5" marker-end="url(#arrow-tb)"/>
+        <rect x="530" y="125" width="120" height="60" rx="8" fill="var(--color-background-secondary)" stroke="var(--color-border-tertiary)" stroke-width="1"/>
+        <text id="tb-out-text" class="th" x="590" y="160" text-anchor="middle">Ready</text>
+      </svg>
+      <div class="tb-stats">
+        <div class="tb-stat"><div class="tb-stat-label">Tokens</div><div class="tb-stat-value" id="tb-count">10</div></div>
+        <div class="tb-stat"><div class="tb-stat-label">Refill rate</div><div class="tb-stat-value">1/s</div></div>
+        <div class="tb-stat"><div class="tb-stat-label">Allowed</div><div class="tb-stat-value" id="tb-allowed">0</div></div>
+        <div class="tb-stat"><div class="tb-stat-label">Denied</div><div class="tb-stat-value" id="tb-denied">0</div></div>
+      </div>
+      <div class="tb-controls">
+        <button onclick="tbSend()">Send request</button>
+        <button onclick="tbBurst()">Burst of 10</button>
+        <button onclick="tbReset()">Reset</button>
+      </div>
+      <div class="tb-outcome idle" id="tb-outcome">Click "send request" to consume a token</div>
+    </div>
+    <script>
+      let tbTokens = 10;
+      const tbMax = 10;
+      let tbAllowed = 0, tbDenied = 0;
+      function tbRender() {
+        const g = document.getElementById('tb-tokens');
+        g.innerHTML = '';
+        for (let i = 0; i < tbTokens; i++) {
+          const col = i % 5, row = Math.floor(i / 5);
+          const cx = 270 + col * 18, cy = 200 - row * 22;
+          const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          c.setAttribute('cx', cx); c.setAttribute('cy', cy); c.setAttribute('r', '7');
+          c.setAttribute('fill', '#fb863a');
+          g.appendChild(c);
+        }
+        document.getElementById('tb-count').textContent = tbTokens;
+      }
+      function tbSend() {
+        const o = document.getElementById('tb-outcome');
+        const t = document.getElementById('tb-out-text');
+        if (tbTokens > 0) {
+          tbTokens--; tbAllowed++;
+          o.className = 'tb-outcome allow';
+          o.textContent = '✓ Request allowed — one token consumed';
+          t.textContent = 'Allowed';
+        } else {
+          tbDenied++;
+          o.className = 'tb-outcome deny';
+          o.textContent = '✗ Request denied — bucket is empty';
+          t.textContent = 'Denied';
+        }
+        document.getElementById('tb-allowed').textContent = tbAllowed;
+        document.getElementById('tb-denied').textContent = tbDenied;
+        tbRender();
+      }
+      function tbBurst() { for (let i = 0; i < 10; i++) setTimeout(tbSend, i * 80); }
+      function tbReset() {
+        tbTokens = tbMax; tbAllowed = 0; tbDenied = 0;
+        document.getElementById('tb-allowed').textContent = 0;
+        document.getElementById('tb-denied').textContent = 0;
+        const o = document.getElementById('tb-outcome');
+        o.className = 'tb-outcome idle';
+        o.textContent = 'Click "send request" to consume a token';
+        document.getElementById('tb-out-text').textContent = 'Ready';
+        tbRender();
+      }
+      setInterval(() => {
+        if (tbTokens < tbMax) {
+          tbTokens++; tbRender();
+          const d = document.getElementById('tb-drop');
+          d.setAttribute('opacity', '1');
+          let cy = 76;
+          const id = setInterval(() => {
+            cy += 7; d.setAttribute('cy', cy);
+            if (cy > 90) { d.setAttribute('opacity', '0'); clearInterval(id); }
+          }, 25);
+        }
+      }, 1000);
+      tbRender();
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

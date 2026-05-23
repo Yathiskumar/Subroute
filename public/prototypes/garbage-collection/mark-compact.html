@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Garbage Collection — Mark-Compact</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --success-soft: rgba(92,198,111,0.14); --success-border: rgba(92,198,111,0.40);
+        --danger: #f06868; --danger-soft: rgba(240,104,104,0.14); --danger-border: rgba(240,104,104,0.42);
+        --info: #5e9ff6; --info-soft: rgba(94,159,246,0.14); --info-border: rgba(94,159,246,0.40);
+        --warning: #f0b568; --warning-soft: rgba(240,181,104,0.14); --warning-border: rgba(240,181,104,0.40);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body { padding: 14px 16px 16px; background-image: linear-gradient(to right, rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.025) 1px, transparent 1px); background-size: 40px 40px; }
+      .container { max-width: 980px; margin: 0 auto; }
+
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+      .stat .lbl { font-size: 11px; color: var(--muted); }
+      .stat .val { font-size: 18px; font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
+      .stat.green { background: var(--success-soft); border-color: var(--success-border); }
+      .stat.green .lbl { color: var(--success); }
+      .stat.red { background: var(--danger-soft); border-color: var(--danger-border); }
+      .stat.red .lbl { color: var(--danger); }
+      .stat .val.phase { font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; }
+
+      .pipeline { display: flex; gap: 6px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+      .pstep { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--subtle); background: var(--elevated); border: 1px solid var(--border); border-radius: 999px; padding: 5px 12px; transition: all 180ms ease; }
+      .pstep.active { color: var(--accent); border-color: rgba(251,134,58,0.45); background: rgba(251,134,58,0.12); font-weight: 600; }
+      .pstep.done { color: var(--success); border-color: var(--success-border); }
+      .pchev { color: var(--subtle); font-size: 12px; }
+
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 6px; margin-bottom: 10px; }
+      svg { width: 100%; height: 270px; display: block; }
+
+      .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+      .panel .ttl { font-size: 10px; color: var(--subtle); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 6px; }
+      #narration { font-size: 12.5px; line-height: 1.6; color: var(--fg); min-height: 38px; }
+      #narration .em { color: var(--accent); font-weight: 600; }
+      #narration b { color: var(--fg); }
+
+      .controls { display: flex; gap: 8px; align-items: center; }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; padding: 9px 13px; transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.10); background: var(--accent); }
+      button.ghost { background: transparent; }
+      .counter { margin-left: auto; font: 12px var(--mono); color: var(--muted); }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+    </style>
+  </head>
+  <body>
+    <h2 class="sr-only">Mark-compact walkthrough: mark live objects, compute forwarding addresses, fix up every pointer, then slide survivors down to close the gaps.</h2>
+    <div class="container">
+      <div class="stats">
+        <div class="stat green"><div class="lbl">Live objects</div><div class="val" id="s-live">0</div></div>
+        <div class="stat red"><div class="lbl">Garbage</div><div class="val" id="s-garbage">0</div></div>
+        <div class="stat"><div class="lbl">Free slots</div><div class="val" id="s-free">1</div></div>
+        <div class="stat"><div class="lbl">Phase</div><div class="val phase" id="s-phase">idle</div></div>
+      </div>
+
+      <div class="pipeline" id="pipeline">
+        <div class="pstep" data-p="mark"><i class="ti ti-search"></i>Mark</div><span class="pchev">›</span>
+        <div class="pstep" data-p="compute"><i class="ti ti-map-pin"></i>Compute addresses</div><span class="pchev">›</span>
+        <div class="pstep" data-p="fixup"><i class="ti ti-arrows-exchange"></i>Fixup pointers</div><span class="pchev">›</span>
+        <div class="pstep" data-p="move"><i class="ti ti-arrow-bar-to-left"></i>Move</div>
+      </div>
+
+      <div class="stage">
+        <svg viewBox="0 0 720 260" role="img" aria-label="Mark-compact visualization — linear heap">
+          <defs>
+            <marker id="mc-arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#5e9ff6"/></marker>
+            <marker id="mc-arr-o" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#fb863a"/></marker>
+          </defs>
+          <text x="80" y="22" text-anchor="middle" font-size="10" fill="#6b7280" letter-spacing="1.5">ROOTS</text>
+          <text x="360" y="148" text-anchor="middle" font-size="10" fill="#6b7280" letter-spacing="1.5">HEAP — ADDRESS 0 → 7</text>
+          <g id="arcs"></g>
+          <g id="roots"></g>
+          <g id="slots"></g>
+        </svg>
+      </div>
+
+      <div class="panel">
+        <div class="ttl">What's happening</div>
+        <div id="narration"></div>
+      </div>
+
+      <div class="controls">
+        <button id="prev"><i class="ti ti-arrow-left"></i>Prev</button>
+        <button id="next" class="primary">Next step<i class="ti ti-arrow-right"></i></button>
+        <button id="auto" class="ghost"><i class="ti ti-player-play"></i>Auto</button>
+        <button id="restart" class="ghost"><i class="ti ti-refresh"></i>Restart</button>
+        <span class="counter" id="counter">Step 1</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        // Report content height so the embedding frame can size to fit (no inner scroll).
+        function postHeight() { const h = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight); parent.postMessage({ type: "prototype:height", height: h }, "*"); }
+        if (window.ResizeObserver) new ResizeObserver(postHeight).observe(document.body);
+        window.addEventListener("load", postHeight);
+        const NS = "http://www.w3.org/2000/svg";
+        const svg = (t, a) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); return e; };
+        const I = ["A", "B", "C", "D", "E", "F", "G", null];
+
+        // Heap snapshots used by the move phase (id per slot, null = free).
+        const H0 = ["A", "B", "C", "D", "E", "F", "G", null];
+        const Hc = ["A", "C", null, "D", "E", "F", "G", null];   // C moved 2→1
+        const He = ["A", "C", "E", "D", null, "F", "G", null];   // E moved 4→2
+        const Hg = ["A", "C", "E", "G", null, "F", null, null];  // G moved 6→3
+        const Hf = ["A", "C", "E", "G", null, null, null, null]; // free reclaimed
+
+        const MARKED = ["A", "C", "E", "G"];
+        const GARB = ["B", "D", "F"];
+
+        const STEPS = [
+          { phase: "idle", heap: H0, marked: [], scan: null, garb: [], fwd: {}, roots: { x: 0, y: 4 }, ptr: { A: 2, E: 6 }, narr: "Heap: 7 objects at addresses 0–6, slot 7 free. Roots <b>x</b>→A, <b>y</b>→E. A→C, E→G. B, D, F are unreachable garbage — see the gaps that will appear." },
+          { phase: "mark", heap: H0, marked: [], scan: "A", garb: [], fwd: {}, roots: { x: 0, y: 4 }, ptr: { A: 2, E: 6 }, narr: "<b>MARK.</b> Follow root x → A. Scanning A." },
+          { phase: "mark", heap: H0, marked: ["A"], scan: "C", garb: [], fwd: {}, roots: { x: 0, y: 4 }, ptr: { A: 2, E: 6 }, narr: "A marked. Follow A → C. Scanning C." },
+          { phase: "mark", heap: H0, marked: ["A", "C"], scan: "E", garb: [], fwd: {}, roots: { x: 0, y: 4 }, ptr: { A: 2, E: 6 }, narr: "C marked. Now from root y → E. Scanning E." },
+          { phase: "mark", heap: H0, marked: ["A", "C", "E"], scan: "G", garb: [], fwd: {}, roots: { x: 0, y: 4 }, ptr: { A: 2, E: 6 }, narr: "E marked. Follow E → G. Scanning G." },
+          { phase: "mark", heap: H0, marked: MARKED, scan: null, garb: GARB, fwd: {}, roots: { x: 0, y: 4 }, ptr: { A: 2, E: 6 }, narr: "G marked. Mark done. Alive: A, C, E, G. Garbage: B, D, F. The heap is <span class='em'>fragmented</span> — holes everywhere." },
+          { phase: "compute", heap: H0, marked: MARKED, scan: null, garb: GARB, fwd: { A: 0 }, roots: { x: 0, y: 4 }, ptr: { A: 2, E: 6 }, narr: "<b>COMPUTE ADDRESSES.</b> Walk the heap with a free cursor at 0. A is the 1st survivor → forwarding address <span class='em'>0</span> (stays put)." },
+          { phase: "compute", heap: H0, marked: MARKED, scan: null, garb: GARB, fwd: { A: 0, C: 1 }, roots: { x: 0, y: 4 }, ptr: { A: 2, E: 6 }, narr: "C is the 2nd survivor → forwarding address <span class='em'>1</span>. It will slide from slot 2 to slot 1." },
+          { phase: "compute", heap: H0, marked: MARKED, scan: null, garb: GARB, fwd: { A: 0, C: 1, E: 2 }, roots: { x: 0, y: 4 }, ptr: { A: 2, E: 6 }, narr: "E is the 3rd survivor → forwarding address <span class='em'>2</span> (from slot 4)." },
+          { phase: "compute", heap: H0, marked: MARKED, scan: null, garb: GARB, fwd: { A: 0, C: 1, E: 2, G: 3 }, roots: { x: 0, y: 4 }, ptr: { A: 2, E: 6 }, narr: "G is the 4th survivor → forwarding address <span class='em'>3</span>. Every survivor now knows its destination." },
+          { phase: "fixup", heap: H0, marked: MARKED, scan: null, garb: GARB, fwd: { A: 0, C: 1, E: 2, G: 3 }, roots: { x: 0, y: 2 }, ptr: { A: 2, E: 6 }, hl: "root-y", narr: "<b>FIXUP POINTERS.</b> Root y pointed at old slot 4 (E). E's new address is 2 — rewrite root y to slot 2." },
+          { phase: "fixup", heap: H0, marked: MARKED, scan: null, garb: GARB, fwd: { A: 0, C: 1, E: 2, G: 3 }, roots: { x: 0, y: 2 }, ptr: { A: 1, E: 6 }, hl: "A", narr: "A's pointer to C is rewritten: C's new address is 1, so A now points at slot 1." },
+          { phase: "fixup", heap: H0, marked: MARKED, scan: null, garb: GARB, fwd: { A: 0, C: 1, E: 2, G: 3 }, roots: { x: 0, y: 2 }, ptr: { A: 1, E: 3 }, hl: "E", narr: "E's pointer to G is rewritten to slot 3. <span class='em'>All pointers now aim at where objects will be.</span>" },
+          { phase: "move", heap: H0, marked: MARKED, scan: null, garb: GARB, fwd: { A: 0, C: 1, E: 2, G: 3 }, roots: { x: 0, y: 2 }, ptr: { A: 1, E: 3 }, moving: "A", narr: "<b>MOVE.</b> A is already at slot 0 — no copy needed." },
+          { phase: "move", heap: Hc, marked: MARKED, scan: null, garb: GARB, fwd: { A: 0, C: 1, E: 2, G: 3 }, roots: { x: 0, y: 2 }, ptr: { A: 1, E: 3 }, moving: "C", narr: "C slides from slot 2 to slot 1, overwriting garbage B. Slot 2 is now free." },
+          { phase: "move", heap: He, marked: MARKED, scan: null, garb: GARB, fwd: { A: 0, C: 1, E: 2, G: 3 }, roots: { x: 0, y: 2 }, ptr: { A: 1, E: 3 }, moving: "E", narr: "E slides from slot 4 to slot 2." },
+          { phase: "move", heap: Hg, marked: MARKED, scan: null, garb: GARB, fwd: { A: 0, C: 1, E: 2, G: 3 }, roots: { x: 0, y: 2 }, ptr: { A: 1, E: 3 }, moving: "G", narr: "G slides from slot 6 to slot 3, overwriting garbage D." },
+          { phase: "done", heap: Hf, marked: MARKED, scan: null, garb: [], fwd: {}, roots: { x: 0, y: 2 }, ptr: { A: 1, E: 3 }, narr: "<span class='em'>Compaction complete.</span> A, C, E, G are packed at slots 0–3; slots 4–7 are one clean run of free space. Zero fragmentation — allocation is now just a pointer bump." },
+        ];
+
+        let idx = 0, timer = null;
+        const $ = (id) => document.getElementById(id);
+        const N = 8, SW = 72, GAP = 6, X0 = 60, ROW_Y = 165, SH = 64;
+        const slotX = (i) => X0 + i * (SW + GAP);
+        const slotCx = (i) => slotX(i) + SW / 2;
+
+        const COL = {
+          live: { fill: "rgba(92,198,111,0.14)", stroke: "#5cc66f", text: "#7bd389" },
+          scan: { fill: "rgba(240,181,104,0.16)", stroke: "#f0b568", text: "#f0b568" },
+          unmarked: { fill: "rgba(94,159,246,0.06)", stroke: "#2d333d", text: "#9099a8" },
+          garb: { fill: "rgba(240,104,104,0.13)", stroke: "#f06868", text: "#f3a0a0" },
+          moving: { fill: "rgba(251,134,58,0.18)", stroke: "#fb863a", text: "#fcae74" },
+        };
+
+        function arc(layer, fromX, fromY, toX, toY, color, marker) {
+          const mx = (fromX + toX) / 2, lift = Math.min(58, 26 + Math.abs(toX - fromX) * 0.18);
+          layer.appendChild(svg("path", { d: `M ${fromX} ${fromY} Q ${mx} ${fromY - lift} ${toX} ${toY}`, fill: "none", stroke: color, "stroke-width": 1.6, "marker-end": marker }));
+        }
+
+        function render() {
+          const step = STEPS[idx];
+          const slots = $("slots"), arcs = $("arcs"), roots = $("roots");
+          [slots, arcs, roots].forEach((g) => (g.innerHTML = ""));
+
+          // pointer arcs (object → slot index it stores)
+          for (const src in step.ptr) {
+            const srcSlot = step.heap.indexOf(src);
+            if (srcSlot < 0) continue;
+            const tgt = step.ptr[src], hot = step.hl === src;
+            arc(arcs, slotCx(srcSlot), ROW_Y, slotCx(tgt), ROW_Y, hot ? "#fb863a" : "#3f6fb0", hot ? "url(#mc-arr-o)" : "url(#mc-arr)");
+          }
+          // roots
+          let ri = 0;
+          for (const r in step.roots) {
+            const cx = 60 + ri * 70, tgt = step.roots[r], hot = step.hl === "root-" + r;
+            roots.appendChild(svg("rect", { x: cx - 26, y: 36, width: 52, height: 30, rx: 7, fill: hot ? "rgba(251,134,58,0.14)" : "rgba(94,159,246,0.10)", stroke: hot ? "#fb863a" : "#5e9ff6", "stroke-width": 1.2 }));
+            const t = svg("text", { x: cx, y: 56, "text-anchor": "middle", "font-size": 12, "font-weight": 600, fill: hot ? "#fcae74" : "#9cc4fb" }); t.textContent = r; roots.appendChild(t);
+            arc(arcs, cx, 66, slotCx(tgt), ROW_Y, hot ? "#fb863a" : "#3f6fb0", hot ? "url(#mc-arr-o)" : "url(#mc-arr)");
+            ri++;
+          }
+          // slots
+          for (let i = 0; i < N; i++) {
+            const id = step.heap[i], x = slotX(i);
+            if (id == null) {
+              slots.appendChild(svg("rect", { x, y: ROW_Y, width: SW, height: SH, rx: 8, fill: "#101216", stroke: "#2d333d", "stroke-width": 1, "stroke-dasharray": "4 4" }));
+              const t = svg("text", { x: x + SW / 2, y: ROW_Y + SH / 2 + 4, "text-anchor": "middle", "font-size": 11, fill: "#6b7280", "font-style": "italic" }); t.textContent = "free"; slots.appendChild(t);
+            } else {
+              let s = COL.unmarked;
+              if (step.moving === id) s = COL.moving;
+              else if (step.scan === id) s = COL.scan;
+              else if (step.garb.includes(id)) s = COL.garb;
+              else if (step.marked.includes(id)) s = COL.live;
+              slots.appendChild(svg("rect", { x, y: ROW_Y, width: SW, height: SH, rx: 8, fill: s.fill, stroke: s.stroke, "stroke-width": 1.6, "stroke-dasharray": step.garb.includes(id) && step.moving !== id ? "4 3" : "" }));
+              const nm = svg("text", { x: x + SW / 2, y: ROW_Y + 26, "text-anchor": "middle", "font-size": 16, "font-weight": 700, fill: s.text }); nm.textContent = id; slots.appendChild(nm);
+              if (step.fwd[id] != null) {
+                const fw = svg("text", { x: x + SW / 2, y: ROW_Y + 46, "text-anchor": "middle", "font-size": 11, fill: "#fcae74", "font-family": "var(--mono)", "font-weight": 600 }); fw.textContent = "→ " + step.fwd[id]; slots.appendChild(fw);
+              } else if (step.garb.includes(id) && step.moving !== id) {
+                const g = svg("text", { x: x + SW / 2, y: ROW_Y + 46, "text-anchor": "middle", "font-size": 10, fill: "#f3a0a0", "font-family": "var(--mono)" }); g.textContent = "garbage"; slots.appendChild(g);
+              }
+            }
+            // address label
+            const ad = svg("text", { x: x + SW / 2, y: ROW_Y + SH + 15, "text-anchor": "middle", "font-size": 10, fill: "#6b7280", "font-family": "var(--mono)" }); ad.textContent = i; slots.appendChild(ad);
+          }
+
+          // narration + stats + pipeline
+          $("narration").innerHTML = step.narr;
+          const liveCount = step.heap.filter((x) => x != null && MARKED.includes(x)).length;
+          $("s-live").textContent = liveCount;
+          $("s-garbage").textContent = step.garb.length;
+          $("s-free").textContent = step.heap.filter((x) => x == null).length;
+          const ph = $("s-phase"); ph.textContent = step.phase;
+          ph.style.color = step.phase === "mark" ? "#f0b568" : step.phase === "move" || step.phase === "done" ? "#5cc66f" : step.phase === "idle" ? "#9099a8" : "#fb863a";
+          const order = ["mark", "compute", "fixup", "move"];
+          const curRank = step.phase === "done" ? 4 : order.indexOf(step.phase);
+          document.querySelectorAll(".pstep").forEach((el) => {
+            const r = order.indexOf(el.dataset.p);
+            el.classList.toggle("active", r === curRank);
+            el.classList.toggle("done", r < curRank);
+          });
+          $("counter").textContent = `Step ${idx + 1} / ${STEPS.length}`;
+          $("prev").disabled = idx === 0;
+          $("next").disabled = idx === STEPS.length - 1;
+        }
+
+        function stopAuto() { if (timer) { clearInterval(timer); timer = null; $("auto").innerHTML = '<i class="ti ti-player-play"></i>Auto'; } }
+        function go(n) { const max = STEPS.length - 1; idx = Math.max(0, Math.min(max, n)); render(); if (idx === max) stopAuto(); }
+        $("next").onclick = () => { stopAuto(); go(idx + 1); };
+        $("prev").onclick = () => { stopAuto(); go(idx - 1); };
+        $("restart").onclick = () => { stopAuto(); go(0); };
+        $("auto").onclick = () => { if (timer) { stopAuto(); return; } if (idx === STEPS.length - 1) idx = 0; $("auto").innerHTML = '<i class="ti ti-player-pause"></i>Pause'; timer = setInterval(() => go(idx + 1), 1100); };
+        render();
+      })();
+    </script>
+  </body>
+</html>

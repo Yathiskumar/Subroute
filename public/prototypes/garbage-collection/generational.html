@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Garbage Collection — Generational</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --success-soft: rgba(92,198,111,0.14); --success-border: rgba(92,198,111,0.40);
+        --danger: #f06868; --danger-soft: rgba(240,104,104,0.14); --danger-border: rgba(240,104,104,0.42);
+        --info: #5e9ff6; --info-soft: rgba(94,159,246,0.14); --info-border: rgba(94,159,246,0.40);
+        --warning: #f0b568; --warning-soft: rgba(240,181,104,0.14); --warning-border: rgba(240,181,104,0.40);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body { padding: 14px 16px 16px; background-image: linear-gradient(to right, rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.025) 1px, transparent 1px); background-size: 40px 40px; }
+      .container { max-width: 980px; margin: 0 auto; }
+
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+      .stat .lbl { font-size: 11px; color: var(--muted); }
+      .stat .val { font-size: 18px; font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
+      .stat.blue { background: var(--info-soft); border-color: var(--info-border); }
+      .stat.blue .lbl { color: var(--info); }
+      .stat.green { background: var(--success-soft); border-color: var(--success-border); }
+      .stat.green .lbl { color: var(--success); }
+      .stat.red { background: var(--danger-soft); border-color: var(--danger-border); }
+      .stat.red .lbl { color: var(--danger); }
+      .stat .val.phase { font-size: 14px; text-transform: uppercase; letter-spacing: 0.04em; }
+
+      .tabs { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+      .tab { background: var(--elevated); color: var(--muted); border: 1px solid var(--border); border-radius: 999px; cursor: pointer; padding: 6px 13px; font: 500 12px/1 var(--sans); transition: all 150ms ease; white-space: nowrap; }
+      .tab:hover { border-color: var(--border-strong); color: var(--fg); }
+      .tab.active { background: var(--info-soft); color: var(--info); border-color: var(--info-border); }
+
+      .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 8px; padding: 0 2px; }
+      .legend .item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+      .legend .dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid; }
+      .dot.young { background: var(--info-soft); border-color: var(--info); }
+      .dot.old { background: var(--success-soft); border-color: var(--success); }
+      .dot.garb { background: var(--danger-soft); border-color: var(--danger); border-style: dashed; }
+
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 6px; margin-bottom: 10px; }
+      .stage svg { width: 100%; height: 348px; display: block; }
+      .legend svg { display: inline-block; vertical-align: middle; }
+
+      .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+      .panel .ttl { font-size: 10px; color: var(--subtle); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 6px; }
+      #narration { font-size: 12.5px; line-height: 1.6; color: var(--fg); min-height: 40px; }
+      #narration .em { color: var(--accent); font-weight: 600; }
+      #narration b { color: var(--fg); }
+
+      .controls { display: flex; gap: 8px; align-items: center; }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; padding: 9px 13px; transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.10); background: var(--accent); }
+      button.ghost { background: transparent; }
+      .counter { margin-left: auto; font: 12px var(--mono); color: var(--muted); }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+    </style>
+  </head>
+  <body>
+    <h2 class="sr-only">Generational garbage collection: objects allocate in eden, survivors age through survivor spaces, long-lived objects are promoted to the old generation, and a write barrier records old-to-young pointers for minor collections.</h2>
+    <div class="container">
+      <div class="stats">
+        <div class="stat blue"><div class="lbl">Young gen (live)</div><div class="val" id="s-young">0</div></div>
+        <div class="stat green"><div class="lbl">Old gen (live)</div><div class="val" id="s-old">0</div></div>
+        <div class="stat red"><div class="lbl">Garbage</div><div class="val" id="s-garb">0</div></div>
+        <div class="stat"><div class="lbl">Phase</div><div class="val phase" id="s-phase">idle</div></div>
+      </div>
+
+      <div class="tabs" id="tabs">
+        <button class="tab active" data-scn="basic">1 · Promotion lifecycle</button>
+        <button class="tab" data-scn="oldyoung">2 · Old → young pointer</button>
+        <button class="tab" data-scn="major">3 · Major collection</button>
+      </div>
+
+      <div class="legend">
+        <div class="item"><span class="dot young"></span>young (age N)</div>
+        <div class="item"><span class="dot old"></span>old gen</div>
+        <div class="item"><span class="dot garb"></span>garbage</div>
+        <div class="item"><svg width="24" height="10"><line x1="2" y1="5" x2="20" y2="5" stroke="#f0b568" stroke-width="1.8"/><polygon points="20,1 20,9 24,5" fill="#f0b568"/></svg>write barrier (old→young)</div>
+      </div>
+
+      <div class="stage">
+        <svg viewBox="0 0 720 348" role="img" aria-label="Generational garbage collection visualization">
+          <defs>
+            <marker id="g-purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#9b8bff"/></marker>
+            <marker id="g-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#f0b568"/></marker>
+          </defs>
+          <text x="40" y="20" font-size="10" fill="#6b7280" letter-spacing="1.4">YOUNG GENERATION</text>
+          <text x="40" y="230" font-size="10" fill="#6b7280" letter-spacing="1.4">OLD GENERATION</text>
+          <g id="phase-badge"></g>
+          <g id="regions"></g>
+          <g id="objs"></g>
+          <g id="arrows"></g>
+          <g id="remembered"></g>
+        </svg>
+      </div>
+
+      <div class="panel">
+        <div class="ttl">What's happening</div>
+        <div id="narration"></div>
+      </div>
+
+      <div class="controls">
+        <button id="prev"><i class="ti ti-arrow-left"></i>Prev</button>
+        <button id="next" class="primary">Next step<i class="ti ti-arrow-right"></i></button>
+        <button id="auto" class="ghost"><i class="ti ti-player-play"></i>Auto</button>
+        <button id="restart" class="ghost"><i class="ti ti-refresh"></i>Restart</button>
+        <span class="counter" id="counter">Step 1</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        // Report content height so the embedding frame can size to fit (no inner scroll).
+        function postHeight() { const h = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight); parent.postMessage({ type: "prototype:height", height: h }, "*"); }
+        if (window.ResizeObserver) new ResizeObserver(postHeight).observe(document.body);
+        window.addEventListener("load", postHeight);
+
+        const NS = "http://www.w3.org/2000/svg";
+        const svg = (t, a, txt) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); if (txt != null) e.textContent = txt; return e; };
+        const THRESHOLD = 3;
+        const o = (id, age, g) => ({ id, age: age || 0, g: !!g });
+
+        // Regions
+        const R = {
+          eden: { x: 40, y: 78, w: 298, h: 108, label: "Eden", sub: "allocation here" },
+          s0: { x: 352, y: 78, w: 152, h: 108, label: "Survivor S0" },
+          s1: { x: 518, y: 78, w: 162, h: 108, label: "Survivor S1" },
+          old: { x: 40, y: 244, w: 640, h: 84, label: "Old generation" },
+        };
+
+        const SCN = {
+          basic: [
+            { phase: "allocate", eden: [o("A"), o("B"), o("C"), o("D"), o("E")], s0: [], s1: [], old: [], active: "s0", narr: "Eden holds 5 freshly allocated objects (age 0). Survivor spaces and old gen are empty. New objects always allocate here via a fast <b>bump pointer</b>." },
+            { phase: "allocate", eden: [o("A"), o("B"), o("C"), o("D"), o("E"), o("F"), o("G"), o("H")], s0: [], s1: [], old: [], active: "s0", narr: "More allocations — eden is filling with F, G, H. Most are temporary: intermediate values, locals, parsed strings." },
+            { phase: "minor", eden: [o("A"), o("B", 0, 1), o("C"), o("D", 0, 1), o("E", 0, 1), o("F"), o("G", 0, 1), o("H", 0, 1)], s0: [], s1: [], old: [], active: "s0", narr: "<b>EDEN FULL → MINOR GC.</b> Trace from the roots. Live: A, C, F. Garbage: B, D, E, G, H. <span class='em'>5 of 8 are already dead</span> — typical young-gen mortality." },
+            { phase: "copy", eden: [], s0: [o("A", 1), o("C", 1), o("F", 1)], s1: [], old: [], active: "s0", narr: "<b>MINOR GC — COPY.</b> Live A, C, F are copied to survivor S0, age bumped to 1. Eden is wiped; the garbage dies for free, never touched." },
+            { phase: "allocate", eden: [o("I"), o("J"), o("K"), o("L"), o("M"), o("N")], s0: [o("A", 1), o("C", 1), o("F", 1)], s1: [], old: [], active: "s0", narr: "Program continues. New objects I–N fill eden. A, C, F (age 1) sit safely in S0 — they survived one cycle." },
+            { phase: "minor", eden: [o("I"), o("J", 0, 1), o("K"), o("L", 0, 1), o("M", 0, 1), o("N", 0, 1)], s0: [o("A", 1), o("C", 1, 1), o("F", 1)], s1: [], old: [], active: "s0", narr: "<b>MINOR GC.</b> Roots are traced through eden <i>and</i> the active survivor S0. Live: I, K, A, F. C died since last time. Garbage: J, L, M, N, C." },
+            { phase: "copy", eden: [], s0: [], s1: [o("A", 2), o("F", 2), o("I", 1), o("K", 1)], old: [], active: "s1", narr: "<b>MINOR GC — COPY.</b> Survivors from eden and S0 move into S1. A and F survived again → age 2. I and K → age 1. S0 and eden are wiped; <span class='em'>S1 is now the active survivor.</span>" },
+            { phase: "allocate", eden: [o("P"), o("Q"), o("R")], s0: [], s1: [o("A", 2), o("F", 2), o("I", 1), o("K", 1)], old: [], active: "s1", narr: "More allocations. A and F (age 2) are one cycle away from the promotion threshold of " + THRESHOLD + "." },
+            { phase: "minor", eden: [o("P"), o("Q", 0, 1), o("R", 0, 1)], s0: [], s1: [o("A", 2), o("F", 2), o("I", 1, 1), o("K", 1)], old: [], active: "s1", narr: "<b>MINOR GC.</b> Live: P, A, F, K. A and F have age 2 — if they survive, they hit age 3 = the <span class='em'>tenuring threshold</span>." },
+            { phase: "copy", eden: [], s0: [o("P", 1), o("K", 2)], s1: [], old: [o("A", 3), o("F", 3)], active: "s0", narr: "<b>MINOR GC — COPY + PROMOTE.</b> A and F reached age 3 → <span class='em'>promoted to old gen</span>; they no longer take part in minor GCs. P and K move to S0. The young gen stays small and fast." },
+            { phase: "idle", eden: [], s0: [o("P", 1), o("K", 2)], s1: [], old: [o("A", 3), o("F", 3)], active: "s0", narr: "<b>STEADY STATE.</b> Long-lived A and F live in old gen, touched only on rare major GCs. Short-lived churn stays in young gen, collected cheaply many times. <span class='em'>~95% of GC work on ~10% of the heap.</span>" },
+          ],
+          oldyoung: [
+            { phase: "idle", eden: [], s0: [], s1: [], old: [o("CACHE", 5)], active: "s0", remembered: [], narr: "CACHE is a long-lived object in old gen (a hash map, app config — anything that sticks around). The program is about to add an entry to it…" },
+            { phase: "allocate", eden: [o("item")], s0: [], s1: [], old: [o("CACHE", 5)], active: "s0", remembered: [], narr: "A new object <b>item</b> is allocated in eden. The program runs <code>CACHE.entry = item</code> — creating a pointer <span class='em'>from old gen to young gen.</span>" },
+            { phase: "barrier", eden: [o("item")], s0: [], s1: [], old: [o("CACHE", 5)], active: "s0", remembered: ["CACHE"], barrier: { to: "eden" }, narr: "<b>WRITE BARRIER FIRES.</b> The runtime intercepts the store, sees 'old object gets a young pointer', and adds CACHE to the <span class='em'>remembered set</span> — a small side table, so minor GC needn't scan all of old gen." },
+            { phase: "minor", eden: [o("item"), o("tmp", 0, 1), o("tmp2", 0, 1)], s0: [], s1: [], old: [o("CACHE", 5)], active: "s0", remembered: ["CACHE"], oldPtr: { to: "eden" }, narr: "<b>MINOR GC.</b> The collector treats the remembered set as <span class='em'>extra roots</span>: even while skipping old gen, it sees 'CACHE points into young gen — follow it.'" },
+            { phase: "copy", eden: [], s0: [o("item", 1)], s1: [], old: [o("CACHE", 5)], active: "s0", remembered: ["CACHE"], oldPtr: { to: "s0" }, narr: "<b>COPY.</b> item is reached via the remembered set and copied to S0; CACHE's pointer is updated to the new location. The two temps (no incoming reference) die. <span class='em'>Without the barrier, item would have been wrongly freed.</span>" },
+          ],
+          major: [
+            { phase: "idle", eden: [o("x"), o("y")], s0: [o("a", 2), o("b", 1)], s1: [], old: [o("K", 5), o("L", 8), o("M", 4, 1), o("N", 7), o("O", 6, 1), o("P", 9), o("Q", 5, 1), o("R", 8)], active: "s0", narr: "Many minor GCs have run. Old gen has filled with promoted objects — some still live (K, L, N, P, R), some now unreachable (M, O, Q). When old gen fills, a <b>major GC</b> must run." },
+            { phase: "major", eden: [o("x"), o("y", 0, 1)], s0: [o("a", 2), o("b", 1, 1)], s1: [], old: [o("K", 5), o("L", 8), o("M", 4, 1), o("N", 7), o("O", 6, 1), o("P", 9), o("Q", 5, 1), o("R", 8)], active: "s0", narr: "<b>MAJOR GC.</b> Unlike a minor GC, this collects the <span class='em'>entire heap</span>. All garbage in both generations is identified. This is the slow, stop-the-world event — but rare (maybe once per 50–100 minor GCs)." },
+            { phase: "compact", eden: [], s0: [], s1: [], old: [o("K", 5), o("L", 8), o("N", 7), o("P", 9), o("R", 8), o("x", 1), o("a", 3)], active: "s0", narr: "<b>OLD GEN COMPACTED</b> (mark-compact). Live K, L, N, P, R slide together; M, O, Q are gone. Young survivors x and a are promoted during the major GC. Young gen is fully wiped." },
+            { phase: "idle", eden: [], s0: [], s1: [], old: [o("K", 5), o("L", 8), o("N", 7), o("P", 9), o("R", 8), o("x", 1), o("a", 3)], active: "s0", narr: "<b>COMPLETE.</b> Old gen is compact with plenty of free space; eden is empty and ready for fast allocation. Many minor GCs will run before the next major GC is needed." },
+          ],
+        };
+
+        let cur = "basic", idx = 0, timer = null;
+        const $ = (id) => document.getElementById(id);
+
+        const PHASE = {
+          allocate: { lbl: "Allocating", color: "#5e9ff6" },
+          idle: { lbl: "Idle", color: "#9099a8" },
+          minor: { lbl: "Minor GC", color: "#f0b568" },
+          copy: { lbl: "Minor GC · copy", color: "#f0b568" },
+          barrier: { lbl: "Write barrier", color: "#fb863a" },
+          major: { lbl: "Major GC", color: "#f06868" },
+          compact: { lbl: "Major GC · compact", color: "#f06868" },
+        };
+
+        function drawRegionBox(g, r, active, collecting) {
+          let fill = "#101216", stroke = "#2d333d";
+          if (active) stroke = "#3a4150";
+          if (collecting) { fill = "rgba(240,181,104,0.07)"; stroke = "#6b5733"; }
+          g.appendChild(svg("rect", { x: r.x, y: r.y, width: r.w, height: r.h, rx: 9, fill, stroke, "stroke-width": 1 }));
+          g.appendChild(svg("text", { x: r.x + r.w / 2, y: r.y - 6, "text-anchor": "middle", "font-size": 11, "font-weight": 600, fill: "#cdd4de" }, r.label));
+        }
+
+        function drawObjs(g, r, objs, isOld) {
+          const per = Math.max(1, Math.floor((r.w - 24) / 42));
+          objs.forEach((ob, i) => {
+            const col = i % per, row = Math.floor(i / per);
+            const cx = r.x + 24 + col * 42, cy = r.y + 28 + row * 36;
+            let fill, stroke, text, dash = "";
+            if (ob.g) { fill = "rgba(240,104,104,0.12)"; stroke = "#f06868"; text = "#f3a0a0"; dash = "3 2"; }
+            else if (isOld) { fill = "rgba(92,198,111,0.14)"; stroke = "#5cc66f"; text = "#7bd389"; }
+            else { fill = "rgba(94,159,246,0.13)"; stroke = "#5e9ff6"; text = "#9cc4fb"; }
+            g.appendChild(svg("circle", { cx, cy, r: 15, fill, stroke, "stroke-width": 1.6, "stroke-dasharray": dash }));
+            const label = ob.id.length > 5 ? ob.id.slice(0, 4) + "…" : ob.id;
+            g.appendChild(svg("text", { x: cx, y: cy + 3.5, "text-anchor": "middle", "font-size": ob.id.length > 3 ? 8 : 10, "font-weight": 600, fill: text }, label));
+            if (!ob.g) g.appendChild(svg("text", { x: cx + 16, y: cy - 9, "font-size": 9, "font-weight": 700, fill: isOld ? "#5cc66f" : "#f0b568", "font-family": "var(--mono)" }, "a" + ob.age));
+          });
+        }
+
+        function anchorBottom(name) { const r = R[name] || R.eden; return { x: r.x + 26, y: r.y + r.h }; }
+
+        function render() {
+          const steps = SCN[cur], step = steps[idx];
+          ["phase-badge", "regions", "objs", "arrows", "remembered"].forEach((g) => ($(g).innerHTML = ""));
+          const minorC = step.phase === "minor" || step.phase === "copy";
+          const majorC = step.phase === "major" || step.phase === "compact";
+
+          // region boxes + sublabels
+          const reg = $("regions");
+          drawRegionBox(reg, R.eden, true, minorC || majorC);
+          drawRegionBox(reg, R.s0, step.active === "s0", minorC || majorC);
+          drawRegionBox(reg, R.s1, step.active === "s1", minorC || majorC);
+          drawRegionBox(reg, R.old, true, majorC);
+          const sub = (r, txt) => reg.appendChild(svg("text", { x: r.x + r.w / 2, y: r.y + r.h - 8, "text-anchor": "middle", "font-size": 9, fill: "#6b7280", "font-style": "italic" }, txt));
+          sub(R.eden, "allocation here");
+          sub(R.s0, step.active === "s0" ? "active" : "empty");
+          sub(R.s1, step.active === "s1" ? "active" : "empty");
+
+          // objects
+          const og = $("objs");
+          drawObjs(og, R.eden, step.eden || [], false);
+          drawObjs(og, R.s0, step.s0 || [], false);
+          drawObjs(og, R.s1, step.s1 || [], false);
+          drawObjs(og, R.old, step.old || [], true);
+
+          // arrows (write barrier / old→young pointer)
+          const ar = $("arrows");
+          const ptr = step.barrier || step.oldPtr;
+          if (ptr) {
+            const from = { x: R.old.x + 26, y: R.old.y }, to = anchorBottom(ptr.to);
+            const amber = !!step.barrier;
+            ar.appendChild(svg("path", { d: `M ${from.x} ${from.y} C ${from.x - 24} ${(from.y + to.y) / 2}, ${to.x - 24} ${(from.y + to.y) / 2}, ${to.x} ${to.y}`, fill: "none", stroke: amber ? "#f0b568" : "#9b8bff", "stroke-width": amber ? 2 : 1.7, "marker-end": amber ? "url(#g-amber)" : "url(#g-purple)" }));
+            ar.appendChild(svg("text", { x: 30, y: (from.y + to.y) / 2 - 4, "font-size": 9.5, "font-weight": 700, fill: amber ? "#f0b568" : "#9b8bff", "font-family": "var(--mono)" }, amber ? "old → young" : "follow ref"));
+          }
+
+          // remembered set chip
+          if (step.remembered && step.remembered.length) {
+            $("remembered").appendChild(svg("text", { x: R.old.x + R.old.w - 8, y: R.old.y - 6, "text-anchor": "end", "font-size": 10, fill: "#9b8bff", "font-family": "var(--mono)" }, "remembered set: { " + step.remembered.join(", ") + " }"));
+          }
+
+          // phase badge
+          const ph = PHASE[step.phase];
+          const pb = $("phase-badge");
+          pb.appendChild(svg("rect", { x: 558, y: 8, width: 122, height: 22, rx: 11, fill: "transparent", stroke: ph.color, "stroke-width": 1, opacity: 0.6 }));
+          pb.appendChild(svg("circle", { cx: 573, cy: 19, r: 3.5, fill: ph.color }));
+          pb.appendChild(svg("text", { x: 585, y: 23, "font-size": 11, "font-weight": 600, fill: ph.color }, ph.lbl));
+
+          // narration + stats
+          $("narration").innerHTML = step.narr;
+          const young = [...(step.eden || []), ...(step.s0 || []), ...(step.s1 || [])];
+          $("s-young").textContent = young.filter((x) => !x.g).length;
+          $("s-old").textContent = (step.old || []).filter((x) => !x.g).length;
+          $("s-garb").textContent = young.filter((x) => x.g).length + (step.old || []).filter((x) => x.g).length;
+          const pe = $("s-phase"); pe.textContent = ph.lbl; pe.style.color = ph.color;
+          $("counter").textContent = `Step ${idx + 1} / ${steps.length}`;
+          $("prev").disabled = idx === 0;
+          $("next").disabled = idx === steps.length - 1;
+        }
+
+        function stopAuto() { if (timer) { clearInterval(timer); timer = null; $("auto").innerHTML = '<i class="ti ti-player-play"></i>Auto'; } }
+        function go(n) { const max = SCN[cur].length - 1; idx = Math.max(0, Math.min(max, n)); render(); if (idx === max) stopAuto(); }
+        $("next").onclick = () => { stopAuto(); go(idx + 1); };
+        $("prev").onclick = () => { stopAuto(); go(idx - 1); };
+        $("restart").onclick = () => { stopAuto(); go(0); };
+        $("auto").onclick = () => { if (timer) { stopAuto(); return; } if (idx === SCN[cur].length - 1) idx = 0; $("auto").innerHTML = '<i class="ti ti-player-pause"></i>Pause'; timer = setInterval(() => go(idx + 1), 1200); };
+        document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => { stopAuto(); document.querySelectorAll(".tab").forEach((x) => x.classList.remove("active")); b.classList.add("active"); cur = b.dataset.scn; idx = 0; render(); }));
+        render();
+      })();
+    </script>
+  </body>
+</html>

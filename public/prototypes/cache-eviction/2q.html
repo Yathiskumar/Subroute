@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cache Eviction — Subroute</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-strong: #d56a1f;
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --warning: #f0b568;
+        --warning-soft: rgba(240, 181, 104, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --radius-md: 8px;
+
+        --color-background-primary: var(--bg);
+        --color-background-secondary: var(--surface);
+        --color-background-success: var(--success-soft);
+        --color-background-danger: var(--danger-soft);
+        --color-background-info: var(--info-soft);
+        --color-background-warning: var(--warning-soft);
+        --color-text-primary: var(--fg);
+        --color-text-secondary: var(--muted);
+        --color-text-tertiary: var(--subtle);
+        --color-text-success: var(--success);
+        --color-text-danger: var(--danger);
+        --color-text-info: var(--info);
+        --color-text-warning: var(--warning);
+        --color-border-secondary: var(--border-strong);
+        --color-border-tertiary: var(--border);
+        --color-border-info: rgba(94, 159, 246, 0.45);
+        --color-border-success: rgba(92, 198, 111, 0.45);
+        --color-border-warning: rgba(240, 181, 104, 0.45);
+        --border-radius-md: var(--radius-md);
+        --font-mono: var(--mono);
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 20px 20px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.025) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.025) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      button {
+        background: var(--elevated);
+        color: var(--fg);
+        font: 500 13px/1 var(--sans);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        cursor: pointer;
+        transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease;
+      }
+      button:hover { border-color: var(--border-strong); background: var(--surface); }
+      button:active { transform: scale(0.97); }
+      .access-btn, .insert-btn {
+        background: var(--accent);
+        color: #1a1003;
+        border-color: transparent;
+        font-weight: 600;
+      }
+      .access-btn:hover, .insert-btn:hover {
+        filter: brightness(1.08);
+        background: var(--accent);
+        border-color: transparent;
+      }
+      input[type="range"] { accent-color: var(--accent); }
+      .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    </style>
+  </head>
+  <body>
+<h2 class="sr-only">Interactive 2Q cache demonstration with three lists: A1in (FIFO for newcomers), A1out (ghost list of recently evicted keys), and Am (main LRU cache for proven items).</h2>
+
+<div style="padding: 1rem 0;">
+
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 1rem;">
+    <div>
+      <div style="font-size: 12px; color: var(--color-text-secondary); margin-bottom: 6px;">A1in — Newcomers (FIFO, max 2)</div>
+      <div id="a1in-row" style="display: flex; gap: 6px;"></div>
+    </div>
+    <div>
+      <div style="font-size: 12px; color: var(--color-text-secondary); margin-bottom: 6px;">Am — Main cache (LRU, max 2)</div>
+      <div id="am-row" style="display: flex; gap: 6px;"></div>
+    </div>
+  </div>
+
+  <div style="margin-bottom: 1.25rem;">
+    <div style="font-size: 12px; color: var(--color-text-secondary); margin-bottom: 6px;">A1out — Ghosts of evicted A1in items (keys only, max 2)</div>
+    <div id="a1out-row" style="display: flex; gap: 6px; max-width: calc(50% - 8px);"></div>
+  </div>
+
+  <div id="status" style="padding: 10px 14px; border-radius: var(--border-radius-md); background: var(--color-background-secondary); font-size: 14px; color: var(--color-text-secondary); margin-bottom: 1.25rem; min-height: 20px;">Cache is empty. Click a letter to access it.</div>
+
+  <div style="font-size: 13px; color: var(--color-text-secondary); margin-bottom: 8px;">Access an item</div>
+  <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 1.25rem;">
+    <button class="access-btn" data-k="A" style="width: 48px; height: 44px; font-size: 18px; font-weight: 500;">A</button>
+    <button class="access-btn" data-k="B" style="width: 48px; height: 44px; font-size: 18px; font-weight: 500;">B</button>
+    <button class="access-btn" data-k="C" style="width: 48px; height: 44px; font-size: 18px; font-weight: 500;">C</button>
+    <button class="access-btn" data-k="D" style="width: 48px; height: 44px; font-size: 18px; font-weight: 500;">D</button>
+    <button class="access-btn" data-k="E" style="width: 48px; height: 44px; font-size: 18px; font-weight: 500;">E</button>
+    <button class="access-btn" data-k="F" style="width: 48px; height: 44px; font-size: 18px; font-weight: 500;">F</button>
+    <div style="flex: 1;"></div>
+    <button id="demo-btn" style="height: 44px; padding: 0 14px; font-size: 14px;"><i class="ti ti-player-play" style="font-size:16px; vertical-align:-2px; margin-right:4px" aria-hidden="true"></i>Run demo</button>
+    <button id="reset-btn" style="height: 44px; padding: 0 14px; font-size: 14px;"><i class="ti ti-refresh" style="font-size:16px; vertical-align:-2px; margin-right:4px" aria-hidden="true"></i>Reset</button>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 1.25rem;">
+    <div style="background: var(--color-background-secondary); padding: 10px 12px; border-radius: var(--border-radius-md);">
+      <div style="font-size: 12px; color: var(--color-text-secondary);">Hits</div>
+      <div id="stat-hits" style="font-size: 20px; font-weight: 500;">0</div>
+    </div>
+    <div style="background: var(--color-background-secondary); padding: 10px 12px; border-radius: var(--border-radius-md);">
+      <div style="font-size: 12px; color: var(--color-text-secondary);">Ghost hits</div>
+      <div id="stat-ghost" style="font-size: 20px; font-weight: 500;">0</div>
+    </div>
+    <div style="background: var(--color-background-secondary); padding: 10px 12px; border-radius: var(--border-radius-md);">
+      <div style="font-size: 12px; color: var(--color-text-secondary);">Misses</div>
+      <div id="stat-misses" style="font-size: 20px; font-weight: 500;">0</div>
+    </div>
+    <div style="background: var(--color-background-secondary); padding: 10px 12px; border-radius: var(--border-radius-md);">
+      <div style="font-size: 12px; color: var(--color-text-secondary);">Hit rate</div>
+      <div id="stat-rate" style="font-size: 20px; font-weight: 500;">—</div>
+    </div>
+  </div>
+
+  <div style="font-size: 13px; color: var(--color-text-secondary); margin-bottom: 6px;">Operation log</div>
+  <div id="log" style="max-height: 160px; overflow-y: auto; background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 10px 12px; font-size: 12px; font-family: var(--font-mono); color: var(--color-text-secondary);">Waiting for first access…</div>
+
+</div>
+
+<script>
+(function() {
+  const KIN = 2, KOUT = 2, KM = 2;
+  let A1in = [], A1out = [], Am = [];
+  let hits = 0, misses = 0, ghostHits = 0;
+  let busy = false;
+
+  function makeSlot(kind, max) {
+    const slot = document.createElement('div');
+    slot.style.flex = '1';
+    slot.style.maxWidth = (100 / max) + '%';
+    slot.style.height = '54px';
+    slot.style.borderRadius = 'var(--border-radius-md)';
+    slot.style.display = 'flex';
+    slot.style.alignItems = 'center';
+    slot.style.justifyContent = 'center';
+    slot.style.fontSize = '20px';
+    slot.style.fontWeight = '500';
+    slot.style.transition = 'background 0.25s, border-color 0.25s, color 0.25s';
+    slot.classList.add('slot');
+    return slot;
+  }
+
+  function renderRow(rowId, list, kind, max) {
+    const row = document.getElementById(rowId);
+    row.innerHTML = '';
+    for (let i = 0; i < max; i++) {
+      const slot = makeSlot(kind, max);
+      if (list[i]) {
+        slot.textContent = list[i];
+        if (kind === 'a1in') {
+          slot.style.background = 'var(--color-background-info)';
+          slot.style.border = '0.5px solid var(--color-border-info)';
+          slot.style.color = 'var(--color-text-info)';
+        } else if (kind === 'am') {
+          slot.style.background = 'var(--color-background-success)';
+          slot.style.border = '0.5px solid var(--color-border-success)';
+          slot.style.color = 'var(--color-text-success)';
+        } else {
+          slot.style.background = 'transparent';
+          slot.style.border = '1px dashed var(--color-border-info)';
+          slot.style.color = 'var(--color-text-info)';
+          slot.style.opacity = '0.65';
+        }
+      } else {
+        slot.textContent = '—';
+        slot.style.background = 'var(--color-background-secondary)';
+        slot.style.border = '0.5px solid var(--color-border-tertiary)';
+        slot.style.color = 'var(--color-text-tertiary)';
+      }
+      row.appendChild(slot);
+    }
+  }
+
+  function render() {
+    renderRow('a1in-row', A1in, 'a1in', KIN);
+    renderRow('am-row', Am, 'am', KM);
+    renderRow('a1out-row', A1out, 'a1out', KOUT);
+    document.getElementById('stat-hits').textContent = hits;
+    document.getElementById('stat-misses').textContent = misses;
+    document.getElementById('stat-ghost').textContent = ghostHits;
+    const total = hits + misses + ghostHits;
+    document.getElementById('stat-rate').textContent = total === 0 ? '—' : Math.round(100 * (hits + ghostHits) / total) + '%';
+  }
+
+  function flash(rowId, idx, kind) {
+    const row = document.getElementById(rowId);
+    const slot = row.children[idx];
+    if (!slot) return;
+    const colors = {
+      hit:   { bg: '#C0DD97', border: '#639922' },
+      miss:  { bg: '#F7C1C1', border: '#E24B4A' },
+      ghost: { bg: '#CECBF6', border: '#534AB7' }
+    };
+    const c = colors[kind];
+    slot.style.background = c.bg;
+    slot.style.borderColor = c.border;
+    slot.style.opacity = '1';
+    setTimeout(() => render(), 700);
+  }
+
+  function setStatus(text, color) {
+    const el = document.getElementById('status');
+    el.textContent = text;
+    el.style.color = color;
+  }
+
+  function logLine(text) {
+    const logEl = document.getElementById('log');
+    if (logEl.textContent === 'Waiting for first access…') logEl.innerHTML = '';
+    const div = document.createElement('div');
+    div.style.padding = '2px 0';
+    div.textContent = text;
+    logEl.appendChild(div);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function snapshot() {
+    return `A1in=[${A1in.join(',')}] A1out=[${A1out.join(',')}] Am=[${Am.join(',')}]`;
+  }
+
+  function access(key) {
+    const inAm = Am.indexOf(key);
+    if (inAm !== -1) {
+      Am.splice(inAm, 1);
+      Am.unshift(key);
+      hits++;
+      render();
+      flash('am-row', 0, 'hit');
+      setStatus(`HIT in Am — ${key} refreshed to head.`, 'var(--color-text-success)');
+      logLine(`access(${key}) → HIT Am  | ${snapshot()}`);
+      return;
+    }
+    const inA1in = A1in.indexOf(key);
+    if (inA1in !== -1) {
+      hits++;
+      render();
+      flash('a1in-row', inA1in, 'hit');
+      setStatus(`HIT in A1in — ${key} found. A1in is FIFO, so no reordering.`, 'var(--color-text-success)');
+      logLine(`access(${key}) → HIT A1in (no reorder)  | ${snapshot()}`);
+      return;
+    }
+    const inA1out = A1out.indexOf(key);
+    if (inA1out !== -1) {
+      ghostHits++;
+      A1out.splice(inA1out, 1);
+      if (Am.length >= KM) {
+        Am.pop();
+      }
+      Am.unshift(key);
+      render();
+      flash('am-row', 0, 'ghost');
+      setStatus(`GHOST HIT — ${key} was in A1out, proven worth keeping. Promoted directly to Am.`, '#3C3489');
+      logLine(`access(${key}) → GHOST A1out, promote to Am  | ${snapshot()}`);
+      return;
+    }
+    misses++;
+    if (A1in.length >= KIN) {
+      const evicted = A1in.pop();
+      A1out.unshift(evicted);
+      if (A1out.length > KOUT) A1out.pop();
+    }
+    A1in.unshift(key);
+    render();
+    flash('a1in-row', 0, 'miss');
+    setStatus(`MISS — ${key} added to A1in (probationary).`, 'var(--color-text-danger)');
+    logLine(`access(${key}) → MISS, insert into A1in  | ${snapshot()}`);
+  }
+
+  function resetAll() {
+    A1in = []; A1out = []; Am = [];
+    hits = 0; misses = 0; ghostHits = 0;
+    document.getElementById('log').innerHTML = 'Waiting for first access…';
+    setStatus('Cache is empty. Click a letter to access it.', 'var(--color-text-secondary)');
+    render();
+  }
+
+  document.querySelectorAll('.access-btn').forEach(btn => {
+    btn.addEventListener('click', () => { if (!busy) access(btn.dataset.k); });
+  });
+  document.getElementById('reset-btn').addEventListener('click', () => { if (!busy) resetAll(); });
+  document.getElementById('demo-btn').addEventListener('click', async () => {
+    if (busy) return;
+    busy = true;
+    resetAll();
+    const seq = ['A', 'B', 'A', 'C', 'D', 'A', 'E', 'B'];
+    for (const k of seq) {
+      access(k);
+      await new Promise(r => setTimeout(r, 1200));
+    }
+    busy = false;
+  });
+
+  render();
+})();
+</script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Memory Allocation — Buddy System</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --success-soft: rgba(92,198,111,0.16); --success-border: rgba(92,198,111,0.40);
+        --danger: #f06868; --danger-soft: rgba(240,104,104,0.14); --danger-border: rgba(240,104,104,0.42);
+        --info: #5e9ff6; --info-soft: rgba(94,159,246,0.14); --info-border: rgba(94,159,246,0.40);
+        --warning: #f0b568; --warning-soft: rgba(240,181,104,0.16); --warning-border: rgba(240,181,104,0.50);
+        --waste: rgba(144,153,168,0.18); --waste-border: rgba(144,153,168,0.4);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body { padding: 14px 16px 16px; background-image: linear-gradient(to right, rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.025) 1px, transparent 1px); background-size: 40px 40px; }
+      .container { max-width: 980px; margin: 0 auto; }
+
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+      .stat .lbl { font-size: 11px; color: var(--muted); }
+      .stat .val { font-size: 18px; font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
+      .stat.frag .val { color: var(--warning); }
+
+      .tabs { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+      .tab { background: var(--elevated); color: var(--muted); border: 1px solid var(--border); border-radius: 999px; cursor: pointer; padding: 6px 13px; font: 500 12px/1 var(--sans); transition: all 150ms ease; white-space: nowrap; }
+      .tab:hover { border-color: var(--border-strong); color: var(--fg); }
+      .tab.active { background: var(--info-soft); color: var(--info); border-color: var(--info-border); }
+
+      .bar { display: flex; width: 100%; height: 76px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-strong); }
+      .blk { overflow: hidden; display: flex; transition: outline 150ms ease, transform 200ms ease; position: relative; }
+      .blk + .blk { border-left: 1px solid rgba(0,0,0,0.45); }
+      .blk.hot { outline: 2px solid var(--warning); outline-offset: -2px; transform: translateY(-3px); z-index: 1; }
+      .seg { display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; overflow: hidden; font-family: var(--mono); }
+      .seg.free { background: var(--info-soft); color: var(--info); width: 100%; }
+      .seg.used { background: var(--success-soft); color: var(--success); }
+      .seg.waste { background: var(--waste); color: var(--muted); font-size: 10px; flex: 1; }
+      .ruler { display: flex; justify-content: space-between; margin-top: 6px; font-size: 10.5px; color: var(--subtle); font-family: var(--mono); }
+      .freelist { margin-top: 12px; font-size: 12px; color: var(--muted); font-family: var(--mono); }
+      .freelist b { color: var(--info); }
+
+      .legend { display: flex; gap: 14px; flex-wrap: wrap; margin: 10px 0 4px; }
+      .legend .item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+      .legend .sw { width: 11px; height: 11px; border-radius: 3px; }
+      .sw.free { background: var(--info-soft); border: 1px solid var(--info-border); }
+      .sw.used { background: var(--success-soft); border: 1px solid var(--success-border); }
+      .sw.waste { background: var(--waste); border: 1px solid var(--waste-border); }
+
+      .queue { display: flex; flex-wrap: wrap; gap: 7px; margin: 12px 0; }
+      .pill { padding: 5px 11px; border-radius: 999px; font-size: 12px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: var(--elevated); color: var(--muted); font-family: var(--mono); }
+      .pill.next { background: var(--warning-soft); color: var(--warning); border-color: var(--warning-border); }
+      .pill.done { background: var(--success-soft); color: var(--success); border-color: var(--success-border); }
+      .pill.fail { background: var(--danger-soft); color: var(--danger); border-color: var(--danger-border); }
+
+      .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+      .panel .ttl { font-size: 10px; color: var(--subtle); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+      .dot { width: 7px; height: 7px; border-radius: 50%; }
+      #narration { font-size: 12.5px; line-height: 1.6; color: var(--fg); min-height: 42px; }
+      #narration .ok { color: var(--success); font-weight: 600; }
+      #narration .bad { color: var(--danger); font-weight: 600; }
+      #narration .em { color: var(--accent); font-weight: 600; }
+      #narration code { font-family: var(--mono); background: var(--elevated); padding: 1px 4px; border-radius: 4px; font-size: 11.5px; }
+
+      .controls { display: flex; gap: 8px; align-items: center; }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; padding: 9px 13px; transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.10); background: var(--accent); }
+      button.ghost { background: transparent; }
+      .counter { margin-left: auto; font: 12px var(--mono); color: var(--muted); }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+    </style>
+  </head>
+  <body>
+    <h2 class="sr-only">Buddy system memory allocation: requests are rounded up to a power of two, large blocks split in half repeatedly to fit, and on free a block merges with its buddy whenever the buddy is also free.</h2>
+    <div class="container">
+      <div class="stats">
+        <div class="stat"><div class="lbl">Total memory</div><div class="val" id="s-total">1024K</div></div>
+        <div class="stat"><div class="lbl">In use (blocks)</div><div class="val" id="s-used">0K</div></div>
+        <div class="stat"><div class="lbl">Free</div><div class="val" id="s-free">1024K</div></div>
+        <div class="stat frag"><div class="lbl">Internal frag</div><div class="val" id="s-frag">0K</div></div>
+      </div>
+
+      <div class="tabs" id="tabs">
+        <button class="tab active" data-scn="splitmerge">1 · Split &amp; merge</button>
+        <button class="tab" data-scn="cascade">2 · Full merge cascade</button>
+      </div>
+
+      <div class="bar" id="bar"></div>
+      <div class="ruler" id="ruler"></div>
+      <div class="freelist" id="freelist"></div>
+
+      <div class="legend">
+        <div class="item"><span class="sw free"></span>Free block (power of 2)</div>
+        <div class="item"><span class="sw used"></span>Allocated (requested part)</div>
+        <div class="item"><span class="sw waste"></span>Internal fragmentation</div>
+      </div>
+
+      <div class="queue" id="queue"></div>
+
+      <div class="panel">
+        <div class="ttl"><span class="dot" id="ph-dot"></span><span id="ph-lbl">step</span></div>
+        <div id="narration"></div>
+      </div>
+
+      <div class="controls">
+        <button id="prev"><i class="ti ti-arrow-left"></i>Prev</button>
+        <button id="next" class="primary">Next step<i class="ti ti-arrow-right"></i></button>
+        <button id="auto" class="ghost"><i class="ti ti-player-play"></i>Auto</button>
+        <button id="restart" class="ghost"><i class="ti ti-refresh"></i>Restart</button>
+        <span class="counter" id="counter">Step 1</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        function postHeight() { const h = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight); parent.postMessage({ type: "prototype:height", height: h }, "*"); }
+        if (window.ResizeObserver) new ResizeObserver(postHeight).observe(document.body);
+        window.addEventListener("load", postHeight);
+
+        const TOTAL = 1024, MIN = 64;
+        const $ = (id) => document.getElementById(id);
+
+        const SCN = {
+          splitmerge: {
+            ops: [
+              { t: "alloc", id: "P1", size: 100 }, { t: "alloc", id: "P2", size: 240 },
+              { t: "alloc", id: "P3", size: 60 }, { t: "alloc", id: "P4", size: 256 },
+              { t: "free", id: "P3" }, { t: "free", id: "P1" },
+            ],
+            intro: "<b>Setup.</b> One free <b>1024K</b> block, minimum block <b>64K</b>. Every request is rounded up to a power of two, and a block is split in half until it's the right size. Watch the splits on the way in — and the buddy merges on the way out.",
+          },
+          cascade: {
+            ops: [
+              { t: "alloc", id: "Q1", size: 200 }, { t: "alloc", id: "Q2", size: 200 },
+              { t: "free", id: "Q1" }, { t: "free", id: "Q2" },
+            ],
+            intro: "<b>Coalescing in action.</b> Two 200K requests each round up to a 256K block. Free them in order and watch the merges cascade: 256+256 → 512, then 512+512 → the whole <b>1024K</b> heap, reborn from a single XOR each step.",
+          },
+        };
+
+        const nextPow2 = (n) => { let p = MIN; while (p < n) p *= 2; return p; };
+
+        function build(scnKey) {
+          const scn = SCN[scnKey];
+          const steps = [];
+          let blocks = [{ start: 0, size: TOTAL, status: "free" }];
+          let ops = scn.ops.map((o) => ({ ...o }));
+
+          const snap = (o) => steps.push({
+            blocks: blocks.map((b) => ({ ...b })), ops: ops.map((x) => ({ ...x })),
+            hot: (o.hot || []).slice(), phase: o.phase, narr: o.narr,
+          });
+          const idxOf = (start, size) => blocks.findIndex((b) => b.start === start && b.size === size);
+
+          snap({ phase: "init", narr: scn.intro });
+
+          for (let oi = 0; oi < ops.length; oi++) {
+            const op = ops[oi];
+            if (op.t === "alloc") {
+              const req = nextPow2(op.size), waste = req - op.size;
+              snap({ phase: "request", narr: "<b>" + op.id + "</b> requests <b>" + op.size + "K</b>. Round up to the next power of two: <b>" + req + "K</b>" + (waste ? " — that bakes in <span class='em'>" + waste + "K of internal fragmentation</span> inside the block." : " — an exact power of two, no waste.") });
+              let cand = blocks.map((b, i) => ({ b, i })).filter((x) => x.b.status === "free" && x.b.size >= req).sort((a, b) => a.b.size - b.b.size || a.b.start - b.b.start);
+              if (!cand.length) { op.status = "failed"; snap({ phase: "fail", narr: "<b class='bad'>" + op.id + " failed.</b> No free block of at least " + req + "K exists." }); continue; }
+              let ti = cand[0].i;
+              snap({ phase: "search", hot: [ti], narr: "Smallest free block that can hold " + req + "K is the <b>" + blocks[ti].size + "K</b> block at address " + blocks[ti].start + "K." });
+              while (blocks[ti].size > req) {
+                const t = blocks[ti], half = t.size / 2;
+                blocks.splice(ti, 1, { start: t.start, size: half, status: "free" }, { start: t.start + half, size: half, status: "free" });
+                snap({ phase: "split", hot: [ti, ti + 1], narr: "Too big. <span class='em'>Split</span> the " + t.size + "K block into two <b>" + half + "K</b> buddies at " + t.start + "K and " + (t.start + half) + "K. Keep the left half." });
+              }
+              blocks[ti] = { start: blocks[ti].start, size: req, status: "alloc", id: op.id, req: op.size };
+              op.status = "done";
+              snap({ phase: "place", hot: [ti], narr: "<b>" + op.id + "</b> takes the <b>" + req + "K</b> block at " + blocks[ti].start + "K · " + op.size + "K used" + (waste ? " + <b>" + waste + "K</b> wasted inside it." : ", exact fit.") });
+            } else {
+              let ix = blocks.findIndex((b) => b.status === "alloc" && b.id === op.id);
+              if (ix === -1) { op.status = "failed"; snap({ phase: "fail", narr: "<b>" + op.id + "</b> is not currently allocated." }); continue; }
+              const orig = blocks[ix];
+              blocks[ix] = { start: orig.start, size: orig.size, status: "free" };
+              snap({ phase: "freeing", hot: [ix], narr: "Freeing <b>" + op.id + "</b> — the " + orig.size + "K block at " + orig.start + "K. Now check its buddy for a merge." });
+              op.status = "done";
+              let merged = false;
+              while (true) {
+                const blk = blocks[ix];
+                if (blk.size >= TOTAL) break;
+                const buddyStart = blk.start ^ blk.size;
+                const bi = idxOf(buddyStart, blk.size);
+                if (bi === -1) { snap({ phase: "freeing", hot: [ix], narr: "The buddy region at " + buddyStart + "K is split into smaller blocks still in use — <span class='em'>can't merge further</span>." }); break; }
+                if (blocks[bi].status !== "free") { snap({ phase: "freeing", hot: [ix, bi], narr: "Buddy at " + buddyStart + "K is held by <b>" + blocks[bi].id + "</b> — both halves must be free to merge. <span class='em'>Stop.</span>" }); break; }
+                snap({ phase: "merge", hot: [ix, bi], narr: "Buddy at " + buddyStart + "K (" + blk.size + "K) is <span class='ok'>also free</span>. <span class='em'>Merge</span> into a " + blk.size * 2 + "K block." });
+                const ms = Math.min(blk.start, buddyStart), lo = Math.min(ix, bi), hi = Math.max(ix, bi);
+                blocks.splice(hi, 1); blocks.splice(lo, 1, { start: ms, size: blk.size * 2, status: "free" });
+                ix = lo; merged = true;
+                snap({ phase: "merge", hot: [ix], narr: "Now a <b>" + blocks[ix].size + "K</b> free block at " + blocks[ix].start + "K. Check <i>its</i> buddy too." });
+              }
+              if (!merged) snap({ phase: "place", narr: "<b>" + op.id + " freed.</b> Its buddy was busy, so the block stays at " + blocks[ix].size + "K — no coalescing this time." });
+              else snap({ phase: "place", narr: "<b>" + op.id + " freed</b> and merged up to a <b>" + blocks[ix].size + "K</b> free block at " + blocks[ix].start + "K." });
+            }
+          }
+
+          const fragFinal = blocks.filter((b) => b.status === "alloc").reduce((s, b) => s + (b.size - b.req), 0);
+          const lesson = scnKey === "cascade"
+            ? "Both buddies freed, so the merges cascaded all the way back to a single <b>1024K</b> block. Coalescing costs one XOR and a list edit per level — that speed is the whole point of the buddy system."
+            : "Two free blocks remain but sit on opposite sides of P2 and P4 — they aren't buddies, so they can't merge. Even buddy systems leave gaps when busy blocks sit between free ones; and <span class='em'>" + fragFinal + "K is still wasted inside</span> the rounded-up allocations.";
+          snap({ phase: "done", narr: "<b>Run complete.</b> " + lesson });
+          return steps;
+        }
+
+        const PHASE = {
+          init: { lbl: "Setup", color: "#9099a8" },
+          request: { lbl: "Request → round up", color: "#5e9ff6" },
+          search: { lbl: "Find smallest block", color: "#5e9ff6" },
+          split: { lbl: "Splitting", color: "#f0b568" },
+          place: { lbl: "Done", color: "#5cc66f" },
+          freeing: { lbl: "Freeing", color: "#f0b568" },
+          merge: { lbl: "Merging buddies", color: "#5cc66f" },
+          fail: { lbl: "Failed", color: "#f06868" },
+          done: { lbl: "Done", color: "#5cc66f" },
+        };
+
+        let cur = "splitmerge", steps = build(cur), idx = 0, timer = null;
+
+        function freeSummary(blocks) {
+          const c = {}; for (const b of blocks) if (b.status === "free") c[b.size] = (c[b.size] || 0) + 1;
+          const sizes = Object.keys(c).map(Number).sort((a, b) => b - a);
+          return sizes.length ? sizes.map((s) => c[s] + "×" + s + "K").join("  ·  ") : "empty";
+        }
+
+        function render() {
+          const st = steps[idx];
+          const bar = $("bar"); bar.innerHTML = "";
+          st.blocks.forEach((b, i) => {
+            const d = document.createElement("div");
+            d.className = "blk" + (st.hot.includes(i) ? " hot" : "");
+            d.style.width = (b.size / TOTAL * 100) + "%";
+            d.title = (b.status === "alloc" ? b.id : "free") + " · " + b.size + "K @ " + b.start + "K";
+            if (b.status === "free") {
+              const s = document.createElement("div"); s.className = "seg free";
+              if (b.size / TOTAL > 0.05) s.textContent = b.size + "K free";
+              d.appendChild(s);
+            } else {
+              const usedPct = b.req / b.size * 100;
+              const u = document.createElement("div"); u.className = "seg used"; u.style.width = usedPct + "%";
+              if (b.size / TOTAL > 0.06) u.textContent = b.id + "·" + b.req + "K";
+              d.appendChild(u);
+              if (b.req < b.size) { const w = document.createElement("div"); w.className = "seg waste"; if ((b.size - b.req) / TOTAL > 0.03) w.textContent = (b.size - b.req); d.appendChild(w); }
+            }
+            bar.appendChild(d);
+          });
+          const r = $("ruler"); r.innerHTML = "";
+          [0, 256, 512, 768, 1024].forEach((v) => { const s = document.createElement("span"); s.textContent = v + "K"; r.appendChild(s); });
+          $("freelist").innerHTML = "<b>Free list by size:</b> " + freeSummary(st.blocks);
+
+          const qe = $("queue"); qe.innerHTML = "";
+          const nextIdx = st.ops.findIndex((o) => !o.status);
+          st.ops.forEach((o, i) => {
+            const pill = document.createElement("div");
+            let cls = "pill", ic = "ti-clock";
+            if (o.status === "done") { cls += " done"; ic = "ti-check"; }
+            else if (o.status === "failed") { cls += " fail"; ic = "ti-x"; }
+            else if (i === nextIdx) { cls += " next"; ic = o.t === "alloc" ? "ti-arrow-right" : "ti-trash"; }
+            pill.className = cls;
+            pill.innerHTML = '<i class="ti ' + ic + '"></i>' + (o.t === "alloc" ? o.id + " alloc " + o.size + "K" : o.id + " free");
+            qe.appendChild(pill);
+          });
+
+          const used = st.blocks.filter((b) => b.status === "alloc").reduce((s, b) => s + b.size, 0);
+          const frag = st.blocks.filter((b) => b.status === "alloc").reduce((s, b) => s + (b.size - b.req), 0);
+          $("s-total").textContent = TOTAL + "K";
+          $("s-used").textContent = used + "K";
+          $("s-free").textContent = (TOTAL - used) + "K";
+          $("s-frag").textContent = frag + "K";
+
+          const ph = PHASE[st.phase];
+          $("ph-dot").style.background = ph.color;
+          $("ph-lbl").textContent = ph.lbl; $("ph-lbl").style.color = ph.color;
+          $("narration").innerHTML = st.narr;
+          $("counter").textContent = "Step " + (idx + 1) + " / " + steps.length;
+          $("prev").disabled = idx === 0;
+          $("next").disabled = idx === steps.length - 1;
+        }
+
+        function stopAuto() { if (timer) { clearInterval(timer); timer = null; $("auto").innerHTML = '<i class="ti ti-player-play"></i>Auto'; } }
+        function go(n) { const max = steps.length - 1; idx = Math.max(0, Math.min(max, n)); render(); if (idx === max) stopAuto(); }
+        $("next").onclick = () => { stopAuto(); go(idx + 1); };
+        $("prev").onclick = () => { stopAuto(); go(idx - 1); };
+        $("restart").onclick = () => { stopAuto(); go(0); };
+        $("auto").onclick = () => { if (timer) { stopAuto(); return; } if (idx === steps.length - 1) idx = 0; $("auto").innerHTML = '<i class="ti ti-player-pause"></i>Pause'; timer = setInterval(() => go(idx + 1), 1150); };
+        document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => {
+          stopAuto(); document.querySelectorAll(".tab").forEach((x) => x.classList.remove("active"));
+          b.classList.add("active"); cur = b.dataset.scn; steps = build(cur); idx = 0; render();
+        }));
+        render();
+      })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cache Eviction — Subroute</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-strong: #d56a1f;
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --warning: #f0b568;
+        --warning-soft: rgba(240, 181, 104, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --radius-md: 8px;
+
+        --color-background-primary: var(--bg);
+        --color-background-secondary: var(--surface);
+        --color-background-success: var(--success-soft);
+        --color-background-danger: var(--danger-soft);
+        --color-background-info: var(--info-soft);
+        --color-background-warning: var(--warning-soft);
+        --color-text-primary: var(--fg);
+        --color-text-secondary: var(--muted);
+        --color-text-tertiary: var(--subtle);
+        --color-text-success: var(--success);
+        --color-text-danger: var(--danger);
+        --color-text-info: var(--info);
+        --color-text-warning: var(--warning);
+        --color-border-secondary: var(--border-strong);
+        --color-border-tertiary: var(--border);
+        --color-border-info: rgba(94, 159, 246, 0.45);
+        --color-border-success: rgba(92, 198, 111, 0.45);
+        --color-border-warning: rgba(240, 181, 104, 0.45);
+        --border-radius-md: var(--radius-md);
+        --font-mono: var(--mono);
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 20px 20px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.025) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.025) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      button {
+        background: var(--elevated);
+        color: var(--fg);
+        font: 500 13px/1 var(--sans);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        cursor: pointer;
+        transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease;
+      }
+      button:hover { border-color: var(--border-strong); background: var(--surface); }
+      button:active { transform: scale(0.97); }
+      .access-btn, .insert-btn {
+        background: var(--accent);
+        color: #1a1003;
+        border-color: transparent;
+        font-weight: 600;
+      }
+      .access-btn:hover, .insert-btn:hover {
+        filter: brightness(1.08);
+        background: var(--accent);
+        border-color: transparent;
+      }
+      input[type="range"] { accent-color: var(--accent); }
+      .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    </style>
+  </head>
+  <body>
+<h2 class="sr-only">Interactive LFU cache demonstration with capacity 4. Click letter buttons to access items; each access increments a frequency counter, and the item with the lowest count is evicted first.</h2>
+
+<div style="padding: 1rem 0;">
+
+  <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--color-text-secondary); margin-bottom: 8px; padding: 0 4px;">
+    <span>← Highest frequency</span>
+    <span>Lowest frequency (next to evict) →</span>
+  </div>
+
+  <div id="cache-row" style="display: flex; gap: 10px; margin-bottom: 8px;">
+    <div class="slot" data-i="0" style="flex:1; height: 84px; border-radius: var(--border-radius-md); background: var(--color-background-secondary); border: 0.5px solid var(--color-border-tertiary); display: flex; flex-direction: column; align-items: center; justify-content: center; transition: background 0.25s, border-color 0.25s;">
+      <div class="letter" style="font-size: 24px; font-weight: 500; color: var(--color-text-tertiary); line-height: 1;">—</div>
+      <div class="freq" style="font-size: 12px; color: var(--color-text-tertiary); margin-top: 4px;">&nbsp;</div>
+    </div>
+    <div class="slot" data-i="1" style="flex:1; height: 84px; border-radius: var(--border-radius-md); background: var(--color-background-secondary); border: 0.5px solid var(--color-border-tertiary); display: flex; flex-direction: column; align-items: center; justify-content: center; transition: background 0.25s, border-color 0.25s;">
+      <div class="letter" style="font-size: 24px; font-weight: 500; color: var(--color-text-tertiary); line-height: 1;">—</div>
+      <div class="freq" style="font-size: 12px; color: var(--color-text-tertiary); margin-top: 4px;">&nbsp;</div>
+    </div>
+    <div class="slot" data-i="2" style="flex:1; height: 84px; border-radius: var(--border-radius-md); background: var(--color-background-secondary); border: 0.5px solid var(--color-border-tertiary); display: flex; flex-direction: column; align-items: center; justify-content: center; transition: background 0.25s, border-color 0.25s;">
+      <div class="letter" style="font-size: 24px; font-weight: 500; color: var(--color-text-tertiary); line-height: 1;">—</div>
+      <div class="freq" style="font-size: 12px; color: var(--color-text-tertiary); margin-top: 4px;">&nbsp;</div>
+    </div>
+    <div class="slot" data-i="3" style="flex:1; height: 84px; border-radius: var(--border-radius-md); background: var(--color-background-secondary); border: 0.5px solid var(--color-border-tertiary); display: flex; flex-direction: column; align-items: center; justify-content: center; transition: background 0.25s, border-color 0.25s;">
+      <div class="letter" style="font-size: 24px; font-weight: 500; color: var(--color-text-tertiary); line-height: 1;">—</div>
+      <div class="freq" style="font-size: 12px; color: var(--color-text-tertiary); margin-top: 4px;">&nbsp;</div>
+    </div>
+  </div>
+
+  <div id="status" style="padding: 10px 14px; border-radius: var(--border-radius-md); background: var(--color-background-secondary); font-size: 14px; color: var(--color-text-secondary); margin-bottom: 1.25rem; min-height: 20px;">Cache is empty. Click a letter below to access it.</div>
+
+  <div style="font-size: 13px; color: var(--color-text-secondary); margin-bottom: 8px;">Access an item</div>
+  <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 1.25rem;">
+    <button class="access-btn" data-k="A" style="width: 48px; height: 44px; font-size: 18px; font-weight: 500;">A</button>
+    <button class="access-btn" data-k="B" style="width: 48px; height: 44px; font-size: 18px; font-weight: 500;">B</button>
+    <button class="access-btn" data-k="C" style="width: 48px; height: 44px; font-size: 18px; font-weight: 500;">C</button>
+    <button class="access-btn" data-k="D" style="width: 48px; height: 44px; font-size: 18px; font-weight: 500;">D</button>
+    <button class="access-btn" data-k="E" style="width: 48px; height: 44px; font-size: 18px; font-weight: 500;">E</button>
+    <button class="access-btn" data-k="F" style="width: 48px; height: 44px; font-size: 18px; font-weight: 500;">F</button>
+    <div style="flex: 1;"></div>
+    <button id="demo-btn" style="height: 44px; padding: 0 14px; font-size: 14px;"><i class="ti ti-player-play" style="font-size:16px; vertical-align:-2px; margin-right:4px" aria-hidden="true"></i>Run demo</button>
+    <button id="reset-btn" style="height: 44px; padding: 0 14px; font-size: 14px;"><i class="ti ti-refresh" style="font-size:16px; vertical-align:-2px; margin-right:4px" aria-hidden="true"></i>Reset</button>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 1.25rem;">
+    <div style="background: var(--color-background-secondary); padding: 10px 12px; border-radius: var(--border-radius-md);">
+      <div style="font-size: 12px; color: var(--color-text-secondary);">Hits</div>
+      <div id="stat-hits" style="font-size: 22px; font-weight: 500;">0</div>
+    </div>
+    <div style="background: var(--color-background-secondary); padding: 10px 12px; border-radius: var(--border-radius-md);">
+      <div style="font-size: 12px; color: var(--color-text-secondary);">Misses</div>
+      <div id="stat-misses" style="font-size: 22px; font-weight: 500;">0</div>
+    </div>
+    <div style="background: var(--color-background-secondary); padding: 10px 12px; border-radius: var(--border-radius-md);">
+      <div style="font-size: 12px; color: var(--color-text-secondary);">Hit rate</div>
+      <div id="stat-rate" style="font-size: 22px; font-weight: 500;">—</div>
+    </div>
+  </div>
+
+  <div style="font-size: 13px; color: var(--color-text-secondary); margin-bottom: 6px;">Operation log</div>
+  <div id="log" style="max-height: 180px; overflow-y: auto; background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 10px 12px; font-size: 13px; font-family: var(--font-mono); color: var(--color-text-secondary);">Waiting for first access…</div>
+
+</div>
+
+<script>
+(function() {
+  const CAPACITY = 4;
+  let counter = 0;
+  let cache = []; // {key, freq, lastAccess}
+  let hits = 0, misses = 0;
+  let demoRunning = false;
+
+  const slots = document.querySelectorAll('.slot');
+  const statusEl = document.getElementById('status');
+  const logEl = document.getElementById('log');
+  const statHits = document.getElementById('stat-hits');
+  const statMisses = document.getElementById('stat-misses');
+  const statRate = document.getElementById('stat-rate');
+
+  function sortCache() {
+    cache.sort((a, b) => {
+      if (b.freq !== a.freq) return b.freq - a.freq;
+      return b.lastAccess - a.lastAccess;
+    });
+  }
+
+  function render() {
+    slots.forEach((slot, i) => {
+      const letterEl = slot.querySelector('.letter');
+      const freqEl = slot.querySelector('.freq');
+      if (cache[i]) {
+        letterEl.textContent = cache[i].key;
+        letterEl.style.color = 'var(--color-text-primary)';
+        freqEl.textContent = '×' + cache[i].freq;
+        freqEl.style.color = 'var(--color-text-secondary)';
+        slot.style.background = 'var(--color-background-primary)';
+        slot.style.borderColor = 'var(--color-border-secondary)';
+      } else {
+        letterEl.textContent = '—';
+        letterEl.style.color = 'var(--color-text-tertiary)';
+        freqEl.innerHTML = '&nbsp;';
+        slot.style.background = 'var(--color-background-secondary)';
+        slot.style.borderColor = 'var(--color-border-tertiary)';
+      }
+    });
+    statHits.textContent = hits;
+    statMisses.textContent = misses;
+    const total = hits + misses;
+    statRate.textContent = total === 0 ? '—' : Math.round((hits / total) * 100) + '%';
+  }
+
+  function flashSlot(idx, kind) {
+    const slot = slots[idx];
+    if (!slot) return;
+    const colors = {
+      hit:   { bg: '#C0DD97', border: '#639922' },
+      miss:  { bg: '#F7C1C1', border: '#E24B4A' },
+      evict: { bg: '#FAC775', border: '#BA7517' }
+    };
+    const c = colors[kind];
+    slot.style.background = c.bg;
+    slot.style.borderColor = c.border;
+    setTimeout(() => render(), 600);
+  }
+
+  function logLine(text) {
+    if (logEl.textContent === 'Waiting for first access…') logEl.innerHTML = '';
+    const div = document.createElement('div');
+    div.style.padding = '2px 0';
+    div.textContent = text;
+    logEl.appendChild(div);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function snapshot() {
+    return cache.map(e => `${e.key}×${e.freq}`).join(', ');
+  }
+
+  function access(key) {
+    counter++;
+    const existing = cache.find(e => e.key === key);
+    if (existing) {
+      existing.freq++;
+      existing.lastAccess = counter;
+      hits++;
+      sortCache();
+      render();
+      const idx = cache.findIndex(e => e.key === key);
+      statusEl.textContent = `HIT — ${key} found. Frequency now ×${existing.freq}.`;
+      statusEl.style.color = '#27500A';
+      flashSlot(idx, 'hit');
+      logLine(`access(${key}) → HIT (×${existing.freq})  | cache: [${snapshot()}]`);
+    } else {
+      misses++;
+      if (cache.length >= CAPACITY) {
+        sortCache();
+        const evicted = cache.pop();
+        // briefly show evict
+        const lastSlot = slots[CAPACITY - 1];
+        lastSlot.querySelector('.letter').textContent = evicted.key;
+        lastSlot.querySelector('.letter').style.color = '#412402';
+        lastSlot.querySelector('.freq').textContent = '×' + evicted.freq;
+        lastSlot.querySelector('.freq').style.color = '#633806';
+        lastSlot.style.background = '#FAC775';
+        lastSlot.style.borderColor = '#BA7517';
+        cache.push({ key, freq: 1, lastAccess: counter });
+        sortCache();
+        setTimeout(() => {
+          render();
+          const idx = cache.findIndex(e => e.key === key);
+          flashSlot(idx, 'miss');
+        }, 550);
+        statusEl.textContent = `MISS — ${key} not in cache. Evicted ${evicted.key} (lowest freq ×${evicted.freq}), added ${key} at ×1.`;
+        statusEl.style.color = '#854F0B';
+        logLine(`access(${key}) → MISS, evict ${evicted.key}×${evicted.freq}  | cache: [${snapshot()}]`);
+      } else {
+        cache.push({ key, freq: 1, lastAccess: counter });
+        sortCache();
+        render();
+        const idx = cache.findIndex(e => e.key === key);
+        statusEl.textContent = `MISS — ${key} not in cache. Added at ×1 (no eviction needed).`;
+        statusEl.style.color = '#791F1F';
+        flashSlot(idx, 'miss');
+        logLine(`access(${key}) → MISS  | cache: [${snapshot()}]`);
+      }
+    }
+  }
+
+  document.querySelectorAll('.access-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (demoRunning) return;
+      access(btn.dataset.k);
+    });
+  });
+
+  document.getElementById('reset-btn').addEventListener('click', () => {
+    if (demoRunning) return;
+    cache = [];
+    hits = 0; misses = 0; counter = 0;
+    logEl.innerHTML = 'Waiting for first access…';
+    statusEl.textContent = 'Cache is empty. Click a letter below to access it.';
+    statusEl.style.color = 'var(--color-text-secondary)';
+    render();
+  });
+
+  document.getElementById('demo-btn').addEventListener('click', async () => {
+    if (demoRunning) return;
+    demoRunning = true;
+    cache = [];
+    hits = 0; misses = 0; counter = 0;
+    logEl.innerHTML = 'Waiting for first access…';
+    render();
+    const sequence = ['A', 'A', 'A', 'B', 'B', 'C', 'D', 'E', 'F'];
+    for (const k of sequence) {
+      access(k);
+      await new Promise(r => setTimeout(r, 1100));
+    }
+    demoRunning = false;
+  });
+
+  render();
+})();
+</script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

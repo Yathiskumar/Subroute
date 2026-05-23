@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cache Write — Write-Through</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.14);
+        --success-border: rgba(92, 198, 111, 0.40);
+        --danger: #f06868;
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.14);
+        --info-border: rgba(94, 159, 246, 0.40);
+        --warning: #f0b568;
+        --warning-soft: rgba(240, 181, 104, 0.14);
+        --warning-border: rgba(240, 181, 104, 0.40);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        padding: 0;
+        min-height: 100%;
+        background: var(--bg);
+        color: var(--fg);
+        font-family: var(--sans);
+        font-size: 13px;
+      }
+      body {
+        padding: 14px 16px 16px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.025) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.025) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      .container { max-width: 980px; margin: 0 auto; }
+
+      /* === Stats === */
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+      .stat .lbl { font-size: 11px; color: var(--muted); }
+      .stat .val { font-size: 18px; font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
+      .stat.green { background: var(--success-soft); border-color: var(--success-border); }
+      .stat.green .lbl { color: var(--success); }
+
+      /* === Stage: CPU | wire | Cache | wire | Memory === */
+      .stage {
+        position: relative;
+        display: grid;
+        grid-template-columns: 96px minmax(60px, 1fr) minmax(220px, 270px) minmax(60px, 1fr) minmax(160px, 180px);
+        align-items: stretch;
+        gap: 0;
+        padding: 14px 4px;
+        margin-bottom: 14px;
+      }
+
+      .block {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 8px;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+      .block-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        padding: 0 2px 6px;
+        border-bottom: 1px solid var(--border);
+        margin-bottom: 6px;
+      }
+      .block-title { font-size: 11px; font-weight: 600; color: var(--fg); text-transform: uppercase; letter-spacing: 0.06em; }
+      .block-meta { font-size: 10px; color: var(--muted); font-family: var(--mono); }
+
+      .cpu {
+        align-items: center;
+        justify-content: center;
+        background: var(--elevated);
+      }
+      .cpu .cpu-icon {
+        width: 32px; height: 32px;
+        border-radius: 8px;
+        background: linear-gradient(135deg, rgba(94,159,246,0.20), rgba(94,159,246,0.05));
+        border: 1px solid var(--info-border);
+        display: grid; place-items: center;
+        color: var(--info);
+        font-size: 18px;
+      }
+      .cpu .cpu-label { font-size: 11px; font-weight: 600; margin-top: 6px; }
+      .cpu .cpu-sub { font-size: 10px; color: var(--muted); font-family: var(--mono); }
+
+      /* === Cache lines === */
+      .lines { display: flex; flex-direction: column; gap: 4px; }
+      .line {
+        display: grid;
+        grid-template-columns: 14px 1fr auto;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 7px;
+        height: 30px;
+        font-family: var(--mono);
+        font-size: 11px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        transition: background 250ms ease, border-color 250ms ease;
+      }
+      .line .ln-idx { color: var(--subtle); font-size: 10px; }
+      .line .ln-val { color: var(--fg); }
+      .line .ln-val .key { color: var(--muted); }
+      .line .ln-val .arrow { color: var(--subtle); margin: 0 3px; }
+      .line .ln-val .v { font-weight: 600; }
+      .line.empty .ln-val { color: var(--subtle); font-style: italic; }
+      .badge {
+        font-size: 9px;
+        font-family: var(--mono);
+        padding: 1px 6px;
+        border-radius: 999px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        border: 1px solid;
+      }
+      .badge.empty { color: var(--subtle); border-color: var(--border); background: transparent; }
+      .badge.synced { color: var(--success); border-color: var(--success-border); background: var(--success-soft); }
+
+      /* === Memory cells === */
+      .cells { display: flex; flex-direction: column; gap: 3px; }
+      .cell {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 4px 8px;
+        height: 24px;
+        font-family: var(--mono);
+        font-size: 11px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        transition: background 250ms ease;
+      }
+      .cell .addr { color: var(--muted); font-size: 10px; }
+      .cell .v { color: var(--fg); font-weight: 600; }
+
+      /* === Wires (between blocks) === */
+      .wire {
+        position: relative;
+        align-self: center;
+        height: 2px;
+        background: var(--border);
+        border-radius: 1px;
+      }
+      .wire.dashed {
+        background: repeating-linear-gradient(to right, var(--border) 0 5px, transparent 5px 9px);
+        background-color: transparent;
+        height: 2px;
+      }
+      .wire .wire-label {
+        position: absolute;
+        top: -20px;
+        left: 50%;
+        transform: translateX(-50%);
+        white-space: nowrap;
+        font-size: 10px;
+        color: var(--muted);
+        font-family: var(--mono);
+      }
+      .wire .arrowhead {
+        position: absolute;
+        right: -1px; top: 50%;
+        transform: translateY(-50%);
+        width: 0; height: 0;
+        border-left: 6px solid var(--border-strong);
+        border-top: 4px solid transparent;
+        border-bottom: 4px solid transparent;
+      }
+      .wire.dashed .arrowhead { border-left-color: var(--border-strong); }
+
+      .dot {
+        position: absolute;
+        top: 50%;
+        left: 0;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--accent);
+        transform: translate(-50%, -50%);
+        opacity: 0;
+        pointer-events: none;
+        box-shadow: 0 0 12px currentColor, 0 0 4px currentColor;
+        color: var(--accent);
+      }
+      .dot.blue { background: var(--info); color: var(--info); }
+      .dot.orange { background: var(--accent); color: var(--accent); }
+      .dot.fire {
+        animation: dotFire 600ms ease-in-out forwards;
+      }
+      @keyframes dotFire {
+        0% { opacity: 0; left: 0%; }
+        10% { opacity: 1; }
+        90% { opacity: 1; }
+        100% { opacity: 0; left: 100%; }
+      }
+
+      /* === Pulses on cache/memory rows === */
+      .pulse-cache { animation: pulseCache 700ms ease-out; }
+      .pulse-mem { animation: pulseMem 700ms ease-out; }
+      @keyframes pulseCache {
+        0% { background: var(--info-soft); border-color: var(--info-border); }
+        100% { background: var(--bg); border-color: var(--border); }
+      }
+      @keyframes pulseMem {
+        0% { background: rgba(251, 134, 58, 0.22); border-color: rgba(251, 134, 58, 0.45); }
+        100% { background: var(--bg); border-color: var(--border); }
+      }
+
+      /* === Controls === */
+      .controls {
+        display: grid;
+        grid-template-columns: 1fr 1fr auto auto auto auto;
+        gap: 8px;
+        align-items: end;
+        margin-bottom: 12px;
+      }
+      .controls .field-lbl { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+      input, select {
+        background: var(--elevated);
+        color: var(--fg);
+        font: 12px/1 var(--mono);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 8px 10px;
+        width: 100%;
+        outline: none;
+      }
+      input:focus, select:focus { border-color: var(--accent); }
+      button {
+        background: var(--elevated);
+        color: var(--fg);
+        font: 500 12px/1 var(--sans);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        cursor: pointer;
+        padding: 9px 12px;
+        transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease;
+        white-space: nowrap;
+      }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.45; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.10); background: var(--accent); border-color: transparent; }
+      button.ghost { background: transparent; }
+
+      /* === Log === */
+      .log {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 8px 12px;
+        min-height: 100px;
+        max-height: 130px;
+        overflow-y: auto;
+        font-family: var(--mono);
+        font-size: 11.5px;
+        color: var(--muted);
+        line-height: 1.7;
+      }
+      .log .row { padding: 1px 0; }
+      .log .ok { color: var(--success); }
+      .log .miss { color: var(--warning); }
+      .log .write { color: var(--info); }
+      .log .mem { color: var(--accent); }
+
+      .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    </style>
+  </head>
+  <body>
+    <h2 class="sr-only">Write-through cache simulator. Every write goes to cache and memory at the same time.</h2>
+    <div class="container">
+
+      <div class="stats">
+        <div class="stat green"><div class="lbl">Writes</div><div class="val" id="s-writes">0</div></div>
+        <div class="stat green"><div class="lbl">Memory writes</div><div class="val" id="s-memw">0</div></div>
+        <div class="stat"><div class="lbl">Reads</div><div class="val" id="s-reads">0</div></div>
+        <div class="stat"><div class="lbl">Read hits</div><div class="val" id="s-hits">0</div></div>
+      </div>
+
+      <div class="stage">
+        <div class="block cpu">
+          <div class="cpu-icon"><i class="ti ti-cpu" aria-hidden="true"></i></div>
+          <div class="cpu-label">CPU</div>
+          <div class="cpu-sub">core</div>
+        </div>
+
+        <div class="wire" id="wire1">
+          <span class="wire-label">writes + reads</span>
+          <span class="arrowhead"></span>
+          <span class="dot blue" id="dot1"></span>
+        </div>
+
+        <div class="block">
+          <div class="block-head">
+            <span class="block-title">Cache</span>
+            <span class="block-meta">4 lines · direct-mapped</span>
+          </div>
+          <div class="lines" id="cache-lines"></div>
+        </div>
+
+        <div class="wire" id="wire2">
+          <span class="wire-label">parallel write</span>
+          <span class="arrowhead"></span>
+          <span class="dot orange" id="dot2"></span>
+        </div>
+
+        <div class="block">
+          <div class="block-head">
+            <span class="block-title">Memory</span>
+            <span class="block-meta">always current</span>
+          </div>
+          <div class="cells" id="mem-cells"></div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div>
+          <div class="field-lbl">Address</div>
+          <select id="addr"></select>
+        </div>
+        <div>
+          <div class="field-lbl">Value</div>
+          <input id="val" value="42" maxlength="6"/>
+        </div>
+        <button id="b-write" class="primary"><i class="ti ti-pencil" style="vertical-align:-2px; margin-right:3px"></i>Write</button>
+        <button id="b-read"><i class="ti ti-eye" style="vertical-align:-2px; margin-right:3px"></i>Read</button>
+        <button id="b-demo" class="ghost"><i class="ti ti-player-play" style="vertical-align:-2px; margin-right:3px"></i>Demo</button>
+        <button id="b-reset" class="ghost"><i class="ti ti-refresh" style="vertical-align:-2px; margin-right:3px"></i>Reset</button>
+      </div>
+
+      <div class="log" id="log"><div class="row">ready · every write hits cache AND memory at the same time</div></div>
+
+    </div>
+
+    <script>
+      (function(){
+        const ADDRS = [0x00, 0x04, 0x08, 0x0C, 0x10, 0x14, 0x18, 0x1C];
+        const initialMem = {0x00:'A1', 0x04:'B2', 0x08:'C3', 0x0C:'D4', 0x10:'E5', 0x14:'F6', 0x18:'G7', 0x1C:'H8'};
+        const hex = a => '0x' + a.toString(16).toUpperCase().padStart(2,'0');
+        const idx = a => (a >> 2) % 4;
+
+        const st = {
+          memory: {...initialMem},
+          cache: Array.from({length:4}, ()=>({tag:null, value:null, valid:false})),
+          stats: {writes:0, reads:0, hits:0, memw:0},
+          busy: false,
+        };
+
+        const addrSel = document.getElementById('addr');
+        ADDRS.forEach(a => {
+          const o = document.createElement('option');
+          o.value = a; o.textContent = hex(a);
+          addrSel.appendChild(o);
+        });
+
+        function renderCache() {
+          const host = document.getElementById('cache-lines');
+          host.innerHTML = '';
+          st.cache.forEach((ln, i) => {
+            const row = document.createElement('div');
+            row.id = 'cl-' + i;
+            row.className = 'line' + (ln.valid ? '' : ' empty');
+            if (!ln.valid) {
+              row.innerHTML = `
+                <span class="ln-idx">${i}</span>
+                <span class="ln-val">empty</span>
+                <span class="badge empty">—</span>`;
+            } else {
+              row.innerHTML = `
+                <span class="ln-idx">${i}</span>
+                <span class="ln-val"><span class="key">${hex(ln.tag)}</span><span class="arrow">→</span><span class="v">${ln.value}</span></span>
+                <span class="badge synced">synced</span>`;
+            }
+            host.appendChild(row);
+          });
+        }
+        function renderMem() {
+          const host = document.getElementById('mem-cells');
+          host.innerHTML = '';
+          ADDRS.forEach(a => {
+            const c = document.createElement('div');
+            c.id = 'mc-' + a;
+            c.className = 'cell';
+            c.innerHTML = `<span class="addr">${hex(a)}</span><span class="v">${st.memory[a]}</span>`;
+            host.appendChild(c);
+          });
+        }
+        function renderStats() {
+          document.getElementById('s-writes').textContent = st.stats.writes;
+          document.getElementById('s-reads').textContent = st.stats.reads;
+          document.getElementById('s-hits').textContent = st.stats.hits;
+          document.getElementById('s-memw').textContent = st.stats.memw;
+        }
+        function pulseCache(i) {
+          const el = document.getElementById('cl-' + i);
+          if (!el) return;
+          el.classList.remove('pulse-cache');
+          void el.offsetWidth;
+          el.classList.add('pulse-cache');
+        }
+        function pulseMem(a) {
+          const el = document.getElementById('mc-' + a);
+          if (!el) return;
+          el.classList.remove('pulse-mem');
+          void el.offsetWidth;
+          el.classList.add('pulse-mem');
+        }
+        function fireDot(id) {
+          return new Promise(resolve => {
+            const d = document.getElementById(id);
+            d.classList.remove('fire');
+            void d.offsetWidth;
+            d.classList.add('fire');
+            setTimeout(resolve, 600);
+          });
+        }
+        function log(html) {
+          const l = document.getElementById('log');
+          if (l.children[0]?.textContent?.startsWith('ready')) l.innerHTML = '';
+          const div = document.createElement('div');
+          div.className = 'row';
+          div.innerHTML = html;
+          l.insertBefore(div, l.firstChild);
+          while (l.children.length > 8) l.removeChild(l.lastChild);
+        }
+
+        async function doWrite(a, v) {
+          if (st.busy) return;
+          st.busy = true;
+          const i = idx(a);
+          const line = st.cache[i];
+          st.stats.writes++;
+          const hit = line.valid && line.tag === a;
+          if (hit) st.stats.hits++;
+          // Fire both dots in parallel — that's the visual essence of write-through
+          await Promise.all([fireDot('dot1'), fireDot('dot2')]);
+          line.tag = a; line.value = v; line.valid = true;
+          st.memory[a] = v;
+          st.stats.memw++;
+          renderCache(); renderMem(); renderStats();
+          pulseCache(i); pulseMem(a);
+          log(`<span class="write">WRITE</span> ${hex(a)}=${v} → cache line ${i} <span style="color: var(--subtle)">+</span> <span class="mem">memory</span> ${hit ? '(hit)' : '(miss, allocate)'}`);
+          st.busy = false;
+        }
+
+        async function doRead(a) {
+          if (st.busy) return;
+          st.busy = true;
+          const i = idx(a);
+          const line = st.cache[i];
+          st.stats.reads++;
+          if (line.valid && line.tag === a) {
+            st.stats.hits++;
+            await fireDot('dot1');
+            pulseCache(i);
+            renderStats();
+            log(`<span class="ok">READ HIT</span>  ${hex(a)} → ${line.value} from cache`);
+          } else {
+            await fireDot('dot2');
+            await fireDot('dot1');
+            line.tag = a; line.value = st.memory[a]; line.valid = true;
+            renderCache(); renderStats();
+            pulseCache(i);
+            log(`<span class="miss">READ MISS</span> ${hex(a)} → loaded ${st.memory[a]} from memory`);
+          }
+          st.busy = false;
+        }
+
+        function reset() {
+          st.memory = {...initialMem};
+          st.cache = Array.from({length:4}, ()=>({tag:null, value:null, valid:false}));
+          st.stats = {writes:0, reads:0, hits:0, memw:0};
+          st.busy = false;
+          document.getElementById('log').innerHTML = '<div class="row">ready · every write hits cache AND memory at the same time</div>';
+          renderCache(); renderMem(); renderStats();
+        }
+
+        async function runDemo() {
+          if (st.busy) return;
+          reset();
+          const seq = [
+            ['w', 0x00, '99'],
+            ['w', 0x04, '77'],
+            ['w', 0x00, 'AA'],
+            ['r', 0x00, null],
+            ['w', 0x10, '55'],
+            ['r', 0x14, null],
+          ];
+          for (const [op, a, v] of seq) {
+            if (op === 'w') await doWrite(a, v);
+            else await doRead(a);
+            await new Promise(r => setTimeout(r, 350));
+          }
+        }
+
+        document.getElementById('b-write').addEventListener('click', () => {
+          const a = parseInt(addrSel.value);
+          const v = document.getElementById('val').value || '?';
+          doWrite(a, v);
+        });
+        document.getElementById('b-read').addEventListener('click', () => {
+          const a = parseInt(addrSel.value);
+          doRead(a);
+        });
+        document.getElementById('b-demo').addEventListener('click', runDemo);
+        document.getElementById('b-reset').addEventListener('click', reset);
+
+        renderCache(); renderMem(); renderStats();
+      })();
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

@@ -1,0 +1,94 @@
+import type { ConceptContent, TopicContent } from "./types";
+import { tokenBucket } from "./rate-limiting/token-bucket";
+import { leakyBucket } from "./rate-limiting/leaky-bucket";
+import { fixedWindow } from "./rate-limiting/fixed-window";
+import { slidingWindow } from "./rate-limiting/sliding-window";
+import { slidingLog } from "./rate-limiting/sliding-log";
+import { rateLimitingTopic } from "./rate-limiting/_topic";
+import { cacheEvictionTopic } from "./cache-eviction/_topic";
+import { cacheWriteTopic } from "./cache-write/_topic";
+import { writeThrough } from "./cache-write/write-through";
+import { writeBack } from "./cache-write/write-back";
+import { writeAround } from "./cache-write/write-around";
+import { lfu } from "./cache-eviction/lfu";
+import { lru } from "./cache-eviction/lru";
+import { mru } from "./cache-eviction/mru";
+import { fifo } from "./cache-eviction/fifo";
+import { random } from "./cache-eviction/random";
+import { ttl } from "./cache-eviction/ttl";
+import { clock } from "./cache-eviction/clock";
+import { twoQ } from "./cache-eviction/2q";
+import { arc } from "./cache-eviction/arc";
+import { lirs } from "./cache-eviction/lirs";
+import { garbageCollectionTopic } from "./garbage-collection/_topic";
+import { referenceCounting } from "./garbage-collection/reference-counting";
+import { markSweep } from "./garbage-collection/mark-sweep";
+import { markCompact } from "./garbage-collection/mark-compact";
+import { copyingCheney } from "./garbage-collection/copying-cheney";
+import { generational } from "./garbage-collection/generational";
+import { triColor } from "./garbage-collection/tri-color";
+import { incremental } from "./garbage-collection/incremental";
+import { concurrentMarkSweep } from "./garbage-collection/concurrent-mark-sweep";
+import { memoryAllocationTopic } from "./memory-allocation/_topic";
+import { firstFit } from "./memory-allocation/first-fit";
+import { bestFit } from "./memory-allocation/best-fit";
+import { worstFit } from "./memory-allocation/worst-fit";
+import { nextFit } from "./memory-allocation/next-fit";
+import { buddy } from "./memory-allocation/buddy";
+import { slab } from "./memory-allocation/slab";
+
+// Indexed by `${topicSlug}/${conceptSlug}`
+const CONCEPT_CONTENT: Record<string, ConceptContent> = {
+  "rate-limiting/token-bucket": tokenBucket,
+  "rate-limiting/leaky-bucket": leakyBucket,
+  "rate-limiting/fixed-window": fixedWindow,
+  "rate-limiting/sliding-window": slidingWindow,
+  "rate-limiting/sliding-log": slidingLog,
+  "cache-write/write-through": writeThrough,
+  "cache-write/write-back": writeBack,
+  "cache-write/write-around": writeAround,
+  "cache-eviction/lfu": lfu,
+  "cache-eviction/lru": lru,
+  "cache-eviction/mru": mru,
+  "cache-eviction/fifo": fifo,
+  "cache-eviction/random": random,
+  "cache-eviction/ttl": ttl,
+  "cache-eviction/clock": clock,
+  "cache-eviction/2q": twoQ,
+  "cache-eviction/arc": arc,
+  "cache-eviction/lirs": lirs,
+  "garbage-collection/reference-counting": referenceCounting,
+  "garbage-collection/mark-sweep": markSweep,
+  "garbage-collection/mark-compact": markCompact,
+  "garbage-collection/copying-cheney": copyingCheney,
+  "garbage-collection/generational": generational,
+  "garbage-collection/tri-color": triColor,
+  "garbage-collection/incremental": incremental,
+  "garbage-collection/concurrent-mark-sweep": concurrentMarkSweep,
+  "memory-allocation/first-fit": firstFit,
+  "memory-allocation/best-fit": bestFit,
+  "memory-allocation/worst-fit": worstFit,
+  "memory-allocation/next-fit": nextFit,
+  "memory-allocation/buddy": buddy,
+  "memory-allocation/slab": slab,
+};
+
+// Indexed by topic slug
+const TOPIC_CONTENT: Record<string, TopicContent> = {
+  "rate-limiting": rateLimitingTopic,
+  "cache-write": cacheWriteTopic,
+  "cache-eviction": cacheEvictionTopic,
+  "garbage-collection": garbageCollectionTopic,
+  "memory-allocation": memoryAllocationTopic,
+};
+
+export function getConceptContent(
+  topicSlug: string,
+  conceptSlug: string,
+): ConceptContent | null {
+  return CONCEPT_CONTENT[`${topicSlug}/${conceptSlug}`] ?? null;
+}
+
+export function getTopicContent(topicSlug: string): TopicContent | null {
+  return TOPIC_CONTENT[topicSlug] ?? null;
+}

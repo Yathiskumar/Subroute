@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sliding Window Log — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a; --accent-strong: #d56a1f;
+        --accent-soft: rgba(251, 134, 58, 0.12); --accent-border: rgba(251, 134, 58, 0.32);
+        --success: #5cc66f; --success-soft: rgba(92, 198, 111, 0.12);
+        --danger: #f06868; --danger-soft: rgba(240, 104, 104, 0.12);
+        --info: #5e9ff6; --info-soft: rgba(94, 159, 246, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --radius-md: 8px;
+        --color-background-primary: var(--bg);
+        --color-background-secondary: var(--surface);
+        --color-background-success: var(--success-soft);
+        --color-background-danger: var(--danger-soft);
+        --color-background-info: var(--info-soft);
+        --color-text-primary: var(--fg);
+        --color-text-secondary: var(--muted);
+        --color-text-success: var(--success);
+        --color-text-danger: var(--danger);
+        --color-text-info: var(--info);
+        --color-border-tertiary: var(--border);
+        --border-radius-md: var(--radius-md);
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 20px 20px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.025) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.025) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      .ts { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; fill: var(--muted); }
+      .th { font-family: var(--sans); font-size: 14px; font-weight: 500; fill: var(--fg); }
+      .c-blue rect { fill: var(--accent-soft); stroke: var(--accent-border); }
+      button {
+        background: var(--accent); color: #1a1003;
+        font: 500 13px/1 var(--sans);
+        border: 1px solid transparent; border-radius: var(--radius-md);
+        padding: 9px 14px; cursor: pointer;
+        transition: filter 150ms ease, transform 100ms ease, background 150ms ease;
+      }
+      button:hover { filter: brightness(1.06); }
+      button:active { transform: scale(0.97); }
+      .swl-controls button:nth-of-type(n+2) {
+        background: var(--elevated); color: var(--fg); border-color: var(--border);
+      }
+      .swl-controls button:nth-of-type(n+2):hover { border-color: var(--border-strong); filter: none; background: var(--surface); }
+    </style>
+    <style>
+      .swl-wrap { padding: 0.25rem 0; }
+      .swl-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0; }
+      .swl-stat { background: var(--color-background-secondary); padding: 10px 12px; border-radius: var(--border-radius-md); border: 1px solid var(--border); }
+      .swl-stat-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-secondary); margin-bottom: 4px; }
+      .swl-stat-value { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+      .swl-controls { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+      .swl-outcome { padding: 10px 14px; border-radius: var(--border-radius-md); font-size: 13px; min-height: 22px; transition: background 0.15s, color 0.15s; border: 1px solid transparent; }
+      .swl-outcome.idle { background: var(--color-background-secondary); color: var(--color-text-secondary); border-color: var(--border); }
+      .swl-outcome.allow { background: var(--color-background-success); color: var(--color-text-success); border-color: rgba(92, 198, 111, 0.3); }
+      .swl-outcome.deny { background: var(--color-background-danger); color: var(--color-text-danger); border-color: rgba(240, 104, 104, 0.3); }
+    </style>
+  </head>
+  <body>
+    <div class="swl-wrap">
+      <svg width="100%" viewBox="0 0 680 220" role="img" aria-label="Sliding window log">
+        <desc>A log of request timestamps. The window covers the most recent N seconds and slides forward with time.</desc>
+        <g class="c-blue">
+          <rect x="253" y="50" width="387" height="120" rx="6" stroke-width="1"/>
+        </g>
+        <text class="th" x="446" y="75" text-anchor="middle" fill="#fb863a">8-SECOND WINDOW</text>
+        <line x1="60" y1="140" x2="640" y2="140" stroke="var(--color-text-secondary)" stroke-width="0.5" opacity="0.4"/>
+        <line x1="640" y1="40" x2="640" y2="180" stroke="#fb863a" stroke-width="1.5"/>
+        <text class="ts" x="638" y="36" text-anchor="end" fill="#fb863a">NOW</text>
+        <line x1="253" y1="50" x2="253" y2="180" stroke="#fb863a" stroke-width="1" stroke-dasharray="4 4" opacity="0.6"/>
+        <text class="ts" x="156" y="115" text-anchor="middle">EXPIRED</text>
+        <text class="ts" x="156" y="130" text-anchor="middle">NOT COUNTED</text>
+        <g id="swl-dots"></g>
+        <text class="ts" x="60" y="200">12s ago</text>
+        <text class="ts" x="253" y="200" text-anchor="middle">8s ago</text>
+        <text class="ts" x="640" y="200" text-anchor="end">now</text>
+      </svg>
+      <div class="swl-stats">
+        <div class="swl-stat"><div class="swl-stat-label">In window</div><div class="swl-stat-value" id="swl-in-window">0</div></div>
+        <div class="swl-stat"><div class="swl-stat-label">Limit</div><div class="swl-stat-value">5</div></div>
+        <div class="swl-stat"><div class="swl-stat-label">Allowed</div><div class="swl-stat-value" id="swl-allowed">0</div></div>
+        <div class="swl-stat"><div class="swl-stat-label">Denied</div><div class="swl-stat-value" id="swl-denied">0</div></div>
+      </div>
+      <div class="swl-controls">
+        <button onclick="swlSend()">Send request</button>
+        <button onclick="swlBurst()">Burst of 8</button>
+        <button onclick="swlReset()">Reset</button>
+      </div>
+      <div class="swl-outcome idle" id="swl-outcome">Click "send request" — its timestamp is added to the log</div>
+    </div>
+    <script>
+      const swlLimit = 5;
+      const swlWindowMs = 8000;
+      const swlTimelineMs = 12000;
+      const swlXR = 640, swlXL = 60;
+      let swlLog = [];
+      let swlAllowed = 0, swlDenied = 0;
+      let swlEntryCounter = 0;
+      function swlInWindowCount() {
+        const now = Date.now();
+        return swlLog.filter(e => (now - e.ts) <= swlWindowMs).length;
+      }
+      function swlRender() {
+        const now = Date.now();
+        const g = document.getElementById('swl-dots');
+        g.innerHTML = '';
+        swlLog = swlLog.filter(e => (now - e.ts) <= swlTimelineMs + 500);
+        swlLog.forEach((e) => {
+          const age = now - e.ts;
+          const x = swlXR - (age / swlTimelineMs) * (swlXR - swlXL);
+          const inWindow = age <= swlWindowMs;
+          const yOffset = ((e.idx % 3) - 1) * 11;
+          const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          c.setAttribute('cx', x);
+          c.setAttribute('cy', 140 + yOffset);
+          c.setAttribute('r', '6');
+          if (inWindow) {
+            c.setAttribute('fill', '#fb863a');
+          } else {
+            c.setAttribute('fill', 'var(--color-text-secondary)');
+            c.setAttribute('opacity', '0.3');
+          }
+          g.appendChild(c);
+        });
+        const cnt = swlInWindowCount();
+        document.getElementById('swl-in-window').textContent = cnt;
+      }
+      function swlSend() {
+        const o = document.getElementById('swl-outcome');
+        const cnt = swlInWindowCount();
+        if (cnt < swlLimit) {
+          swlLog.push({ ts: Date.now(), idx: swlEntryCounter++ });
+          swlAllowed++;
+          o.className = 'swl-outcome allow';
+          o.textContent = '✓ Request allowed — timestamp added (' + (cnt + 1) + ' in window)';
+        } else {
+          swlDenied++;
+          o.className = 'swl-outcome deny';
+          o.textContent = '✗ Request denied — ' + swlLimit + ' requests already in the last 8 seconds';
+        }
+        document.getElementById('swl-allowed').textContent = swlAllowed;
+        document.getElementById('swl-denied').textContent = swlDenied;
+        swlRender();
+      }
+      function swlBurst() { for (let i = 0; i < 8; i++) setTimeout(swlSend, i * 130); }
+      function swlReset() {
+        swlLog = []; swlAllowed = 0; swlDenied = 0; swlEntryCounter = 0;
+        document.getElementById('swl-allowed').textContent = 0;
+        document.getElementById('swl-denied').textContent = 0;
+        const o = document.getElementById('swl-outcome');
+        o.className = 'swl-outcome idle';
+        o.textContent = 'Click "send request" — its timestamp is added to the log';
+        swlRender();
+      }
+      function swlTick() { swlRender(); requestAnimationFrame(swlTick); }
+      swlTick();
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

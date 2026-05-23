@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Garbage Collection — Reference Counting</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --success-soft: rgba(92,198,111,0.14); --success-border: rgba(92,198,111,0.40);
+        --danger: #f06868; --danger-soft: rgba(240,104,104,0.14); --danger-border: rgba(240,104,104,0.42);
+        --info: #5e9ff6; --info-soft: rgba(94,159,246,0.14); --info-border: rgba(94,159,246,0.40);
+        --warning: #f0b568; --warning-soft: rgba(240,181,104,0.14); --warning-border: rgba(240,181,104,0.40);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body {
+        padding: 14px 16px 16px;
+        background-image: linear-gradient(to right, rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.025) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      .container { max-width: 980px; margin: 0 auto; }
+
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+      .stat .lbl { font-size: 11px; color: var(--muted); }
+      .stat .val { font-size: 18px; font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
+      .stat.blue { background: var(--info-soft); border-color: var(--info-border); }
+      .stat.blue .lbl { color: var(--info); }
+      .stat.green { background: var(--success-soft); border-color: var(--success-border); }
+      .stat.green .lbl { color: var(--success); }
+      .stat.red { background: var(--danger-soft); border-color: var(--danger-border); }
+      .stat.red .lbl { color: var(--danger); }
+
+      .tabs { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+      .tab {
+        background: var(--elevated); color: var(--muted); border: 1px solid var(--border);
+        border-radius: 999px; cursor: pointer; padding: 6px 13px; font: 500 12px/1 var(--sans);
+        transition: all 150ms ease; white-space: nowrap;
+      }
+      .tab:hover { border-color: var(--border-strong); color: var(--fg); }
+      .tab.active { background: var(--info-soft); color: var(--info); border-color: var(--info-border); }
+
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 6px; margin-bottom: 10px; }
+      svg { width: 100%; height: 264px; display: block; }
+
+      .panels { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 10px; margin-bottom: 10px; }
+      .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+      .panel .ttl { font-size: 10px; color: var(--subtle); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 7px; }
+      #code-block { font-family: var(--mono); font-size: 12px; line-height: 1.75; }
+      #code-block .cl { padding: 1px 8px; border-radius: 4px; color: var(--muted); white-space: pre; transition: all 160ms ease; }
+      #code-block .cl.cur { color: var(--info); background: var(--info-soft); font-weight: 600; }
+      #narration { font-size: 12.5px; line-height: 1.6; color: var(--fg); min-height: 70px; }
+      #narration .em { color: var(--accent); font-weight: 600; }
+
+      .controls { display: flex; gap: 8px; align-items: center; }
+      button {
+        background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans);
+        border: 1px solid var(--border); border-radius: 6px; cursor: pointer; padding: 9px 13px;
+        transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease;
+        white-space: nowrap; display: inline-flex; align-items: center; gap: 5px;
+      }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.10); background: var(--accent); }
+      button.ghost { background: transparent; }
+      .counter { margin-left: auto; font: 12px var(--mono); color: var(--muted); }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+    </style>
+  </head>
+  <body>
+    <h2 class="sr-only">Reference counting walkthrough: each object tracks how many references point at it; when the count hits zero it is freed, but cycles leak.</h2>
+    <div class="container">
+      <div class="stats">
+        <div class="stat blue"><div class="lbl">Live objects</div><div class="val" id="s-live">0</div></div>
+        <div class="stat"><div class="lbl">Total references</div><div class="val" id="s-refs">0</div></div>
+        <div class="stat green"><div class="lbl">Freed</div><div class="val" id="s-freed">0</div></div>
+        <div class="stat red"><div class="lbl">Leaked</div><div class="val" id="s-leaked">0</div></div>
+      </div>
+
+      <div class="tabs" id="tabs">
+        <button class="tab active" data-scn="basic">1 · Basic counting</button>
+        <button class="tab" data-scn="cascade">2 · Cascade freeing</button>
+        <button class="tab" data-scn="cycle">3 · Cycle leak</button>
+      </div>
+
+      <div class="stage">
+        <svg viewBox="0 0 720 290" role="img" aria-label="Reference counting visualization">
+          <defs>
+            <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#5e9ff6"/></marker>
+            <marker id="arr-o" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#fb863a"/></marker>
+            <marker id="arr-d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#6b7280"/></marker>
+          </defs>
+          <text x="80" y="20" text-anchor="middle" font-size="10" fill="#6b7280" letter-spacing="1.5">VARIABLES</text>
+          <text x="400" y="20" text-anchor="middle" font-size="10" fill="#6b7280" letter-spacing="1.5">HEAP MEMORY</text>
+          <text x="660" y="20" text-anchor="middle" font-size="10" fill="#6b7280" letter-spacing="1.5">FREED</text>
+          <line x1="170" y1="32" x2="170" y2="282" stroke="#232830" stroke-width="1" stroke-dasharray="3 4"/>
+          <line x1="600" y1="32" x2="600" y2="282" stroke="#232830" stroke-width="1" stroke-dasharray="3 4"/>
+          <g id="refs-layer"></g>
+          <g id="vars-layer"></g>
+          <g id="objs-layer"></g>
+          <g id="freed-layer"></g>
+        </svg>
+      </div>
+
+      <div class="panels">
+        <div class="panel">
+          <div class="ttl">Program</div>
+          <div id="code-block"></div>
+        </div>
+        <div class="panel">
+          <div class="ttl">What's happening</div>
+          <div id="narration"></div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button id="prev"><i class="ti ti-arrow-left"></i>Prev</button>
+        <button id="next" class="primary">Next step<i class="ti ti-arrow-right"></i></button>
+        <button id="auto" class="ghost"><i class="ti ti-player-play"></i>Auto</button>
+        <button id="restart" class="ghost"><i class="ti ti-refresh"></i>Restart</button>
+        <span class="counter" id="counter">Step 1 / 7</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        // Report content height so the embedding frame can size to fit (no inner scroll).
+        function postHeight() { const h = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight); parent.postMessage({ type: "prototype:height", height: h }, "*"); }
+        if (window.ResizeObserver) new ResizeObserver(postHeight).observe(document.body);
+        window.addEventListener("load", postHeight);
+        const NS = "http://www.w3.org/2000/svg";
+        const svg = (t, a) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); return e; };
+        const COL = {
+          live: { fill: "rgba(94,159,246,0.13)", stroke: "#5e9ff6", text: "#9cc4fb" },
+          dying: { fill: "rgba(240,104,104,0.16)", stroke: "#f06868", text: "#f3a0a0" },
+        };
+
+        const SCN = {
+          basic: {
+            code: ["a = new Object()", "b = a", "c = a", "b = null", "c = null", "a = null"],
+            steps: [
+              { line: -1, vars: { a: null, b: null, c: null }, objs: [], freed: [], narr: "Three variables exist but none point anywhere. The heap is empty." },
+              { line: 0, vars: { a: "X", b: null, c: null }, objs: [{ id: "X", rc: 1 }], freed: [], narr: "A new object <span class='em'>X</span> is created. <b>a</b> points to it, so X.rc = 1." },
+              { line: 1, vars: { a: "X", b: "X", c: null }, objs: [{ id: "X", rc: 2 }], freed: [], narr: "<b>b = a</b> copies the reference. Both a and b hold X — increment to X.rc = 2." },
+              { line: 2, vars: { a: "X", b: "X", c: "X" }, objs: [{ id: "X", rc: 3 }], freed: [], narr: "<b>c = a</b>. Three references now. X.rc = 3." },
+              { line: 3, vars: { a: "X", b: null, c: "X" }, objs: [{ id: "X", rc: 2 }], freed: [], narr: "<b>b = null</b> drops one reference. Decrement to X.rc = 2 — X stays alive." },
+              { line: 4, vars: { a: "X", b: null, c: null }, objs: [{ id: "X", rc: 1 }], freed: [], narr: "<b>c = null</b>. X.rc = 1. Still held by a." },
+              { line: 5, vars: { a: null, b: null, c: null }, objs: [], freed: ["X"], narr: "<b>a = null</b>. X.rc hits <span class='em'>0</span> — the last reference is gone, so X is freed <span class='em'>immediately</span>." },
+            ],
+          },
+          cascade: {
+            code: ["a = new List()", "a.next = new Node()", "a = null"],
+            steps: [
+              { line: -1, vars: { a: null, b: null, c: null }, objs: [], freed: [], narr: "Empty heap. Watch how freeing one object triggers a chain reaction." },
+              { line: 0, vars: { a: "L", b: null, c: null }, objs: [{ id: "L", rc: 1 }], freed: [], narr: "A List <span class='em'>L</span> is created. a points to it. L.rc = 1." },
+              { line: 1, vars: { a: "L", b: null, c: null }, objs: [{ id: "L", rc: 1 }, { id: "N", rc: 1, parent: "L" }], freed: [], narr: "A Node <span class='em'>N</span> is created inside L (L.next → N). N.rc = 1 because L holds it." },
+              { line: 2, vars: { a: null, b: null, c: null }, objs: [{ id: "L", rc: 0 }, { id: "N", rc: 1, parent: "L" }], freed: [], narr: "<b>a = null</b>. L.rc drops to <span class='em'>0</span> — L is about to be freed." },
+              { line: 2, vars: { a: null, b: null, c: null }, objs: [{ id: "N", rc: 0 }], freed: ["L"], narr: "Freeing L decrements everything L pointed at: N.rc → <span class='em'>0</span>. The cascade begins." },
+              { line: 2, vars: { a: null, b: null, c: null }, objs: [], freed: ["L", "N"], narr: "N is freed too. <span class='em'>One assignment</span> reclaimed the entire chain." },
+            ],
+          },
+          cycle: {
+            code: ["a = new Node()", "b = new Node()", "a.next = b", "b.next = a", "a = null", "b = null"],
+            steps: [
+              { line: -1, vars: { a: null, b: null, c: null }, objs: [], freed: [], narr: "Empty heap. We'll build two objects that point at each other — reference counting's blind spot." },
+              { line: 0, vars: { a: "A", b: null, c: null }, objs: [{ id: "A", rc: 1 }], freed: [], narr: "Object <span class='em'>A</span> created. a → A. A.rc = 1." },
+              { line: 1, vars: { a: "A", b: "B", c: null }, objs: [{ id: "A", rc: 1 }, { id: "B", rc: 1 }], freed: [], narr: "Object <span class='em'>B</span> created. b → B. B.rc = 1." },
+              { line: 2, vars: { a: "A", b: "B", c: null }, objs: [{ id: "A", rc: 1 }, { id: "B", rc: 2, extraRef: "A" }], freed: [], narr: "<b>a.next = b</b>. A now also points at B. B.rc = 2 (b and A)." },
+              { line: 3, vars: { a: "A", b: "B", c: null }, objs: [{ id: "A", rc: 2, extraRef: "B" }, { id: "B", rc: 2, extraRef: "A" }], freed: [], narr: "<b>b.next = a</b>. The cycle closes. A.rc = 2, B.rc = 2." },
+              { line: 4, vars: { a: null, b: "B", c: null }, objs: [{ id: "A", rc: 1, extraRef: "B" }, { id: "B", rc: 2, extraRef: "A" }], freed: [], narr: "<b>a = null</b>. A.rc drops to 1 — but B still points at A, so A is <span class='em'>not</span> freed." },
+              { line: 5, vars: { a: null, b: null, c: null }, objs: [{ id: "A", rc: 1, extraRef: "B" }, { id: "B", rc: 1, extraRef: "A" }], freed: [], leaked: 2, narr: "<b>b = null</b>. Both counts are stuck at 1. Nothing outside can reach them, yet neither hits 0. <span class='em'>Memory leak</span> — only a tracing collector escapes this." },
+            ],
+          },
+        };
+
+        let cur = "basic", idx = 0, timer = null;
+        const $ = (id) => document.getElementById(id);
+
+        function objPos(objs) {
+          const pos = {};
+          objs.forEach((o, i) => { pos[o.id] = { x: 290 + (i % 2) * 150, y: 95 + Math.floor(i / 2) * 115 }; });
+          return pos;
+        }
+
+        function render() {
+          const scn = SCN[cur], step = scn.steps[idx];
+          // code
+          const cb = $("code-block"); cb.innerHTML = "";
+          scn.code.forEach((ln, i) => {
+            const d = document.createElement("div");
+            d.className = "cl" + (i === step.line ? " cur" : "");
+            d.textContent = (i === step.line ? "▸ " : "  ") + ln;
+            cb.appendChild(d);
+          });
+          // scene
+          const vl = $("vars-layer"), rl = $("refs-layer"), ol = $("objs-layer"), fl = $("freed-layer");
+          [vl, rl, ol, fl].forEach((g) => (g.innerHTML = ""));
+          const varOrder = ["a", "b", "c"], vp = {};
+          varOrder.forEach((name, i) => {
+            const y = 70 + i * 70; vp[name] = { x: 90, y };
+            const set = step.vars[name] !== null;
+            vl.appendChild(svg("rect", { x: 30, y: y - 19, width: 110, height: 38, rx: 7, fill: set ? "rgba(92,198,111,0.12)" : "#14161a", stroke: set ? "#5cc66f" : "#2d333d", "stroke-width": set ? 1.2 : 1, "stroke-dasharray": set ? "" : "3 3" }));
+            const lab = svg("text", { x: 90, y: y - 2, "text-anchor": "middle", "font-size": 14, "font-weight": 600, fill: set ? "#7bd389" : "#6b7280" }); lab.textContent = name; vl.appendChild(lab);
+            const val = svg("text", { x: 90, y: y + 14, "text-anchor": "middle", "font-size": 11, fill: set ? "#5cc66f" : "#6b7280", "font-family": "var(--mono)" }); val.textContent = set ? "→ " + step.vars[name] : "null"; vl.appendChild(val);
+          });
+          const op = objPos(step.objs);
+          step.objs.forEach((o) => {
+            const p = op[o.id], dying = o.rc === 0, c = dying ? COL.dying : COL.live;
+            ol.appendChild(svg("circle", { cx: p.x, cy: p.y, r: 36, fill: c.fill, stroke: c.stroke, "stroke-width": 1.6 }));
+            const nm = svg("text", { x: p.x, y: p.y - 8, "text-anchor": "middle", "font-size": 13, "font-weight": 600, fill: c.text }); nm.textContent = "Obj " + o.id; ol.appendChild(nm);
+            const rcl = svg("text", { x: p.x, y: p.y + 7, "text-anchor": "middle", "font-size": 9, fill: c.text, "font-family": "var(--mono)", opacity: 0.65 }); rcl.textContent = "rc"; ol.appendChild(rcl);
+            const rcn = svg("text", { x: p.x, y: p.y + 25, "text-anchor": "middle", "font-size": 18, "font-weight": 700, fill: c.text, "font-family": "var(--mono)" }); rcn.textContent = o.rc; ol.appendChild(rcn);
+          });
+          varOrder.forEach((name) => {
+            const t = step.vars[name];
+            if (t && op[t]) rl.appendChild(svg("line", { x1: vp[name].x + 52, y1: vp[name].y, x2: op[t].x - 38, y2: op[t].y, stroke: "#5e9ff6", "stroke-width": 1.6, "marker-end": "url(#arr)" }));
+          });
+          step.objs.forEach((o) => {
+            if (o.parent && op[o.parent]) { const f = op[o.parent], t = op[o.id], dy = o.rc === 0; rl.appendChild(svg("line", { x1: f.x + 36, y1: f.y, x2: t.x - 36, y2: t.y, stroke: dy ? "#6b7280" : "#5e9ff6", "stroke-width": 1.6, "marker-end": dy ? "url(#arr-d)" : "url(#arr)", "stroke-dasharray": dy ? "4 3" : "" })); }
+            if (o.extraRef && op[o.extraRef]) {
+              const f = op[o.extraRef], t = op[o.id], mx = (f.x + t.x) / 2, my = (f.y + t.y) / 2, dx = t.x - f.x, dyy = t.y - f.y, L = Math.sqrt(dx * dx + dyy * dyy) || 1;
+              rl.appendChild(svg("path", { d: `M ${f.x + 28} ${f.y + 22} Q ${mx - (dyy / L) * 30} ${my + (dx / L) * 30} ${t.x - 28} ${t.y + 22}`, fill: "none", stroke: "#fb863a", "stroke-width": 1.6, "marker-end": "url(#arr-o)" }));
+            }
+          });
+          step.freed.forEach((id, i) => {
+            const y = 65 + i * 52;
+            fl.appendChild(svg("rect", { x: 615, y, width: 78, height: 38, rx: 7, fill: "#14161a", stroke: "#2d333d", "stroke-width": 1, "stroke-dasharray": "3 3" }));
+            const tx = svg("text", { x: 654, y: y + 23, "text-anchor": "middle", "font-size": 12, fill: "#6b7280", "text-decoration": "line-through" }); tx.textContent = "Obj " + id; fl.appendChild(tx);
+          });
+          // narration + stats
+          $("narration").innerHTML = step.narr;
+          const live = step.objs.filter((o) => o.rc > 0);
+          $("s-live").textContent = live.length;
+          $("s-refs").textContent = live.reduce((a, o) => a + o.rc, 0);
+          $("s-freed").textContent = step.freed.length;
+          $("s-leaked").textContent = step.leaked || 0;
+          $("counter").textContent = `Step ${idx + 1} / ${scn.steps.length}`;
+          $("prev").disabled = idx === 0;
+          $("next").disabled = idx === scn.steps.length - 1;
+        }
+
+        function stopAuto() { if (timer) { clearInterval(timer); timer = null; $("auto").innerHTML = '<i class="ti ti-player-play"></i>Auto'; } }
+        function go(n) { const max = SCN[cur].steps.length - 1; idx = Math.max(0, Math.min(max, n)); render(); if (idx === max) stopAuto(); }
+
+        $("next").onclick = () => { stopAuto(); go(idx + 1); };
+        $("prev").onclick = () => { stopAuto(); go(idx - 1); };
+        $("restart").onclick = () => { stopAuto(); go(0); };
+        $("auto").onclick = () => {
+          if (timer) { stopAuto(); return; }
+          if (idx === SCN[cur].steps.length - 1) idx = 0;
+          $("auto").innerHTML = '<i class="ti ti-player-pause"></i>Pause';
+          timer = setInterval(() => go(idx + 1), 1150);
+        };
+        document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => {
+          stopAuto(); document.querySelectorAll(".tab").forEach((x) => x.classList.remove("active"));
+          b.classList.add("active"); cur = b.dataset.scn; idx = 0; render();
+        }));
+
+        render();
+      })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cache Eviction — Subroute</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-strong: #d56a1f;
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --warning: #f0b568;
+        --warning-soft: rgba(240, 181, 104, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --radius-md: 8px;
+
+        --color-background-primary: var(--bg);
+        --color-background-secondary: var(--surface);
+        --color-background-success: var(--success-soft);
+        --color-background-danger: var(--danger-soft);
+        --color-background-info: var(--info-soft);
+        --color-background-warning: var(--warning-soft);
+        --color-text-primary: var(--fg);
+        --color-text-secondary: var(--muted);
+        --color-text-tertiary: var(--subtle);
+        --color-text-success: var(--success);
+        --color-text-danger: var(--danger);
+        --color-text-info: var(--info);
+        --color-text-warning: var(--warning);
+        --color-border-secondary: var(--border-strong);
+        --color-border-tertiary: var(--border);
+        --color-border-info: rgba(94, 159, 246, 0.45);
+        --color-border-success: rgba(92, 198, 111, 0.45);
+        --color-border-warning: rgba(240, 181, 104, 0.45);
+        --border-radius-md: var(--radius-md);
+        --font-mono: var(--mono);
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 20px 20px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.025) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.025) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      button {
+        background: var(--elevated);
+        color: var(--fg);
+        font: 500 13px/1 var(--sans);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        cursor: pointer;
+        transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease;
+      }
+      button:hover { border-color: var(--border-strong); background: var(--surface); }
+      button:active { transform: scale(0.97); }
+      .access-btn, .insert-btn {
+        background: var(--accent);
+        color: #1a1003;
+        border-color: transparent;
+        font-weight: 600;
+      }
+      .access-btn:hover, .insert-btn:hover {
+        filter: brightness(1.08);
+        background: var(--accent);
+        border-color: transparent;
+      }
+      input[type="range"] { accent-color: var(--accent); }
+      .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    </style>
+  </head>
+  <body>
+<h2 class="sr-only">Interactive Clock (Second-Chance) cache replacement demo with 6 slots arranged in a circle. A rotating hand evicts items with reference bit 0 and clears the bit on items with reference bit 1 before advancing.</h2>
+
+<div style="padding: 1rem 0;">
+
+  <div style="display: flex; justify-content: center; margin-bottom: 0.5rem;">
+    <svg id="clock-svg" viewBox="0 0 400 320" width="100%" style="max-width: 380px; height: auto;">
+      <g id="slots"></g>
+      <g id="hand-group" style="transform-origin: 200px 160px; transition: transform 0.45s cubic-bezier(.7,.1,.3,.95);">
+        <line x1="200" y1="160" x2="200" y2="80" stroke="var(--color-text-primary)" stroke-width="3" stroke-linecap="round" />
+        <polygon points="200,72 192,88 208,88" fill="var(--color-text-primary)" />
+        <circle cx="200" cy="160" r="6" fill="var(--color-text-primary)" />
+      </g>
+    </svg>
+  </div>
+
+  <div id="status" style="padding: 10px 14px; border-radius: var(--border-radius-md); background: var(--color-background-secondary); font-size: 14px; color: var(--color-text-secondary); margin-bottom: 1.25rem; min-height: 20px;">Cache is empty. Click a letter to access it.</div>
+
+  <div style="font-size: 13px; color: var(--color-text-secondary); margin-bottom: 8px;">Access an item</div>
+  <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 1.25rem;">
+    <button class="access-btn" data-k="A" style="width: 42px; height: 42px; font-size: 16px; font-weight: 500;">A</button>
+    <button class="access-btn" data-k="B" style="width: 42px; height: 42px; font-size: 16px; font-weight: 500;">B</button>
+    <button class="access-btn" data-k="C" style="width: 42px; height: 42px; font-size: 16px; font-weight: 500;">C</button>
+    <button class="access-btn" data-k="D" style="width: 42px; height: 42px; font-size: 16px; font-weight: 500;">D</button>
+    <button class="access-btn" data-k="E" style="width: 42px; height: 42px; font-size: 16px; font-weight: 500;">E</button>
+    <button class="access-btn" data-k="F" style="width: 42px; height: 42px; font-size: 16px; font-weight: 500;">F</button>
+    <button class="access-btn" data-k="G" style="width: 42px; height: 42px; font-size: 16px; font-weight: 500;">G</button>
+    <button class="access-btn" data-k="H" style="width: 42px; height: 42px; font-size: 16px; font-weight: 500;">H</button>
+    <div style="flex: 1;"></div>
+    <button id="demo-btn" style="height: 42px; padding: 0 12px; font-size: 14px;"><i class="ti ti-player-play" style="font-size:15px; vertical-align:-2px; margin-right:4px" aria-hidden="true"></i>Run demo</button>
+    <button id="reset-btn" style="height: 42px; padding: 0 12px; font-size: 14px;"><i class="ti ti-refresh" style="font-size:15px; vertical-align:-2px; margin-right:4px" aria-hidden="true"></i>Reset</button>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 1.25rem;">
+    <div style="background: var(--color-background-secondary); padding: 10px 12px; border-radius: var(--border-radius-md);">
+      <div style="font-size: 12px; color: var(--color-text-secondary);">Hits</div>
+      <div id="stat-hits" style="font-size: 20px; font-weight: 500;">0</div>
+    </div>
+    <div style="background: var(--color-background-secondary); padding: 10px 12px; border-radius: var(--border-radius-md);">
+      <div style="font-size: 12px; color: var(--color-text-secondary);">Misses</div>
+      <div id="stat-misses" style="font-size: 20px; font-weight: 500;">0</div>
+    </div>
+    <div style="background: var(--color-background-secondary); padding: 10px 12px; border-radius: var(--border-radius-md);">
+      <div style="font-size: 12px; color: var(--color-text-secondary);">Hit rate</div>
+      <div id="stat-rate" style="font-size: 20px; font-weight: 500;">—</div>
+    </div>
+  </div>
+
+  <div style="font-size: 13px; color: var(--color-text-secondary); margin-bottom: 6px;">Operation log</div>
+  <div id="log" style="max-height: 160px; overflow-y: auto; background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 10px 12px; font-size: 12px; font-family: var(--font-mono); color: var(--color-text-secondary);">Waiting for first access…</div>
+
+</div>
+
+<script>
+(function() {
+  const N = 6;
+  let slots = new Array(N).fill(null);
+  let hand = 0;
+  let hits = 0, misses = 0;
+  let busy = false;
+
+  function positions() {
+    const result = [];
+    for (let i = 0; i < N; i++) {
+      const angle = (-90 + i * 60) * Math.PI / 180;
+      result.push({ x: 200 + 105 * Math.cos(angle), y: 160 + 105 * Math.sin(angle) });
+    }
+    return result;
+  }
+
+  function render() {
+    const g = document.getElementById('slots');
+    g.innerHTML = '';
+    const pos = positions();
+    for (let i = 0; i < N; i++) {
+      const p = pos[i];
+      const slot = slots[i];
+      const ns = 'http://www.w3.org/2000/svg';
+      const c = document.createElementNS(ns, 'circle');
+      c.setAttribute('cx', p.x);
+      c.setAttribute('cy', p.y);
+      c.setAttribute('r', 30);
+      c.setAttribute('stroke-width', '1');
+      c.setAttribute('data-i', i);
+      if (slot) {
+        c.setAttribute('fill', 'var(--color-background-info)');
+        c.setAttribute('stroke', 'var(--color-border-info)');
+      } else {
+        c.setAttribute('fill', 'var(--color-background-secondary)');
+        c.setAttribute('stroke', 'var(--color-border-tertiary)');
+      }
+      g.appendChild(c);
+      if (slot) {
+        const t = document.createElementNS(ns, 'text');
+        t.setAttribute('x', p.x);
+        t.setAttribute('y', p.y - 1);
+        t.setAttribute('text-anchor', 'middle');
+        t.setAttribute('dominant-baseline', 'middle');
+        t.setAttribute('fill', 'var(--color-text-info)');
+        t.setAttribute('font-size', '20');
+        t.setAttribute('font-weight', '500');
+        t.textContent = slot.key;
+        g.appendChild(t);
+        const b = document.createElementNS(ns, 'text');
+        b.setAttribute('x', p.x);
+        b.setAttribute('y', p.y + 16);
+        b.setAttribute('text-anchor', 'middle');
+        b.setAttribute('dominant-baseline', 'middle');
+        b.setAttribute('fill', slot.bit ? '#27500A' : 'var(--color-text-tertiary)');
+        b.setAttribute('font-size', '10');
+        b.textContent = 'ref=' + slot.bit;
+        g.appendChild(b);
+      } else {
+        const t = document.createElementNS(ns, 'text');
+        t.setAttribute('x', p.x);
+        t.setAttribute('y', p.y);
+        t.setAttribute('text-anchor', 'middle');
+        t.setAttribute('dominant-baseline', 'middle');
+        t.setAttribute('fill', 'var(--color-text-tertiary)');
+        t.setAttribute('font-size', '20');
+        t.textContent = '—';
+        g.appendChild(t);
+      }
+    }
+    document.getElementById('hand-group').style.transform = `rotate(${hand * 60}deg)`;
+    document.getElementById('stat-hits').textContent = hits;
+    document.getElementById('stat-misses').textContent = misses;
+    const total = hits + misses;
+    document.getElementById('stat-rate').textContent = total === 0 ? '—' : Math.round(100 * hits / total) + '%';
+  }
+
+  function flash(idx, kind) {
+    const circles = document.getElementById('slots').querySelectorAll('circle');
+    const slot = circles[idx];
+    if (!slot) return;
+    const colors = {
+      hit:   { bg: '#C0DD97', border: '#639922' },
+      miss:  { bg: '#F7C1C1', border: '#E24B4A' },
+      evict: { bg: '#FAC775', border: '#BA7517' },
+      skip:  { bg: '#CECBF6', border: '#7F77DD' }
+    };
+    const c = colors[kind];
+    slot.setAttribute('fill', c.bg);
+    slot.setAttribute('stroke', c.border);
+  }
+
+  function setStatus(text, color) {
+    const el = document.getElementById('status');
+    el.textContent = text;
+    el.style.color = color;
+  }
+
+  function logLine(text) {
+    const logEl = document.getElementById('log');
+    if (logEl.textContent === 'Waiting for first access…') logEl.innerHTML = '';
+    const div = document.createElement('div');
+    div.style.padding = '2px 0';
+    div.textContent = text;
+    logEl.appendChild(div);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function snapshot() {
+    return slots.map((s, i) => s ? `${s.key}/${s.bit}` : '_').join(',') + ` hand=${hand}`;
+  }
+
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  async function access(key) {
+    if (busy) return;
+    busy = true;
+    const idx = slots.findIndex(s => s && s.key === key);
+    if (idx !== -1) {
+      slots[idx].bit = 1;
+      hits++;
+      render();
+      flash(idx, 'hit');
+      setStatus(`HIT — ${key} found at slot ${idx}, ref bit set to 1.`, 'var(--color-text-success)');
+      logLine(`access(${key}) → HIT  | ${snapshot()}`);
+      await sleep(700);
+      render();
+      busy = false;
+      return;
+    }
+    misses++;
+    let sweepCount = 0;
+    while (sweepCount < 2 * N + 1) {
+      if (!slots[hand]) {
+        const at = hand;
+        slots[hand] = { key, bit: 1 };
+        render();
+        flash(at, 'miss');
+        setStatus(`MISS — ${key} inserted at empty slot ${at}, ref=1.`, 'var(--color-text-danger)');
+        logLine(`access(${key}) → MISS, insert at ${at}  | ${snapshot()}`);
+        await sleep(700);
+        hand = (hand + 1) % N;
+        render();
+        busy = false;
+        return;
+      } else if (slots[hand].bit === 1) {
+        const skipped = slots[hand].key;
+        slots[hand].bit = 0;
+        const at = hand;
+        render();
+        flash(at, 'skip');
+        setStatus(`Hand at ${skipped} (ref=1) — second chance granted, clearing to 0.`, '#3C3489');
+        await sleep(450);
+        hand = (hand + 1) % N;
+        render();
+        await sleep(250);
+        sweepCount++;
+      } else {
+        const evicted = slots[hand].key;
+        const at = hand;
+        slots[hand] = { key, bit: 1 };
+        render();
+        flash(at, 'evict');
+        setStatus(`Hand at ${evicted} (ref=0) — EVICTED. ${key} inserted with ref=1.`, 'var(--color-text-warning)');
+        logLine(`access(${key}) → MISS, evict ${evicted} at slot ${at}  | ${snapshot()}`);
+        await sleep(750);
+        hand = (hand + 1) % N;
+        render();
+        busy = false;
+        return;
+      }
+    }
+    busy = false;
+  }
+
+  function resetAll() {
+    slots = new Array(N).fill(null);
+    hand = 0;
+    hits = 0; misses = 0;
+    document.getElementById('log').innerHTML = 'Waiting for first access…';
+    setStatus('Cache is empty. Click a letter to access it.', 'var(--color-text-secondary)');
+    render();
+  }
+
+  document.querySelectorAll('.access-btn').forEach(btn => {
+    btn.addEventListener('click', () => { if (!busy) access(btn.dataset.k); });
+  });
+  document.getElementById('reset-btn').addEventListener('click', () => { if (!busy) resetAll(); });
+  document.getElementById('demo-btn').addEventListener('click', async () => {
+    if (busy) return;
+    resetAll();
+    const seq = ['A', 'B', 'C', 'D', 'E', 'F', 'A', 'G', 'B', 'H'];
+    for (const k of seq) {
+      await access(k);
+      await sleep(400);
+    }
+  });
+
+  render();
+})();
+</script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

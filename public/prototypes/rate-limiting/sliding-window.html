@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sliding Window Counter — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a; --accent-strong: #d56a1f;
+        --accent-soft: rgba(251, 134, 58, 0.12); --accent-border: rgba(251, 134, 58, 0.32);
+        --success: #5cc66f; --success-soft: rgba(92, 198, 111, 0.12);
+        --danger: #f06868; --danger-soft: rgba(240, 104, 104, 0.12);
+        --info: #5e9ff6; --info-soft: rgba(94, 159, 246, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --radius-md: 8px;
+        --color-background-primary: var(--bg);
+        --color-background-secondary: var(--surface);
+        --color-background-success: var(--success-soft);
+        --color-background-danger: var(--danger-soft);
+        --color-background-info: var(--info-soft);
+        --color-text-primary: var(--fg);
+        --color-text-secondary: var(--muted);
+        --color-text-success: var(--success);
+        --color-text-danger: var(--danger);
+        --color-text-info: var(--info);
+        --color-border-tertiary: var(--border);
+        --border-radius-md: var(--radius-md);
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 20px 20px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.025) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.025) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      .ts { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; fill: var(--muted); }
+      .th { font-family: var(--sans); font-size: 14px; font-weight: 500; fill: var(--fg); }
+      .c-blue rect { fill: var(--accent-soft); stroke: var(--accent-border); }
+      .c-gray rect { fill: var(--surface); stroke: var(--border); }
+      button {
+        background: var(--accent); color: #1a1003;
+        font: 500 13px/1 var(--sans);
+        border: 1px solid transparent; border-radius: var(--radius-md);
+        padding: 9px 14px; cursor: pointer;
+        transition: filter 150ms ease, transform 100ms ease, background 150ms ease;
+      }
+      button:hover { filter: brightness(1.06); }
+      button:active { transform: scale(0.97); }
+      .swc-controls button:nth-of-type(n+2) {
+        background: var(--elevated); color: var(--fg); border-color: var(--border);
+      }
+      .swc-controls button:nth-of-type(n+2):hover { border-color: var(--border-strong); filter: none; background: var(--surface); }
+    </style>
+    <style>
+      .swc-wrap { padding: 0.25rem 0; }
+      .swc-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0; }
+      .swc-stat { background: var(--color-background-secondary); padding: 10px 12px; border-radius: var(--border-radius-md); border: 1px solid var(--border); }
+      .swc-stat-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-secondary); margin-bottom: 4px; }
+      .swc-stat-value { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+      .swc-controls { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; }
+      .swc-counter { margin-left: auto; font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-text-secondary); }
+      .swc-counter b { color: var(--fg); font-weight: 500; font-variant-numeric: tabular-nums; }
+      .swc-outcome { padding: 10px 14px; border-radius: var(--border-radius-md); font-size: 13px; min-height: 22px; transition: background 0.15s, color 0.15s; border: 1px solid transparent; }
+      .swc-outcome.idle { background: var(--color-background-secondary); color: var(--color-text-secondary); border-color: var(--border); }
+      .swc-outcome.allow { background: var(--color-background-success); color: var(--color-text-success); border-color: rgba(92, 198, 111, 0.3); }
+      .swc-outcome.deny { background: var(--color-background-danger); color: var(--color-text-danger); border-color: rgba(240, 104, 104, 0.3); }
+      .swc-outcome.reset { background: var(--color-background-info); color: var(--color-text-info); border-color: rgba(94, 159, 246, 0.3); }
+    </style>
+  </head>
+  <body>
+    <div class="swc-wrap">
+      <svg width="100%" viewBox="0 0 680 240" role="img" aria-label="Sliding window counter">
+        <desc>Two adjacent fixed windows. A sliding view spans across them, weighting the previous count by overlap.</desc>
+        <g class="c-gray">
+          <rect x="50" y="70" width="290" height="100" rx="6" stroke-width="1"/>
+          <text class="ts" x="195" y="118" text-anchor="middle">PREVIOUS WINDOW</text>
+          <text class="ts" x="195" y="138" text-anchor="middle" id="swc-prev-label">count: 0</text>
+        </g>
+        <g class="c-blue">
+          <rect x="340" y="70" width="290" height="100" rx="6" stroke-width="1"/>
+          <text class="ts" x="485" y="118" text-anchor="middle" fill="var(--fg)">CURRENT WINDOW</text>
+          <text class="ts" x="485" y="138" text-anchor="middle" fill="var(--fg)" id="swc-curr-label">count: 0</text>
+        </g>
+        <rect id="swc-slide" x="50" y="55" width="290" height="130" rx="6" fill="none" stroke="#fb863a" stroke-width="2" stroke-dasharray="6 4"/>
+        <line id="swc-now-line" x1="340" y1="50" x2="340" y2="190" stroke="#fb863a" stroke-width="2"/>
+        <text class="ts" x="340" y="46" text-anchor="middle" fill="#fb863a" id="swc-now-label">NOW</text>
+        <text class="th" x="340" y="216" text-anchor="middle" id="swc-formula">estimate = 0 × 1.00 + 0 = 0.00</text>
+      </svg>
+      <div class="swc-stats">
+        <div class="swc-stat"><div class="swc-stat-label">Previous</div><div class="swc-stat-value" id="swc-prev">0</div></div>
+        <div class="swc-stat"><div class="swc-stat-label">Current</div><div class="swc-stat-value" id="swc-curr">0</div></div>
+        <div class="swc-stat"><div class="swc-stat-label">Estimate</div><div class="swc-stat-value" id="swc-est">0.00</div></div>
+        <div class="swc-stat"><div class="swc-stat-label">Limit</div><div class="swc-stat-value">5</div></div>
+      </div>
+      <div class="swc-controls">
+        <button onclick="swcSend()">Send request</button>
+        <button onclick="swcBurst()">Burst of 8</button>
+        <button onclick="swcReset()">Reset</button>
+        <span class="swc-counter">
+          allowed <b id="swc-allowed">0</b> · denied <b id="swc-denied">0</b>
+        </span>
+      </div>
+      <div class="swc-outcome idle" id="swc-outcome">Click "send request" — estimate is a weighted blend of two counts</div>
+    </div>
+    <script>
+      const swcLimit = 5;
+      const swcWindowMs = 15000;
+      let swcPrev = 0, swcCurr = 0;
+      let swcWindowStart = Date.now();
+      let swcAllowed = 0, swcDenied = 0;
+      function swcEstimate() {
+        const progress = Math.min(1, (Date.now() - swcWindowStart) / swcWindowMs);
+        return swcPrev * (1 - progress) + swcCurr;
+      }
+      function swcRender() {
+        const now = Date.now();
+        let progress = (now - swcWindowStart) / swcWindowMs;
+        let cycled = false;
+        while (progress >= 1) {
+          swcPrev = swcCurr;
+          swcCurr = 0;
+          swcWindowStart += swcWindowMs;
+          progress = (now - swcWindowStart) / swcWindowMs;
+          cycled = true;
+        }
+        if (cycled) {
+          const o = document.getElementById('swc-outcome');
+          o.className = 'swc-outcome reset';
+          o.textContent = '↻ Window rolled over — current became previous';
+        }
+        const nowX = 340 + progress * 290;
+        const slideX = 50 + progress * 290;
+        document.getElementById('swc-now-line').setAttribute('x1', nowX);
+        document.getElementById('swc-now-line').setAttribute('x2', nowX);
+        document.getElementById('swc-now-label').setAttribute('x', nowX);
+        document.getElementById('swc-slide').setAttribute('x', slideX);
+        const est = swcPrev * (1 - progress) + swcCurr;
+        const weight = (1 - progress).toFixed(2);
+        document.getElementById('swc-formula').textContent =
+          'estimate = ' + swcPrev + ' × ' + weight + ' + ' + swcCurr + ' = ' + est.toFixed(2);
+        document.getElementById('swc-prev').textContent = swcPrev;
+        document.getElementById('swc-curr').textContent = swcCurr;
+        document.getElementById('swc-est').textContent = est.toFixed(2);
+        document.getElementById('swc-prev-label').textContent = 'count: ' + swcPrev;
+        document.getElementById('swc-curr-label').textContent = 'count: ' + swcCurr;
+      }
+      function swcSend() {
+        const est = swcEstimate();
+        const o = document.getElementById('swc-outcome');
+        if (est < swcLimit) {
+          swcCurr++; swcAllowed++;
+          o.className = 'swc-outcome allow';
+          o.textContent = '✓ Allowed — estimate was ' + est.toFixed(2) + ' (under limit)';
+        } else {
+          swcDenied++;
+          o.className = 'swc-outcome deny';
+          o.textContent = '✗ Denied — estimate ' + est.toFixed(2) + ' is at limit ' + swcLimit;
+        }
+        document.getElementById('swc-allowed').textContent = swcAllowed;
+        document.getElementById('swc-denied').textContent = swcDenied;
+        swcRender();
+      }
+      function swcBurst() { for (let i = 0; i < 8; i++) setTimeout(swcSend, i * 100); }
+      function swcReset() {
+        swcPrev = 0; swcCurr = 0; swcWindowStart = Date.now();
+        swcAllowed = 0; swcDenied = 0;
+        document.getElementById('swc-allowed').textContent = 0;
+        document.getElementById('swc-denied').textContent = 0;
+        const o = document.getElementById('swc-outcome');
+        o.className = 'swc-outcome idle';
+        o.textContent = 'Click "send request" — estimate is a weighted blend of two counts';
+        swcRender();
+      }
+      function swcTick() { swcRender(); requestAnimationFrame(swcTick); }
+      swcTick();
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

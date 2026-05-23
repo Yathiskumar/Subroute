@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Fixed Window — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a; --accent-strong: #d56a1f;
+        --accent-soft: rgba(251, 134, 58, 0.12); --accent-border: rgba(251, 134, 58, 0.32);
+        --success: #5cc66f; --success-soft: rgba(92, 198, 111, 0.12);
+        --danger: #f06868; --danger-soft: rgba(240, 104, 104, 0.12);
+        --info: #5e9ff6; --info-soft: rgba(94, 159, 246, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --radius-md: 8px;
+        --color-background-primary: var(--bg);
+        --color-background-secondary: var(--surface);
+        --color-background-success: var(--success-soft);
+        --color-background-danger: var(--danger-soft);
+        --color-background-info: var(--info-soft);
+        --color-text-primary: var(--fg);
+        --color-text-secondary: var(--muted);
+        --color-text-success: var(--success);
+        --color-text-danger: var(--danger);
+        --color-text-info: var(--info);
+        --color-border-tertiary: var(--border);
+        --border-radius-md: var(--radius-md);
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 20px 20px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.025) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.025) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      .ts { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; fill: var(--muted); }
+      .th { font-family: var(--sans); font-size: 14px; font-weight: 500; fill: var(--fg); }
+      button {
+        background: var(--accent); color: #1a1003;
+        font: 500 13px/1 var(--sans);
+        border: 1px solid transparent; border-radius: var(--radius-md);
+        padding: 9px 14px; cursor: pointer;
+        transition: filter 150ms ease, transform 100ms ease, background 150ms ease;
+      }
+      button:hover { filter: brightness(1.06); }
+      button:active { transform: scale(0.97); }
+      .fw-controls button:nth-of-type(n+2) {
+        background: var(--elevated); color: var(--fg); border-color: var(--border);
+      }
+      .fw-controls button:nth-of-type(n+2):hover { border-color: var(--border-strong); filter: none; background: var(--surface); }
+    </style>
+    <style>
+      .fw-wrap { padding: 0.25rem 0; }
+      .fw-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0; }
+      .fw-stat { background: var(--color-background-secondary); padding: 10px 12px; border-radius: var(--border-radius-md); border: 1px solid var(--border); }
+      .fw-stat-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-secondary); margin-bottom: 4px; }
+      .fw-stat-value { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+      .fw-controls { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+      .fw-outcome { padding: 10px 14px; border-radius: var(--border-radius-md); font-size: 13px; min-height: 22px; transition: background 0.15s, color 0.15s; border: 1px solid transparent; }
+      .fw-outcome.idle { background: var(--color-background-secondary); color: var(--color-text-secondary); border-color: var(--border); }
+      .fw-outcome.allow { background: var(--color-background-success); color: var(--color-text-success); border-color: rgba(92, 198, 111, 0.3); }
+      .fw-outcome.deny { background: var(--color-background-danger); color: var(--color-text-danger); border-color: rgba(240, 104, 104, 0.3); }
+      .fw-outcome.reset { background: var(--color-background-info); color: var(--color-text-info); border-color: rgba(94, 159, 246, 0.3); }
+      .fw-history { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; padding: 10px 12px; background: var(--color-background-secondary); border: 1px solid var(--border); border-radius: var(--border-radius-md); font-size: 12px; }
+      .fw-history-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-secondary); white-space: nowrap; }
+      .fw-history-bars { display: flex; gap: 6px; flex: 1; }
+      .fw-hbar { flex: 1; height: 24px; background: var(--bg); border-radius: 4px; border: 1px solid var(--color-border-tertiary); position: relative; overflow: hidden; }
+      .fw-hbar-fill { position: absolute; left: 0; top: 0; bottom: 0; opacity: 0.7; }
+      .fw-hbar-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; }
+    </style>
+  </head>
+  <body>
+    <div class="fw-wrap">
+      <svg width="100%" viewBox="0 0 680 250" role="img" aria-label="Fixed window counter">
+        <desc>A counter tracks requests in the current time window. The counter resets when the window ends.</desc>
+        <text class="ts" x="40" y="30">CURRENT WINDOW</text>
+        <text class="ts" x="640" y="30" text-anchor="end" id="fw-time-text">resets in 10.0s</text>
+        <rect x="40" y="40" width="600" height="6" rx="3" fill="var(--color-background-secondary)"/>
+        <rect id="fw-time-bar" x="40" y="40" width="600" height="6" rx="3" fill="#fb863a"/>
+        <g id="fw-slots"></g>
+        <text class="th" x="340" y="220" text-anchor="middle" font-size="22" id="fw-counter" fill="var(--color-text-primary)">0 / 5</text>
+      </svg>
+      <div class="fw-history">
+        <span class="fw-history-label">Recent windows</span>
+        <div class="fw-history-bars" id="fw-history"></div>
+      </div>
+      <div class="fw-stats">
+        <div class="fw-stat"><div class="fw-stat-label">In window</div><div class="fw-stat-value" id="fw-count">0</div></div>
+        <div class="fw-stat"><div class="fw-stat-label">Limit</div><div class="fw-stat-value">5</div></div>
+        <div class="fw-stat"><div class="fw-stat-label">Allowed</div><div class="fw-stat-value" id="fw-allowed">0</div></div>
+        <div class="fw-stat"><div class="fw-stat-label">Denied</div><div class="fw-stat-value" id="fw-denied">0</div></div>
+      </div>
+      <div class="fw-controls">
+        <button onclick="fwSend()">Send request</button>
+        <button onclick="fwBurst()">Burst of 8</button>
+        <button onclick="fwReset()">Reset</button>
+      </div>
+      <div class="fw-outcome idle" id="fw-outcome">Click "send request" — counter resets every 10 seconds</div>
+    </div>
+    <script>
+      const fwLimit = 5;
+      const fwWindowMs = 10000;
+      let fwCount = 0, fwAllowed = 0, fwDenied = 0;
+      let fwWindowStart = Date.now();
+      let fwHistory = [0, 0, 0, 0];
+      function fwRenderSlots() {
+        const g = document.getElementById('fw-slots');
+        g.innerHTML = '';
+        const slotW = 100, gap = 14, n = 5;
+        const totalW = n * slotW + (n - 1) * gap;
+        const startX = (680 - totalW) / 2;
+        for (let i = 0; i < n; i++) {
+          const x = startX + i * (slotW + gap);
+          const r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+          r.setAttribute('x', x); r.setAttribute('y', 80);
+          r.setAttribute('width', slotW); r.setAttribute('height', 100);
+          r.setAttribute('rx', 8); r.setAttribute('stroke-width', '1');
+          if (i < fwCount) {
+            r.setAttribute('fill', '#fb863a'); r.setAttribute('stroke', '#d56a1f');
+          } else {
+            r.setAttribute('fill', 'var(--color-background-secondary)');
+            r.setAttribute('stroke', 'var(--color-border-tertiary)');
+          }
+          g.appendChild(r);
+        }
+      }
+      function fwRenderHistory() {
+        const h = document.getElementById('fw-history');
+        h.innerHTML = '';
+        fwHistory.forEach((c) => {
+          const bar = document.createElement('div');
+          bar.className = 'fw-hbar';
+          const fill = document.createElement('div');
+          fill.className = 'fw-hbar-fill';
+          fill.style.width = (Math.min(c, fwLimit) / fwLimit * 100) + '%';
+          fill.style.background = c >= fwLimit ? '#f06868' : '#fb863a';
+          bar.appendChild(fill);
+          const lab = document.createElement('div');
+          lab.className = 'fw-hbar-label';
+          lab.textContent = c;
+          bar.appendChild(lab);
+          h.appendChild(bar);
+        });
+      }
+      function fwUpdateCounter() {
+        document.getElementById('fw-counter').textContent = fwCount + ' / ' + fwLimit;
+        document.getElementById('fw-count').textContent = fwCount;
+      }
+      function fwSend() {
+        const o = document.getElementById('fw-outcome');
+        if (fwCount < fwLimit) {
+          fwCount++; fwAllowed++;
+          o.className = 'fw-outcome allow';
+          o.textContent = '✓ Request allowed — count is now ' + fwCount + ' of ' + fwLimit;
+        } else {
+          fwDenied++;
+          o.className = 'fw-outcome deny';
+          o.textContent = '✗ Request denied — limit reached for this window';
+        }
+        document.getElementById('fw-allowed').textContent = fwAllowed;
+        document.getElementById('fw-denied').textContent = fwDenied;
+        fwUpdateCounter();
+        fwRenderSlots();
+      }
+      function fwBurst() { for (let i = 0; i < 8; i++) setTimeout(fwSend, i * 100); }
+      function fwReset() {
+        fwCount = 0; fwAllowed = 0; fwDenied = 0;
+        fwWindowStart = Date.now();
+        fwHistory = [0, 0, 0, 0];
+        document.getElementById('fw-allowed').textContent = 0;
+        document.getElementById('fw-denied').textContent = 0;
+        const o = document.getElementById('fw-outcome');
+        o.className = 'fw-outcome idle';
+        o.textContent = 'Click "send request" — counter resets every 10 seconds';
+        fwUpdateCounter();
+        fwRenderSlots();
+        fwRenderHistory();
+      }
+      function fwTick() {
+        const elapsed = Date.now() - fwWindowStart;
+        if (elapsed >= fwWindowMs) {
+          fwHistory.push(fwCount); fwHistory.shift();
+          fwCount = 0;
+          fwWindowStart = Date.now();
+          const o = document.getElementById('fw-outcome');
+          o.className = 'fw-outcome reset';
+          o.textContent = '↻ Window reset — counter back to 0';
+          fwUpdateCounter(); fwRenderSlots(); fwRenderHistory();
+        } else {
+          const remaining = (fwWindowMs - elapsed) / 1000;
+          document.getElementById('fw-time-text').textContent = 'resets in ' + remaining.toFixed(1) + 's';
+          const pct = (fwWindowMs - elapsed) / fwWindowMs;
+          document.getElementById('fw-time-bar').setAttribute('width', 600 * pct);
+        }
+        requestAnimationFrame(fwTick);
+      }
+      fwUpdateCounter(); fwRenderSlots(); fwRenderHistory(); fwTick();
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

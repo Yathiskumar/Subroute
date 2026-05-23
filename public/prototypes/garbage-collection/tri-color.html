@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Garbage Collection — Tri-Color Marking</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --success-soft: rgba(92,198,111,0.14); --success-border: rgba(92,198,111,0.40);
+        --danger: #f06868; --danger-soft: rgba(240,104,104,0.14); --danger-border: rgba(240,104,104,0.42);
+        --info: #5e9ff6; --info-soft: rgba(94,159,246,0.14); --info-border: rgba(94,159,246,0.40);
+        --warning: #f0b568; --warning-soft: rgba(240,181,104,0.14); --warning-border: rgba(240,181,104,0.40);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body { padding: 14px 16px 16px; background-image: linear-gradient(to right, rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.025) 1px, transparent 1px); background-size: 40px 40px; }
+      .container { max-width: 980px; margin: 0 auto; }
+
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+      .stat .lbl { font-size: 11px; color: var(--muted); }
+      .stat .val { font-size: 18px; font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
+      .stat.gray { background: rgba(144,153,168,0.10); border-color: rgba(144,153,168,0.35); }
+      .stat.gray .lbl { color: #b6bdc9; }
+      .stat .val.phase { font-size: 14px; text-transform: uppercase; letter-spacing: 0.04em; }
+
+      .tabs { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+      .tab { background: var(--elevated); color: var(--muted); border: 1px solid var(--border); border-radius: 999px; cursor: pointer; padding: 6px 13px; font: 500 12px/1 var(--sans); transition: all 150ms ease; white-space: nowrap; }
+      .tab:hover { border-color: var(--border-strong); color: var(--fg); }
+      .tab.active { background: var(--info-soft); color: var(--info); border-color: var(--info-border); }
+
+      .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 8px; padding: 0 2px; }
+      .legend .item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+      .legend .dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid; }
+      .dot.white { background: #e8e4dc; border-color: #888780; }
+      .dot.gray { background: #5b6270; border-color: #9099a8; }
+      .dot.black { background: #07080a; border-color: #4a5160; }
+      .dot.garb { background: var(--danger-soft); border-color: var(--danger); border-style: dashed; }
+
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 6px; margin-bottom: 10px; }
+      .stage svg { width: 100%; height: 360px; display: block; }
+      .legend svg { display: inline-block; vertical-align: middle; }
+
+      .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+      .panel .ttl { font-size: 10px; color: var(--subtle); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 6px; }
+      #narration { font-size: 12.5px; line-height: 1.6; color: var(--fg); min-height: 40px; }
+      #narration .em { color: var(--accent); font-weight: 600; }
+      #narration b { color: var(--fg); }
+
+      .controls { display: flex; gap: 8px; align-items: center; }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; padding: 9px 13px; transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.10); background: var(--accent); }
+      button.ghost { background: transparent; }
+      .counter { margin-left: auto; font: 12px var(--mono); color: var(--muted); }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+    </style>
+  </head>
+  <body>
+    <h2 class="sr-only">Tri-color marking: objects are white, gray, or black; marking drains a gray work queue, and a write barrier preserves correctness while the program mutates the heap.</h2>
+    <div class="container">
+      <div class="stats">
+        <div class="stat"><div class="lbl">White (unvisited)</div><div class="val" id="s-white">0</div></div>
+        <div class="stat gray"><div class="lbl">Gray (queue)</div><div class="val" id="s-gray">0</div></div>
+        <div class="stat"><div class="lbl">Black (done)</div><div class="val" id="s-black">0</div></div>
+        <div class="stat"><div class="lbl">Phase</div><div class="val phase" id="s-phase">init</div></div>
+      </div>
+
+      <div class="tabs" id="tabs">
+        <button class="tab active" data-scn="basic">1 · Basic marking</button>
+        <button class="tab" data-scn="bug">2 · The concurrent bug</button>
+        <button class="tab" data-scn="barrier">3 · Write barrier saves it</button>
+      </div>
+
+      <div class="legend">
+        <div class="item"><span class="dot white"></span>white (unvisited)</div>
+        <div class="item"><span class="dot gray"></span>gray (in queue)</div>
+        <div class="item"><span class="dot black"></span>black (done)</div>
+        <div class="item"><span class="dot garb"></span>garbage (swept)</div>
+      </div>
+
+      <div class="stage">
+        <svg viewBox="0 0 720 356" role="img" aria-label="Tri-color marking visualization">
+          <defs>
+            <marker id="tc-e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#7d8694"/></marker>
+            <marker id="tc-b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#5e9ff6"/></marker>
+            <marker id="tc-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#f0b568"/></marker>
+            <marker id="tc-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#f06868"/></marker>
+          </defs>
+          <text x="30" y="36" font-size="10" fill="#6b7280" letter-spacing="1.4">ROOT</text>
+          <text x="30" y="98" font-size="10" fill="#6b7280" letter-spacing="1.4">HEAP</text>
+          <text x="30" y="280" font-size="10" fill="#6b7280" letter-spacing="1.4">GRAY WORK QUEUE</text>
+          <g id="phase-badge"></g>
+          <g id="refs"></g>
+          <g id="root"></g>
+          <g id="heap"></g>
+          <g id="queue"></g>
+          <g id="mutator"></g>
+        </svg>
+      </div>
+
+      <div class="panel">
+        <div class="ttl">What's happening</div>
+        <div id="narration"></div>
+      </div>
+
+      <div class="controls">
+        <button id="prev"><i class="ti ti-arrow-left"></i>Prev</button>
+        <button id="next" class="primary">Next step<i class="ti ti-arrow-right"></i></button>
+        <button id="auto" class="ghost"><i class="ti ti-player-play"></i>Auto</button>
+        <button id="restart" class="ghost"><i class="ti ti-refresh"></i>Restart</button>
+        <span class="counter" id="counter">Step 1</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        function postHeight() { const h = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight); parent.postMessage({ type: "prototype:height", height: h }, "*"); }
+        if (window.ResizeObserver) new ResizeObserver(postHeight).observe(document.body);
+        window.addEventListener("load", postHeight);
+
+        const NS = "http://www.w3.org/2000/svg";
+        const svg = (t, a, txt) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); if (txt != null) e.textContent = txt; return e; };
+
+        const POS = { A: { x: 160, y: 150 }, B: { x: 295, y: 128 }, C: { x: 295, y: 205 }, D: { x: 430, y: 128 }, E: { x: 430, y: 205 }, F: { x: 565, y: 166 } };
+        const EDGES = [["A", "B"], ["A", "C"], ["B", "D"], ["C", "E"], ["D", "F"]];
+
+        const SCN = {
+          basic: [
+            { phase: "init", colors: { A: "w", B: "w", C: "w", D: "w", E: "w", F: "w" }, queue: [], root: "A", narr: "<b>INITIAL.</b> All 6 objects are WHITE (unvisited). Root → A. Graph: A→B, A→C, B→D, C→E, D→F. Gray queue empty; marking hasn't started." },
+            { phase: "mark", colors: { A: "g", B: "w", C: "w", D: "w", E: "w", F: "w" }, queue: ["A"], root: "A", active: "A", narr: "<b>START.</b> Color root's target A GRAY and enqueue. Gray = 'known alive, pointers not yet followed.'" },
+            { phase: "mark", colors: { A: "g", B: "g", C: "g", D: "w", E: "w", F: "w" }, queue: ["A", "B", "C"], root: "A", active: "A", narr: "Process A. Follow A→B and A→C; both white → color GRAY and enqueue." },
+            { phase: "mark", colors: { A: "b", B: "g", C: "g", D: "w", E: "w", F: "w" }, queue: ["B", "C"], root: "A", narr: "A is fully scanned → BLACK. Black = 'alive and done'. Queue: [B, C]." },
+            { phase: "mark", colors: { A: "b", B: "g", C: "g", D: "g", E: "w", F: "w" }, queue: ["C", "D"], root: "A", active: "B", narr: "Process B. Follow B→D; D white → GRAY, enqueue." },
+            { phase: "mark", colors: { A: "b", B: "b", C: "g", D: "g", E: "w", F: "w" }, queue: ["C", "D"], root: "A", narr: "B fully scanned → BLACK. Queue: [C, D]." },
+            { phase: "mark", colors: { A: "b", B: "b", C: "g", D: "g", E: "g", F: "w" }, queue: ["D", "E"], root: "A", active: "C", narr: "Process C. Follow C→E; E white → GRAY." },
+            { phase: "mark", colors: { A: "b", B: "b", C: "b", D: "g", E: "g", F: "w" }, queue: ["D", "E"], root: "A", narr: "C fully scanned → BLACK. Queue: [D, E]." },
+            { phase: "mark", colors: { A: "b", B: "b", C: "b", D: "g", E: "g", F: "g" }, queue: ["E", "F"], root: "A", active: "D", narr: "Process D. Follow D→F; F white → GRAY." },
+            { phase: "mark", colors: { A: "b", B: "b", C: "b", D: "b", E: "g", F: "g" }, queue: ["E", "F"], root: "A", narr: "D fully scanned → BLACK." },
+            { phase: "mark", colors: { A: "b", B: "b", C: "b", D: "b", E: "b", F: "g" }, queue: ["F"], root: "A", narr: "E has no outgoing pointers → BLACK immediately." },
+            { phase: "mark", colors: { A: "b", B: "b", C: "b", D: "b", E: "b", F: "b" }, queue: [], root: "A", narr: "F has no pointers → BLACK. Gray queue empty → <span class='em'>marking complete.</span> All reachable objects are black." },
+            { phase: "done", colors: { A: "b", B: "b", C: "b", D: "b", E: "b", F: "b" }, queue: [], root: "A", narr: "<b>DONE.</b> Sweep would free all white objects (none here). The invariant held throughout: <span class='em'>no black object ever pointed to a white one.</span> That soundness is what concurrent collectors must preserve." },
+          ],
+          bug: [
+            { phase: "mark", colors: { A: "b", B: "b", C: "w", D: "w", E: "w", F: "w" }, queue: ["C"], root: "A", narr: "<b>NAIVE CONCURRENT MARKING.</b> GC has blackened A and B. C is gray, waiting. Meanwhile the program (mutator) runs in parallel — with <span class='em'>no write barrier.</span>" },
+            { phase: "mutate", colors: { A: "b", B: "b", C: "w", D: "w", E: "w", F: "w" }, queue: ["C"], root: "A", mutation: { from: "B", to: "D" }, narr: "<b>MUTATOR:</b> the program runs <code>B.next = D</code>. Now B (black) points to D (white) — a <span class='em'>tri-color invariant violation.</span> Nothing catches it." },
+            { phase: "mark", colors: { A: "b", B: "b", C: "g", D: "w", E: "w", F: "w" }, queue: ["C"], root: "A", active: "C", narr: "GC pulls C → processes C→E. But it has no reason to revisit B (already black). D is never enqueued." },
+            { phase: "mark", colors: { A: "b", B: "b", C: "b", D: "w", E: "b", F: "w" }, queue: [], root: "A", narr: "Marking completes; queue empty. The GC believes it found everything. <span class='em'>D and F are still white.</span>" },
+            { phase: "bug", colors: { A: "b", B: "b", C: "b", D: "r", E: "b", F: "r" }, queue: [], root: "A", bug: ["D", "F"], narr: "<b>BUG!</b> D is swept as garbage (still white) — and F with it. But B still holds a pointer to D. Next time the program reads <code>B.next</code>, it dereferences freed memory: <span class='em'>use-after-free.</span> This is why naive concurrent marking is unsound." },
+          ],
+          barrier: [
+            { phase: "mark", colors: { A: "b", B: "b", C: "w", D: "w", E: "w", F: "w" }, queue: ["C"], root: "A", narr: "<b>SAME SETUP, WITH A WRITE BARRIER.</b> A and B black, C gray and waiting. The mutator is about to run <code>B.next = D</code>." },
+            { phase: "barrier", colors: { A: "b", B: "b", C: "w", D: "g", E: "w", F: "w" }, queue: ["C", "D"], root: "A", mutation: { from: "B", to: "D" }, barrier: true, narr: "<b>WRITE BARRIER FIRES.</b> The runtime intercepts <code>B.next = D</code>, sees a black object now points to white D, and (Dijkstra-style) colors D GRAY and enqueues it. <span class='em'>The invariant is restored.</span>" },
+            { phase: "mark", colors: { A: "b", B: "b", C: "g", D: "g", E: "g", F: "w" }, queue: ["D", "E"], root: "A", active: "C", narr: "GC processes C → E gray, C → black. D is safely in the queue." },
+            { phase: "mark", colors: { A: "b", B: "b", C: "b", D: "g", E: "g", F: "g" }, queue: ["E", "F"], root: "A", active: "D", narr: "GC processes D → F gray, D → black. <span class='em'>D would have been missed without the barrier.</span>" },
+            { phase: "mark", colors: { A: "b", B: "b", C: "b", D: "b", E: "b", F: "b" }, queue: [], root: "A", narr: "E and F finish → black. Queue empty → marking complete. Every reachable object (including the D added mid-mark) is correctly black. <span class='em'>No use-after-free.</span>" },
+            { phase: "done", colors: { A: "b", B: "b", C: "b", D: "b", E: "b", F: "b" }, queue: [], root: "A", narr: "<b>DONE.</b> Concurrent marking succeeded because the barrier preserved the invariant while the mutator ran freely. This is exactly how Go and Java's G1 stay correct." },
+          ],
+        };
+
+        let cur = "basic", idx = 0, timer = null;
+        const $ = (id) => document.getElementById(id);
+
+        const COL = {
+          w: { fill: "#e8e4dc", stroke: "#888780", text: "#1a1c20" },
+          g: { fill: "#5b6270", stroke: "#aab2bf", text: "#f3f5f8" },
+          b: { fill: "#07080a", stroke: "#4a5160", text: "#e8e4dc" },
+          r: { fill: "rgba(240,104,104,0.14)", stroke: "#f06868", text: "#f3a0a0" },
+        };
+        const PHASE = {
+          init: { lbl: "Before marking", color: "#9099a8" },
+          mark: { lbl: "Marking", color: "#5e9ff6" },
+          mutate: { lbl: "Mutator action", color: "#fb863a" },
+          barrier: { lbl: "Write barrier", color: "#f0b568" },
+          bug: { lbl: "BUG · use-after-free", color: "#f06868" },
+          done: { lbl: "Done", color: "#5cc66f" },
+        };
+
+        function edge(layer, f, t, color, marker) {
+          const dx = t.x - f.x, dy = t.y - f.y, L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L;
+          layer.appendChild(svg("line", { x1: f.x + ux * 22, y1: f.y + uy * 22, x2: t.x - ux * 23, y2: t.y - uy * 23, stroke: color, "stroke-width": 1.4, "marker-end": marker, opacity: 0.8 }));
+        }
+
+        function render() {
+          const steps = SCN[cur], step = steps[idx];
+          ["phase-badge", "refs", "root", "heap", "queue", "mutator"].forEach((g) => ($(g).innerHTML = ""));
+
+          // edges
+          EDGES.forEach(([a, b]) => edge($("refs"), POS[a], POS[b], "#3a4150", "url(#tc-e)"));
+          // mutation edge
+          if (step.mutation) {
+            const f = POS[step.mutation.from], t = POS[step.mutation.to], mx = (f.x + t.x) / 2, my = (f.y + t.y) / 2 + 42;
+            const amber = !!step.barrier;
+            $("refs").appendChild(svg("path", { d: `M ${f.x} ${f.y + 20} Q ${mx} ${my} ${t.x} ${t.y + 20}`, fill: "none", stroke: amber ? "#f0b568" : "#f06868", "stroke-width": 2.2, "marker-end": amber ? "url(#tc-amber)" : "url(#tc-red)" }));
+            $("refs").appendChild(svg("text", { x: mx, y: my + 16, "text-anchor": "middle", "font-size": 10.5, "font-weight": 700, fill: amber ? "#f0b568" : "#f06868", "font-family": "var(--mono)" }, step.mutation.from + ".next = " + step.mutation.to));
+          }
+          // root
+          $("root").appendChild(svg("rect", { x: 60, y: 38, width: 64, height: 30, rx: 7, fill: "rgba(94,159,246,0.10)", stroke: "#5e9ff6", "stroke-width": 1.2 }));
+          $("root").appendChild(svg("text", { x: 92, y: 58, "text-anchor": "middle", "font-size": 12, "font-weight": 600, fill: "#9cc4fb" }, "root"));
+          if (step.root && POS[step.root]) edge($("root"), { x: 124, y: 53 }, POS[step.root], "#5e9ff6", "url(#tc-b)");
+          // heap nodes
+          Object.keys(POS).forEach((id) => {
+            const p = POS[id], c = COL[step.colors[id] || "w"], active = step.active === id, bug = step.bug && step.bug.includes(id);
+            let stroke = c.stroke, sw = 1.6;
+            if (active) { stroke = "#f0b568"; sw = 3; }
+            else if (bug) { stroke = "#f06868"; sw = 2.6; }
+            $("heap").appendChild(svg("circle", { cx: p.x, cy: p.y, r: 21, fill: c.fill, stroke, "stroke-width": sw, "stroke-dasharray": (step.colors[id] === "r") ? "3 2" : "" }));
+            $("heap").appendChild(svg("text", { x: p.x, y: p.y + 5, "text-anchor": "middle", "font-size": 14, "font-weight": 700, fill: c.text }, id));
+          });
+          // queue
+          $("queue").appendChild(svg("rect", { x: 30, y: 292, width: 660, height: 34, rx: 7, fill: "#101216", stroke: "#2d333d", "stroke-width": 1 }));
+          if (!step.queue.length) $("queue").appendChild(svg("text", { x: 44, y: 313, "font-size": 11, fill: "#6b7280", "font-style": "italic", "font-family": "var(--mono)" }, "empty"));
+          else step.queue.forEach((id, i) => {
+            const x = 42 + i * 52;
+            $("queue").appendChild(svg("rect", { x, y: 298, width: 42, height: 22, rx: 5, fill: "#5b6270", stroke: "#aab2bf", "stroke-width": 1 }));
+            $("queue").appendChild(svg("text", { x: x + 21, y: 313, "text-anchor": "middle", "font-size": 12, "font-weight": 700, fill: "#f3f5f8" }, id));
+          });
+          // mutator chip
+          if (step.phase === "mutate" || step.phase === "barrier") {
+            const amber = step.phase === "barrier";
+            $("mutator").appendChild(svg("rect", { x: 470, y: 334, width: 210, height: 20, rx: 10, fill: "transparent", stroke: amber ? "#f0b568" : "#fb863a", "stroke-width": 1, opacity: 0.7 }));
+            $("mutator").appendChild(svg("text", { x: 575, y: 348, "text-anchor": "middle", "font-size": 10, "font-weight": 600, fill: amber ? "#f0b568" : "#fcae74", "font-family": "var(--mono)" }, amber ? "✓ barrier intercepted the write" : "⚠ mutator wrote a pointer"));
+          }
+          // phase badge
+          const ph = PHASE[step.phase];
+          $("phase-badge").appendChild(svg("rect", { x: 520, y: 8, width: 168, height: 22, rx: 11, fill: "transparent", stroke: ph.color, "stroke-width": 1, opacity: 0.6 }));
+          $("phase-badge").appendChild(svg("circle", { cx: 535, cy: 19, r: 3.5, fill: ph.color }));
+          $("phase-badge").appendChild(svg("text", { x: 547, y: 23, "font-size": 11, "font-weight": 600, fill: ph.color }, ph.lbl));
+
+          // narration + stats
+          $("narration").innerHTML = step.narr;
+          const vals = Object.values(step.colors);
+          $("s-white").textContent = vals.filter((c) => c === "w").length;
+          $("s-gray").textContent = vals.filter((c) => c === "g").length;
+          $("s-black").textContent = vals.filter((c) => c === "b").length;
+          const pe = $("s-phase"); pe.textContent = ph.lbl.split(" ")[0]; pe.style.color = ph.color;
+          $("counter").textContent = `Step ${idx + 1} / ${steps.length}`;
+          $("prev").disabled = idx === 0;
+          $("next").disabled = idx === steps.length - 1;
+        }
+
+        function stopAuto() { if (timer) { clearInterval(timer); timer = null; $("auto").innerHTML = '<i class="ti ti-player-play"></i>Auto'; } }
+        function go(n) { const max = SCN[cur].length - 1; idx = Math.max(0, Math.min(max, n)); render(); if (idx === max) stopAuto(); }
+        $("next").onclick = () => { stopAuto(); go(idx + 1); };
+        $("prev").onclick = () => { stopAuto(); go(idx - 1); };
+        $("restart").onclick = () => { stopAuto(); go(0); };
+        $("auto").onclick = () => { if (timer) { stopAuto(); return; } if (idx === SCN[cur].length - 1) idx = 0; $("auto").innerHTML = '<i class="ti ti-player-pause"></i>Pause'; timer = setInterval(() => go(idx + 1), 1150); };
+        document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => { stopAuto(); document.querySelectorAll(".tab").forEach((x) => x.classList.remove("active")); b.classList.add("active"); cur = b.dataset.scn; idx = 0; render(); }));
+        render();
+      })();
+    </script>
+  </body>
+</html>

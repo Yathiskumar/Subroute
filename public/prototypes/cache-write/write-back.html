@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cache Write — Write-Back</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.14);
+        --success-border: rgba(92, 198, 111, 0.40);
+        --danger: #f06868;
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.14);
+        --info-border: rgba(94, 159, 246, 0.40);
+        --warning: #f0b568;
+        --warning-soft: rgba(240, 181, 104, 0.14);
+        --warning-border: rgba(240, 181, 104, 0.40);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0; padding: 0; min-height: 100%;
+        background: var(--bg); color: var(--fg);
+        font-family: var(--sans); font-size: 13px;
+      }
+      body {
+        padding: 14px 16px 16px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.025) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.025) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      .container { max-width: 980px; margin: 0 auto; }
+
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+      .stat .lbl { font-size: 11px; color: var(--muted); }
+      .stat .val { font-size: 18px; font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
+      .stat.yellow { background: var(--warning-soft); border-color: var(--warning-border); }
+      .stat.yellow .lbl { color: var(--warning); }
+      .stat.green { background: var(--success-soft); border-color: var(--success-border); }
+      .stat.green .lbl { color: var(--success); }
+
+      .stage {
+        position: relative;
+        display: grid;
+        grid-template-columns: 96px minmax(60px, 1fr) minmax(220px, 270px) minmax(60px, 1fr) minmax(160px, 180px);
+        align-items: stretch;
+        gap: 0;
+        padding: 14px 4px;
+        margin-bottom: 14px;
+      }
+
+      .block {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 8px;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+      .block-head {
+        display: flex; justify-content: space-between; align-items: baseline;
+        padding: 0 2px 6px;
+        border-bottom: 1px solid var(--border);
+        margin-bottom: 6px;
+      }
+      .block-title { font-size: 11px; font-weight: 600; color: var(--fg); text-transform: uppercase; letter-spacing: 0.06em; }
+      .block-meta { font-size: 10px; color: var(--muted); font-family: var(--mono); }
+
+      .cpu { align-items: center; justify-content: center; background: var(--elevated); }
+      .cpu-icon {
+        width: 32px; height: 32px;
+        border-radius: 8px;
+        background: linear-gradient(135deg, rgba(94,159,246,0.20), rgba(94,159,246,0.05));
+        border: 1px solid var(--info-border);
+        display: grid; place-items: center;
+        color: var(--info); font-size: 18px;
+      }
+      .cpu-label { font-size: 11px; font-weight: 600; margin-top: 6px; }
+      .cpu-sub { font-size: 10px; color: var(--muted); font-family: var(--mono); }
+
+      .lines { display: flex; flex-direction: column; gap: 4px; }
+      .line {
+        display: grid;
+        grid-template-columns: 14px 1fr auto;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 7px;
+        height: 30px;
+        font-family: var(--mono);
+        font-size: 11px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        transition: background 250ms ease, border-color 250ms ease;
+      }
+      .line .ln-idx { color: var(--subtle); font-size: 10px; }
+      .line .ln-val { color: var(--fg); }
+      .line .ln-val .key { color: var(--muted); }
+      .line .ln-val .arrow { color: var(--subtle); margin: 0 3px; }
+      .line .ln-val .v { font-weight: 600; }
+      .line.dirty { background: var(--warning-soft); border-color: var(--warning-border); }
+      .line.empty .ln-val { color: var(--subtle); font-style: italic; }
+
+      .badge {
+        font-size: 9px; font-family: var(--mono);
+        padding: 1px 6px;
+        border-radius: 999px;
+        text-transform: uppercase; letter-spacing: 0.04em;
+        border: 1px solid;
+      }
+      .badge.empty { color: var(--subtle); border-color: var(--border); background: transparent; }
+      .badge.clean { color: var(--success); border-color: var(--success-border); background: var(--success-soft); }
+      .badge.dirty { color: var(--warning); border-color: var(--warning-border); background: var(--warning-soft); }
+
+      .cells { display: flex; flex-direction: column; gap: 3px; }
+      .cell {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 4px 8px;
+        height: 24px;
+        font-family: var(--mono);
+        font-size: 11px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        transition: background 250ms ease;
+      }
+      .cell .addr { color: var(--muted); font-size: 10px; }
+      .cell .v { color: var(--fg); font-weight: 600; }
+      .cell.stale .v { color: var(--subtle); text-decoration: line-through; }
+
+      .wire {
+        position: relative;
+        align-self: center;
+        height: 2px;
+        background: var(--border);
+        border-radius: 1px;
+      }
+      .wire.dashed {
+        background: repeating-linear-gradient(to right, var(--warning-border) 0 5px, transparent 5px 9px);
+        background-color: transparent;
+      }
+      .wire .wire-label {
+        position: absolute;
+        top: -20px; left: 50%;
+        transform: translateX(-50%);
+        white-space: nowrap;
+        font-size: 10px;
+        color: var(--muted);
+        font-family: var(--mono);
+      }
+      .wire.dashed .wire-label { color: var(--warning); }
+      .wire .arrowhead {
+        position: absolute;
+        right: -1px; top: 50%;
+        transform: translateY(-50%);
+        width: 0; height: 0;
+        border-left: 6px solid var(--border-strong);
+        border-top: 4px solid transparent;
+        border-bottom: 4px solid transparent;
+      }
+      .wire.dashed .arrowhead { border-left-color: var(--warning); }
+
+      .dot {
+        position: absolute;
+        top: 50%; left: 0;
+        width: 10px; height: 10px;
+        border-radius: 50%;
+        transform: translate(-50%, -50%);
+        opacity: 0;
+        pointer-events: none;
+        box-shadow: 0 0 12px currentColor, 0 0 4px currentColor;
+      }
+      .dot.blue { background: var(--info); color: var(--info); }
+      .dot.orange { background: var(--accent); color: var(--accent); }
+      .dot.yellow { background: var(--warning); color: var(--warning); }
+      .dot.fire { animation: dotFire 600ms ease-in-out forwards; }
+      @keyframes dotFire {
+        0% { opacity: 0; left: 0%; }
+        10% { opacity: 1; }
+        90% { opacity: 1; }
+        100% { opacity: 0; left: 100%; }
+      }
+
+      .pulse-cache { animation: pulseCache 700ms ease-out; }
+      .pulse-cache-dirty { animation: pulseCacheDirty 700ms ease-out; }
+      .pulse-mem { animation: pulseMem 700ms ease-out; }
+      @keyframes pulseCache {
+        0% { background: var(--info-soft); border-color: var(--info-border); }
+        100% { background: var(--bg); border-color: var(--border); }
+      }
+      @keyframes pulseCacheDirty {
+        0% { background: rgba(240,181,104,0.36); border-color: var(--warning); }
+        100% { background: var(--warning-soft); border-color: var(--warning-border); }
+      }
+      @keyframes pulseMem {
+        0% { background: rgba(240, 181, 104, 0.30); border-color: var(--warning-border); }
+        100% { background: var(--bg); border-color: var(--border); }
+      }
+
+      .controls {
+        display: grid;
+        grid-template-columns: 1fr 1fr auto auto auto auto;
+        gap: 8px; align-items: end;
+        margin-bottom: 12px;
+      }
+      .controls .field-lbl { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+      input, select {
+        background: var(--elevated); color: var(--fg);
+        font: 12px/1 var(--mono);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 8px 10px;
+        width: 100%;
+        outline: none;
+      }
+      input:focus, select:focus { border-color: var(--accent); }
+      button {
+        background: var(--elevated); color: var(--fg);
+        font: 500 12px/1 var(--sans);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        cursor: pointer;
+        padding: 9px 12px;
+        transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease;
+        white-space: nowrap;
+      }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.45; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.10); background: var(--accent); border-color: transparent; }
+      button.ghost { background: transparent; }
+
+      .log {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 8px 12px;
+        min-height: 100px;
+        max-height: 130px;
+        overflow-y: auto;
+        font-family: var(--mono);
+        font-size: 11.5px;
+        color: var(--muted);
+        line-height: 1.7;
+      }
+      .log .row { padding: 1px 0; }
+      .log .ok { color: var(--success); }
+      .log .miss { color: var(--accent); }
+      .log .write { color: var(--info); }
+      .log .flush { color: var(--warning); }
+
+      .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    </style>
+  </head>
+  <body>
+    <h2 class="sr-only">Write-back cache simulator. Writes touch cache only; dirty lines flush to memory only on eviction.</h2>
+    <div class="container">
+
+      <div class="stats">
+        <div class="stat"><div class="lbl">Writes</div><div class="val" id="s-writes">0</div></div>
+        <div class="stat yellow"><div class="lbl">Dirty lines</div><div class="val" id="s-dirty">0</div></div>
+        <div class="stat green"><div class="lbl">Saved memory writes</div><div class="val" id="s-saved">0</div></div>
+        <div class="stat"><div class="lbl">Flushes</div><div class="val" id="s-flush">0</div></div>
+      </div>
+
+      <div class="stage">
+        <div class="block cpu">
+          <div class="cpu-icon"><i class="ti ti-cpu" aria-hidden="true"></i></div>
+          <div class="cpu-label">CPU</div>
+          <div class="cpu-sub">core</div>
+        </div>
+
+        <div class="wire" id="wire1">
+          <span class="wire-label">writes + reads</span>
+          <span class="arrowhead"></span>
+          <span class="dot blue" id="dot1"></span>
+        </div>
+
+        <div class="block">
+          <div class="block-head">
+            <span class="block-title">Cache</span>
+            <span class="block-meta">4 lines · may be dirty</span>
+          </div>
+          <div class="lines" id="cache-lines"></div>
+        </div>
+
+        <div class="wire dashed" id="wire2">
+          <span class="wire-label">flush on evict</span>
+          <span class="arrowhead"></span>
+          <span class="dot yellow" id="dot2"></span>
+        </div>
+
+        <div class="block">
+          <div class="block-head">
+            <span class="block-title">Memory</span>
+            <span class="block-meta">may be stale</span>
+          </div>
+          <div class="cells" id="mem-cells"></div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div>
+          <div class="field-lbl">Address</div>
+          <select id="addr"></select>
+        </div>
+        <div>
+          <div class="field-lbl">Value</div>
+          <input id="val" value="42" maxlength="6"/>
+        </div>
+        <button id="b-write" class="primary"><i class="ti ti-pencil" style="vertical-align:-2px; margin-right:3px"></i>Write</button>
+        <button id="b-read"><i class="ti ti-eye" style="vertical-align:-2px; margin-right:3px"></i>Read</button>
+        <button id="b-demo" class="ghost"><i class="ti ti-player-play" style="vertical-align:-2px; margin-right:3px"></i>Demo</button>
+        <button id="b-reset" class="ghost"><i class="ti ti-refresh" style="vertical-align:-2px; margin-right:3px"></i>Reset</button>
+      </div>
+
+      <div class="log" id="log"><div class="row">ready · writes stay in cache; memory only sees dirty lines on eviction</div></div>
+
+    </div>
+
+    <script>
+      (function(){
+        const ADDRS = [0x00, 0x04, 0x08, 0x0C, 0x10, 0x14, 0x18, 0x1C];
+        const initialMem = {0x00:'A1', 0x04:'B2', 0x08:'C3', 0x0C:'D4', 0x10:'E5', 0x14:'F6', 0x18:'G7', 0x1C:'H8'};
+        const hex = a => '0x' + a.toString(16).toUpperCase().padStart(2,'0');
+        const idx = a => (a >> 2) % 4;
+
+        const st = {
+          memory: {...initialMem},
+          cache: Array.from({length:4}, ()=>({tag:null, value:null, valid:false, dirty:false})),
+          stats: {writes:0, saved:0, flushes:0},
+          busy: false,
+        };
+
+        const addrSel = document.getElementById('addr');
+        ADDRS.forEach(a => {
+          const o = document.createElement('option');
+          o.value = a; o.textContent = hex(a);
+          addrSel.appendChild(o);
+        });
+
+        function dirtyCount() {
+          return st.cache.filter(l => l.valid && l.dirty).length;
+        }
+        function isStale(a) {
+          const ln = st.cache[idx(a)];
+          return ln.valid && ln.tag === a && ln.dirty;
+        }
+
+        function renderCache() {
+          const host = document.getElementById('cache-lines');
+          host.innerHTML = '';
+          st.cache.forEach((ln, i) => {
+            const row = document.createElement('div');
+            row.id = 'cl-' + i;
+            row.className = 'line' + (!ln.valid ? ' empty' : (ln.dirty ? ' dirty' : ''));
+            if (!ln.valid) {
+              row.innerHTML = `
+                <span class="ln-idx">${i}</span>
+                <span class="ln-val">empty</span>
+                <span class="badge empty">—</span>`;
+            } else {
+              const badge = ln.dirty
+                ? '<span class="badge dirty">dirty</span>'
+                : '<span class="badge clean">clean</span>';
+              row.innerHTML = `
+                <span class="ln-idx">${i}</span>
+                <span class="ln-val"><span class="key">${hex(ln.tag)}</span><span class="arrow">→</span><span class="v">${ln.value}</span></span>
+                ${badge}`;
+            }
+            host.appendChild(row);
+          });
+        }
+        function renderMem() {
+          const host = document.getElementById('mem-cells');
+          host.innerHTML = '';
+          ADDRS.forEach(a => {
+            const c = document.createElement('div');
+            c.id = 'mc-' + a;
+            c.className = 'cell' + (isStale(a) ? ' stale' : '');
+            c.innerHTML = `<span class="addr">${hex(a)}</span><span class="v">${st.memory[a]}</span>`;
+            host.appendChild(c);
+          });
+        }
+        function renderStats() {
+          document.getElementById('s-writes').textContent = st.stats.writes;
+          document.getElementById('s-dirty').textContent = dirtyCount();
+          document.getElementById('s-saved').textContent = st.stats.saved;
+          document.getElementById('s-flush').textContent = st.stats.flushes;
+        }
+        function pulseCache(i, dirty) {
+          const el = document.getElementById('cl-' + i);
+          if (!el) return;
+          const cls = dirty ? 'pulse-cache-dirty' : 'pulse-cache';
+          el.classList.remove(cls);
+          void el.offsetWidth;
+          el.classList.add(cls);
+        }
+        function pulseMem(a) {
+          const el = document.getElementById('mc-' + a);
+          if (!el) return;
+          el.classList.remove('pulse-mem');
+          void el.offsetWidth;
+          el.classList.add('pulse-mem');
+        }
+        function fireDot(id) {
+          return new Promise(resolve => {
+            const d = document.getElementById(id);
+            d.classList.remove('fire');
+            void d.offsetWidth;
+            d.classList.add('fire');
+            setTimeout(resolve, 600);
+          });
+        }
+        function log(html) {
+          const l = document.getElementById('log');
+          if (l.children[0]?.textContent?.startsWith('ready')) l.innerHTML = '';
+          const div = document.createElement('div');
+          div.className = 'row';
+          div.innerHTML = html;
+          l.insertBefore(div, l.firstChild);
+          while (l.children.length > 8) l.removeChild(l.lastChild);
+        }
+
+        async function doWrite(a, v) {
+          if (st.busy) return;
+          st.busy = true;
+          const i = idx(a);
+          const line = st.cache[i];
+          st.stats.writes++;
+          const hit = line.valid && line.tag === a;
+          let evictMsg = '';
+          if (line.valid && line.tag !== a && line.dirty) {
+            // Conflict — must flush dirty resident first
+            st.memory[line.tag] = line.value;
+            st.stats.flushes++;
+            evictMsg = ` · <span class="flush">flushed ${hex(line.tag)}=${line.value}</span>`;
+            await fireDot('dot2');
+            pulseMem(line.tag);
+            renderMem();
+          }
+          await fireDot('dot1');
+          line.tag = a; line.value = v; line.valid = true; line.dirty = true;
+          st.stats.saved++;
+          renderCache(); renderMem(); renderStats();
+          pulseCache(i, true);
+          log(`<span class="write">WRITE</span> ${hex(a)}=${v} → cache only, marked dirty ${hit ? '(hit)' : '(miss)'}${evictMsg}`);
+          st.busy = false;
+        }
+
+        async function doRead(a) {
+          if (st.busy) return;
+          st.busy = true;
+          const i = idx(a);
+          const line = st.cache[i];
+          if (line.valid && line.tag === a) {
+            await fireDot('dot1');
+            pulseCache(i, line.dirty);
+            log(`<span class="ok">READ HIT</span>  ${hex(a)} → ${line.value} from cache`);
+          } else {
+            let evictMsg = '';
+            if (line.valid && line.dirty) {
+              st.memory[line.tag] = line.value;
+              st.stats.flushes++;
+              evictMsg = ` · <span class="flush">flushed ${hex(line.tag)}=${line.value}</span>`;
+              await fireDot('dot2');
+              pulseMem(line.tag);
+            }
+            await fireDot('dot1');
+            line.tag = a; line.value = st.memory[a]; line.valid = true; line.dirty = false;
+            renderCache(); renderMem(); renderStats();
+            pulseCache(i, false);
+            log(`<span class="miss">READ MISS</span> ${hex(a)} → loaded ${st.memory[a]} from memory${evictMsg}`);
+          }
+          st.busy = false;
+        }
+
+        function reset() {
+          st.memory = {...initialMem};
+          st.cache = Array.from({length:4}, ()=>({tag:null, value:null, valid:false, dirty:false}));
+          st.stats = {writes:0, saved:0, flushes:0};
+          st.busy = false;
+          document.getElementById('log').innerHTML = '<div class="row">ready · writes stay in cache; memory only sees dirty lines on eviction</div>';
+          renderCache(); renderMem(); renderStats();
+        }
+
+        async function runDemo() {
+          if (st.busy) return;
+          reset();
+          // The story: 3 writes to same address (showcasing coalescing),
+          // then a conflict write forcing a flush, then a read miss with another flush.
+          const seq = [
+            ['w', 0x00, '99'],
+            ['w', 0x00, 'AA'],
+            ['w', 0x00, 'BB'],
+            ['w', 0x10, '55'],    // conflict — flushes dirty 0x00
+            ['r', 0x18, null],    // read miss into line 2 (no flush)
+            ['w', 0x04, '77'],
+          ];
+          for (const [op, a, v] of seq) {
+            if (op === 'w') await doWrite(a, v);
+            else await doRead(a);
+            await new Promise(r => setTimeout(r, 450));
+          }
+        }
+
+        document.getElementById('b-write').addEventListener('click', () => {
+          const a = parseInt(addrSel.value);
+          const v = document.getElementById('val').value || '?';
+          doWrite(a, v);
+        });
+        document.getElementById('b-read').addEventListener('click', () => {
+          const a = parseInt(addrSel.value);
+          doRead(a);
+        });
+        document.getElementById('b-demo').addEventListener('click', runDemo);
+        document.getElementById('b-reset').addEventListener('click', reset);
+
+        renderCache(); renderMem(); renderStats();
+      })();
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

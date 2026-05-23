@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Memory Allocation — First Fit</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --success-soft: rgba(92,198,111,0.14); --success-border: rgba(92,198,111,0.40);
+        --danger: #f06868; --danger-soft: rgba(240,104,104,0.14); --danger-border: rgba(240,104,104,0.42);
+        --info: #5e9ff6; --info-soft: rgba(94,159,246,0.14); --info-border: rgba(94,159,246,0.40);
+        --warning: #f0b568; --warning-soft: rgba(240,181,104,0.16); --warning-border: rgba(240,181,104,0.45);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body { padding: 14px 16px 16px; background-image: linear-gradient(to right, rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.025) 1px, transparent 1px); background-size: 40px 40px; }
+      .container { max-width: 980px; margin: 0 auto; }
+
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+      .stat .lbl { font-size: 11px; color: var(--muted); }
+      .stat .val { font-size: 18px; font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
+
+      .tabs { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+      .tab { background: var(--elevated); color: var(--muted); border: 1px solid var(--border); border-radius: 999px; cursor: pointer; padding: 6px 13px; font: 500 12px/1 var(--sans); transition: all 150ms ease; white-space: nowrap; }
+      .tab:hover { border-color: var(--border-strong); color: var(--fg); }
+      .tab.active { background: var(--info-soft); color: var(--info); border-color: var(--info-border); }
+
+      .markrow { position: relative; height: 34px; }
+      .marker { position: absolute; top: 0; transform: translateX(-50%); transition: left 220ms ease, opacity 180ms ease; white-space: nowrap; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+      .marker .chip { font-size: 10.5px; font-weight: 600; padding: 1px 7px; border-radius: 4px; font-family: var(--mono); }
+      .ptr { border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 9px solid var(--warning); width: 0; height: 0; }
+      .ptr .chip { background: var(--warning-soft); color: var(--warning); }
+      .best { color: var(--info); }
+      .best .bm { border-left: 6px solid transparent; border-right: 6px solid transparent; border-bottom: 8px solid var(--info); width: 0; height: 0; }
+      .best .chip { background: var(--info-soft); color: var(--info); }
+
+      .bar { display: flex; width: 100%; height: 74px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-strong); }
+      .blk { display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; overflow: hidden; transition: background 220ms ease, color 220ms ease, transform 200ms ease; font-family: var(--mono); }
+      .blk + .blk { border-left: 1px solid rgba(0,0,0,0.35); }
+      .blk.sys { background: var(--elevated); color: var(--subtle); }
+      .blk.free { background: var(--info-soft); color: var(--info); }
+      .blk.scan { background: var(--warning-soft); color: var(--warning); transform: translateY(-3px); }
+      .blk.alloc { background: var(--success-soft); color: var(--success); }
+      .ruler { display: flex; justify-content: space-between; margin-top: 6px; font-size: 10.5px; color: var(--subtle); font-family: var(--mono); }
+
+      .legend { display: flex; gap: 14px; flex-wrap: wrap; margin: 12px 0 4px; }
+      .legend .item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+      .legend .sw { width: 11px; height: 11px; border-radius: 3px; }
+      .sw.sys { background: var(--elevated); border: 1px solid var(--border-strong); }
+      .sw.free { background: var(--info-soft); border: 1px solid var(--info-border); }
+      .sw.scan { background: var(--warning-soft); border: 1px solid var(--warning-border); }
+      .sw.alloc { background: var(--success-soft); border: 1px solid var(--success-border); }
+
+      .queue { display: flex; flex-wrap: wrap; gap: 7px; margin: 12px 0; }
+      .pill { padding: 5px 11px; border-radius: 999px; font-size: 12px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: var(--elevated); color: var(--muted); font-family: var(--mono); }
+      .pill.next { background: var(--warning-soft); color: var(--warning); border-color: var(--warning-border); }
+      .pill.done { background: var(--success-soft); color: var(--success); border-color: var(--success-border); }
+      .pill.fail { background: var(--danger-soft); color: var(--danger); border-color: var(--danger-border); }
+
+      .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+      .panel .ttl { font-size: 10px; color: var(--subtle); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+      .dot { width: 7px; height: 7px; border-radius: 50%; }
+      #narration { font-size: 12.5px; line-height: 1.6; color: var(--fg); min-height: 42px; }
+      #narration .ok { color: var(--success); font-weight: 600; }
+      #narration .bad { color: var(--danger); font-weight: 600; }
+      #narration .em { color: var(--accent); font-weight: 600; }
+      #narration code { font-family: var(--mono); background: var(--elevated); padding: 1px 4px; border-radius: 4px; font-size: 11.5px; }
+
+      .controls { display: flex; gap: 8px; align-items: center; }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; padding: 9px 13px; transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.10); background: var(--accent); }
+      button.ghost { background: transparent; }
+      .counter { margin-left: auto; font: 12px var(--mono); color: var(--muted); }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+    </style>
+  </head>
+  <body>
+    <h2 class="sr-only">First Fit memory allocation: the OS scans free holes from the start of memory and places each process in the first hole large enough, splitting the hole and leaving the remainder free.</h2>
+    <div class="container">
+      <div class="stats">
+        <div class="stat"><div class="lbl">Total memory</div><div class="val" id="s-total">0K</div></div>
+        <div class="stat"><div class="lbl">In use</div><div class="val" id="s-used">0K</div></div>
+        <div class="stat"><div class="lbl">Free</div><div class="val" id="s-free">0K</div></div>
+        <div class="stat"><div class="lbl">Placed</div><div class="val" id="s-done">0 / 0</div></div>
+      </div>
+
+      <div class="tabs" id="tabs">
+        <button class="tab active" data-scn="classic">1 · Four-process run</button>
+        <button class="tab" data-scn="sliver">2 · The sliver trap</button>
+      </div>
+
+      <div class="markrow">
+        <div class="marker ptr" id="m-ptr" style="opacity:0"><div class="ptr"></div></div>
+        <div class="marker best" id="m-best" style="opacity:0"><div class="chip" id="m-best-chip">best so far</div><div class="bm"></div></div>
+      </div>
+
+      <div class="bar" id="bar"></div>
+      <div class="ruler" id="ruler"></div>
+
+      <div class="legend">
+        <div class="item"><span class="sw sys"></span>Reserved (OS / other procs)</div>
+        <div class="item"><span class="sw free"></span>Free hole</div>
+        <div class="item"><span class="sw scan"></span>Currently scanning</div>
+        <div class="item"><span class="sw alloc"></span>Allocated</div>
+      </div>
+
+      <div class="queue" id="queue"></div>
+
+      <div class="panel">
+        <div class="ttl"><span class="dot" id="ph-dot"></span><span id="ph-lbl">step</span></div>
+        <div id="narration"></div>
+      </div>
+
+      <div class="controls">
+        <button id="prev"><i class="ti ti-arrow-left"></i>Prev</button>
+        <button id="next" class="primary">Next step<i class="ti ti-arrow-right"></i></button>
+        <button id="auto" class="ghost"><i class="ti ti-player-play"></i>Auto</button>
+        <button id="restart" class="ghost"><i class="ti ti-refresh"></i>Restart</button>
+        <span class="counter" id="counter">Step 1</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        function postHeight() { const h = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight); parent.postMessage({ type: "prototype:height", height: h }, "*"); }
+        if (window.ResizeObserver) new ResizeObserver(postHeight).observe(document.body);
+        window.addEventListener("load", postHeight);
+
+        const STRATEGY = "first"; // first | best | worst | next
+        const SNAME = { first: "First Fit", best: "Best Fit", worst: "Worst Fit", next: "Next Fit" }[STRATEGY];
+        const $ = (id) => document.getElementById(id);
+
+        const SCN = {
+          classic: {
+            blocks: [
+              { id: "OS", size: 100, status: "sys" }, { id: "h", size: 100, status: "free" },
+              { id: "A", size: 50, status: "sys" }, { id: "h", size: 500, status: "free" },
+              { id: "B", size: 50, status: "sys" }, { id: "h", size: 200, status: "free" },
+              { id: "C", size: 50, status: "sys" }, { id: "h", size: 300, status: "free" },
+              { id: "D", size: 50, status: "sys" }, { id: "h", size: 600, status: "free" },
+            ],
+            queue: [ { id: "P1", size: 212 }, { id: "P2", size: 417 }, { id: "P3", size: 112 }, { id: "P4", size: 426 } ],
+            intro: "<b>Setup.</b> 2000K of memory holds five free holes of <b>100, 500, 200, 300, 600K</b> between reserved regions. Four processes wait in the queue. Watch which hole " + SNAME + " carves each from — and whether the big <b>600K</b> hole survives long enough for <b>P4 (426K)</b>.",
+          },
+          sliver: {
+            blocks: [
+              { id: "OS", size: 100, status: "sys" }, { id: "h", size: 1300, status: "free" },
+              { id: "X", size: 100, status: "sys" }, { id: "h", size: 1200, status: "free" },
+            ],
+            queue: [ { id: "P1", size: 1000 }, { id: "P2", size: 1100 }, { id: "P3", size: 250 } ],
+            intro: "<b>The sliver trap.</b> Two large holes — <b>1300K</b> and <b>1200K</b> — and three requests: 1000K, 1100K, then a small 250K. The first two requests each leave a leftover. The question is whether the small <b>P3 (250K)</b> still finds a home, or whether " + SNAME + " has carved the leftovers too small to use.",
+          },
+        };
+
+        function addr(bl, idx) { let a = 0; for (let j = 0; j < idx; j++) a += bl[j].size; return a; }
+        function freeSum(bl) { return bl.filter((b) => b.status === "free").reduce((s, b) => s + b.size, 0); }
+
+        function build(scnKey) {
+          const scn = SCN[scnKey];
+          const steps = [];
+          let blocks = scn.blocks.map((b) => ({ ...b }));
+          let queue = scn.queue.map((p) => ({ ...p }));
+          let lastPos = 0;
+          const total = blocks.reduce((s, b) => s + b.size, 0);
+
+          const snap = (o) => steps.push({
+            blocks: blocks.map((b) => ({ ...b })),
+            queue: queue.map((p) => ({ ...p })),
+            scan: o.scan ?? -1, marker: o.marker ?? -1, resume: o.resume ?? -1,
+            markLbl: o.markLbl || "", phase: o.phase, narr: o.narr, total,
+          });
+
+          snap({ phase: "init", narr: scn.intro });
+
+          for (let qi = 0; qi < queue.length; qi++) {
+            const p = queue[qi];
+            const resumeAddr = addr(blocks, lastPos);
+            let arrive;
+            if (STRATEGY === "first") arrive = "<b>" + p.id + "</b> needs <b>" + p.size + "K</b>. Scan free holes left-to-right and take the <b>first</b> one big enough.";
+            else if (STRATEGY === "next") arrive = "<b>" + p.id + "</b> needs <b>" + p.size + "K</b>. Resume the scan from the saved bookmark (address <b>" + resumeAddr + "K</b>), wrapping around the end if needed.";
+            else if (STRATEGY === "best") arrive = "<b>" + p.id + "</b> needs <b>" + p.size + "K</b>. Visit <b>every</b> hole and track the <b>smallest</b> one that still fits — no early stop.";
+            else arrive = "<b>" + p.id + "</b> needs <b>" + p.size + "K</b>. Visit <b>every</b> hole and track the <b>largest</b> one that fits.";
+            snap({ phase: "arrive", resume: STRATEGY === "next" ? lastPos : -1, narr: arrive });
+
+            let chosen = -1;
+            if (STRATEGY === "first" || STRATEGY === "next") {
+              const N = blocks.length;
+              const start = STRATEGY === "next" ? lastPos : 0;
+              let wrapped = false;
+              for (let s = 0; s < N; s++) {
+                const i = (start + s) % N;
+                if (STRATEGY === "next" && s > 0 && i === 0 && start !== 0 && !wrapped) {
+                  wrapped = true;
+                  snap({ phase: "scan", resume: -1, narr: "<b>Reached the end of memory.</b> Wrap back to address 0K and keep scanning forward." });
+                }
+                if (blocks[i].status !== "free") continue;
+                const a = addr(blocks, i), sz = blocks[i].size;
+                if (sz >= p.size) {
+                  snap({ phase: "scan", scan: i, narr: "Hole at " + a + "K (" + sz + "K) — <span class='ok'>fits " + p.size + "K</span>. " + SNAME + " stops scanning here." });
+                  chosen = i; break;
+                } else {
+                  snap({ phase: "scan", scan: i, narr: "Hole at " + a + "K (" + sz + "K) — too small for " + p.size + "K. Keep scanning →" });
+                }
+              }
+            } else {
+              const lbl = STRATEGY === "best" ? "best so far" : "largest so far";
+              let mark = -1, metric = STRATEGY === "best" ? Infinity : -1;
+              for (let i = 0; i < blocks.length; i++) {
+                if (blocks[i].status !== "free") continue;
+                const a = addr(blocks, i), sz = blocks[i].size;
+                if (sz >= p.size) {
+                  const left = sz - p.size;
+                  const better = STRATEGY === "best" ? left < metric : sz > metric;
+                  const firstCand = mark === -1;
+                  if (better) {
+                    mark = i; metric = STRATEGY === "best" ? left : sz;
+                    const why = STRATEGY === "best"
+                      ? "fits, leftover would be <b>" + left + "K</b>" + (firstCand ? " — first candidate." : " — smallest yet, new best.")
+                      : "fits — <b>" + sz + "K</b>" + (firstCand ? " is the first candidate (leftover " + left + "K)." : " is the largest yet, new best (leftover " + left + "K).");
+                    snap({ phase: "scan", scan: i, marker: i, markLbl: lbl, narr: "Hole at " + a + "K (" + sz + "K) — " + why });
+                  } else {
+                    const why = STRATEGY === "best"
+                      ? "fits, but leftover " + left + "K is bigger than the current best. Skip."
+                      : "fits, but " + sz + "K is smaller than the current largest. Skip.";
+                    snap({ phase: "scan", scan: i, marker: mark, markLbl: lbl, narr: "Hole at " + a + "K (" + sz + "K) — " + why });
+                  }
+                } else {
+                  snap({ phase: "scan", scan: i, marker: mark, markLbl: lbl, narr: "Hole at " + a + "K (" + sz + "K) — too small for " + p.size + "K. Skip." });
+                }
+              }
+              chosen = mark;
+              if (chosen !== -1) {
+                const a = addr(blocks, chosen), left = blocks[chosen].size - p.size;
+                snap({ phase: "scan", marker: chosen, markLbl: lbl, narr: "Scan complete. " + (STRATEGY === "best" ? "Smallest" : "Largest") + " fitting hole is " + blocks[chosen].size + "K at " + a + "K (leftover <b>" + left + "K</b>). Placing " + p.id + " there." });
+              }
+            }
+
+            if (chosen === -1) {
+              p.status = "failed";
+              snap({ phase: "fail", narr: "<b class='bad'>" + p.id + " failed.</b> No single hole holds " + p.size + "K. Total free is still <b>" + freeSum(blocks) + "K</b> — more than enough — but it is shattered into pieces too small to use. That is <span class='em'>external fragmentation</span>." });
+            } else {
+              const a = addr(blocks, chosen), left = blocks[chosen].size - p.size;
+              if (left === 0) {
+                blocks[chosen] = { id: p.id, size: p.size, status: "alloc" };
+              } else {
+                blocks.splice(chosen, 1, { id: p.id, size: p.size, status: "alloc" }, { id: "h", size: left, status: "free" });
+              }
+              p.status = "allocated";
+              let txt = "<b>" + p.id + "</b> placed at address " + a + "K";
+              txt += left === 0 ? ". <span class='ok'>Exact fit</span> — no leftover." : ", using " + p.size + "K. The hole splits: <b>" + p.size + "K allocated</b> + <b>" + left + "K</b> still free beside it.";
+              if (STRATEGY === "next") { lastPos = chosen; txt += " <span class='em'>Bookmark saved here</span> — the next scan resumes from this spot, not the start."; }
+              snap({ phase: "place", resume: STRATEGY === "next" ? chosen : -1, narr: txt });
+            }
+          }
+
+          const placed = queue.filter((p) => p.status === "allocated").length;
+          const failed = queue.length - placed;
+          let moral;
+          if (STRATEGY === "first") moral = "First Fit is fast — it stops at the first hole that works — but it keeps biting the front of memory, scattering small leftovers as it goes.";
+          else if (STRATEGY === "next") moral = "Next Fit spread the allocations across memory instead of clustering them at the front — a different heap shape, but the same fragmentation story.";
+          else if (STRATEGY === "best") moral = "Best Fit minimized the leftover of every placement — but notice how it manufactures tiny slivers that later requests can struggle to use.";
+          else moral = "Worst Fit always carved from the biggest hole, hoping to leave reusable leftovers — but that depletes the large holes, and a big request arriving later finds nothing left.";
+          const head = failed === 0
+            ? "<span class='ok'>All " + queue.length + " processes placed.</span> "
+            : "<b class='bad'>" + placed + " of " + queue.length + " placed</b> — " + failed + " failed with " + freeSum(blocks) + "K free but fragmented. ";
+          snap({ phase: "done", narr: "<b>Run complete.</b> " + head + moral });
+
+          return steps;
+        }
+
+        const PHASE = {
+          init: { lbl: "Setup", color: "#9099a8" },
+          arrive: { lbl: "Request arrives", color: "#5e9ff6" },
+          scan: { lbl: "Scanning", color: "#f0b568" },
+          place: { lbl: "Allocated", color: "#5cc66f" },
+          fail: { lbl: "Allocation failed", color: "#f06868" },
+          done: { lbl: "Done", color: "#5cc66f" },
+        };
+
+        let cur = "classic", steps = build(cur), idx = 0, timer = null;
+
+        function centerPct(st, i) { return ((addr(st.blocks, i) + st.blocks[i].size / 2) / st.total) * 100; }
+
+        function render() {
+          const st = steps[idx];
+          // bar
+          const bar = $("bar");
+          bar.innerHTML = "";
+          st.blocks.forEach((b, i) => {
+            const d = document.createElement("div");
+            const scanning = st.scan === i;
+            d.className = "blk " + (b.status === "alloc" ? "alloc" : b.status === "sys" ? "sys" : scanning ? "scan" : "free");
+            d.style.width = (b.size / st.total * 100) + "%";
+            const label = b.status === "sys" ? (b.id === "OS" ? "OS" : "used") + "·" + b.size : b.status === "alloc" ? b.id + "·" + b.size : b.size + "K";
+            d.textContent = b.size / st.total > 0.045 ? label : "";
+            d.title = (b.status === "alloc" ? b.id : b.status === "free" ? "free" : b.id) + " · " + b.size + "K @ " + addr(st.blocks, i) + "K";
+            bar.appendChild(d);
+          });
+          // ruler
+          const r = $("ruler"); r.innerHTML = "";
+          for (let q = 0; q <= 4; q++) { const s = document.createElement("span"); s.textContent = Math.round(st.total * q / 4) + "K"; r.appendChild(s); }
+          // markers
+          const ptr = $("m-ptr");
+          if (st.scan >= 0) { ptr.style.opacity = "1"; ptr.style.left = centerPct(st, st.scan) + "%"; } else ptr.style.opacity = "0";
+          const best = $("m-best");
+          const markIdx = st.marker >= 0 ? st.marker : st.resume >= 0 ? st.resume : -1;
+          if (markIdx >= 0) {
+            best.style.opacity = "1"; best.style.left = centerPct(st, markIdx) + "%";
+            $("m-best-chip").textContent = st.resume >= 0 ? "↻ resume here" : (st.markLbl || "best");
+          } else best.style.opacity = "0";
+          // queue
+          const qe = $("queue"); qe.innerHTML = "";
+          const nextIdx = st.queue.findIndex((p) => !p.status);
+          st.queue.forEach((p, i) => {
+            const pill = document.createElement("div");
+            let cls = "pill", ic = "ti-clock";
+            if (p.status === "allocated") { cls += " done"; ic = "ti-check"; }
+            else if (p.status === "failed") { cls += " fail"; ic = "ti-x"; }
+            else if (i === nextIdx) { cls += " next"; ic = "ti-arrow-right"; }
+            pill.className = cls;
+            pill.innerHTML = '<i class="ti ' + ic + '"></i>' + p.id + " · " + p.size + "K";
+            qe.appendChild(pill);
+          });
+          // stats
+          const used = st.blocks.filter((b) => b.status === "alloc").reduce((s, b) => s + b.size, 0);
+          const placed = st.queue.filter((p) => p.status).length;
+          $("s-total").textContent = st.total + "K";
+          $("s-used").textContent = used + "K";
+          $("s-free").textContent = freeSum(st.blocks) + "K";
+          $("s-done").textContent = st.queue.filter((p) => p.status === "allocated").length + " / " + st.queue.length;
+          // phase + narration
+          const ph = PHASE[st.phase];
+          $("ph-dot").style.background = ph.color;
+          $("ph-lbl").textContent = ph.lbl; $("ph-lbl").style.color = ph.color;
+          $("narration").innerHTML = st.narr;
+          $("counter").textContent = "Step " + (idx + 1) + " / " + steps.length;
+          $("prev").disabled = idx === 0;
+          $("next").disabled = idx === steps.length - 1;
+        }
+
+        function stopAuto() { if (timer) { clearInterval(timer); timer = null; $("auto").innerHTML = '<i class="ti ti-player-play"></i>Auto'; } }
+        function go(n) { const max = steps.length - 1; idx = Math.max(0, Math.min(max, n)); render(); if (idx === max) stopAuto(); }
+        $("next").onclick = () => { stopAuto(); go(idx + 1); };
+        $("prev").onclick = () => { stopAuto(); go(idx - 1); };
+        $("restart").onclick = () => { stopAuto(); go(0); };
+        $("auto").onclick = () => { if (timer) { stopAuto(); return; } if (idx === steps.length - 1) idx = 0; $("auto").innerHTML = '<i class="ti ti-player-pause"></i>Pause'; timer = setInterval(() => go(idx + 1), 1150); };
+        document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => {
+          stopAuto(); document.querySelectorAll(".tab").forEach((x) => x.classList.remove("active"));
+          b.classList.add("active"); cur = b.dataset.scn; steps = build(cur); idx = 0; render();
+        }));
+        render();
+      })();
+    </script>
+  </body>
+</html>

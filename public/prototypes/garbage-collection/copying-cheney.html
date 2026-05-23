@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Garbage Collection — Copying (Cheney's)</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --success-soft: rgba(92,198,111,0.14); --success-border: rgba(92,198,111,0.40);
+        --danger: #f06868; --danger-soft: rgba(240,104,104,0.14); --danger-border: rgba(240,104,104,0.42);
+        --info: #5e9ff6; --info-soft: rgba(94,159,246,0.14); --info-border: rgba(94,159,246,0.40);
+        --warning: #f0b568; --warning-soft: rgba(240,181,104,0.14); --warning-border: rgba(240,181,104,0.40);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body { padding: 14px 16px 16px; background-image: linear-gradient(to right, rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.025) 1px, transparent 1px); background-size: 40px 40px; }
+      .container { max-width: 980px; margin: 0 auto; }
+
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+      .stat .lbl { font-size: 11px; color: var(--muted); }
+      .stat .val { font-size: 18px; font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
+      .stat.green { background: var(--success-soft); border-color: var(--success-border); }
+      .stat.green .lbl { color: var(--success); }
+      .stat.amber { background: var(--warning-soft); border-color: var(--warning-border); }
+      .stat.amber .lbl { color: var(--warning); }
+      .stat.red { background: var(--danger-soft); border-color: var(--danger-border); }
+      .stat.red .lbl { color: var(--danger); }
+
+      .tabs { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+      .tab { background: var(--elevated); color: var(--muted); border: 1px solid var(--border); border-radius: 999px; cursor: pointer; padding: 6px 13px; font: 500 12px/1 var(--sans); transition: all 150ms ease; white-space: nowrap; }
+      .tab:hover { border-color: var(--border-strong); color: var(--fg); }
+      .tab.active { background: var(--info-soft); color: var(--info); border-color: var(--info-border); }
+
+      .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 8px; padding: 0 2px; }
+      .legend .item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 6px; margin-bottom: 10px; }
+      .stage svg { width: 100%; height: 296px; display: block; }
+      .legend svg { display: inline-block; vertical-align: middle; }
+
+      .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+      .panel .ttl { font-size: 10px; color: var(--subtle); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 6px; }
+      #narration { font-size: 12.5px; line-height: 1.6; color: var(--fg); min-height: 38px; }
+      #narration .em { color: var(--accent); font-weight: 600; }
+      #narration b { color: var(--fg); }
+
+      .controls { display: flex; gap: 8px; align-items: center; }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; padding: 9px 13px; transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.10); background: var(--accent); }
+      button.ghost { background: transparent; }
+      .counter { margin-left: auto; font: 12px var(--mono); color: var(--muted); }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+    </style>
+  </head>
+  <body>
+    <h2 class="sr-only">Cheney's copying collector: copy live objects from from-space to to-space using scan and alloc pointers, leaving forwarding pointers behind so shared references redirect to a single copy.</h2>
+    <div class="container">
+      <div class="stats">
+        <div class="stat green"><div class="lbl">Copied (alloc)</div><div class="val" id="s-alloc">0</div></div>
+        <div class="stat"><div class="lbl">Scanned</div><div class="val" id="s-scan">0</div></div>
+        <div class="stat amber"><div class="lbl">Queue (alloc − scan)</div><div class="val" id="s-queue">0</div></div>
+        <div class="stat red"><div class="lbl">Garbage freed</div><div class="val" id="s-garb">0</div></div>
+      </div>
+
+      <div class="tabs" id="tabs">
+        <button class="tab active" data-scn="basic">1 · Shared reference (diamond)</button>
+        <button class="tab" data-scn="cycle">2 · Cycle handled</button>
+      </div>
+
+      <div class="legend">
+        <div class="item"><svg width="24" height="10"><line x1="2" y1="5" x2="20" y2="5" stroke="#f0b568" stroke-width="1.6" stroke-dasharray="3 2"/><polygon points="20,1 20,9 24,5" fill="#f0b568"/></svg>forwarding ★</div>
+        <div class="item"><svg width="24" height="10"><line x1="2" y1="5" x2="20" y2="5" stroke="#5cc66f" stroke-width="1.8"/><polygon points="20,1 20,9 24,5" fill="#5cc66f"/></svg>rewritten pointer</div>
+        <div class="item"><span style="color:#f0b568;font-weight:700;">▲ scan</span> · <span style="color:#5e9ff6;font-weight:700;">▲ alloc</span></div>
+      </div>
+
+      <div class="stage">
+        <svg viewBox="0 0 720 320" role="img" aria-label="Cheney's copying collector visualization">
+          <defs>
+            <marker id="cn-live" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#5cc66f"/></marker>
+            <marker id="cn-fwd" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#f0b568"/></marker>
+            <marker id="cn-root" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#5e9ff6"/></marker>
+          </defs>
+          <g id="roots"></g>
+          <text x="30" y="86" font-size="10" fill="#6b7280" letter-spacing="1.2">FROM-SPACE</text>
+          <g id="from"></g>
+          <g id="cross"></g>
+          <g id="markers"></g>
+          <text x="30" y="206" font-size="10" fill="#6b7280" letter-spacing="1.2">TO-SPACE</text>
+          <g id="to"></g>
+          <g id="toarcs"></g>
+        </svg>
+      </div>
+
+      <div class="panel">
+        <div class="ttl">What's happening</div>
+        <div id="narration"></div>
+      </div>
+
+      <div class="controls">
+        <button id="prev"><i class="ti ti-arrow-left"></i>Prev</button>
+        <button id="next" class="primary">Next step<i class="ti ti-arrow-right"></i></button>
+        <button id="auto" class="ghost"><i class="ti ti-player-play"></i>Auto</button>
+        <button id="restart" class="ghost"><i class="ti ti-refresh"></i>Restart</button>
+        <span class="counter" id="counter">Step 1</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        // Report content height so the embedding frame can size to fit (no inner scroll).
+        function postHeight() { const h = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight); parent.postMessage({ type: "prototype:height", height: h }, "*"); }
+        if (window.ResizeObserver) new ResizeObserver(postHeight).observe(document.body);
+        window.addEventListener("load", postHeight);
+        const NS = "http://www.w3.org/2000/svg";
+        const svg = (t, a) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); return e; };
+
+        // --- Scenarios. FROM is the fixed layout of from-space; refs are object ids. ---
+        const SCN = {
+          basic: {
+            from: [
+              { id: "A", refs: ["B", "C"] }, { id: "G1", refs: [] }, { id: "B", refs: ["D"] },
+              { id: "C", refs: ["D"] }, { id: "D", refs: [] }, { id: "G2", refs: [] },
+            ],
+            root: "A",
+            steps: [
+              { phase: "idle", to: [], fwd: {}, scan: 0, alloc: 0, root: null, copying: [], narr: "Root <b>r</b> → A in from-space. A → B and A → C, and both B and C → <b>D</b> (a shared object). G1, G2 are garbage. To-space is empty; <b>scan</b> and <b>alloc</b> both sit at 0." },
+              { phase: "evac", to: [{ id: "A", refs: [null, null] }], fwd: { A: 0 }, scan: 0, alloc: 1, root: 0, copying: ["A"], narr: "<b>Evacuate the root.</b> Copy A to to-space[0], leave a forwarding ★ in old A, and repoint root r at the copy. <span class='em'>alloc → 1.</span>" },
+              { phase: "scan", to: [{ id: "A", refs: [1, 2] }, { id: "B", refs: [null] }, { id: "C", refs: [null] }], fwd: { A: 0, B: 1, C: 2 }, scan: 1, alloc: 3, root: 0, copying: ["B", "C"], narr: "<b>Scan [0] = A.</b> Neither B nor C is copied yet → copy B → [1], C → [2], and rewrite A's two pointers. <span class='em'>alloc → 3.</span> scan advances to 1." },
+              { phase: "scan", to: [{ id: "A", refs: [1, 2] }, { id: "B", refs: [3] }, { id: "C", refs: [null] }, { id: "D", refs: [] }], fwd: { A: 0, B: 1, C: 2, D: 3 }, scan: 2, alloc: 4, root: 0, copying: ["D"], narr: "<b>Scan [1] = B.</b> Its ref D isn't copied → copy D → [3], rewrite B's pointer. alloc → 4. scan advances to 2." },
+              { phase: "scan", to: [{ id: "A", refs: [1, 2] }, { id: "B", refs: [3] }, { id: "C", refs: [3] }, { id: "D", refs: [] }], fwd: { A: 0, B: 1, C: 2, D: 3 }, scan: 3, alloc: 4, root: 0, copying: [], redirect: "C", narr: "<b>Scan [2] = C.</b> Its ref D is <span class='em'>already forwarded</span> (★ → [3]) — no copy! Just redirect C's pointer to [3]. D is copied <span class='em'>exactly once.</span> scan advances to 3." },
+              { phase: "scan", to: [{ id: "A", refs: [1, 2] }, { id: "B", refs: [3] }, { id: "C", refs: [3] }, { id: "D", refs: [] }], fwd: { A: 0, B: 1, C: 2, D: 3 }, scan: 4, alloc: 4, root: 0, copying: [], narr: "<b>Scan [3] = D.</b> No outgoing pointers, nothing to copy. scan advances to 4 — and now <span class='em'>scan = alloc</span>." },
+              { phase: "done", to: [{ id: "A", refs: [1, 2] }, { id: "B", refs: [3] }, { id: "C", refs: [3] }, { id: "D", refs: [] }], fwd: { A: 0, B: 1, C: 2, D: 3 }, scan: 4, alloc: 4, root: 0, copying: [], garb: 2, narr: "<span class='em'>Queue empty — collection done.</span> 4 live objects packed tightly in to-space; from-space (with garbage G1, G2) is abandoned wholesale. Swap the semispaces and resume." },
+            ],
+          },
+          cycle: {
+            from: [
+              { id: "A", refs: ["B"] }, { id: "B", refs: ["A"] }, { id: "C", refs: [] },
+            ],
+            root: "A",
+            steps: [
+              { phase: "idle", to: [], fwd: {}, scan: 0, alloc: 0, root: null, copying: [], narr: "A → B and B → A form a <b>cycle</b>, reachable from root r. C is garbage. Reference counting would leak A and B; watch Cheney copy them cleanly." },
+              { phase: "evac", to: [{ id: "A", refs: [null] }], fwd: { A: 0 }, scan: 0, alloc: 1, root: 0, copying: ["A"], narr: "<b>Evacuate the root.</b> Copy A → to-space[0], forwarding ★ in old A, repoint root r. alloc → 1." },
+              { phase: "scan", to: [{ id: "A", refs: [1] }, { id: "B", refs: [null] }], fwd: { A: 0, B: 1 }, scan: 1, alloc: 2, root: 0, copying: ["B"], narr: "<b>Scan [0] = A.</b> Ref B not copied → copy B → [1], rewrite A's pointer. alloc → 2. scan advances to 1." },
+              { phase: "scan", to: [{ id: "A", refs: [1] }, { id: "B", refs: [0] }], fwd: { A: 0, B: 1 }, scan: 2, alloc: 2, root: 0, copying: [], redirect: "B", narr: "<b>Scan [1] = B.</b> Its ref A is <span class='em'>already forwarded</span> (★ → [0]) — no copy. Redirect B's pointer to [0]. The cycle <span class='em'>terminates</span> here. scan advances to 2." },
+              { phase: "done", to: [{ id: "A", refs: [1] }, { id: "B", refs: [0] }], fwd: { A: 0, B: 1 }, scan: 2, alloc: 2, root: 0, copying: [], garb: 1, narr: "<span class='em'>scan = alloc — done.</span> A and B copied exactly once each, the cycle preserved by the forwarding pointer. Garbage C is abandoned. Swap semispaces." },
+            ],
+          },
+        };
+
+        let cur = "basic", idx = 0, timer = null;
+        const $ = (id) => document.getElementById(id);
+        const SW = 92, GAP = 8, X0 = 64, FROM_Y = 92, TO_Y = 212, SH = 52;
+        const slotX = (i) => X0 + i * (SW + GAP);
+        const slotCx = (i) => slotX(i) + SW / 2;
+
+        function arcDown(layer, x1, y1, x2, y2, color, marker) {
+          const lift = 22 + Math.abs(x2 - x1) * 0.16, my = Math.max(y1, y2) + lift, mx = (x1 + x2) / 2;
+          layer.appendChild(svg("path", { d: `M ${x1} ${y1} Q ${mx} ${my} ${x2} ${y2}`, fill: "none", stroke: color, "stroke-width": 1.7, "marker-end": marker }));
+        }
+
+        function render() {
+          const scn = SCN[cur], step = scn.steps[idx];
+          const NF = scn.from.length;
+          ["roots", "from", "cross", "markers", "to", "toarcs"].forEach((g) => ($(g).innerHTML = ""));
+          const fromIdx = {}; scn.from.forEach((o, i) => (fromIdx[o.id] = i));
+
+          // FROM-SPACE
+          scn.from.forEach((o, i) => {
+            const x = slotX(i), evac = step.fwd[o.id] != null, garbage = step.phase === "done" && !(o.id in step.fwd);
+            const stroke = evac ? "#3a4150" : garbage ? "#f06868" : (o.id.startsWith("G") ? "#5a4030" : "#3f6fb0");
+            const fill = evac ? "#101216" : garbage ? "rgba(240,104,104,0.10)" : (o.id.startsWith("G") ? "rgba(240,181,104,0.06)" : "rgba(94,159,246,0.08)");
+            $("from").appendChild(svg("rect", { x, y: FROM_Y, width: SW, height: SH, rx: 8, fill, stroke, "stroke-width": 1.5, "stroke-dasharray": garbage ? "4 3" : "", opacity: evac ? 0.6 : 1 }));
+            const nm = svg("text", { x: x + SW / 2, y: FROM_Y + 24, "text-anchor": "middle", "font-size": 14, "font-weight": 700, fill: evac ? "#6b7280" : garbage ? "#f3a0a0" : "#cdd4de" }); nm.textContent = o.id; $("from").appendChild(nm);
+            const sub = svg("text", { x: x + SW / 2, y: FROM_Y + 41, "text-anchor": "middle", "font-size": 10, "font-family": "var(--mono)", fill: evac ? "#f0b568" : "#6b7280" });
+            sub.textContent = evac ? "★ → To[" + step.fwd[o.id] + "]" : (o.refs.length ? "→ " + o.refs.join(",") : (o.id.startsWith("G") ? "garbage" : "leaf")); $("from").appendChild(sub);
+            // forwarding cross-arrow down to the copy
+            if (evac) arcDown($("cross"), x + SW / 2, FROM_Y + SH, slotCx(step.fwd[o.id]), TO_Y, "#f0b568", "url(#cn-fwd)");
+          });
+
+          // ROOT chip + arrow
+          const rootCx = 92, rootBottom = 62;
+          $("roots").appendChild(svg("rect", { x: rootCx - 30, y: 32, width: 60, height: 30, rx: 7, fill: "rgba(94,159,246,0.10)", stroke: "#5e9ff6", "stroke-width": 1.2 }));
+          const rt = svg("text", { x: rootCx, y: 52, "text-anchor": "middle", "font-size": 12, "font-weight": 600, fill: "#9cc4fb" }); rt.textContent = "root r"; $("roots").appendChild(rt);
+          if (step.root == null) {
+            const fx = slotCx(fromIdx[scn.root]);
+            $("roots").appendChild(svg("line", { x1: rootCx, y1: rootBottom, x2: fx, y2: FROM_Y, stroke: "#3f6fb0", "stroke-width": 1.5, "marker-end": "url(#cn-root)", opacity: 0.85 }));
+          } else {
+            const tx = slotCx(step.root);
+            $("roots").appendChild(svg("path", { d: `M ${rootCx} ${rootBottom} C ${rootCx - 6} 150, ${tx - 30} 175, ${tx} ${TO_Y}`, fill: "none", stroke: "#5e9ff6", "stroke-width": 1.7, "marker-end": "url(#cn-root)" }));
+          }
+
+          // TO-SPACE slots (alloc width or at least full row outline)
+          const NT = Math.max(NF, step.to.length);
+          for (let i = 0; i < NF; i++) {
+            const x = slotX(i), o = step.to[i];
+            if (!o) { $("to").appendChild(svg("rect", { x, y: TO_Y, width: SW, height: SH, rx: 8, fill: "#101216", stroke: "#2d333d", "stroke-width": 1, "stroke-dasharray": "4 4" })); continue; }
+            const justCopied = step.copying.includes(o.id), redir = step.redirect === o.id;
+            const stroke = redir ? "#f0b568" : justCopied ? "#fb863a" : "#5cc66f";
+            const fill = redir ? "rgba(240,181,104,0.14)" : justCopied ? "rgba(251,134,58,0.16)" : "rgba(92,198,111,0.14)";
+            $("to").appendChild(svg("rect", { x, y: TO_Y, width: SW, height: SH, rx: 8, fill, stroke, "stroke-width": 1.7 }));
+            const nm = svg("text", { x: x + SW / 2, y: TO_Y + 23, "text-anchor": "middle", "font-size": 14, "font-weight": 700, fill: "#cdebcf" }); nm.textContent = o.id; $("to").appendChild(nm);
+            // pointer footnote: resolved indices vs pending
+            const origRefs = scn.from[fromIdx[o.id]].refs;
+            let label;
+            if (origRefs.length === 0) label = "leaf";
+            else label = origRefs.map((r, k) => (o.refs[k] != null ? "[" + o.refs[k] + "]" : "?")).join(",");
+            const sub = svg("text", { x: x + SW / 2, y: TO_Y + 41, "text-anchor": "middle", "font-size": 10, "font-family": "var(--mono)", fill: "#7bd389" }); sub.textContent = origRefs.length ? "→ " + label : "leaf"; $("to").appendChild(sub);
+            const ix = svg("text", { x: x + SW / 2, y: TO_Y + SH + 14, "text-anchor": "middle", "font-size": 10, "font-family": "var(--mono)", fill: "#6b7280" }); ix.textContent = "[" + i + "]"; $("to").appendChild(ix);
+          }
+
+          // TO-SPACE resolved ref arcs (curved below)
+          step.to.forEach((o, i) => {
+            o.refs.forEach((t) => { if (t != null) arcDown($("toarcs"), slotCx(i), TO_Y + SH, slotCx(t), TO_Y + SH, "#5cc66f", "url(#cn-live)"); });
+          });
+
+          // scan + alloc markers (triangles above to-space)
+          const mk = (i, color, label, dy) => {
+            const cx = slotCx(Math.min(i, NF - 1)) + (i >= NF ? SW / 2 + 6 : 0);
+            $("markers").appendChild(svg("path", { d: `M ${cx - 6} ${176 + dy} L ${cx + 6} ${176 + dy} L ${cx} ${186 + dy} Z`, fill: color }));
+            const t = svg("text", { x: cx, y: 172 + dy, "text-anchor": "middle", "font-size": 10, "font-weight": 700, fill: color, "font-family": "var(--mono)" }); t.textContent = label + (i >= NF ? "·end" : ""); $("markers").appendChild(t);
+          };
+          if (step.scan === step.alloc) { mk(step.scan, "#9b8bff", "scan=alloc", 0); }
+          else { mk(step.scan, "#f0b568", "scan", 0); mk(step.alloc, "#5e9ff6", "alloc", -16); }
+
+          // narration + stats
+          $("narration").innerHTML = step.narr;
+          $("s-alloc").textContent = step.alloc;
+          $("s-scan").textContent = step.scan;
+          $("s-queue").textContent = step.alloc - step.scan;
+          $("s-garb").textContent = step.garb || 0;
+          $("counter").textContent = `Step ${idx + 1} / ${scn.steps.length}`;
+          $("prev").disabled = idx === 0;
+          $("next").disabled = idx === scn.steps.length - 1;
+        }
+
+        function stopAuto() { if (timer) { clearInterval(timer); timer = null; $("auto").innerHTML = '<i class="ti ti-player-play"></i>Auto'; } }
+        function go(n) { const max = SCN[cur].steps.length - 1; idx = Math.max(0, Math.min(max, n)); render(); if (idx === max) stopAuto(); }
+        $("next").onclick = () => { stopAuto(); go(idx + 1); };
+        $("prev").onclick = () => { stopAuto(); go(idx - 1); };
+        $("restart").onclick = () => { stopAuto(); go(0); };
+        $("auto").onclick = () => { if (timer) { stopAuto(); return; } if (idx === SCN[cur].steps.length - 1) idx = 0; $("auto").innerHTML = '<i class="ti ti-player-pause"></i>Pause'; timer = setInterval(() => go(idx + 1), 1250); };
+        document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => { stopAuto(); document.querySelectorAll(".tab").forEach((x) => x.classList.remove("active")); b.classList.add("active"); cur = b.dataset.scn; idx = 0; render(); }));
+        render();
+      })();
+    </script>
+  </body>
+</html>

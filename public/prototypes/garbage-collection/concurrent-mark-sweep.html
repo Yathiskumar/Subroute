@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Garbage Collection — Concurrent Mark-Sweep</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --success-soft: rgba(92,198,111,0.14); --success-border: rgba(92,198,111,0.40);
+        --danger: #f06868; --danger-soft: rgba(240,104,104,0.14); --danger-border: rgba(240,104,104,0.42);
+        --info: #5e9ff6; --info-soft: rgba(94,159,246,0.14); --info-border: rgba(94,159,246,0.40);
+        --warning: #f0b568; --warning-soft: rgba(240,181,104,0.14); --warning-border: rgba(240,181,104,0.40);
+        --purple: #9b8bff;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body { padding: 14px 16px 16px; background-image: linear-gradient(to right, rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.025) 1px, transparent 1px); background-size: 40px 40px; }
+      .container { max-width: 980px; margin: 0 auto; }
+
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+      .stat .lbl { font-size: 11px; color: var(--muted); }
+      .stat .val { font-size: 18px; font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
+      .stat.gray { background: rgba(144,153,168,0.10); border-color: rgba(144,153,168,0.35); }
+      .stat.gray .lbl { color: #b6bdc9; }
+      .stat.red { background: var(--danger-soft); border-color: var(--danger-border); }
+      .stat.red .lbl { color: var(--danger); }
+      .stat .val.phase { font-size: 13px; }
+
+      .tabs { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+      .tab { background: var(--elevated); color: var(--muted); border: 1px solid var(--border); border-radius: 999px; cursor: pointer; padding: 6px 13px; font: 500 12px/1 var(--sans); transition: all 150ms ease; white-space: nowrap; }
+      .tab:hover { border-color: var(--border-strong); color: var(--fg); }
+      .tab.active { background: var(--info-soft); color: var(--info); border-color: var(--info-border); }
+
+      .legend { display: flex; gap: 13px; flex-wrap: wrap; margin-bottom: 8px; padding: 0 2px; }
+      .legend .item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+      .legend .dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid; }
+      .dot.white { background: #e8e4dc; border-color: #888780; }
+      .dot.gray { background: #5b6270; border-color: #9099a8; }
+      .dot.black { background: #07080a; border-color: #4a5160; }
+      .dot.float { background: var(--danger-soft); border-color: var(--danger); border-style: dashed; }
+      .legend .sw { width: 18px; height: 9px; border-radius: 2px; border: 1px solid; }
+      .sw.stw { background: var(--danger-soft); border-color: var(--danger); }
+      .sw.par { background: var(--success-soft); border-color: var(--success); }
+
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 6px; margin-bottom: 10px; }
+      .stage svg { width: 100%; height: 392px; display: block; }
+
+      .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+      .panel .ttl { font-size: 10px; color: var(--subtle); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 6px; }
+      #narration { font-size: 12.5px; line-height: 1.6; color: var(--fg); min-height: 40px; }
+      #narration .em { color: var(--accent); font-weight: 600; }
+      #narration b { color: var(--fg); }
+
+      .controls { display: flex; gap: 8px; align-items: center; }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; padding: 9px 13px; transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.10); background: var(--accent); }
+      button.ghost { background: transparent; }
+      .counter { margin-left: auto; font: 12px var(--mono); color: var(--muted); }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+    </style>
+  </head>
+  <body>
+    <h2 class="sr-only">Concurrent mark-sweep: the collector runs in parallel with the program on a separate thread, with brief stop-the-world initial-mark and remark phases, write barriers, and floating garbage.</h2>
+    <div class="container">
+      <div class="stats">
+        <div class="stat gray"><div class="lbl">Gray (queue)</div><div class="val" id="s-gray">0</div></div>
+        <div class="stat"><div class="lbl">Black (marked)</div><div class="val" id="s-black">0</div></div>
+        <div class="stat red"><div class="lbl">Floating garbage</div><div class="val" id="s-float">0</div></div>
+        <div class="stat"><div class="lbl">Phase</div><div class="val phase" id="s-phase">idle</div></div>
+      </div>
+
+      <div class="tabs" id="tabs">
+        <button class="tab active" data-scn="basic">1 · Full CMS cycle</button>
+        <button class="tab" data-scn="floating">2 · Floating garbage</button>
+      </div>
+
+      <div class="legend">
+        <div class="item"><span class="dot white"></span>white</div>
+        <div class="item"><span class="dot gray"></span>gray</div>
+        <div class="item"><span class="dot black"></span>black</div>
+        <div class="item"><span class="dot float"></span>floating garbage</div>
+        <div class="item"><span class="sw stw"></span>stop-the-world</div>
+        <div class="item"><span class="sw par"></span>concurrent (parallel)</div>
+      </div>
+
+      <div class="stage">
+        <svg viewBox="0 0 720 388" role="img" aria-label="Concurrent mark-sweep visualization">
+          <defs>
+            <marker id="cm-e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#7d8694"/></marker>
+            <marker id="cm-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#f06868"/></marker>
+          </defs>
+          <text x="30" y="32" font-size="10" fill="#6b7280" letter-spacing="1.4">SHARED HEAP</text>
+          <text x="30" y="318" font-size="10" fill="#6b7280" letter-spacing="1.4">TIMELINE  (parallel threads)</text>
+          <g id="phase-badge"></g>
+          <g id="refs"></g>
+          <g id="heap"></g>
+          <g id="threads"></g>
+          <g id="timeline"></g>
+        </svg>
+      </div>
+
+      <div class="panel">
+        <div class="ttl">What's happening</div>
+        <div id="narration"></div>
+      </div>
+
+      <div class="controls">
+        <button id="prev"><i class="ti ti-arrow-left"></i>Prev</button>
+        <button id="next" class="primary">Next step<i class="ti ti-arrow-right"></i></button>
+        <button id="auto" class="ghost"><i class="ti ti-player-play"></i>Auto</button>
+        <button id="restart" class="ghost"><i class="ti ti-refresh"></i>Restart</button>
+        <span class="counter" id="counter">Step 1</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        function postHeight() { const h = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight); parent.postMessage({ type: "prototype:height", height: h }, "*"); }
+        if (window.ResizeObserver) new ResizeObserver(postHeight).observe(document.body);
+        window.addEventListener("load", postHeight);
+
+        const NS = "http://www.w3.org/2000/svg";
+        const svg = (t, a, txt) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); if (txt != null) e.textContent = txt; return e; };
+
+        const POS = { A: { x: 140, y: 100 }, B: { x: 255, y: 76 }, C: { x: 255, y: 150 }, D: { x: 370, y: 76 }, E: { x: 370, y: 150 }, F: { x: 485, y: 112 }, G: { x: 600, y: 112 } };
+        const EDGES = [["A", "B"], ["A", "C"], ["B", "D"], ["C", "E"], ["D", "F"], ["E", "F"], ["F", "G"]];
+        const S = (type, dur, label, mut, col) => ({ type, dur, label, mut, col });
+
+        const SCN = {
+          basic: [
+            { colors: { A: "w", B: "w", C: "w", D: "w", E: "w", F: "w", G: "w" }, mut: "running", col: "idle", timeline: [S("mut", 4, "program")], narr: "<b>BEFORE GC.</b> The mutator thread runs your program — allocating, computing, mutating. The collector thread is idle. All heap objects are white (no marking yet)." },
+            { colors: { A: "g", B: "w", C: "w", D: "w", E: "w", F: "w", G: "w" }, mut: "paused", col: "init", stw: true, timeline: [S("mut", 4, "program"), S("stw", 1, "STW init")], narr: "<b>PHASE 1 · INITIAL MARK (STW).</b> Briefly pause all mutator threads, scan the roots, gray A, then release the mutators. Short — it touches only roots, not the whole heap." },
+            { colors: { A: "g", B: "w", C: "w", D: "w", E: "w", F: "w", G: "w" }, mut: "running", col: "cmark", timeline: [S("mut", 4, "program"), S("stw", 1, "STW init"), S("parallel", 5, null, "program", "concurrent mark")], narr: "<b>PHASE 2 · CONCURRENT MARK.</b> Mutator and collector now run <span class='em'>in parallel</span> on different threads, sharing one heap. The collector starts draining the gray queue — A first." },
+            { colors: { A: "b", B: "g", C: "g", D: "w", E: "w", F: "w", G: "w" }, mut: "running", col: "cmark", timeline: [S("mut", 4, "program"), S("stw", 1, "STW init"), S("parallel", 5, null, "program", "concurrent mark")], narr: "Collector processes A → grays B and C, blackens A. Meanwhile the mutator keeps working. No synchronization beyond the write barrier on pointer writes." },
+            { colors: { A: "b", B: "b", C: "b", D: "g", E: "g", F: "w", G: "w" }, mut: "running", col: "cmark", timeline: [S("mut", 4, "program"), S("stw", 1, "STW init"), S("parallel", 5, null, "program", "concurrent mark")], narr: "Marking advances: B and C → black, D and E gray. The mutator runs throughout, doing program work. <span class='em'>No pause.</span>" },
+            { colors: { A: "b", B: "b", C: "b", D: "b", E: "b", F: "g", G: "w" }, mut: "running", col: "cmark", cleanup: { from: "B", old: "D" }, timeline: [S("mut", 4, "program"), S("stw", 1, "STW init"), S("parallel", 5, null, "program", "concurrent mark")], narr: "Meanwhile the mutator runs <code>B.next = null</code> — D is no longer reachable in reality. But D is already black. It becomes <span class='em'>floating garbage</span>: reclaimed next cycle, not this one." },
+            { colors: { A: "b", B: "b", C: "b", D: "b", E: "b", F: "b", G: "g" }, mut: "running", col: "cmark", timeline: [S("mut", 4, "program"), S("stw", 1, "STW init"), S("parallel", 5, null, "program", "concurrent mark")], narr: "F processed, G gray. Marking is almost done — all while the program kept running." },
+            { colors: { A: "b", B: "b", C: "b", D: "b", E: "b", F: "b", G: "b" }, mut: "paused", col: "remark", stw: true, timeline: [S("mut", 4, "program"), S("stw", 1, "STW init"), S("parallel", 5, null, "program", "concurrent mark"), S("stw", 1, "STW remark")], narr: "<b>PHASE 3 · REMARK (STW).</b> Briefly pause again to finish work the write barrier deferred — new allocations, last-minute mutations — and confirm the gray queue is empty. The second short pause." },
+            { colors: { A: "b", B: "b", C: "b", D: "b", E: "b", F: "b", G: "b" }, mut: "running", col: "csweep", timeline: [S("mut", 4, "program"), S("stw", 1, "STW init"), S("parallel", 5, null, "program", "concurrent mark"), S("stw", 1, "STW remark"), S("parallel", 4, null, "program", "concurrent sweep")], narr: "<b>PHASE 4 · CONCURRENT SWEEP.</b> Mutators resume; the collector frees white objects in parallel. Here nothing was white — but D is now logically dead even though black (floating garbage)." },
+            { colors: { A: "b", B: "b", C: "b", D: "b", E: "b", F: "b", G: "b" }, mut: "running", col: "idle", timeline: [S("mut", 4, "program"), S("stw", 1, "STW init"), S("parallel", 5, null, "program", "concurrent mark"), S("stw", 1, "STW remark"), S("parallel", 4, null, "program", "concurrent sweep"), S("mut", 3, "program")], narr: "<b>CYCLE COMPLETE.</b> Collector goes idle; the mutator continues. Total stop-the-world time was just the two thin red slices. The bulk of GC ran in parallel — <span class='em'>near-zero observable pause.</span>" },
+          ],
+          floating: [
+            { colors: { A: "g", B: "w", C: "w", D: "w", E: "w", F: "w", G: "w" }, mut: "running", col: "cmark", timeline: [S("stw", 1, "STW init"), S("parallel", 1, null, "program", "concurrent mark")], narr: "CMS just started. Initial mark done — A is gray. The concurrent mark phase begins; mutator and collector run in parallel." },
+            { colors: { A: "b", B: "b", C: "g", D: "g", E: "w", F: "w", G: "w" }, mut: "running", col: "cmark", timeline: [S("stw", 1, "STW init"), S("parallel", 3, null, "program", "concurrent mark")], narr: "The collector has blackened A and B. It already grayed D (saw it via B earlier). Now the mutator is about to run <code>B.next = null</code>." },
+            { colors: { A: "b", B: "b", C: "g", D: "g", E: "w", F: "w", G: "w" }, mut: "running", col: "cmark", edges: [["A", "B"], ["A", "C"], ["C", "E"], ["D", "F"], ["E", "F"], ["F", "G"]], timeline: [S("stw", 1, "STW init"), S("parallel", 4, null, "program", "concurrent mark")], narr: "<code>B.next = null</code>: the B→D edge is <span class='em'>gone in reality</span>. But D is already gray in the queue — the collector doesn't know D was just orphaned, and will keep marking it." },
+            { colors: { A: "b", B: "b", C: "b", D: "b", E: "b", F: "b", G: "b" }, mut: "running", col: "cmark", edges: [["A", "B"], ["A", "C"], ["C", "E"], ["D", "F"], ["E", "F"], ["F", "G"]], timeline: [S("stw", 1, "STW init"), S("parallel", 6, null, "program", "concurrent mark")], narr: "Marking completes. D is BLACK even though it's logically unreachable. The collector wasn't aware D became garbage mid-cycle." },
+            { colors: { A: "b", B: "b", C: "b", D: "f", E: "b", F: "b", G: "b" }, mut: "running", col: "idle", edges: [["A", "B"], ["A", "C"], ["C", "E"], ["E", "F"], ["F", "G"]], timeline: [S("stw", 1, "STW init"), S("parallel", 6, null, "program", "concurrent mark"), S("stw", 1, "STW remark"), S("parallel", 2, null, "program", "concurrent sweep")], narr: "Cycle ends. D survives as <span class='em'>floating garbage</span> (red dashed) — wasting memory, reachable by no one. F is still live via E. CMS accepts floating garbage as the price of near-zero pauses." },
+            { colors: { A: "b", B: "b", C: "b", D: "f", E: "b", F: "b", G: "b" }, mut: "running", col: "idle", edges: [["A", "B"], ["A", "C"], ["C", "E"], ["E", "F"], ["F", "G"]], timeline: [S("stw", 1, "STW init"), S("parallel", 6, null, "program", "concurrent mark"), S("stw", 1, "STW remark"), S("parallel", 2, null, "program", "concurrent sweep"), S("mut", 5, "program")], narr: "The program runs on; D keeps wasting memory. <span class='em'>On the next GC cycle</span> the collector traces from roots, finds D unreachable, and finally collects it. Floating garbage is delayed by one cycle, not lost forever." },
+          ],
+        };
+
+        let cur = "basic", idx = 0, timer = null;
+        const $ = (id) => document.getElementById(id);
+
+        const COL = { w: { fill: "#e8e4dc", stroke: "#888780", text: "#1a1c20" }, g: { fill: "#5b6270", stroke: "#aab2bf", text: "#f3f5f8" }, b: { fill: "#07080a", stroke: "#4a5160", text: "#e8e4dc" }, f: { fill: "rgba(240,104,104,0.14)", stroke: "#f06868", text: "#f3a0a0" } };
+        const SLICE = { stw: { fill: "rgba(240,104,104,0.20)", stroke: "#f06868", text: "#f3a0a0" }, parallel: { fill: "rgba(92,198,111,0.18)", stroke: "#5cc66f", text: "#9fe0ab" }, mut: { fill: "rgba(155,139,255,0.20)", stroke: "#9b8bff", text: "#c3b8ff" } };
+        const PHASE = {
+          init: { lbl: "Initial mark (STW)", color: "#f06868" },
+          remark: { lbl: "Remark (STW)", color: "#f06868" },
+          cmark: { lbl: "Concurrent mark", color: "#5cc66f" },
+          csweep: { lbl: "Concurrent sweep", color: "#5cc66f" },
+          idle: { lbl: "No GC running", color: "#9099a8" },
+        };
+        const MUT_STATE = { running: { txt: "● running", color: "#7bd389" }, paused: { txt: "⏸ paused (STW)", color: "#9099a8" } };
+        const COL_STATE = {
+          idle: { txt: "○ idle", color: "#9099a8" }, init: { txt: "◐ initial mark", color: "#f0b568" },
+          cmark: { txt: "◑ concurrent mark", color: "#7bd389" }, remark: { txt: "◐ remark", color: "#f0b568" }, csweep: { txt: "◑ concurrent sweep", color: "#7bd389" },
+        };
+
+        function edge(layer, f, t, color, marker) {
+          const dx = t.x - f.x, dy = t.y - f.y, L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L;
+          layer.appendChild(svg("line", { x1: f.x + ux * 20, y1: f.y + uy * 20, x2: t.x - ux * 21, y2: t.y - uy * 21, stroke: color, "stroke-width": 1.3, "marker-end": marker, opacity: 0.75 }));
+        }
+
+        function lane(layer, y, label, st, who) {
+          const running = st.color === "#7bd389", dashed = st.txt.includes("idle") || st.txt.includes("paused");
+          const stroke = dashed ? "#3a4150" : st.color, fill = dashed ? "#101216" : (running ? "rgba(92,198,111,0.07)" : "rgba(240,181,104,0.07)");
+          layer.appendChild(svg("rect", { x: 30, y: y - 18, width: 660, height: 36, rx: 8, fill, stroke, "stroke-width": 1.2, "stroke-dasharray": dashed ? "5 4" : "" }));
+          layer.appendChild(svg("text", { x: 48, y: y + 5, "font-size": 12.5, "font-weight": 600, fill: "#cdd4de" }, who));
+          layer.appendChild(svg("text", { x: 672, y: y + 5, "text-anchor": "end", "font-size": 11, fill: st.color, "font-family": "var(--mono)", "font-weight": 600 }, st.txt));
+        }
+
+        function render() {
+          const steps = SCN[cur], step = steps[idx];
+          ["phase-badge", "refs", "heap", "threads", "timeline"].forEach((g) => ($(g).innerHTML = ""));
+
+          (step.edges || EDGES).forEach(([a, b]) => edge($("refs"), POS[a], POS[b], "#3a4150", "url(#cm-e)"));
+          if (step.cleanup) {
+            const f = POS[step.cleanup.from], t = POS[step.cleanup.old];
+            $("refs").appendChild(svg("line", { x1: f.x + 15, y1: f.y + 13, x2: t.x - 15, y2: t.y - 13, stroke: "#f06868", "stroke-width": 2.4, opacity: 0.85, "stroke-dasharray": "5 3" }));
+            $("refs").appendChild(svg("text", { x: (f.x + t.x) / 2 + 6, y: (f.y + t.y) / 2 - 6, "text-anchor": "middle", "font-size": 10.5, "font-weight": 700, fill: "#f06868", "font-family": "var(--mono)" }, step.cleanup.from + ".next = null"));
+          }
+          Object.keys(POS).forEach((id) => {
+            const p = POS[id], c = COL[step.colors[id] || "w"];
+            $("heap").appendChild(svg("circle", { cx: p.x, cy: p.y, r: 20, fill: c.fill, stroke: c.stroke, "stroke-width": 1.6, "stroke-dasharray": step.colors[id] === "f" ? "3 2" : "" }));
+            $("heap").appendChild(svg("text", { x: p.x, y: p.y + 5, "text-anchor": "middle", "font-size": 14, "font-weight": 700, fill: c.text }, id));
+          });
+
+          // thread lanes
+          lane($("threads"), 218, "mutator", MUT_STATE[step.mut] || MUT_STATE.running, "Mutator thread — your program");
+          lane($("threads"), 266, "collector", COL_STATE[step.col] || COL_STATE.idle, "Collector thread — GC");
+
+          // timeline
+          const tlX = 30, tlY = 330, tlH = 38, tlW = 660;
+          $("timeline").appendChild(svg("rect", { x: tlX, y: tlY, width: tlW, height: tlH, rx: 6, fill: "#101216", stroke: "#2d333d", "stroke-width": 1 }));
+          const total = step.timeline.reduce((s, x) => s + x.dur, 0);
+          if (total > 0) {
+            const unit = tlW / Math.max(total, 16), FS = 10;
+            const labelOf = (s) => s.type === "stw" ? s.label.replace("STW ", "") : s.type === "parallel" ? (s.col || "").replace("concurrent ", "") + " ∥" : "prog";
+            let cx = tlX;
+            step.timeline.forEach((s, i) => {
+              const w = s.dur * unit, st = SLICE[s.type], last = i === step.timeline.length - 1;
+              $("timeline").appendChild(svg("rect", { x: cx + 1, y: tlY + 5, width: Math.max(w - 2, 3), height: tlH - 10, rx: 3, fill: st.fill, stroke: st.stroke, "stroke-width": last ? 2 : 1 }));
+              const label = labelOf(s);
+              if (label.length * FS * 0.6 + 6 <= w) $("timeline").appendChild(svg("text", { x: cx + w / 2, y: tlY + 24, "text-anchor": "middle", "font-size": FS, "font-weight": 700, fill: st.text, "font-family": "var(--mono)" }, label));
+              cx += w;
+            });
+            $("timeline").appendChild(svg("line", { x1: cx, y1: tlY - 5, x2: cx, y2: tlY + tlH + 4, stroke: "#fb863a", "stroke-width": 2 }));
+            $("timeline").appendChild(svg("text", { x: Math.min(cx, tlX + tlW - 10), y: tlY - 8, "text-anchor": "middle", "font-size": 10, "font-weight": 700, fill: "#fb863a", "font-family": "var(--mono)" }, "now"));
+          }
+
+          // phase badge
+          const ph = PHASE[step.col] || PHASE.idle, stw = !!step.stw;
+          const col = stw ? "#f06868" : ph.color, lbl = stw ? "STOP-THE-WORLD" : ph.lbl;
+          $("phase-badge").appendChild(svg("rect", { x: 510, y: 8, width: 180, height: 22, rx: 11, fill: "transparent", stroke: col, "stroke-width": 1, opacity: 0.6 }));
+          $("phase-badge").appendChild(svg("circle", { cx: 525, cy: 19, r: 3.5, fill: col }));
+          $("phase-badge").appendChild(svg("text", { x: 537, y: 23, "font-size": 11, "font-weight": 600, fill: col }, lbl));
+
+          // narration + stats
+          $("narration").innerHTML = step.narr;
+          const vals = Object.values(step.colors);
+          $("s-gray").textContent = vals.filter((c) => c === "g").length;
+          $("s-black").textContent = vals.filter((c) => c === "b").length;
+          $("s-float").textContent = vals.filter((c) => c === "f").length;
+          const pe = $("s-phase"); pe.textContent = stw ? "STW" : ph.lbl; pe.style.color = col;
+          $("counter").textContent = `Step ${idx + 1} / ${steps.length}`;
+          $("prev").disabled = idx === 0;
+          $("next").disabled = idx === steps.length - 1;
+        }
+
+        function stopAuto() { if (timer) { clearInterval(timer); timer = null; $("auto").innerHTML = '<i class="ti ti-player-play"></i>Auto'; } }
+        function go(n) { const max = SCN[cur].length - 1; idx = Math.max(0, Math.min(max, n)); render(); if (idx === max) stopAuto(); }
+        $("next").onclick = () => { stopAuto(); go(idx + 1); };
+        $("prev").onclick = () => { stopAuto(); go(idx - 1); };
+        $("restart").onclick = () => { stopAuto(); go(0); };
+        $("auto").onclick = () => { if (timer) { stopAuto(); return; } if (idx === SCN[cur].length - 1) idx = 0; $("auto").innerHTML = '<i class="ti ti-player-pause"></i>Pause'; timer = setInterval(() => go(idx + 1), 1250); };
+        document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => { stopAuto(); document.querySelectorAll(".tab").forEach((x) => x.classList.remove("active")); b.classList.add("active"); cur = b.dataset.scn; idx = 0; render(); }));
+        render();
+      })();
+    </script>
+  </body>
+</html>

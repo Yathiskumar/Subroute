@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cache Eviction — Subroute</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-strong: #d56a1f;
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --warning: #f0b568;
+        --warning-soft: rgba(240, 181, 104, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --radius-md: 8px;
+
+        --color-background-primary: var(--bg);
+        --color-background-secondary: var(--surface);
+        --color-background-success: var(--success-soft);
+        --color-background-danger: var(--danger-soft);
+        --color-background-info: var(--info-soft);
+        --color-background-warning: var(--warning-soft);
+        --color-text-primary: var(--fg);
+        --color-text-secondary: var(--muted);
+        --color-text-tertiary: var(--subtle);
+        --color-text-success: var(--success);
+        --color-text-danger: var(--danger);
+        --color-text-info: var(--info);
+        --color-text-warning: var(--warning);
+        --color-border-secondary: var(--border-strong);
+        --color-border-tertiary: var(--border);
+        --color-border-info: rgba(94, 159, 246, 0.45);
+        --color-border-success: rgba(92, 198, 111, 0.45);
+        --color-border-warning: rgba(240, 181, 104, 0.45);
+        --border-radius-md: var(--radius-md);
+        --font-mono: var(--mono);
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 20px 20px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.025) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.025) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      button {
+        background: var(--elevated);
+        color: var(--fg);
+        font: 500 13px/1 var(--sans);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        cursor: pointer;
+        transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease;
+      }
+      button:hover { border-color: var(--border-strong); background: var(--surface); }
+      button:active { transform: scale(0.97); }
+      .access-btn, .insert-btn {
+        background: var(--accent);
+        color: #1a1003;
+        border-color: transparent;
+        font-weight: 600;
+      }
+      .access-btn:hover, .insert-btn:hover {
+        filter: brightness(1.08);
+        background: var(--accent);
+        border-color: transparent;
+      }
+      input[type="range"] { accent-color: var(--accent); }
+      .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    </style>
+  </head>
+  <body>
+<h2 class="sr-only">Interactive TTL (Time To Live) cache demonstration. Items inserted with a configurable lifetime, each showing a countdown timer; items automatically expire and disappear when their timer reaches zero.</h2>
+
+<div style="padding: 1rem 0;">
+
+  <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 1rem; flex-wrap: wrap;">
+    <label style="font-size: 14px; color: var(--color-text-secondary);">TTL on insert:</label>
+    <input type="range" min="3" max="15" value="8" id="ttl-input" style="flex: 1; min-width: 140px; max-width: 240px;" />
+    <span id="ttl-display" style="font-size: 14px; font-weight: 500; min-width: 48px;">8s</span>
+  </div>
+
+  <div style="font-size: 13px; color: var(--color-text-secondary); margin-bottom: 8px;">Cache items (countdown shown beneath each)</div>
+  <div id="items-row" style="display: flex; gap: 8px; margin-bottom: 1rem; min-height: 84px; padding: 12px; background: var(--color-background-secondary); border-radius: var(--border-radius-md); flex-wrap: wrap; align-items: center;">
+    <div style="font-size: 13px; color: var(--color-text-tertiary); margin: auto;">Empty — insert an item below</div>
+  </div>
+
+  <div id="status" style="padding: 10px 14px; border-radius: var(--border-radius-md); background: var(--color-background-secondary); font-size: 14px; color: var(--color-text-secondary); margin-bottom: 1.25rem; min-height: 20px;">Set a TTL, then insert items. Watch them expire.</div>
+
+  <div style="font-size: 13px; color: var(--color-text-secondary); margin-bottom: 8px;">Insert an item</div>
+  <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 1.25rem;">
+    <button class="insert-btn" data-k="A" style="width: 48px; height: 44px; font-size: 18px; font-weight: 500;">A</button>
+    <button class="insert-btn" data-k="B" style="width: 48px; height: 44px; font-size: 18px; font-weight: 500;">B</button>
+    <button class="insert-btn" data-k="C" style="width: 48px; height: 44px; font-size: 18px; font-weight: 500;">C</button>
+    <button class="insert-btn" data-k="D" style="width: 48px; height: 44px; font-size: 18px; font-weight: 500;">D</button>
+    <button class="insert-btn" data-k="E" style="width: 48px; height: 44px; font-size: 18px; font-weight: 500;">E</button>
+    <div style="flex: 1;"></div>
+    <button id="demo-btn" style="height: 44px; padding: 0 14px; font-size: 14px;"><i class="ti ti-player-play" style="font-size:16px; vertical-align:-2px; margin-right:4px" aria-hidden="true"></i>Run demo</button>
+    <button id="reset-btn" style="height: 44px; padding: 0 14px; font-size: 14px;"><i class="ti ti-refresh" style="font-size:16px; vertical-align:-2px; margin-right:4px" aria-hidden="true"></i>Reset</button>
+  </div>
+
+  <div id="log" style="max-height: 140px; overflow-y: auto; background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 10px 12px; font-size: 12px; font-family: var(--font-mono); color: var(--color-text-secondary);">Waiting for first insert…</div>
+
+</div>
+
+<script>
+(function() {
+  let items = []; // {key, expiresAt}
+  let ttl = 8;
+  let busy = false;
+
+  const ttlInput = document.getElementById('ttl-input');
+  const ttlDisplay = document.getElementById('ttl-display');
+  const itemsRow = document.getElementById('items-row');
+  const statusEl = document.getElementById('status');
+  const logEl = document.getElementById('log');
+
+  ttlInput.addEventListener('input', () => {
+    ttl = parseInt(ttlInput.value);
+    ttlDisplay.textContent = ttl + 's';
+  });
+
+  function setStatus(text, color) {
+    statusEl.textContent = text;
+    statusEl.style.color = color || 'var(--color-text-secondary)';
+  }
+
+  function logLine(text) {
+    if (logEl.textContent === 'Waiting for first insert…') logEl.innerHTML = '';
+    const div = document.createElement('div');
+    div.style.padding = '2px 0';
+    div.textContent = text;
+    logEl.appendChild(div);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function render() {
+    itemsRow.innerHTML = '';
+    if (items.length === 0) {
+      const empty = document.createElement('div');
+      empty.style.fontSize = '13px';
+      empty.style.color = 'var(--color-text-tertiary)';
+      empty.style.margin = 'auto';
+      empty.textContent = 'Empty — insert an item below';
+      itemsRow.appendChild(empty);
+      return;
+    }
+    const now = Date.now();
+    for (const it of items) {
+      const remaining = Math.max(0, (it.expiresAt - now) / 1000);
+      const total = it.totalTtl;
+      const pct = Math.max(0, Math.min(1, remaining / total));
+      const wrap = document.createElement('div');
+      wrap.style.display = 'flex';
+      wrap.style.flexDirection = 'column';
+      wrap.style.alignItems = 'center';
+      wrap.style.gap = '4px';
+
+      const slot = document.createElement('div');
+      slot.style.width = '60px';
+      slot.style.height = '60px';
+      slot.style.borderRadius = 'var(--border-radius-md)';
+      slot.style.display = 'flex';
+      slot.style.alignItems = 'center';
+      slot.style.justifyContent = 'center';
+      slot.style.fontSize = '22px';
+      slot.style.fontWeight = '500';
+      slot.style.position = 'relative';
+      slot.style.overflow = 'hidden';
+      slot.style.transition = 'opacity 0.4s';
+
+      const isExpiring = remaining < 2;
+      slot.style.background = isExpiring ? '#FAEEDA' : 'var(--color-background-info)';
+      slot.style.border = '0.5px solid ' + (isExpiring ? '#BA7517' : 'var(--color-border-info)');
+      slot.style.color = isExpiring ? '#854F0B' : 'var(--color-text-info)';
+      if (remaining <= 0.5) slot.style.opacity = String(Math.max(0, remaining / 0.5));
+
+      const letter = document.createElement('div');
+      letter.style.zIndex = '2';
+      letter.textContent = it.key;
+
+      const bar = document.createElement('div');
+      bar.style.position = 'absolute';
+      bar.style.bottom = '0';
+      bar.style.left = '0';
+      bar.style.width = (pct * 100) + '%';
+      bar.style.height = '3px';
+      bar.style.background = isExpiring ? '#BA7517' : 'var(--color-border-info)';
+      bar.style.transition = 'width 0.2s linear, background 0.3s';
+
+      slot.appendChild(letter);
+      slot.appendChild(bar);
+
+      const time = document.createElement('div');
+      time.style.fontSize = '11px';
+      time.style.color = 'var(--color-text-secondary)';
+      time.style.fontFamily = 'var(--font-mono)';
+      time.textContent = remaining.toFixed(1) + 's';
+
+      wrap.appendChild(slot);
+      wrap.appendChild(time);
+      itemsRow.appendChild(wrap);
+    }
+  }
+
+  function insertItem(key) {
+    const existingIdx = items.findIndex(it => it.key === key);
+    const now = Date.now();
+    const expiresAt = now + ttl * 1000;
+    if (existingIdx !== -1) {
+      items[existingIdx].expiresAt = expiresAt;
+      items[existingIdx].totalTtl = ttl;
+      setStatus(`Refreshed ${key} — new TTL = ${ttl}s.`, 'var(--color-text-info)');
+      logLine(`refresh(${key}, ttl=${ttl}s)`);
+    } else {
+      items.push({ key, expiresAt, totalTtl: ttl });
+      setStatus(`Inserted ${key} with TTL = ${ttl}s.`, 'var(--color-text-info)');
+      logLine(`insert(${key}, ttl=${ttl}s)`);
+    }
+    render();
+  }
+
+  function sweep() {
+    const now = Date.now();
+    const expired = items.filter(it => it.expiresAt <= now);
+    items = items.filter(it => it.expiresAt > now);
+    if (expired.length > 0) {
+      for (const e of expired) {
+        logLine(`expire(${e.key}) — TTL elapsed`);
+      }
+      setStatus(`Expired: ${expired.map(e => e.key).join(', ')}.`, 'var(--color-text-warning)');
+    }
+  }
+
+  setInterval(() => {
+    sweep();
+    render();
+  }, 200);
+
+  document.querySelectorAll('.insert-btn').forEach(btn => {
+    btn.addEventListener('click', () => { if (!busy) insertItem(btn.dataset.k); });
+  });
+
+  document.getElementById('reset-btn').addEventListener('click', () => {
+    items = [];
+    logEl.innerHTML = 'Waiting for first insert…';
+    setStatus('Set a TTL, then insert items. Watch them expire.', 'var(--color-text-secondary)');
+    render();
+  });
+
+  document.getElementById('demo-btn').addEventListener('click', async () => {
+    if (busy) return;
+    busy = true;
+    items = [];
+    logEl.innerHTML = 'Waiting for first insert…';
+    render();
+    ttl = 5; ttlInput.value = 5; ttlDisplay.textContent = '5s';
+    insertItem('A');
+    await new Promise(r => setTimeout(r, 1500));
+    ttl = 10; ttlInput.value = 10; ttlDisplay.textContent = '10s';
+    insertItem('B');
+    await new Promise(r => setTimeout(r, 1500));
+    ttl = 4; ttlInput.value = 4; ttlDisplay.textContent = '4s';
+    insertItem('C');
+    await new Promise(r => setTimeout(r, 2500));
+    ttl = 6; ttlInput.value = 6; ttlDisplay.textContent = '6s';
+    insertItem('A');
+    await new Promise(r => setTimeout(r, 8000));
+    busy = false;
+  });
+
+  render();
+})();
+</script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Memory Allocation — Slab Allocation</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --success-soft: rgba(92,198,111,0.16); --success-border: rgba(92,198,111,0.40);
+        --danger: #f06868; --danger-soft: rgba(240,104,104,0.14); --danger-border: rgba(240,104,104,0.42);
+        --info: #5e9ff6; --info-soft: rgba(94,159,246,0.14); --info-border: rgba(94,159,246,0.40);
+        --warning: #f0b568; --warning-soft: rgba(240,181,104,0.16); --warning-border: rgba(240,181,104,0.55);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body { padding: 14px 16px 16px; background-image: linear-gradient(to right, rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.025) 1px, transparent 1px); background-size: 40px 40px; }
+      .container { max-width: 980px; margin: 0 auto; }
+
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+      .stat .lbl { font-size: 11px; color: var(--muted); }
+      .stat .val { font-size: 18px; font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
+      .stat.frag .val { color: var(--success); }
+
+      .tabs { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+      .tab { background: var(--elevated); color: var(--muted); border: 1px solid var(--border); border-radius: 999px; cursor: pointer; padding: 6px 13px; font: 500 12px/1 var(--sans); transition: all 150ms ease; white-space: nowrap; }
+      .tab:hover { border-color: var(--border-strong); color: var(--fg); }
+      .tab.active { background: var(--info-soft); color: var(--info); border-color: var(--info-border); }
+
+      .cache { margin-bottom: 12px; }
+      .cache-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+      .cache-name { font-weight: 600; font-size: 13px; color: var(--fg); font-family: var(--mono); }
+      .cache-info { color: var(--subtle); font-family: var(--mono); font-size: 11px; }
+      .slab { background: var(--surface); border: 1px solid var(--border); padding: 9px 11px; border-radius: 8px; margin-bottom: 6px; }
+      .slab:last-child { margin-bottom: 0; }
+      .slab.hot { border-color: var(--warning-border); }
+      .slab-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 11px; color: var(--muted); font-family: var(--mono); }
+      .state { padding: 2px 8px; border-radius: 5px; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; }
+      .state.empty { background: var(--elevated); color: var(--muted); border: 1px solid var(--border-strong); }
+      .state.partial { background: var(--info-soft); color: var(--info); border: 1px solid var(--info-border); }
+      .state.full { background: var(--success-soft); color: var(--success); border: 1px solid var(--success-border); }
+      .slots { display: flex; gap: 5px; flex-wrap: wrap; }
+      .slot { width: 46px; height: 34px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; font-family: var(--mono); transition: transform 180ms ease; }
+      .slot.free { background: var(--info-soft); color: var(--info); opacity: 0.5; border: 1px dashed var(--info-border); }
+      .slot.alloc { background: var(--success-soft); color: var(--success); border: 1px solid var(--success-border); }
+      .slot.hot { outline: 2px solid var(--warning); outline-offset: 1px; transform: translateY(-2px); }
+      .empty-msg { font-size: 12px; color: var(--subtle); font-style: italic; padding: 6px 2px; }
+
+      .legend { display: flex; gap: 14px; flex-wrap: wrap; margin: 8px 0 4px; }
+      .legend .item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+      .legend .sw { width: 11px; height: 11px; border-radius: 3px; }
+      .sw.free { background: var(--info-soft); border: 1px dashed var(--info-border); }
+      .sw.alloc { background: var(--success-soft); border: 1px solid var(--success-border); }
+      .sw.hot { background: var(--warning-soft); border: 1px solid var(--warning-border); }
+
+      .queue { display: flex; flex-wrap: wrap; gap: 7px; margin: 12px 0; }
+      .pill { padding: 5px 11px; border-radius: 999px; font-size: 12px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: var(--elevated); color: var(--muted); font-family: var(--mono); }
+      .pill.next { background: var(--warning-soft); color: var(--warning); border-color: var(--warning-border); }
+      .pill.done { background: var(--success-soft); color: var(--success); border-color: var(--success-border); }
+      .pill.fail { background: var(--danger-soft); color: var(--danger); border-color: var(--danger-border); }
+
+      .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+      .panel .ttl { font-size: 10px; color: var(--subtle); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+      .dot { width: 7px; height: 7px; border-radius: 50%; }
+      #narration { font-size: 12.5px; line-height: 1.6; color: var(--fg); min-height: 42px; }
+      #narration .ok { color: var(--success); font-weight: 600; }
+      #narration .bad { color: var(--danger); font-weight: 600; }
+      #narration .em { color: var(--accent); font-weight: 600; }
+      #narration code { font-family: var(--mono); background: var(--elevated); padding: 1px 4px; border-radius: 4px; font-size: 11.5px; }
+
+      .controls { display: flex; gap: 8px; align-items: center; }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; padding: 9px 13px; transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.10); background: var(--accent); }
+      button.ghost { background: transparent; }
+      .counter { margin-left: auto; font: 12px var(--mono); color: var(--muted); }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+    </style>
+  </head>
+  <body>
+    <h2 class="sr-only">Slab allocation: each object type gets its own cache of slabs, each slab divided into fixed-size slots. Allocation finds a free slot in O(1), slabs transition between empty, partial and full, and fully-free slabs are reclaimed.</h2>
+    <div class="container">
+      <div class="stats">
+        <div class="stat"><div class="lbl">Objects live</div><div class="val" id="s-obj">0</div></div>
+        <div class="stat"><div class="lbl">Slabs in use</div><div class="val" id="s-slabs">0</div></div>
+        <div class="stat"><div class="lbl">Memory committed</div><div class="val" id="s-mem">0B</div></div>
+        <div class="stat frag"><div class="lbl">External frag</div><div class="val" id="s-frag">0B</div></div>
+      </div>
+
+      <div class="tabs" id="tabs">
+        <button class="tab active" data-scn="mixed">1 · Two object types</button>
+        <button class="tab" data-scn="reclaim">2 · Grow &amp; reclaim</button>
+      </div>
+
+      <div id="caches"></div>
+
+      <div class="legend">
+        <div class="item"><span class="sw free"></span>Free slot</div>
+        <div class="item"><span class="sw alloc"></span>Allocated slot</div>
+        <div class="item"><span class="sw hot"></span>Active target</div>
+      </div>
+
+      <div class="queue" id="queue"></div>
+
+      <div class="panel">
+        <div class="ttl"><span class="dot" id="ph-dot"></span><span id="ph-lbl">step</span></div>
+        <div id="narration"></div>
+      </div>
+
+      <div class="controls">
+        <button id="prev"><i class="ti ti-arrow-left"></i>Prev</button>
+        <button id="next" class="primary">Next step<i class="ti ti-arrow-right"></i></button>
+        <button id="auto" class="ghost"><i class="ti ti-player-play"></i>Auto</button>
+        <button id="restart" class="ghost"><i class="ti ti-refresh"></i>Restart</button>
+        <span class="counter" id="counter">Step 1</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        function postHeight() { const h = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight); parent.postMessage({ type: "prototype:height", height: h }, "*"); }
+        if (window.ResizeObserver) new ResizeObserver(postHeight).observe(document.body);
+        window.addEventListener("load", postHeight);
+
+        const $ = (id) => document.getElementById(id);
+        const CACHES = [
+          { key: "file", name: "file_cache", obj: 64, slots: 6, prefix: "F" },
+          { key: "task", name: "task_cache", obj: 128, slots: 4, prefix: "T" },
+        ];
+
+        const SCN = {
+          mixed: {
+            ops: [
+              { t: "alloc", c: "file" }, { t: "alloc", c: "file" }, { t: "alloc", c: "task" },
+              { t: "alloc", c: "file" }, { t: "alloc", c: "task" }, { t: "alloc", c: "file" },
+              { t: "alloc", c: "file" }, { t: "alloc", c: "file" }, { t: "alloc", c: "file" },
+              { t: "free", id: "F3" }, { t: "free", id: "T1" }, { t: "free", id: "T2" }, { t: "alloc", c: "file" },
+            ],
+            intro: "<b>Setup.</b> Two caches: <code>file_cache</code> (64B objects, 6 slots/slab) and <code>task_cache</code> (128B, 4 slots/slab). Each cache hands out fixed-size slots — allocation is just 'grab a free slot,' an <span class='em'>O(1)</span> operation with no size search and no external fragmentation.",
+          },
+          reclaim: {
+            ops: [
+              { t: "alloc", c: "file" }, { t: "alloc", c: "file" }, { t: "alloc", c: "file" },
+              { t: "alloc", c: "file" }, { t: "alloc", c: "file" }, { t: "alloc", c: "file" },
+              { t: "alloc", c: "file" },
+              { t: "free", id: "F1" }, { t: "free", id: "F2" }, { t: "free", id: "F3" },
+              { t: "free", id: "F4" }, { t: "free", id: "F5" }, { t: "free", id: "F6" },
+            ],
+            intro: "<b>Slab lifecycle.</b> Fill <code>file_cache</code> past one slab so a second is created, then free a whole slab's worth of objects. Watch a slab go EMPTY → PARTIAL → FULL on the way up, and get <span class='em'>reclaimed</span> to the OS when it empties out again.",
+          },
+        };
+
+        function build(scnKey) {
+          const scn = SCN[scnKey];
+          const steps = [];
+          let caches = {}; CACHES.forEach((d) => { caches[d.key] = { ...d, slabs: [], objN: 0, slabN: 0, slabSize: d.obj * d.slots }; });
+          let ops = scn.ops.map((o) => ({ ...o }));
+
+          const stateOf = (slab, def) => { const u = slab.slots.filter((s) => s).length; return u === 0 ? "empty" : u === def.slots ? "full" : "partial"; };
+          const snap = (o) => steps.push({
+            caches: JSON.parse(JSON.stringify(Object.fromEntries(CACHES.map((d) => [d.key, { slabs: caches[d.key].slabs }])))),
+            ops: ops.map((x) => ({ ...x })), hot: o.hot || null, phase: o.phase, narr: o.narr,
+          });
+
+          snap({ phase: "init", narr: scn.intro });
+
+          for (let oi = 0; oi < ops.length; oi++) {
+            const op = ops[oi];
+            if (op.t === "alloc") {
+              const c = caches[op.c], def = CACHES.find((d) => d.key === op.c);
+              c.objN++; const id = def.prefix + c.objN; op.id = id;
+              snap({ phase: "request", narr: "<b>" + id + "</b> wants a slot in <code>" + def.name + "</code> (" + def.obj + "B). The cache keeps slabs of " + def.slots + " ready-made slots." });
+              let slab = c.slabs.find((s) => { const u = s.slots.filter(Boolean).length; return u > 0 && u < def.slots; });
+              if (slab) snap({ phase: "search", hot: { key: op.c, slab: slab.n }, narr: "A <b>partial</b> slab (slab " + slab.n + ") already has a free slot — use it. No new memory needed." });
+              else {
+                slab = c.slabs.find((s) => s.slots.every((x) => !x));
+                if (slab) snap({ phase: "search", hot: { key: op.c, slab: slab.n }, narr: "No partial slab, but an <b>empty</b> slab is on hand (slab " + slab.n + "). Reuse it." });
+                else {
+                  c.slabN++; slab = { n: c.slabN, slots: Array(def.slots).fill(null) }; c.slabs.push(slab);
+                  snap({ phase: "grow", hot: { key: op.c, slab: slab.n }, narr: "Every slab is full (or none exist). Ask the page allocator for a fresh slab — <b>" + slab.slots.length * def.obj + "B</b> = " + def.slots + " × " + def.obj + "B. New slab " + slab.n + " starts <b>EMPTY</b>." });
+                }
+              }
+              const si = slab.slots.findIndex((x) => !x);
+              slab.slots[si] = id; op.status = "done";
+              snap({ phase: "place", hot: { key: op.c, slab: slab.n, slot: si }, narr: "<b>" + id + "</b> drops into slab " + slab.n + ", slot " + si + ". Slab is now <b>" + stateOf(slab, def).toUpperCase() + "</b> (" + slab.slots.filter(Boolean).length + "/" + def.slots + "). <span class='ok'>O(1)</span>, zero waste." });
+            } else {
+              let found = null;
+              for (const k of Object.keys(caches)) for (const s of caches[k].slabs) { const si = s.slots.indexOf(op.id); if (si !== -1) found = { key: k, slab: s, si }; }
+              if (!found) { op.status = "failed"; snap({ phase: "fail", narr: "<b>" + op.id + "</b> is not allocated anywhere." }); continue; }
+              const def = CACHES.find((d) => d.key === found.key);
+              snap({ phase: "freeing", hot: { key: found.key, slab: found.slab.n, slot: found.si }, narr: "Freeing <b>" + op.id + "</b> from <code>" + def.name + "</code>, slab " + found.slab.n + ", slot " + found.si + "." });
+              found.slab.slots[found.si] = null; op.status = "done";
+              const stt = stateOf(found.slab, def);
+              if (stt === "empty") {
+                snap({ phase: "freeing", hot: { key: found.key, slab: found.slab.n }, narr: "That was the slab's last object — slab " + found.slab.n + " is now <b>EMPTY</b>." });
+                caches[found.key].slabs = caches[found.key].slabs.filter((s) => s !== found.slab);
+                snap({ phase: "reclaim", narr: "Empty slab <span class='em'>reclaimed</span> to the OS (" + def.slots * def.obj + "B returned). Real allocators often keep a few empties cached for fast reuse; we reclaim immediately to show the transition." });
+              } else {
+                snap({ phase: "place", hot: { key: found.key, slab: found.slab.n }, narr: "Slot marked free. Slab " + found.slab.n + " is now <b>" + stt.toUpperCase() + "</b> (" + found.slab.slots.filter(Boolean).length + "/" + def.slots + "). The freed slot waits to be reused — <span class='ok'>no fragmentation</span>." });
+              }
+            }
+          }
+
+          const lesson = scnKey === "reclaim"
+            ? "A slab climbed empty → partial → full as objects landed, a second slab absorbed the overflow, and once a slab's objects were all freed it returned its memory to the OS. Slabs are the unit of growth <i>and</i> reclaim."
+            : "Every operation was O(1) — just claim or release a slot — and <span class='ok'>external fragmentation stayed at 0B</span>. The price: each object size needs its own pre-configured cache, so slab allocation suits kernels churning many same-typed objects, not arbitrary-sized requests.";
+          snap({ phase: "done", narr: "<b>Run complete.</b> " + lesson });
+          return steps;
+        }
+
+        const PHASE = {
+          init: { lbl: "Setup", color: "#9099a8" },
+          request: { lbl: "Object requested", color: "#5e9ff6" },
+          search: { lbl: "Find a slot", color: "#5e9ff6" },
+          grow: { lbl: "New slab", color: "#f0b568" },
+          place: { lbl: "Slot assigned", color: "#5cc66f" },
+          freeing: { lbl: "Freeing", color: "#f0b568" },
+          reclaim: { lbl: "Slab reclaimed", color: "#fb863a" },
+          fail: { lbl: "Failed", color: "#f06868" },
+          done: { lbl: "Done", color: "#5cc66f" },
+        };
+
+        let cur = "mixed", steps = build(cur), idx = 0, timer = null;
+
+        function render() {
+          const st = steps[idx];
+          const wrap = $("caches"); wrap.innerHTML = "";
+          CACHES.forEach((def) => {
+            const slabs = st.caches[def.key].slabs;
+            const sec = document.createElement("div"); sec.className = "cache";
+            const head = document.createElement("div"); head.className = "cache-head";
+            head.innerHTML = '<span class="cache-name">' + def.name + '</span><span class="cache-info">' + def.obj + "B/obj · " + def.slots + " slots/slab · " + def.obj * def.slots + "B/slab</span>";
+            sec.appendChild(head);
+            if (!slabs.length) { const e = document.createElement("div"); e.className = "empty-msg"; e.textContent = "No slabs yet — the next request creates one."; sec.appendChild(e); }
+            slabs.forEach((slab) => {
+              const used = slab.slots.filter(Boolean).length;
+              const stt = used === 0 ? "empty" : used === def.slots ? "full" : "partial";
+              const hotSlab = st.hot && st.hot.key === def.key && st.hot.slab === slab.n;
+              const row = document.createElement("div"); row.className = "slab" + (hotSlab ? " hot" : "");
+              const sh = document.createElement("div"); sh.className = "slab-head";
+              sh.innerHTML = "<span>slab " + slab.n + " · " + used + "/" + def.slots + " used</span><span class='state " + stt + "'>" + stt.toUpperCase() + "</span>";
+              row.appendChild(sh);
+              const sl = document.createElement("div"); sl.className = "slots";
+              slab.slots.forEach((v, i) => {
+                const cell = document.createElement("div");
+                const hotSlot = hotSlab && st.hot.slot === i;
+                cell.className = "slot " + (v ? "alloc" : "free") + (hotSlot ? " hot" : "");
+                cell.textContent = v || "";
+                sl.appendChild(cell);
+              });
+              row.appendChild(sl); sec.appendChild(row);
+            });
+            wrap.appendChild(sec);
+          });
+
+          const qe = $("queue"); qe.innerHTML = "";
+          const nextIdx = st.ops.findIndex((o) => !o.status);
+          st.ops.forEach((o, i) => {
+            const pill = document.createElement("div");
+            let cls = "pill", ic = "ti-clock";
+            if (o.status === "done") { cls += " done"; ic = "ti-check"; }
+            else if (o.status === "failed") { cls += " fail"; ic = "ti-x"; }
+            else if (i === nextIdx) { cls += " next"; ic = o.t === "alloc" ? "ti-arrow-right" : "ti-trash"; }
+            pill.className = cls;
+            const lbl = o.t === "alloc" ? ("alloc " + CACHES.find((d) => d.key === o.c).name + (o.id ? " → " + o.id : "")) : ("free " + o.id);
+            pill.innerHTML = '<i class="ti ' + ic + '"></i>' + lbl;
+            qe.appendChild(pill);
+          });
+
+          let obj = 0, slabN = 0, mem = 0;
+          CACHES.forEach((def) => { const ss = st.caches[def.key].slabs; slabN += ss.length; mem += ss.length * def.obj * def.slots; ss.forEach((s) => obj += s.slots.filter(Boolean).length); });
+          $("s-obj").textContent = obj;
+          $("s-slabs").textContent = slabN;
+          $("s-mem").textContent = mem + "B";
+          $("s-frag").textContent = "0B";
+
+          const ph = PHASE[st.phase];
+          $("ph-dot").style.background = ph.color;
+          $("ph-lbl").textContent = ph.lbl; $("ph-lbl").style.color = ph.color;
+          $("narration").innerHTML = st.narr;
+          $("counter").textContent = "Step " + (idx + 1) + " / " + steps.length;
+          $("prev").disabled = idx === 0;
+          $("next").disabled = idx === steps.length - 1;
+        }
+
+        function stopAuto() { if (timer) { clearInterval(timer); timer = null; $("auto").innerHTML = '<i class="ti ti-player-play"></i>Auto'; } }
+        function go(n) { const max = steps.length - 1; idx = Math.max(0, Math.min(max, n)); render(); if (idx === max) stopAuto(); }
+        $("next").onclick = () => { stopAuto(); go(idx + 1); };
+        $("prev").onclick = () => { stopAuto(); go(idx - 1); };
+        $("restart").onclick = () => { stopAuto(); go(0); };
+        $("auto").onclick = () => { if (timer) { stopAuto(); return; } if (idx === steps.length - 1) idx = 0; $("auto").innerHTML = '<i class="ti ti-player-pause"></i>Pause'; timer = setInterval(() => go(idx + 1), 1150); };
+        document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => {
+          stopAuto(); document.querySelectorAll(".tab").forEach((x) => x.classList.remove("active"));
+          b.classList.add("active"); cur = b.dataset.scn; steps = build(cur); idx = 0; render();
+        }));
+        render();
+      })();
+    </script>
+  </body>
+</html>

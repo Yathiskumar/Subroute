@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Garbage Collection — Incremental</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --success-soft: rgba(92,198,111,0.14); --success-border: rgba(92,198,111,0.40);
+        --danger: #f06868; --danger-soft: rgba(240,104,104,0.14); --danger-border: rgba(240,104,104,0.42);
+        --info: #5e9ff6; --info-soft: rgba(94,159,246,0.14); --info-border: rgba(94,159,246,0.40);
+        --warning: #f0b568; --warning-soft: rgba(240,181,104,0.14); --warning-border: rgba(240,181,104,0.40);
+        --purple: #9b8bff;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body { padding: 14px 16px 16px; background-image: linear-gradient(to right, rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.025) 1px, transparent 1px); background-size: 40px 40px; }
+      .container { max-width: 980px; margin: 0 auto; }
+
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+      .stat .lbl { font-size: 11px; color: var(--muted); }
+      .stat .val { font-size: 18px; font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
+      .stat.gray { background: rgba(144,153,168,0.10); border-color: rgba(144,153,168,0.35); }
+      .stat.gray .lbl { color: #b6bdc9; }
+      .stat .val.phase { font-size: 14px; }
+
+      .tabs { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+      .tab { background: var(--elevated); color: var(--muted); border: 1px solid var(--border); border-radius: 999px; cursor: pointer; padding: 6px 13px; font: 500 12px/1 var(--sans); transition: all 150ms ease; white-space: nowrap; }
+      .tab:hover { border-color: var(--border-strong); color: var(--fg); }
+      .tab.active { background: var(--info-soft); color: var(--info); border-color: var(--info-border); }
+
+      .legend { display: flex; gap: 13px; flex-wrap: wrap; margin-bottom: 8px; padding: 0 2px; }
+      .legend .item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+      .legend .dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid; }
+      .dot.white { background: #e8e4dc; border-color: #888780; }
+      .dot.gray { background: #5b6270; border-color: #9099a8; }
+      .dot.black { background: #07080a; border-color: #4a5160; }
+      .legend .sw { width: 18px; height: 9px; border-radius: 2px; border: 1px solid; }
+      .sw.mut { background: rgba(155,139,255,0.18); border-color: var(--purple); }
+      .sw.gc { background: #3a4150; border-color: #7d8694; }
+      .sw.bar { background: var(--warning-soft); border-color: var(--warning); }
+
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 6px; margin-bottom: 10px; }
+      .stage svg { width: 100%; height: 380px; display: block; }
+
+      .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+      .panel .ttl { font-size: 10px; color: var(--subtle); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 6px; }
+      #narration { font-size: 12.5px; line-height: 1.6; color: var(--fg); min-height: 40px; }
+      #narration .em { color: var(--accent); font-weight: 600; }
+      #narration b { color: var(--fg); }
+
+      .controls { display: flex; gap: 8px; align-items: center; }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; padding: 9px 13px; transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.10); background: var(--accent); }
+      button.ghost { background: transparent; }
+      .counter { margin-left: auto; font: 12px var(--mono); color: var(--muted); }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+    </style>
+  </head>
+  <body>
+    <h2 class="sr-only">Incremental garbage collection: tri-color marking split into small slices interleaved with the program on a timeline, with a write barrier preserving correctness across the gaps.</h2>
+    <div class="container">
+      <div class="stats">
+        <div class="stat"><div class="lbl">White</div><div class="val" id="s-white">0</div></div>
+        <div class="stat gray"><div class="lbl">Gray (queue)</div><div class="val" id="s-gray">0</div></div>
+        <div class="stat"><div class="lbl">Black</div><div class="val" id="s-black">0</div></div>
+        <div class="stat"><div class="lbl">Now running</div><div class="val phase" id="s-phase">idle</div></div>
+      </div>
+
+      <div class="tabs" id="tabs">
+        <button class="tab active" data-scn="basic">1 · Interleaved slices</button>
+        <button class="tab" data-scn="barrier">2 · Mutator + barrier</button>
+      </div>
+
+      <div class="legend">
+        <div class="item"><span class="dot white"></span>white</div>
+        <div class="item"><span class="dot gray"></span>gray</div>
+        <div class="item"><span class="dot black"></span>black</div>
+        <div class="item"><span class="sw mut"></span>mutator slice</div>
+        <div class="item"><span class="sw gc"></span>GC slice</div>
+        <div class="item"><span class="sw bar"></span>barrier</div>
+      </div>
+
+      <div class="stage">
+        <svg viewBox="0 0 720 376" role="img" aria-label="Incremental GC visualization with timeline">
+          <defs>
+            <marker id="ic-e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#7d8694"/></marker>
+            <marker id="ic-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#f0b568"/></marker>
+            <marker id="ic-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#f06868"/></marker>
+          </defs>
+          <text x="30" y="34" font-size="10" fill="#6b7280" letter-spacing="1.4">HEAP</text>
+          <text x="30" y="232" font-size="10" fill="#6b7280" letter-spacing="1.4">GRAY QUEUE</text>
+          <text x="30" y="296" font-size="10" fill="#6b7280" letter-spacing="1.4">TIMELINE  (left → right = time)</text>
+          <g id="phase-badge"></g>
+          <g id="refs"></g>
+          <g id="heap"></g>
+          <g id="queue"></g>
+          <g id="timeline"></g>
+          <g id="now"></g>
+        </svg>
+      </div>
+
+      <div class="panel">
+        <div class="ttl">What's happening</div>
+        <div id="narration"></div>
+      </div>
+
+      <div class="controls">
+        <button id="prev"><i class="ti ti-arrow-left"></i>Prev</button>
+        <button id="next" class="primary">Next step<i class="ti ti-arrow-right"></i></button>
+        <button id="auto" class="ghost"><i class="ti ti-player-play"></i>Auto</button>
+        <button id="restart" class="ghost"><i class="ti ti-refresh"></i>Restart</button>
+        <span class="counter" id="counter">Step 1</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        function postHeight() { const h = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight); parent.postMessage({ type: "prototype:height", height: h }, "*"); }
+        if (window.ResizeObserver) new ResizeObserver(postHeight).observe(document.body);
+        window.addEventListener("load", postHeight);
+
+        const NS = "http://www.w3.org/2000/svg";
+        const svg = (t, a, txt) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); if (txt != null) e.textContent = txt; return e; };
+
+        const POS = { A: { x: 140, y: 96 }, B: { x: 250, y: 70 }, C: { x: 250, y: 140 }, D: { x: 360, y: 70 }, E: { x: 360, y: 140 }, F: { x: 470, y: 105 }, G: { x: 580, y: 105 } };
+        const EDGES = [["A", "B"], ["A", "C"], ["B", "D"], ["C", "E"], ["D", "F"], ["E", "F"], ["F", "G"]];
+        const G = (type, dur, label) => ({ type, dur, label });
+
+        const SCN = {
+          basic: [
+            { colors: { A: "w", B: "w", C: "w", D: "w", E: "w", F: "w", G: "w" }, queue: [], timeline: [], now: null, narr: "<b>INITIAL.</b> Heap has 7 objects, all white. The program is running; GC hasn't started. Timeline is empty." },
+            { colors: { A: "g", B: "w", C: "w", D: "w", E: "w", F: "w", G: "w" }, queue: ["A"], timeline: [G("gc", 1, "init")], now: "gc", narr: "<b>GC SLICE 1 (init).</b> Scan roots, color A gray, enqueue. Then hand control back to the mutator." },
+            { colors: { A: "g", B: "w", C: "w", D: "w", E: "w", F: "w", G: "w" }, queue: ["A"], timeline: [G("gc", 1, "init"), G("mut", 3, "program")], now: "mut", narr: "<b>MUTATOR SLICE.</b> The program runs for a few ms — computing, allocating. No pointer mutations affect the gray set here. Its time budget ends." },
+            { colors: { A: "b", B: "g", C: "g", D: "w", E: "w", F: "w", G: "w" }, queue: ["B", "C"], timeline: [G("gc", 1, "init"), G("mut", 3, "program"), G("gc", 2, "mark")], now: "gc", narr: "<b>GC SLICE 2.</b> Process A: gray B and C, blacken A. Budget used (2 items). Yield." },
+            { colors: { A: "b", B: "g", C: "g", D: "w", E: "w", F: "w", G: "w" }, queue: ["B", "C"], timeline: [G("gc", 1, "init"), G("mut", 3, "program"), G("gc", 2, "mark"), G("mut", 3, "program")], now: "mut", narr: "<b>MUTATOR SLICE.</b> Program runs again. Time passes; marking is paused exactly where it left off." },
+            { colors: { A: "b", B: "b", C: "g", D: "g", E: "w", F: "w", G: "w" }, queue: ["C", "D"], timeline: [G("gc", 1, "init"), G("mut", 3, "program"), G("gc", 2, "mark"), G("mut", 3, "program"), G("gc", 2, "mark")], now: "gc", narr: "<b>GC SLICE 3.</b> Process B: gray D, blacken B. Yield." },
+            { colors: { A: "b", B: "b", C: "b", D: "g", E: "g", F: "w", G: "w" }, queue: ["D", "E"], timeline: [G("gc", 1, "init"), G("mut", 3, "program"), G("gc", 2, "mark"), G("mut", 3, "program"), G("gc", 2, "mark"), G("mut", 3, "program"), G("gc", 2, "mark")], now: "gc", narr: "After another mutator slice, <b>GC SLICE 4.</b> Process C: gray E, blacken C." },
+            { colors: { A: "b", B: "b", C: "b", D: "b", E: "b", F: "g", G: "w" }, queue: ["F"], timeline: [G("gc", 1, "init"), G("mut", 3, "program"), G("gc", 2, "mark"), G("mut", 3, "program"), G("gc", 2, "mark"), G("mut", 3, "program"), G("gc", 2, "mark"), G("mut", 2, "program"), G("gc", 3, "mark")], now: "gc", narr: "<b>GC SLICE 5.</b> Process D and E: D→F gray, E→F already gray (skip), both blacken. Yield." },
+            { colors: { A: "b", B: "b", C: "b", D: "b", E: "b", F: "b", G: "g" }, queue: ["G"], timeline: [G("gc", 1, "init"), G("mut", 3, "program"), G("gc", 2, "mark"), G("mut", 3, "program"), G("gc", 2, "mark"), G("mut", 3, "program"), G("gc", 2, "mark"), G("mut", 2, "program"), G("gc", 3, "mark"), G("mut", 2, "program"), G("gc", 2, "mark")], now: "gc", narr: "<b>GC SLICE 6.</b> Process F: gray G, blacken F." },
+            { colors: { A: "b", B: "b", C: "b", D: "b", E: "b", F: "b", G: "b" }, queue: [], timeline: [G("gc", 1, "init"), G("mut", 3, "program"), G("gc", 2, "mark"), G("mut", 3, "program"), G("gc", 2, "mark"), G("mut", 3, "program"), G("gc", 2, "mark"), G("mut", 2, "program"), G("gc", 3, "mark"), G("mut", 2, "program"), G("gc", 2, "mark"), G("gc", 1, "final")], now: "gc", narr: "<b>FINAL SLICE.</b> Process G (no pointers) → black. Queue empty → marking complete. The total GC time was spread across 6 small slices — <span class='em'>no single pause exceeded ~3 time units.</span>" },
+          ],
+          barrier: [
+            { colors: { A: "b", B: "b", C: "g", D: "w", E: "w", F: "w", G: "w" }, queue: ["C"], timeline: [G("gc", 1, "init"), G("mut", 3, "program"), G("gc", 2, "mark")], now: "gc", narr: "GC is partway through marking: A and B black, C gray (waiting), D–G white. The mutator is about to take its slice…" },
+            { colors: { A: "b", B: "b", C: "g", D: "w", E: "w", F: "w", G: "w" }, queue: ["C"], timeline: [G("gc", 1, "init"), G("mut", 3, "program"), G("gc", 2, "mark"), G("mut", 1, "program")], now: "mut", mutation: { from: "B", to: "D" }, narr: "<b>MUTATOR SLICE:</b> the program runs <code>B.next = D</code>. <span class='em'>Problem:</span> B is black, D is white — without help, D would be missed when GC resumes." },
+            { colors: { A: "b", B: "b", C: "g", D: "g", E: "w", F: "w", G: "w" }, queue: ["C", "D"], timeline: [G("gc", 1, "init"), G("mut", 3, "program"), G("gc", 2, "mark"), G("mut", 1, "program"), G("barrier", 0.6, "barrier")], now: "barrier", mutation: { from: "B", to: "D" }, barrier: true, narr: "<b>WRITE BARRIER FIRES</b> inside the mutator slice. It intercepts the store, sees D is white, colors it gray and enqueues it. A few instructions of overhead — invariant preserved." },
+            { colors: { A: "b", B: "b", C: "g", D: "g", E: "w", F: "w", G: "w" }, queue: ["C", "D"], timeline: [G("gc", 1, "init"), G("mut", 3, "program"), G("gc", 2, "mark"), G("mut", 1, "program"), G("barrier", 0.6, "barrier"), G("mut", 1, "program")], now: "mut", narr: "The mutator finishes its slice. The barrier handled the write transparently — the program never noticed." },
+            { colors: { A: "b", B: "b", C: "b", D: "g", E: "g", F: "w", G: "w" }, queue: ["D", "E"], timeline: [G("gc", 1, "init"), G("mut", 3, "program"), G("gc", 2, "mark"), G("mut", 1, "program"), G("barrier", 0.6, "barrier"), G("mut", 1, "program"), G("gc", 2, "mark")], now: "gc", narr: "<b>GC SLICE resumes.</b> Process C: gray E, blacken C. <span class='em'>D is still in the queue thanks to the barrier</span> — it won't be missed." },
+            { colors: { A: "b", B: "b", C: "b", D: "b", E: "b", F: "g", G: "w" }, queue: ["F"], timeline: [G("gc", 1, "init"), G("mut", 3, "program"), G("gc", 2, "mark"), G("mut", 1, "program"), G("barrier", 0.6, "barrier"), G("mut", 1, "program"), G("gc", 2, "mark"), G("mut", 2, "program"), G("gc", 3, "mark")], now: "gc", narr: "Marking continues. D and E processed → D→F gray, both blacken. The barrier-rescued D is now safely black." },
+            { colors: { A: "b", B: "b", C: "b", D: "b", E: "b", F: "b", G: "b" }, queue: [], timeline: [G("gc", 1, "init"), G("mut", 3, "program"), G("gc", 2, "mark"), G("mut", 1, "program"), G("barrier", 0.6, "barrier"), G("mut", 1, "program"), G("gc", 2, "mark"), G("mut", 2, "program"), G("gc", 3, "mark"), G("gc", 1, "final")], now: "gc", narr: "<b>DONE.</b> F and G processed → all black, including the D the barrier caught. The mutator ran for most of wall-clock time; the collector ran in tiny bursts. <span class='em'>No big pause, no lost object.</span>" },
+          ],
+        };
+
+        let cur = "basic", idx = 0, timer = null;
+        const $ = (id) => document.getElementById(id);
+
+        const COL = { w: { fill: "#e8e4dc", stroke: "#888780", text: "#1a1c20" }, g: { fill: "#5b6270", stroke: "#aab2bf", text: "#f3f5f8" }, b: { fill: "#07080a", stroke: "#4a5160", text: "#e8e4dc" } };
+        const SLICE = { gc: { fill: "#3a4150", stroke: "#7d8694", text: "#cdd4de" }, mut: { fill: "rgba(155,139,255,0.20)", stroke: "#9b8bff", text: "#c3b8ff" }, barrier: { fill: "rgba(240,181,104,0.20)", stroke: "#f0b568", text: "#f0b568" } };
+        const ACT = { gc: { lbl: "GC slice", color: "#aab2bf" }, mut: { lbl: "Mutator", color: "#9b8bff" }, barrier: { lbl: "Barrier", color: "#f0b568" }, null: { lbl: "Idle", color: "#9099a8" } };
+
+        function edge(layer, f, t, color, marker) {
+          const dx = t.x - f.x, dy = t.y - f.y, L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L;
+          layer.appendChild(svg("line", { x1: f.x + ux * 20, y1: f.y + uy * 20, x2: t.x - ux * 21, y2: t.y - uy * 21, stroke: color, "stroke-width": 1.3, "marker-end": marker, opacity: 0.75 }));
+        }
+
+        function render() {
+          const steps = SCN[cur], step = steps[idx];
+          ["phase-badge", "refs", "heap", "queue", "timeline", "now"].forEach((g) => ($(g).innerHTML = ""));
+
+          EDGES.forEach(([a, b]) => edge($("refs"), POS[a], POS[b], "#3a4150", "url(#ic-e)"));
+          if (step.mutation) {
+            const f = POS[step.mutation.from], t = POS[step.mutation.to], mx = (f.x + t.x) / 2, my = (f.y + t.y) / 2 + 46, amber = !!step.barrier;
+            $("refs").appendChild(svg("path", { d: `M ${f.x} ${f.y + 19} Q ${mx} ${my} ${t.x} ${t.y + 19}`, fill: "none", stroke: amber ? "#f0b568" : "#f06868", "stroke-width": 2.2, "marker-end": amber ? "url(#ic-amber)" : "url(#ic-red)" }));
+            $("refs").appendChild(svg("text", { x: mx, y: my + 15, "text-anchor": "middle", "font-size": 10.5, "font-weight": 700, fill: amber ? "#f0b568" : "#f06868", "font-family": "var(--mono)" }, step.mutation.from + ".next = " + step.mutation.to));
+          }
+          Object.keys(POS).forEach((id) => {
+            const p = POS[id], c = COL[step.colors[id] || "w"];
+            $("heap").appendChild(svg("circle", { cx: p.x, cy: p.y, r: 19, fill: c.fill, stroke: c.stroke, "stroke-width": 1.6 }));
+            $("heap").appendChild(svg("text", { x: p.x, y: p.y + 5, "text-anchor": "middle", "font-size": 13, "font-weight": 700, fill: c.text }, id));
+          });
+
+          // gray queue
+          $("queue").appendChild(svg("rect", { x: 30, y: 240, width: 660, height: 30, rx: 6, fill: "#101216", stroke: "#2d333d", "stroke-width": 1 }));
+          if (!step.queue.length) $("queue").appendChild(svg("text", { x: 42, y: 260, "font-size": 11, fill: "#6b7280", "font-style": "italic", "font-family": "var(--mono)" }, "empty (marking complete)"));
+          else step.queue.forEach((id, i) => {
+            const x = 42 + i * 50;
+            $("queue").appendChild(svg("rect", { x, y: 245, width: 40, height: 20, rx: 4, fill: "#5b6270", stroke: "#aab2bf", "stroke-width": 1 }));
+            $("queue").appendChild(svg("text", { x: x + 20, y: 259, "text-anchor": "middle", "font-size": 12, "font-weight": 700, fill: "#f3f5f8" }, id));
+          });
+
+          // timeline
+          const tlX = 30, tlY = 308, tlH = 40, tlW = 660;
+          $("timeline").appendChild(svg("rect", { x: tlX, y: tlY, width: tlW, height: tlH, rx: 6, fill: "#101216", stroke: "#2d333d", "stroke-width": 1 }));
+          const total = step.timeline.reduce((s, x) => s + x.dur, 0);
+          if (total === 0) { $("timeline").appendChild(svg("text", { x: tlX + 12, y: tlY + 24, "font-size": 11, fill: "#6b7280", "font-style": "italic", "font-family": "var(--mono)" }, "no slices yet")); }
+          else {
+            // Fill the bar to the current total so slices are as wide as possible,
+            // with a floor so a lone slice isn't stretched absurdly wide.
+            const unit = tlW / Math.max(total, 14);
+            const SHORT = { program: "prog", barrier: "bar", final: "end" };
+            const FS = 10;
+            let cx = tlX;
+            step.timeline.forEach((s, i) => {
+              const w = s.dur * unit, st = SLICE[s.type], last = i === step.timeline.length - 1;
+              $("timeline").appendChild(svg("rect", { x: cx + 1, y: tlY + 5, width: Math.max(w - 2, 3), height: tlH - 10, rx: 3, fill: st.fill, stroke: st.stroke, "stroke-width": last ? 2 : 1 }));
+              // Only label a slice when the text fully fits inside it (no overlap).
+              const label = SHORT[s.label] || s.label;
+              const textW = label.length * FS * 0.6;
+              if (textW + 6 <= w) $("timeline").appendChild(svg("text", { x: cx + w / 2, y: tlY + 25, "text-anchor": "middle", "font-size": FS, "font-weight": 700, fill: st.text, "font-family": "var(--mono)" }, label));
+              cx += w;
+            });
+            $("now").appendChild(svg("line", { x1: cx, y1: tlY - 6, x2: cx, y2: tlY + tlH + 5, stroke: "#f06868", "stroke-width": 2 }));
+            $("now").appendChild(svg("text", { x: Math.min(cx, tlX + tlW - 12), y: tlY - 9, "text-anchor": "middle", "font-size": 10, "font-weight": 700, fill: "#f06868", "font-family": "var(--mono)" }, "now"));
+          }
+
+          // phase badge
+          const a = ACT[step.now] || ACT.null;
+          $("phase-badge").appendChild(svg("rect", { x: 528, y: 8, width: 160, height: 22, rx: 11, fill: "transparent", stroke: a.color, "stroke-width": 1, opacity: 0.6 }));
+          $("phase-badge").appendChild(svg("circle", { cx: 543, cy: 19, r: 3.5, fill: a.color }));
+          $("phase-badge").appendChild(svg("text", { x: 555, y: 23, "font-size": 11, "font-weight": 600, fill: a.color }, a.lbl + " running"));
+
+          // narration + stats
+          $("narration").innerHTML = step.narr;
+          const vals = Object.values(step.colors);
+          $("s-white").textContent = vals.filter((c) => c === "w").length;
+          $("s-gray").textContent = vals.filter((c) => c === "g").length;
+          $("s-black").textContent = vals.filter((c) => c === "b").length;
+          const pe = $("s-phase"); pe.textContent = a.lbl; pe.style.color = a.color;
+          $("counter").textContent = `Step ${idx + 1} / ${steps.length}`;
+          $("prev").disabled = idx === 0;
+          $("next").disabled = idx === steps.length - 1;
+        }
+
+        function stopAuto() { if (timer) { clearInterval(timer); timer = null; $("auto").innerHTML = '<i class="ti ti-player-play"></i>Auto'; } }
+        function go(n) { const max = SCN[cur].length - 1; idx = Math.max(0, Math.min(max, n)); render(); if (idx === max) stopAuto(); }
+        $("next").onclick = () => { stopAuto(); go(idx + 1); };
+        $("prev").onclick = () => { stopAuto(); go(idx - 1); };
+        $("restart").onclick = () => { stopAuto(); go(0); };
+        $("auto").onclick = () => { if (timer) { stopAuto(); return; } if (idx === SCN[cur].length - 1) idx = 0; $("auto").innerHTML = '<i class="ti ti-player-pause"></i>Pause'; timer = setInterval(() => go(idx + 1), 1200); };
+        document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => { stopAuto(); document.querySelectorAll(".tab").forEach((x) => x.classList.remove("active")); b.classList.add("active"); cur = b.dataset.scn; idx = 0; render(); }));
+        render();
+      })();
+    </script>
+  </body>
+</html>
