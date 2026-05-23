@@ -153,16 +153,34 @@ class Cache {
 
   furtherReading: [
     {
-      label: "Jeff Bonwick — The Slab Allocator: An Object-Caching Kernel Memory Allocator (1994)",
-      note: "The original paper that introduced slab allocation in Solaris.",
+      label: "Bonwick — The Slab Allocator: An Object-Caching Kernel Memory Allocator (USENIX 1994)",
+      href: "https://www.usenix.org/conference/usenix-summer-1994-technical-conference/slab-allocator-object-caching-kernel",
+      kind: "paper",
+      note: "The original paper that introduced slab allocation in Solaris — readable and foundational.",
     },
     {
-      label: "Linux kernel — SLUB/SLAB allocator and /proc/slabinfo",
-      note: "How Linux implements per-type object caches; inspect live caches on any running system.",
+      label: "Slab allocation — Wikipedia",
+      href: "https://en.wikipedia.org/wiki/Slab_allocation",
+      kind: "article",
+      note: "Concise overview of caches, slabs, slots, and the empty/partial/full states.",
     },
     {
-      label: "Understanding the Linux Virtual Memory Manager (Mel Gorman) — Ch. 8: Slab Allocator",
-      note: "Detailed walkthrough of caches, slabs, and the empty/partial/full lists.",
+      label: "Understanding the Linux VMM (Mel Gorman) — Ch. 8: Slab Allocator",
+      href: "https://www.kernel.org/doc/gorman/html/understand/understand011.html",
+      kind: "book",
+      note: "Detailed, free walkthrough of caches, slabs, object coloring, and the slab lists.",
+    },
+    {
+      label: "Linux kernel — Short users guide for SLUB",
+      href: "https://docs.kernel.org/mm/slub.html",
+      kind: "docs",
+      note: "Official docs for Linux's default slab allocator (SLUB) — tuning, debugging, and how it differs from the classic SLAB.",
+    },
+    {
+      label: "slabinfo(5) — Linux manual page",
+      href: "https://man7.org/linux/man-pages/man5/slabinfo.5.html",
+      kind: "docs",
+      note: "What `/proc/slabinfo` reports — objsize, objperslab, pagesperslab. Inspect live caches on any running Linux box.",
     },
   ],
 

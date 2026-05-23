@@ -120,16 +120,33 @@ function firstFitAlloc(holes: Hole[], request: number): number | null {
 
   furtherReading: [
     {
-      label: "Knuth, The Art of Computer Programming, Vol. 1 — Dynamic Storage Allocation (§2.5)",
-      note: "The original analysis of first-fit vs. best-fit, including the famous fifty-percent rule.",
+      label: "OSTEP — Free-Space Management (Chapter 17)",
+      href: "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-freespace.pdf",
+      kind: "book",
+      note: "A free, superb chapter from *Operating Systems: Three Easy Pieces* — first/best/worst/next fit, splitting, and coalescing, all with worked examples. Start here.",
     },
     {
       label: "Wilson et al. — Dynamic Storage Allocation: A Survey and Critical Review",
+      href: "https://www.cs.hmc.edu/~oneill/gc-library/Wilson-Alloc-Survey-1995.pdf",
+      kind: "paper",
       note: "The definitive survey; explains why First Fit holds up so well against fancier policies in practice.",
     },
     {
+      label: "Knuth — The Art of Computer Programming, Vol. 1 (§2.5)",
+      href: "https://en.wikipedia.org/wiki/The_Art_of_Computer_Programming",
+      kind: "book",
+      note: "The original analysis of first-fit vs. best-fit, including the famous fifty-percent rule.",
+    },
+    {
+      label: "Memory management (operating systems) — Wikipedia",
+      href: "https://en.wikipedia.org/wiki/Memory_management_(operating_systems)",
+      kind: "article",
+      note: "A quick reference on partition-allocation strategies and external fragmentation.",
+    },
+    {
       label: "Operating System Concepts (Silberschatz) — Contiguous Memory Allocation",
-      note: "Textbook treatment of first/best/worst fit and external fragmentation.",
+      kind: "book",
+      note: "The classic OS textbook's treatment of first/best/worst fit and external fragmentation.",
     },
   ],
 

@@ -146,16 +146,28 @@ class LFU<K, V> {
 
   furtherReading: [
     {
-      label: "Shi, Prasad, Ko (2010) — An O(1) algorithm for implementing the LFU cache eviction scheme",
-      note: "The canonical paper introducing the frequency-bucket trick.",
+      label: "Shah, Mitra & Matani — An O(1) algorithm for implementing the LFU cache eviction scheme",
+      href: "https://arxiv.org/abs/2110.11602",
+      note: "The canonical write-up of the frequency-bucket trick that makes LFU `O(1)`.",
+      kind: "paper",
     },
     {
-      label: "Caffeine — Window TinyLFU",
+      label: "Caffeine — Efficiency (Window TinyLFU)",
+      href: "https://github.com/ben-manes/caffeine/wiki/Efficiency",
       note: "Modern hybrid that pairs a tiny LRU admission window with a frequency sketch — currently the state of the art.",
+      kind: "docs",
     },
     {
-      label: "Redis — LFU eviction policy",
-      note: "Practical write-up of the decaying-counter approach Redis uses.",
+      label: "Redis — Key eviction (LFU policy)",
+      href: "https://redis.io/docs/latest/develop/reference/eviction/",
+      note: "Practical write-up of the decaying Morris-counter approach Redis uses for `allkeys-lfu`.",
+      kind: "docs",
+    },
+    {
+      label: "Wikipedia — Cache replacement policies",
+      href: "https://en.wikipedia.org/wiki/Cache_replacement_policies",
+      note: "Comparison table placing LFU against LRU, ARC, LIRS and the rest.",
+      kind: "article",
     },
   ],
 

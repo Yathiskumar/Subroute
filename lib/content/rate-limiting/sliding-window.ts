@@ -138,11 +138,21 @@ class SlidingWindow {
   furtherReading: [
     {
       label: "Cloudflare — How we built rate limiting capable of scaling to millions of domains",
+      href: "https://blog.cloudflare.com/counting-things-a-lot-of-different-things/",
       note: "Best public description of this algorithm at scale, with accuracy measurements.",
+      kind: "article",
     },
     {
       label: "Figma — An alternative approach to rate limiting",
-      note: "Engineering blog that compares sliding window and GCRA with practical numbers.",
+      href: "https://www.figma.com/blog/an-alternative-approach-to-rate-limiting/",
+      note: "Engineering blog on a homegrown Redis-backed limiter — accurate, simple, space-efficient.",
+      kind: "article",
+    },
+    {
+      label: "Redis — Build rate limiters: fixed window, sliding window, and more",
+      href: "https://redis.io/tutorials/howtos/ratelimiting/",
+      note: "Walks through the two-counter sliding-window-counter pattern with runnable Lua.",
+      kind: "docs",
     },
   ],
 

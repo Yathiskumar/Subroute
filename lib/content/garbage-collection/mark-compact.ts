@@ -163,15 +163,21 @@ class MarkCompactHeap {
   furtherReading: [
     {
       label: "The Garbage Collection Handbook — Mark-Compact (Ch. 3)",
+      href: "https://gchandbook.org/",
       note: "Jones, Hosking & Moss. Compares Lisp2 sliding, two-finger, and threaded compaction in depth.",
+      kind: "book",
     },
     {
-      label: "OpenJDK — Parallel Old & G1 compaction",
-      note: "How the JVM compacts its old generation, including regional (per-region) compaction in G1.",
+      label: "V8 — Trash talk: the Orinoco garbage collector",
+      href: "https://v8.dev/blog/trash-talk",
+      note: "V8's blog on its mark-sweep-compact major GC and how it was made incremental and concurrent.",
+      kind: "article",
     },
     {
-      label: "V8 — Trash talk: the orinoco garbage collector",
-      note: "V8's blog on its mark-compact major GC and how it was made incremental and concurrent.",
+      label: "Oracle — HotSpot GC Tuning Guide: Generations",
+      href: "https://docs.oracle.com/javase/8/docs/technotes/guides/vm/gctuning/generations.html",
+      note: "How the JVM lays out and compacts its old generation, the survivor-heavy space where compaction pays off.",
+      kind: "docs",
     },
   ],
 

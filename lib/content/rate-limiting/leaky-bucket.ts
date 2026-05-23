@@ -134,15 +134,26 @@ if (!bucket.enqueue(() => handleRequest(req))) {
   furtherReading: [
     {
       label: "Wikipedia — Leaky bucket",
-      note: "The article distinguishes the two variants (meter vs. counter) clearly.",
+      href: "https://en.wikipedia.org/wiki/Leaky_bucket",
+      note: "The article distinguishes the two variants (meter vs. queue) clearly.",
+      kind: "article",
     },
     {
-      label: "NGINX limit_req docs",
-      note: "Production-grade leaky bucket configuration.",
+      label: "NGINX — ngx_http_limit_req_module",
+      href: "https://nginx.org/en/docs/http/ngx_http_limit_req_module.html",
+      note: "Production-grade leaky bucket via `limit_req_zone` and `burst` — NGINX names the method explicitly.",
+      kind: "docs",
+    },
+    {
+      label: "Wikipedia — Generic cell rate algorithm (GCRA)",
+      href: "https://en.wikipedia.org/wiki/Generic_cell_rate_algorithm",
+      note: "The leaky-bucket meter formalized: same behavior, half the storage and no queue.",
+      kind: "article",
     },
     {
       label: "ATM Forum — Traffic Management Specification",
       note: "The dense original definition from telecom networks. Skim section 4 for the math.",
+      kind: "spec",
     },
   ],
 

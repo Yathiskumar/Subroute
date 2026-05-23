@@ -141,16 +141,28 @@ if (bucket.tryConsume()) {
 
   furtherReading: [
     {
-      label: "RFC 2697 — A Single Rate Three Color Marker",
-      note: "The formal description used in network traffic shaping.",
+      label: "Wikipedia — Token bucket",
+      href: "https://en.wikipedia.org/wiki/Token_bucket",
+      note: "Clear canonical description of the algorithm and its bandwidth/burstiness semantics.",
+      kind: "article",
     },
     {
-      label: "Stripe's API rate limiting design",
-      note: "Public engineering blog walks through their token-bucket choices.",
+      label: "Stripe Engineering — Scaling your API with rate limiters",
+      href: "https://stripe.com/blog/rate-limiters",
+      note: "Public engineering blog walks through their token-bucket choices in production.",
+      kind: "article",
+    },
+    {
+      label: "RFC 2697 — A Single Rate Three Color Marker",
+      href: "https://www.rfc-editor.org/rfc/rfc2697",
+      note: "Formal two-token-bucket meter (CIR/CBS/EBS) used in network traffic shaping.",
+      kind: "spec",
     },
     {
       label: "Cloudflare — How we built rate limiting capable of scaling to millions of domains",
-      note: "Distributed token bucket with Redis. Worth the read for the consistency trade-offs.",
+      href: "https://blog.cloudflare.com/counting-things-a-lot-of-different-things/",
+      note: "Distributed limiter with Redis. Worth the read for the consistency trade-offs.",
+      kind: "article",
     },
   ],
 

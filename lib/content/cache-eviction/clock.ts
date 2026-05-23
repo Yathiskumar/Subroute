@@ -136,16 +136,22 @@ class Clock<K, V> {
 
   furtherReading: [
     {
-      label: "Corbato (1968) — A paging experiment with the Multics system",
+      label: "Corbató (1968) — A paging experiment with the Multics system",
+      href: "https://multicians.org/paging-experiment.pdf",
       note: "The original Clock paper. Yes, 1968.",
+      kind: "paper",
     },
     {
       label: "PostgreSQL source — src/backend/storage/buffer/freelist.c",
-      note: "Real Clock-Sweep implementation with a 5-bit usage counter. Worth reading.",
+      href: "https://github.com/postgres/postgres/blob/master/src/backend/storage/buffer/freelist.c",
+      note: "Real clock-sweep implementation that decrements a usage counter as the hand passes. Worth reading.",
+      kind: "docs",
     },
     {
-      label: "Linux kernel — mm/vmscan.c (active/inactive LRU)",
+      label: "Linux kernel source — mm/vmscan.c (active/inactive LRU)",
+      href: "https://github.com/torvalds/linux/blob/master/mm/vmscan.c",
       note: "Modern two-list Clock variant used for page reclaim.",
+      kind: "docs",
     },
   ],
 

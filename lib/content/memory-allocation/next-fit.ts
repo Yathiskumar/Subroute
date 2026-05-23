@@ -121,15 +121,27 @@ class NextFit {
 
   furtherReading: [
     {
+      label: "OSTEP — Free-Space Management (Chapter 17)",
+      href: "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-freespace.pdf",
+      kind: "book",
+      note: "Free chapter from *Operating Systems: Three Easy Pieces*; covers next fit and how the roving pointer changes the heap's shape.",
+    },
+    {
       label: "Wilson et al. — Dynamic Storage Allocation: A Survey and Critical Review",
+      href: "https://www.cs.hmc.edu/~oneill/gc-library/Wilson-Alloc-Survey-1995.pdf",
+      kind: "paper",
       note: "Compares next-fit's roving pointer against first-fit, including its sometimes-worse fragmentation.",
     },
     {
-      label: "Knuth, TAOCP Vol. 1 — Dynamic Storage Allocation (§2.5)",
+      label: "Knuth — The Art of Computer Programming, Vol. 1 (§2.5)",
+      href: "https://en.wikipedia.org/wiki/The_Art_of_Computer_Programming",
+      kind: "book",
       note: "Introduces the 'next fit' (roving pointer) variant of first fit.",
     },
     {
-      label: "The Clock page-replacement algorithm",
+      label: "Page replacement algorithm — Clock — Wikipedia",
+      href: "https://en.wikipedia.org/wiki/Page_replacement_algorithm",
+      kind: "article",
       note: "The same circular-sweep idea applied to choosing which page to evict — worth comparing.",
     },
   ],

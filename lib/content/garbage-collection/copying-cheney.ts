@@ -137,15 +137,27 @@ class CheneyCollector {
   furtherReading: [
     {
       label: "C. J. Cheney — A nonrecursive list compacting algorithm (1970)",
-      note: "The original two-page paper. Remarkably readable, and the source of the scan/alloc-pointer trick.",
+      href: "https://dl.acm.org/doi/10.1145/362790.362798",
+      note: "The original two-page CACM paper. Remarkably readable, and the source of the scan/alloc-pointer trick.",
+      kind: "paper",
     },
     {
       label: "The Garbage Collection Handbook — Copying (Ch. 4)",
+      href: "https://gchandbook.org/",
       note: "Jones, Hosking & Moss. Semispaces, Cheney scanning, and how copying feeds into generational design.",
+      kind: "book",
     },
     {
-      label: "V8 — The Scavenger (new space collection)",
-      note: "How V8's young-generation collector applies Cheney-style copying to short-lived objects.",
+      label: "V8 — Orinoco: young generation garbage collection",
+      href: "https://v8.dev/blog/orinoco-parallel-scavenger",
+      note: "How V8's Scavenger applies semispace, Cheney-style copying to short-lived young-generation objects.",
+      kind: "article",
+    },
+    {
+      label: "Wikipedia — Cheney's algorithm",
+      href: "https://en.wikipedia.org/wiki/Cheney%27s_algorithm",
+      note: "A concise walkthrough of the scan/alloc pointers and forwarding-address mechanics.",
+      kind: "article",
     },
   ],
 

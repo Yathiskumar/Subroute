@@ -5,7 +5,6 @@ import {
   ArrowRight,
   Clock,
   Wrench,
-  FileCode,
   CircleSlash,
   Check,
   X as XIcon,
@@ -21,6 +20,7 @@ import { PrototypeFrame } from "@/components/prototype/PrototypeFrame";
 import { QuizContainer } from "@/components/quiz/QuizContainer";
 import { Button } from "@/components/ui/button";
 import { ProseRenderer, renderInline } from "@/components/shared/ProseRenderer";
+import { FurtherReading } from "@/components/shared/FurtherReading";
 import { TOPICS, getConcept } from "@/lib/data/topics";
 import { SAMPLE_QUIZ } from "@/lib/data/quiz";
 import { getConceptContent } from "@/lib/content";
@@ -260,24 +260,7 @@ export default function ConceptDetailPage({
                 )}
 
                 {content?.furtherReading?.length ? (
-                  <div className="rounded-xl border border-border-subtle bg-surface-elevated p-5">
-                    <div className="flex items-center gap-2 pb-3">
-                      <FileCode className="h-3.5 w-3.5 text-accent" />
-                      <p className="kicker">Further reading</p>
-                    </div>
-                    <ul className="flex flex-col gap-3 text-sm">
-                      {content.furtherReading.map((r, i) => (
-                        <li key={i} className="flex flex-col gap-0.5">
-                          <span className="font-medium text-foreground">
-                            {r.label}
-                          </span>
-                          {r.note ? (
-                            <span className="text-muted">{renderInline(r.note)}</span>
-                          ) : null}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                  <FurtherReading items={content.furtherReading} />
                 ) : null}
               </div>
             </section>

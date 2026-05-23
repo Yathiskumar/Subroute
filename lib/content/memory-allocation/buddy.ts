@@ -139,16 +139,34 @@ function freeAndMerge(blocks: Map<number, Block>, start: number, size: number, t
 
   furtherReading: [
     {
-      label: "Knuth, TAOCP Vol. 1 — The Buddy System (§2.5)",
-      note: "The original description and analysis of buddy allocation.",
+      label: "Buddy memory allocation — Wikipedia",
+      href: "https://en.wikipedia.org/wiki/Buddy_memory_allocation",
+      kind: "article",
+      note: "Clear walkthrough of splitting, the XOR buddy trick, and merging — a great first read.",
     },
     {
-      label: "Linux kernel — Physical Page Allocation (buddy allocator)",
-      note: "How Linux manages physical memory in power-of-two page orders with fast coalescing.",
+      label: "Understanding the Linux VMM (Mel Gorman) — Ch. 6: Physical Page Allocation",
+      href: "https://www.kernel.org/doc/gorman/html/understand/understand009.html",
+      kind: "book",
+      note: "A thorough, free walkthrough of the kernel's binary buddy allocator, its per-order free lists, and coalescing.",
     },
     {
-      label: "Understanding the Linux Virtual Memory Manager (Mel Gorman) — Ch. 6",
-      note: "A thorough walkthrough of the kernel's buddy allocator and its free lists.",
+      label: "OSTEP — Free-Space Management (Chapter 17)",
+      href: "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-freespace.pdf",
+      kind: "book",
+      note: "The 'Other Approaches' section explains the buddy system and why power-of-two blocks make coalescing cheap.",
+    },
+    {
+      label: "Linux kernel — Memory Allocation Guide",
+      href: "https://docs.kernel.org/core-api/memory-allocation.html",
+      kind: "docs",
+      note: "Official docs: how `alloc_pages` and friends sit on top of the buddy allocator in a real kernel.",
+    },
+    {
+      label: "Knuth — The Art of Computer Programming, Vol. 1 (§2.5)",
+      href: "https://en.wikipedia.org/wiki/The_Art_of_Computer_Programming",
+      kind: "book",
+      note: "The original description and analysis of the buddy system.",
     },
   ],
 

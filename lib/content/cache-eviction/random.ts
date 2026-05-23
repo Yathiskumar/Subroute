@@ -139,15 +139,21 @@ class SampledLRU<K, V> {
   furtherReading: [
     {
       label: "Smith (1982) — Cache Memories (ACM Computing Surveys)",
-      note: "Classic survey noting random replacement is competitive on real traces.",
+      href: "https://dl.acm.org/doi/10.1145/356887.356892",
+      note: "Classic survey noting random replacement is surprisingly competitive on real traces.",
+      kind: "paper",
     },
     {
-      label: "Redis documentation — maxmemory-samples",
-      note: "Explains the sampled-LRU trick and how to dial it between random and strict LRU.",
+      label: "Redis — Key eviction (maxmemory-samples)",
+      href: "https://redis.io/docs/latest/develop/reference/eviction/",
+      note: "Explains the sampled-LRU trick and how `maxmemory-samples` dials it between random and strict LRU.",
+      kind: "docs",
     },
     {
-      label: "ARM Cortex-A series TRM — cache replacement policies",
-      note: "Real-world hardware-level pseudo-random replacement in modern CPUs.",
+      label: "ARM Cortex-A Series Programmer's Guide (Armv7-A) — Cache policies",
+      href: "https://documentation-service.arm.com/static/6893ad23e7f7ce6150e88d37",
+      note: "Real-world hardware: ARM cores select between pseudo-random and round-robin line replacement.",
+      kind: "docs",
     },
   ],
 

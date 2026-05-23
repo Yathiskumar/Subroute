@@ -124,16 +124,27 @@ class WriteThroughCache<K, V> {
 
   furtherReading: [
     {
-      label: "Patterson & Hennessy — Computer Organization and Design",
-      note: "The canonical reference. Chapter 5 covers write-through vs write-back with the original tradeoff analysis.",
+      label: "AWS ElastiCache — Caching strategies (Lazy loading & Write-through)",
+      href: "https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/Strategies.html",
+      note: "Maps write-through onto a real cache-in-front-of-database setup, including its write penalty and why it's usually paired with lazy loading.",
+      kind: "docs",
     },
     {
       label: "PostgreSQL — Reliability and the Write-Ahead Log",
-      note: "Why durability-critical systems treat the WAL as write-through against persistent storage.",
+      href: "https://www.postgresql.org/docs/current/wal.html",
+      note: "Why durability-critical systems flush the WAL synchronously before a commit returns — the same lockstep guarantee write-through gives you.",
+      kind: "docs",
     },
     {
-      label: "AWS — Caching strategies (Cache-aside, Write-through, Write-back)",
-      note: "Maps the policies onto common patterns in front of DynamoDB / RDS.",
+      label: "Cache (computing) — Wikipedia",
+      href: "https://en.wikipedia.org/wiki/Cache_(computing)#Writing_policies",
+      note: "Concise side-by-side of write-through vs write-back and the *write-allocate* / *no-write-allocate* miss policies.",
+      kind: "article",
+    },
+    {
+      label: "Patterson & Hennessy — Computer Organization and Design",
+      note: "The canonical textbook. Chapter 5 covers write-through vs write-back with the original tradeoff analysis. (Print; no free canonical link.)",
+      kind: "book",
     },
   ],
 

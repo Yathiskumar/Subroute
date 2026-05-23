@@ -157,11 +157,21 @@ class TwoQ<K, V> {
   furtherReading: [
     {
       label: "Johnson & Shasha (1994) — 2Q: A Low Overhead High Performance Buffer Management Replacement Algorithm",
+      href: "https://www.vldb.org/conf/1994/P439.PDF",
       note: "The original VLDB paper. Tight, readable, full of numbers.",
+      kind: "paper",
     },
     {
-      label: "MySQL Reference Manual — Buffer pool",
-      note: "Documents the young/old sublist design — InnoDB's flavor of 2Q.",
+      label: "MySQL Reference Manual — The InnoDB Buffer Pool",
+      href: "https://dev.mysql.com/doc/refman/8.4/en/innodb-buffer-pool.html",
+      note: "Documents the young/old sublist + midpoint-insertion design — InnoDB's scan-resistant flavor of 2Q.",
+      kind: "docs",
+    },
+    {
+      label: "Wikipedia — Cache replacement policies",
+      href: "https://en.wikipedia.org/wiki/Cache_replacement_policies",
+      note: "Places 2Q alongside LRU, ARC and LIRS for quick comparison.",
+      kind: "article",
     },
   ],
 

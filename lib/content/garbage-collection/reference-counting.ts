@@ -145,15 +145,27 @@ class RefCountedHeap {
   furtherReading: [
     {
       label: "Swift — Automatic Reference Counting (ARC)",
-      note: "Apple's guide, including strong/weak/unowned and how to break the cycles ARC can't collect on its own.",
+      href: "https://docs.swift.org/swift-book/documentation/the-swift-programming-language/automaticreferencecounting/",
+      note: "Apple's official guide, including strong/`weak`/`unowned` and how to break the cycles ARC can't collect on its own.",
+      kind: "docs",
     },
     {
-      label: "CPython — Garbage Collector design",
+      label: "CPython — Garbage collector design",
+      href: "https://devguide.python.org/garbage_collector/",
       note: "How CPython pairs per-object reference counting with a generational cycle-detector for the leaks RC misses.",
+      kind: "docs",
     },
     {
       label: "Jones, Hosking & Moss — The Garbage Collection Handbook, Ch. 5",
+      href: "https://gchandbook.org/",
       note: "The definitive treatment of reference counting, deferred counting, and cycle collection.",
+      kind: "book",
+    },
+    {
+      label: "Wikipedia — Reference counting",
+      href: "https://en.wikipedia.org/wiki/Reference_counting",
+      note: "A concise overview of the technique, its cycle problem, and the usual mitigations.",
+      kind: "article",
     },
   ],
 

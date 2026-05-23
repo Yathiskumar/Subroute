@@ -139,16 +139,22 @@ class TTLCache<K, V> {
 
   furtherReading: [
     {
-      label: "Redis documentation — Expires",
-      note: "How Redis combines lazy expiry, probabilistic sampling, and an active scanner.",
+      label: "Redis — EXPIRE command (key expiry)",
+      href: "https://redis.io/docs/latest/commands/expire/",
+      note: "How Redis combines lazy expiry on access with a probabilistic active scanner.",
+      kind: "docs",
     },
     {
-      label: "Caffeine — Expiry policies",
-      note: "Compares expireAfterWrite, expireAfterAccess, and custom Expiry semantics in detail.",
+      label: "Caffeine — Eviction (expiry policies)",
+      href: "https://github.com/ben-manes/caffeine/wiki/Eviction",
+      note: "Compares `expireAfterWrite`, `expireAfterAccess`, and custom `Expiry` semantics in detail.",
+      kind: "docs",
     },
     {
-      label: "RFC 1035 — DNS, TTL semantics",
-      note: "The original spec for per-record TTLs. Everything DNS-shaped follows this.",
+      label: "RFC 1035 — Domain names: implementation and specification",
+      href: "https://datatracker.ietf.org/doc/html/rfc1035",
+      note: "The original spec defining per-record TTLs. Everything DNS-shaped follows this.",
+      kind: "spec",
     },
   ],
 

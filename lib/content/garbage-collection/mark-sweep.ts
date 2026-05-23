@@ -143,15 +143,27 @@ class MarkSweepHeap {
   furtherReading: [
     {
       label: "The Garbage Collection Handbook — Mark-Sweep (Ch. 2)",
+      href: "https://gchandbook.org/",
       note: "Jones, Hosking & Moss. The canonical description, including the mark-bit table and lazy sweeping.",
+      kind: "book",
     },
     {
       label: "Boehm-Demers-Weiser conservative GC",
+      href: "https://hboehm.info/gc/",
       note: "A production mark & sweep you can drop into a C or C++ program. Great for seeing the algorithm in real code.",
+      kind: "docs",
     },
     {
-      label: "Ruby MRI — Incremental and generational GC",
-      note: "How a real language evolved its stop-the-world mark & sweep into something low-pause.",
+      label: "Wikipedia — Tracing garbage collection",
+      href: "https://en.wikipedia.org/wiki/Tracing_garbage_collection",
+      note: "Covers the naive mark-and-sweep cycle, the mark bit, and tri-color refinements.",
+      kind: "article",
+    },
+    {
+      label: "Ruby — Incremental Garbage Collection in Ruby 2.2",
+      href: "https://www.heroku.com/blog/incremental-gc/",
+      note: "Koichi Sasada on how MRI's stop-the-world mark & sweep grew generational (2.1) and incremental (2.2) low-pause improvements.",
+      kind: "article",
     },
   ],
 

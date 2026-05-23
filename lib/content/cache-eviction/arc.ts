@@ -155,15 +155,21 @@ class ARC<K, V> {
   furtherReading: [
     {
       label: "Megiddo & Modha (2003) — ARC: A Self-Tuning, Low Overhead Replacement Cache",
+      href: "https://www.usenix.org/legacy/event/fast03/tech/full_papers/megiddo/megiddo.pdf",
       note: "The original USENIX FAST paper. Surprisingly readable for a cache paper.",
+      kind: "paper",
     },
     {
-      label: "Bonwick & Adams — ZFS ARC documentation",
-      note: "How ARC is used in a real production storage system, with the extensions ZFS added on top.",
+      label: "OpenZFS source — module/zfs/arc.c",
+      href: "https://github.com/openzfs/zfs/blob/master/module/zfs/arc.c",
+      note: "ARC in a real production storage system. The header comments document exactly how ZFS adapts the paper.",
+      kind: "docs",
     },
     {
-      label: "CAR and CAR-T (Bansal & Modha, 2004)",
-      note: "Patent-free clock-based variants of ARC. Same idea, no licensing headache.",
+      label: "Bansal & Modha (2004) — CAR: Clock with Adaptive Replacement",
+      href: "https://www.usenix.org/legacy/publications/library/proceedings/fast04/tech/full_papers/bansal/bansal.pdf",
+      note: "Patent-free clock-based variants (CAR and CART) of ARC. Same idea, no licensing headache.",
+      kind: "paper",
     },
   ],
 

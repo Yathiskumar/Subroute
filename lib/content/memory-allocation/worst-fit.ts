@@ -121,16 +121,33 @@ function worstFitAlloc(holes: Hole[], request: number): number | null {
 
   furtherReading: [
     {
-      label: "Operating System Concepts (Silberschatz) — Contiguous Memory Allocation",
-      note: "Presents worst-fit alongside first/best fit and notes it tends to perform poorly.",
+      label: "OSTEP — Free-Space Management (Chapter 17)",
+      href: "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-freespace.pdf",
+      kind: "book",
+      note: "Free chapter from *Operating Systems: Three Easy Pieces*; covers worst fit among the placement policies and why leftover-size heuristics disappoint.",
     },
     {
       label: "Wilson et al. — Dynamic Storage Allocation: A Survey and Critical Review",
+      href: "https://www.cs.hmc.edu/~oneill/gc-library/Wilson-Alloc-Survey-1995.pdf",
+      kind: "paper",
       note: "Context on why leftover-size heuristics (both best and worst) underperform First Fit.",
     },
     {
-      label: "Knuth, TAOCP Vol. 1 — Dynamic Storage Allocation (§2.5)",
+      label: "Knuth — The Art of Computer Programming, Vol. 1 (§2.5)",
+      href: "https://en.wikipedia.org/wiki/The_Art_of_Computer_Programming",
+      kind: "book",
       note: "Foundational analysis of placement policies and fragmentation.",
+    },
+    {
+      label: "Memory management (operating systems) — Wikipedia",
+      href: "https://en.wikipedia.org/wiki/Memory_management_(operating_systems)",
+      kind: "article",
+      note: "Presents worst-fit alongside first/best fit and notes it tends to perform poorly.",
+    },
+    {
+      label: "Operating System Concepts (Silberschatz) — Contiguous Memory Allocation",
+      kind: "book",
+      note: "Textbook framing of worst-fit and why it's mostly a teaching foil.",
     },
   ],
 

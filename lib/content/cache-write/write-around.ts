@@ -122,16 +122,22 @@ class WriteAroundCache<K, V> {
 
   furtherReading: [
     {
-      label: "AWS — Caching strategies (the cache-aside pattern)",
-      note: "Walks through write-around in front of DynamoDB, including the invalidation gotchas.",
+      label: "AWS ElastiCache — Caching strategies (Lazy loading)",
+      href: "https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/Strategies.html",
+      note: "The lazy-loading / cache-aside pattern write-around sits on top of: only read data is cached, and stale entries must be invalidated.",
+      kind: "docs",
     },
     {
-      label: "Cloudflare — Cache control and purging",
-      note: "How a real CDN implements write-around at the edge, with explicit purge as the invalidation mechanism.",
+      label: "Cloudflare — Purge cache",
+      href: "https://developers.cloudflare.com/cache/how-to/purge-cache/",
+      note: "How a real CDN does the invalidation half of write-around — explicit purge (by URL, tag, or everything) after an origin write.",
+      kind: "docs",
     },
     {
-      label: "Intel — Cache Allocation Technology overview",
-      note: "How modern CPUs let you pick write-allocate vs no-write-allocate (write-around) per cache way.",
+      label: "CPU cache — Wikipedia (write policies)",
+      href: "https://en.wikipedia.org/wiki/Cache_(computing)#Writing_policies",
+      note: "The silicon analogue: **no-write-allocate** skips bringing a written line into the cache, exactly like write-around.",
+      kind: "article",
     },
   ],
 

@@ -143,15 +143,21 @@ class WriteBackCache<K, V> {
   furtherReading: [
     {
       label: "MESI protocol — Wikipedia",
-      note: "How CPU write-back caches stay coherent across cores. Required reading if you ever build a multi-writer cache.",
+      href: "https://en.wikipedia.org/wiki/MESI_protocol",
+      note: "How CPU write-back caches stay coherent across cores via the **Modified/Exclusive/Shared/Invalid** states. Required reading if you ever build a multi-writer cache.",
+      kind: "article",
     },
     {
-      label: "Linux kernel — Page cache and writeback",
-      note: "The pdflush/bdi-writeback story. How dirty pages get reaped without blocking foreground writes.",
+      label: "Linux kernel — VM writeback tunables (dirty_ratio, dirty_writeback_centisecs)",
+      href: "https://www.kernel.org/doc/html/latest/admin-guide/sysctl/vm.html",
+      note: "The knobs that govern when dirty page-cache pages get flushed to disk — the kernel's write-back policy made configurable.",
+      kind: "docs",
     },
     {
-      label: "MySQL InnoDB — Buffer Pool and Doublewrite Buffer",
-      note: "A production write-back implementation, with a WAL doing the durability work behind it.",
+      label: "MySQL InnoDB — Doublewrite Buffer",
+      href: "https://dev.mysql.com/doc/refman/8.4/en/innodb-doublewrite-buffer.html",
+      note: "How a production write-back buffer pool survives a torn page on crash; pairs with the redo log for durability.",
+      kind: "docs",
     },
   ],
 

@@ -150,15 +150,21 @@ class LIRS<K, V> {
   furtherReading: [
     {
       label: "Jiang & Zhang (2002) — LIRS: An Efficient Low Inter-reference Recency Set Replacement Policy",
+      href: "https://doi.org/10.1145/511334.511340",
       note: "The original SIGMETRICS paper. Read it before implementing.",
+      kind: "paper",
     },
     {
-      label: "Apache Cassandra source — LIRS in the row cache",
-      note: "Production-quality implementation worth studying.",
+      label: "Apache Cassandra — source repository",
+      href: "https://github.com/apache/cassandra",
+      note: "Production caches whose history runs through `ConcurrentLinkedHashMap`'s LIRS-style eviction — worth studying.",
+      kind: "docs",
     },
     {
-      label: "Comparison studies — LIRS vs ARC vs 2Q vs LRU",
-      note: "Multiple academic surveys benchmark these together on standard traces (UMass, OLTP, web).",
+      label: "Wikipedia — Cache replacement policies (LIRS section)",
+      href: "https://en.wikipedia.org/wiki/Cache_replacement_policies",
+      note: "Benchmarks LIRS against ARC, 2Q and LRU and explains the IRR idea concisely.",
+      kind: "article",
     },
   ],
 

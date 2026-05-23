@@ -106,12 +106,22 @@ class FIFO<K, V> {
 
   furtherReading: [
     {
-      label: "Belady, Nelson & Shedler (1969) — An anomaly in space-time characteristics of certain programs",
-      note: "The original paper showing that adding cache slots can hurt FIFO's hit rate.",
+      label: "Bélády, Nelson & Shedler (1969) — An anomaly in space-time characteristics of certain programs running in a paging machine",
+      href: "https://dl.acm.org/doi/10.1145/363011.363155",
+      note: "The original paper showing that adding cache slots can *hurt* FIFO's hit rate — now called Bélády's anomaly.",
+      kind: "paper",
+    },
+    {
+      label: "Wikipedia — Bélády's anomaly",
+      href: "https://en.wikipedia.org/wiki/B%C3%A9l%C3%A1dy%27s_anomaly",
+      note: "Concise explanation with a worked reference string where more frames cause more faults.",
+      kind: "article",
     },
     {
       label: "Wikipedia — Cache replacement policies",
-      note: "Decent comparison table of FIFO against everything else.",
+      href: "https://en.wikipedia.org/wiki/Cache_replacement_policies",
+      note: "Comparison table of FIFO against LRU, LFU and everything else.",
+      kind: "article",
     },
   ],
 

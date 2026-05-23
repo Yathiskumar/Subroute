@@ -1,0 +1,12 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="subroute-mark" x1="12" y1="12" x2="52" y2="52" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fca35f" />
+      <stop offset="1" stop-color="#fb863a" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="#14161a" />
+  <rect x="0.75" y="0.75" width="62.5" height="62.5" rx="14.25" stroke="#ffffff" stroke-opacity="0.08" stroke-width="1.5" />
+  <rect x="11" y="11" width="42" height="42" rx="11" fill="url(#subroute-mark)" />
+  <circle cx="32" cy="32" r="6.5" fill="#0c0d10" />
+</svg>

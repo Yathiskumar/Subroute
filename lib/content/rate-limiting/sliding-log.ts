@@ -127,16 +127,22 @@ class SlidingLog {
 
   furtherReading: [
     {
-      label: "Redis docs — Rate limiter pattern using sorted sets",
-      note: "Canonical Lua script and design notes.",
+      label: "Redis — Build rate limiters: fixed window, sliding window log, and more",
+      href: "https://redis.io/tutorials/howtos/ratelimiting/",
+      note: "Canonical `ZREMRANGEBYSCORE` + `ZCARD` + `ZADD` Lua script for the sorted-set sliding log.",
+      kind: "docs",
     },
     {
-      label: "Stripe engineering — Scaling your API with rate limiters",
-      note: "Discusses sliding log alongside token bucket trade-offs.",
+      label: "Stripe Engineering — Scaling your API with rate limiters",
+      href: "https://stripe.com/blog/rate-limiters",
+      note: "Discusses sliding log alongside token bucket trade-offs in production.",
+      kind: "article",
     },
     {
-      label: "Generic Cell Rate Algorithm (GCRA)",
-      note: "Worth knowing as the dense, log-free alternative for high-rate scenarios.",
+      label: "Wikipedia — Generic cell rate algorithm (GCRA)",
+      href: "https://en.wikipedia.org/wiki/Generic_cell_rate_algorithm",
+      note: "The dense, log-free alternative for high-rate scenarios — exact, but O(1) memory.",
+      kind: "article",
     },
   ],
 

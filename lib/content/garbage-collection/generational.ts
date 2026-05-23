@@ -153,20 +153,28 @@ class GenerationalHeap {
 
   furtherReading: [
     {
-      label: "The Garbage Collection Handbook — Generational GC (Ch. 9)",
-      note: "Jones, Hosking & Moss. The weak generational hypothesis, promotion policies, and remembered-set maintenance in depth.",
+      label: "Oracle — HotSpot GC Tuning Guide: Generations",
+      href: "https://docs.oracle.com/javase/8/docs/technotes/guides/vm/gctuning/generations.html",
+      note: "Eden, survivor spaces, `SurvivorRatio`, and `MaxTenuringThreshold` as they actually ship in the JVM.",
+      kind: "docs",
     },
     {
-      label: "Oracle — HotSpot Garbage Collection Tuning Guide",
-      note: "Eden, survivor spaces, SurvivorRatio, and MaxTenuringThreshold as they actually ship in the JVM.",
+      label: "The Garbage Collection Handbook — Generational GC (Ch. 9)",
+      href: "https://gchandbook.org/",
+      note: "Jones, Hosking & Moss. The weak generational hypothesis, promotion policies, and remembered-set maintenance in depth.",
+      kind: "book",
     },
     {
       label: "V8 — Trash talk: the Orinoco garbage collector",
+      href: "https://v8.dev/blog/trash-talk",
       note: "How V8's generational design uses a copying Scavenger for new space and concurrent mark-compact for old space.",
+      kind: "article",
     },
     {
       label: "Andy Wingo — Baffled by generational garbage collection",
+      href: "https://wingolog.org/archives/2025/02/09/baffled-by-generational-garbage-collection",
       note: "A sharp, skeptical look at when the generational bet actually pays off — and when it doesn't.",
+      kind: "article",
     },
   ],
 

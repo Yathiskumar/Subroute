@@ -139,19 +139,26 @@ class IncrementalCollector {
   furtherReading: [
     {
       label: "The Garbage Collection Handbook — Incremental & concurrent collection",
-      note: "Jones, Hosking & Moss. Time/work budgets, tricolor invariants, and termination arguments.",
+      href: "https://gchandbook.org/",
+      note: "Jones, Hosking & Moss. Time/work budgets, tri-color invariants, and termination arguments.",
+      kind: "book",
     },
     {
-      label: "V8 — Incremental marking & idle-time GC",
-      note: "How V8 splits marking into steps interleaved with JavaScript, scheduling GC into idle frame time.",
+      label: "V8 — Getting garbage collection for free (idle-time incremental GC)",
+      href: "https://v8.dev/blog/free-garbage-collection",
+      note: "How V8 splits marking into sub-5ms steps interleaved with JavaScript, scheduling GC into idle frame time.",
+      kind: "article",
+    },
+    {
+      label: "OpenJDK — The Z Garbage Collector (ZGC)",
+      href: "https://openjdk.org/projects/zgc/",
+      note: "A production collector built around bounded sub-millisecond pauses via concurrent, incremental work.",
+      kind: "docs",
     },
     {
       label: "Steele / Dijkstra / Baker — early on-the-fly and incremental collectors",
       note: "The foundational papers that established interleaving GC with the mutator.",
-    },
-    {
-      label: "OpenJDK — G1, ZGC, Shenandoah pause-time goals",
-      note: "Production collectors built around keeping pauses short via incremental/concurrent work.",
+      kind: "paper",
     },
   ],
 

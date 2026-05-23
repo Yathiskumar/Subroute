@@ -141,19 +141,27 @@ class TriColorMarker {
   furtherReading: [
     {
       label: "Dijkstra et al. — On-the-Fly Garbage Collection: An Exercise in Cooperation (1978)",
-      note: "The original paper that introduced tri-color marking and the insertion write barrier.",
+      href: "https://dl.acm.org/doi/10.1145/359642.359655",
+      note: "The original CACM paper that introduced tri-color marking and the insertion write barrier.",
+      kind: "paper",
     },
     {
-      label: "The Garbage Collection Handbook — Concurrent collback & tri-color abstraction",
+      label: "The Garbage Collection Handbook — Concurrent collection & tri-color abstraction",
+      href: "https://gchandbook.org/",
       note: "Jones, Hosking & Moss. Strong vs weak invariants, insertion vs deletion barriers, in rigorous detail.",
+      kind: "book",
     },
     {
-      label: "The Go Memory Model & GC — golang/proposal #17503 (hybrid write barrier)",
-      note: "How Go combines Dijkstra and Yuasa barriers to eliminate stop-the-world stack rescanning.",
+      label: "Go — Eliminate STW stack re-scanning (golang/proposal #17503, hybrid write barrier)",
+      href: "https://github.com/golang/proposal/blob/master/design/17503-eliminate-rescan.md",
+      note: "How Go combines Dijkstra and Yuasa barriers to drop worst-case stop-the-world pauses below 50µs.",
+      kind: "spec",
     },
     {
       label: "V8 — Concurrent marking",
+      href: "https://v8.dev/blog/concurrent-marking",
       note: "A production tri-color marker running on background threads, with the barrier machinery to match.",
+      kind: "article",
     },
   ],
 

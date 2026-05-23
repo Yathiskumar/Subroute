@@ -124,15 +124,21 @@ class MRU<K, V> {
   furtherReading: [
     {
       label: "Chou & DeWitt (1985) — An Evaluation of Buffer Management Strategies for Relational Database Systems",
-      note: "The classic paper showing MRU beats LRU for sequential and looping scans inside a database engine.",
+      href: "https://www.cs.cmu.edu/~natassa/courses/15-721/papers/P127.PDF",
+      note: "The classic VLDB paper showing MRU beats LRU for sequential and looping scans inside a database engine.",
+      kind: "paper",
     },
     {
       label: "PostgreSQL source — src/backend/storage/buffer/freelist.c (ring buffers)",
+      href: "https://github.com/postgres/postgres/blob/master/src/backend/storage/buffer/freelist.c",
       note: "How Postgres uses MRU-like ring buffers for sequential scans to keep them from polluting the shared buffer pool.",
+      kind: "docs",
     },
     {
-      label: "Oracle — Buffer cache and full table scans",
-      note: "Oracle documents MRU eviction for specific scan workloads — a real-world counter-example to 'always LRU'.",
+      label: "Oracle — Tuning the Database Buffer Cache",
+      href: "https://docs.oracle.com/en/database/oracle/oracle-database/18/tgdba/tuning-database-buffer-cache.html",
+      note: "Documents how full table scans put blocks at the LRU end — a real-world counter-example to 'always LRU'.",
+      kind: "docs",
     },
   ],
 

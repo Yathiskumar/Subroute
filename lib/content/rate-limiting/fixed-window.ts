@@ -126,12 +126,22 @@ class FixedWindow {
 
   furtherReading: [
     {
-      label: "GitHub API rate limiting docs",
-      note: "Canonical example of fixed-window quotas in production.",
+      label: "GitHub Docs — Rate limits for the REST API",
+      href: "https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api",
+      note: "Canonical example of fixed-window quotas in production: 5,000 req/hour with `X-RateLimit-Reset`.",
+      kind: "docs",
     },
     {
-      label: "Cloudflare blog — How we built rate limiting capable of scaling to millions of domains",
+      label: "Cloudflare — How we built rate limiting capable of scaling to millions of domains",
+      href: "https://blog.cloudflare.com/counting-things-a-lot-of-different-things/",
       note: "Compares fixed window, sliding window, and the boundary problem with real numbers.",
+      kind: "article",
+    },
+    {
+      label: "GitHub Engineering — How we scaled the GitHub API with a sharded, replicated rate limiter in Redis",
+      href: "https://github.blog/engineering/infrastructure/how-we-scaled-github-api-sharded-replicated-rate-limiter-redis/",
+      note: "How the simple `INCR` + `EXPIRE` counter is made distributed and resilient at scale.",
+      kind: "article",
     },
   ],
 

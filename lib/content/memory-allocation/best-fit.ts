@@ -123,16 +123,33 @@ function bestFitAlloc(holes: Hole[], request: number): number | null {
 
   furtherReading: [
     {
-      label: "Knuth, TAOCP Vol. 1 — Dynamic Storage Allocation (§2.5)",
-      note: "Where best-fit and first-fit were first compared head-to-head in simulation.",
+      label: "OSTEP — Free-Space Management (Chapter 17)",
+      href: "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-freespace.pdf",
+      kind: "book",
+      note: "Free chapter from *Operating Systems: Three Easy Pieces* — works best fit through a concrete example and shows the sliver problem directly.",
     },
     {
       label: "Wilson et al. — Dynamic Storage Allocation: A Survey and Critical Review",
+      href: "https://www.cs.hmc.edu/~oneill/gc-library/Wilson-Alloc-Survey-1995.pdf",
+      kind: "paper",
       note: "Explains why best-fit's intuitive appeal doesn't hold up, and the role of slivers.",
     },
     {
+      label: "Knuth — The Art of Computer Programming, Vol. 1 (§2.5)",
+      href: "https://en.wikipedia.org/wiki/The_Art_of_Computer_Programming",
+      kind: "book",
+      note: "Where best-fit and first-fit were first compared head-to-head in simulation.",
+    },
+    {
+      label: "Memory management (operating systems) — Wikipedia",
+      href: "https://en.wikipedia.org/wiki/Memory_management_(operating_systems)",
+      kind: "article",
+      note: "Side-by-side summary of best/first/worst fit and their fragmentation behavior.",
+    },
+    {
       label: "Operating System Concepts (Silberschatz) — Contiguous Memory Allocation",
-      note: "Textbook comparison of best/first/worst fit and their fragmentation behavior.",
+      kind: "book",
+      note: "Textbook comparison of best/first/worst fit and the fragmentation each produces.",
     },
   ],
 

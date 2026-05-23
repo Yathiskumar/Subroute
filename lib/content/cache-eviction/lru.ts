@@ -126,16 +126,28 @@ class LRU<K, V> {
 
   furtherReading: [
     {
-      label: "Caffeine — A high performance caching library",
-      note: "Excellent README walking through why strict LRU loses on concurrent workloads and what to do about it.",
-    },
-    {
-      label: "Redis documentation — Using Redis as an LRU cache",
-      note: "Explains the random-sampling approximation Redis uses instead of strict LRU.",
-    },
-    {
       label: "LeetCode 146 — LRU Cache",
-      note: "The canonical interview implementation. Worth coding once from scratch.",
+      href: "https://leetcode.com/problems/lru-cache/",
+      note: "The canonical interview implementation: `O(1)` `get`/`put` via hash map + doubly-linked list. Worth coding once from scratch.",
+      kind: "article",
+    },
+    {
+      label: "Redis — Key eviction (approximated LRU)",
+      href: "https://redis.io/docs/latest/develop/reference/eviction/",
+      note: "Explains the random-sampling approximation Redis uses instead of strict LRU, tuned via `maxmemory-samples`.",
+      kind: "docs",
+    },
+    {
+      label: "Caffeine — A high performance caching library",
+      href: "https://github.com/ben-manes/caffeine",
+      note: "Source and wiki for why strict LRU loses on concurrent workloads and what to do about it.",
+      kind: "docs",
+    },
+    {
+      label: "Wikipedia — Cache replacement policies",
+      href: "https://en.wikipedia.org/wiki/Cache_replacement_policies",
+      note: "Side-by-side comparison of LRU against FIFO, LFU, ARC and others.",
+      kind: "article",
     },
   ],
 

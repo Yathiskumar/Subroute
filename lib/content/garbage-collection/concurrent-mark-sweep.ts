@@ -143,19 +143,27 @@ class CMSCollector {
   furtherReading: [
     {
       label: "Oracle — The Concurrent Mark Sweep (CMS) Collector",
+      href: "https://docs.oracle.com/javase/8/docs/technotes/guides/vm/gctuning/cms.html",
       note: "The canonical four-phase description, tuning knobs, and the concurrent-mode-failure fallback.",
+      kind: "docs",
     },
     {
       label: "JEP 363 — Remove the Concurrent Mark Sweep (CMS) Garbage Collector",
+      href: "https://openjdk.org/jeps/363",
       note: "Why the JVM retired CMS, and what replaced it (G1, ZGC, Shenandoah).",
+      kind: "spec",
     },
     {
       label: "The Garbage Collection Handbook — Concurrent collection",
+      href: "https://gchandbook.org/",
       note: "Jones, Hosking & Moss. The theory behind concurrent tracing, barriers, and termination.",
+      kind: "book",
     },
     {
       label: "Wikipedia — Concurrent mark sweep collector",
+      href: "https://en.wikipedia.org/wiki/Concurrent_mark_sweep_collector",
       note: "A concise overview of the algorithm, its phases, and its trade-offs.",
+      kind: "article",
     },
   ],
 

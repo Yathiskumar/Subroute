@@ -17,6 +17,8 @@ export type FurtherReading = {
   label: string;
   href?: string;
   note?: string;
+  /** Source type — drives the tag/icon shown in the references list. */
+  kind?: "paper" | "book" | "docs" | "article" | "video" | "spec";
 };
 
 export type ConceptContent = {
