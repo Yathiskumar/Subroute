@@ -1,0 +1,93 @@
+---
+title: "Hello, Subroute — why we built a blog you can actually read"
+slug: "hello-subroute"
+publishedAt: "2026-05-24"
+excerpt: "A first post to verify the rendering pipeline end to end: headings, lists, code blocks, blockquotes, and tables — all styled to match the Subroute design system."
+readingTime: 4
+tags: ["meta", "engineering", "writing"]
+author: "Subroute"
+---
+
+This is the inaugural post on the Subroute blog. It exists mostly to prove the
+pipeline works: frontmatter parsing, MDX compilation, syntax highlighting, and
+SEO metadata all the way through to a statically generated page.
+
+If you're reading this on **subroute.dev**, you're reading the canonical source.
+The same words may show up on Hashnode, dev.to, or Medium — but the `<link
+rel="canonical">` on this page points search engines back here.
+
+## What this post checks
+
+Every element below is here on purpose, so we can confirm it renders correctly:
+
+- **Bold** and *italic* inline text
+- `inline code` with the mono treatment
+- Ordered and unordered lists
+- Fenced code blocks with syntax highlighting
+- Blockquotes
+- GitHub-flavored tables
+
+### A short ordered list
+
+1. Write the post as plain MDX in `content/blog/`.
+2. Set the frontmatter — `title`, `slug`, `publishedAt`, `excerpt`, `tags`.
+3. Run the dev server and check the rendered page.
+
+## Code blocks
+
+Syntax highlighting runs through [Shiki](https://shiki.style) at build time, so
+there's zero client-side highlighting cost. Here's a token-bucket limiter:
+
+```ts
+class TokenBucket {
+  private tokens: number;
+  private lastRefill = Date.now();
+
+  constructor(
+    private readonly capacity: number,
+    private readonly refillPerSec: number,
+  ) {
+    this.tokens = capacity;
+  }
+
+  take(n = 1): boolean {
+    this.refill();
+    if (this.tokens < n) return false;
+    this.tokens -= n;
+    return true;
+  }
+
+  private refill() {
+    const now = Date.now();
+    const elapsed = (now - this.lastRefill) / 1000;
+    this.tokens = Math.min(this.capacity, this.tokens + elapsed * this.refillPerSec);
+    this.lastRefill = now;
+  }
+}
+```
+
+A shell snippet, just to confirm a second language highlights too:
+
+```bash
+pnpm dev
+open http://localhost:3000/blog
+```
+
+## Blockquotes
+
+> The simulation comes first. Words label what you've already touched, instead
+> of trying to replace the touching.
+
+## A table
+
+| Algorithm        | Fairness | Burst tolerance | Memory   |
+| ---------------- | -------- | --------------- | -------- |
+| Token bucket     | Medium   | High            | O(1)     |
+| Leaky bucket     | High     | Low             | O(1)     |
+| Sliding window   | High     | Medium          | O(log n) |
+
+## What's next
+
+Real posts will follow — write-ups that pair with the interactive prototypes in
+the [topic library](/topics). If something here renders wrong, this is the file
+to fix: `content/blog/hello-subroute.mdx`.

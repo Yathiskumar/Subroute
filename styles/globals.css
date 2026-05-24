@@ -210,3 +210,65 @@
     @apply my-6 border-l-2 border-accent pl-4 italic text-muted;
   }
 }
+
+/* ------------------------------------------------------------------
+   Blog body — extends .prose-content for full MDX output: headings the
+   topic pages never use, GFM tables, images, hr, and rehype-pretty-code
+   fenced blocks (Shiki dual-theme, switched by .dark on <html>).
+   ------------------------------------------------------------------ */
+@layer components {
+  .prose-blog h1 {
+    @apply mt-12 mb-4 text-3xl font-semibold tracking-tight;
+  }
+  .prose-blog h4 {
+    @apply mt-6 mb-2 text-base font-semibold tracking-tight;
+  }
+  .prose-blog hr {
+    @apply my-10 border-border-subtle;
+  }
+  .prose-blog img {
+    @apply my-6 rounded-lg border border-border-subtle;
+  }
+
+  /* GFM tables */
+  .prose-blog table {
+    @apply my-6 block w-full overflow-x-auto border-collapse text-sm;
+  }
+  .prose-blog thead {
+    @apply border-b border-border;
+  }
+  .prose-blog th {
+    @apply px-3 py-2 text-left font-semibold text-foreground;
+  }
+  .prose-blog td {
+    @apply border-t border-border-subtle px-3 py-2 text-foreground/85;
+  }
+
+  /* Fenced code blocks (rehype-pretty-code). Scoped to the block <figure> so
+     these box styles never apply to inline code, which stays a <code> pill. */
+  .prose-blog figure[data-rehype-pretty-code-figure] {
+    @apply my-6 overflow-hidden rounded-lg border border-border-subtle bg-surface-sunken;
+  }
+  .prose-blog [data-rehype-pretty-code-title] {
+    @apply border-b border-border-subtle bg-surface-elevated/40 px-4 py-2 font-mono text-2xs uppercase tracking-[0.12em] text-subtle;
+  }
+  .prose-blog figure[data-rehype-pretty-code-figure] pre {
+    @apply overflow-x-auto py-4 text-sm leading-6;
+  }
+  .prose-blog figure[data-rehype-pretty-code-figure] code {
+    @apply grid font-mono;
+    background-color: transparent;
+  }
+  .prose-blog figure[data-rehype-pretty-code-figure] [data-line] {
+    @apply px-4;
+  }
+  /* Map Shiki's dual-theme CSS variables to actual colors. */
+  .prose-blog figure[data-rehype-pretty-code-figure] code,
+  .prose-blog figure[data-rehype-pretty-code-figure] code span {
+    color: var(--shiki-light);
+  }
+  html.dark .prose-blog figure[data-rehype-pretty-code-figure] code,
+  html.dark .prose-blog figure[data-rehype-pretty-code-figure] code span {
+    color: var(--shiki-dark);
+  }
+}
