@@ -13,6 +13,7 @@ const SECTIONS = [
   {
     title: "Resources",
     links: [
+      { href: "/blog", label: "Blog" },
       { href: "/about", label: "About" },
       { href: "/changelog", label: "Changelog" },
       { href: "/roadmap", label: "Roadmap" },

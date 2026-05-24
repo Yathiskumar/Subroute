@@ -5,6 +5,7 @@ import "@/styles/globals.css";
 import { Providers } from "./providers";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
+import { SITE_URL, SITE_NAME, SITE_DESCRIPTION } from "@/lib/site";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -19,12 +20,20 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: {
     default: "Subroute — Learn by playing, not just reading",
     template: "%s · Subroute",
   },
-  description:
-    "An interactive playground for technical concepts. Explore system design, algorithms, and infrastructure through visual simulations you can actually touch.",
+  description: SITE_DESCRIPTION,
+  openGraph: {
+    type: "website",
+    siteName: SITE_NAME,
+    url: SITE_URL,
+  },
+  twitter: {
+    card: "summary_large_image",
+  },
 };
 
 export default function RootLayout({
