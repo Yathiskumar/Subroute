@@ -1,15 +1,18 @@
 import type { Metadata } from "next";
+import * as React from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { notFound } from "next/navigation";
 import { compileMDX } from "next-mdx-remote/rsc";
 import remarkGfm from "remark-gfm";
 import rehypePrettyCode, { type Options as PrettyCodeOptions } from "rehype-pretty-code";
-import { ArrowLeft, Clock, Rss } from "lucide-react";
+import { ArrowLeft, Clock } from "lucide-react";
 import { Breadcrumb } from "@/components/shared/Breadcrumb";
 import { TagChip } from "@/components/shared/TagChip";
 import { Button } from "@/components/ui/button";
+import { PostAside, type TocHeading } from "@/components/blog/PostAside";
 import { getAllPostsMeta, getPostBySlug, postUrl, formatDate } from "@/lib/blog";
+import { slugify } from "@/lib/utils/slug";
 import { SITE_URL, SITE_NAME } from "@/lib/site";
 
 // Syntax highlighting runs at build time through Shiki (already a dependency).
@@ -21,6 +24,48 @@ const prettyCodeOptions: PrettyCodeOptions = {
   // plain `inline code` is bypassed (stays a normal <code>, styled as a pill)
   // instead of being wrapped in a full-width code figure.
   defaultLang: { block: "plaintext" },
+};
+
+// --- Heading + TOC helpers -------------------------------------------------
+
+function nodeText(node: React.ReactNode): string {
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(nodeText).join("");
+  if (React.isValidElement(node))
+    return nodeText((node.props as { children?: React.ReactNode }).children);
+  return "";
+}
+
+/** Pull h2/h3 headings from the raw MDX (ignoring fenced code) for the TOC. */
+function extractHeadings(source: string): TocHeading[] {
+  const out: TocHeading[] = [];
+  let inFence = false;
+  for (const line of source.split(/\r?\n/)) {
+    if (/^\s*```/.test(line)) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+    const m = /^(#{2,3})\s+(.+?)\s*#*$/.exec(line);
+    if (!m) continue;
+    const text = m[2].replace(/[*`_]/g, "").trim();
+    out.push({ depth: m[1].length, text, id: slugify(text) });
+  }
+  return out;
+}
+
+// Anchor-able headings so the TOC can deep-link into the post.
+const mdxComponents = {
+  h2: ({ children }: { children?: React.ReactNode }) => (
+    <h2 id={slugify(nodeText(children))} className="scroll-mt-24">
+      {children}
+    </h2>
+  ),
+  h3: ({ children }: { children?: React.ReactNode }) => (
+    <h3 id={slugify(nodeText(children))} className="scroll-mt-24">
+      {children}
+    </h3>
+  ),
 };
 
 export function generateStaticParams() {
@@ -74,9 +119,11 @@ export default async function BlogPostPage({
 
   const { frontmatter, content: source } = post;
   const url = postUrl(frontmatter.slug);
+  const headings = extractHeadings(source);
 
   const { content } = await compileMDX({
     source,
+    components: mdxComponents,
     options: {
       mdxOptions: {
         remarkPlugins: [remarkGfm],
@@ -98,11 +145,7 @@ export default async function BlogPostPage({
     datePublished: frontmatter.publishedAt,
     dateModified: frontmatter.publishedAt,
     author: { "@type": "Person", name: frontmatter.author },
-    publisher: {
-      "@type": "Organization",
-      name: SITE_NAME,
-      url: SITE_URL,
-    },
+    publisher: { "@type": "Organization", name: SITE_NAME, url: SITE_URL },
     image: socialImage,
     keywords: frontmatter.tags.join(", "),
     mainEntityOfPage: { "@type": "WebPage", "@id": url },
@@ -117,7 +160,7 @@ export default async function BlogPostPage({
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
 
-      <article className="container py-12 md:py-16">
+      <div className="container py-12 md:py-16">
         <Breadcrumb
           items={[
             { label: "Home", href: "/" },
@@ -127,7 +170,7 @@ export default async function BlogPostPage({
         />
 
         {/* Header */}
-        <header className="mt-6 flex flex-col gap-4">
+        <header className="mt-6 flex flex-col gap-4 border-b border-border-subtle pb-10">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 font-mono text-2xs uppercase tracking-[0.12em] text-subtle">
             <time dateTime={frontmatter.publishedAt}>
               {formatDate(frontmatter.publishedAt)}
@@ -175,31 +218,30 @@ export default async function BlogPostPage({
           </div>
         ) : null}
 
-        {/* Body */}
-        <div className="prose-content prose-blog mt-10 max-w-[65ch]">
-          {content}
-        </div>
+        {/* Body — prose left, sticky TOC + share rail right */}
+        <div className="mt-10 grid gap-x-16 gap-y-12 lg:grid-cols-[minmax(0,1fr),240px]">
+          <article className="min-w-0">
+            <div className="prose-content prose-blog max-w-[68ch]">{content}</div>
 
-        {/* Footer */}
-        <footer className="mt-16 flex flex-col gap-6 border-t border-border-subtle pt-8">
-          <p className="text-sm text-muted">
-            This is the canonical version of this post. If you found it
-            elsewhere, the original lives here on {SITE_NAME}.
-          </p>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button asChild variant="outline">
-              <Link href="/blog">
-                <ArrowLeft /> All posts
-              </Link>
-            </Button>
-            <Button asChild variant="ghost">
-              <Link href="/blog/rss.xml">
-                <Rss /> Subscribe via RSS
-              </Link>
-            </Button>
-          </div>
-        </footer>
-      </article>
+            <footer className="mt-16 flex flex-col gap-6 border-t border-border-subtle pt-8">
+              <p className="max-w-[68ch] text-sm text-muted">
+                This is the canonical version of this post. If you found it on
+                Hashnode, dev.to, or Medium, the original lives here on{" "}
+                {SITE_NAME}.
+              </p>
+              <Button asChild variant="outline" className="self-start">
+                <Link href="/blog">
+                  <ArrowLeft /> All posts
+                </Link>
+              </Button>
+            </footer>
+          </article>
+
+          <aside className="hidden lg:block">
+            <PostAside headings={headings} url={url} title={frontmatter.title} />
+          </aside>
+        </div>
+      </div>
     </>
   );
 }
