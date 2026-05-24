@@ -112,3 +112,17 @@ export function getConceptContent(
 export function getTopicContent(topicSlug: string): TopicContent | null {
   return TOPIC_CONTENT[topicSlug] ?? null;
 }
+
+/** Aggregate counts across all authored concept content (for site stats). */
+export function getContentStats(): {
+  references: number;
+  quizQuestions: number;
+} {
+  let references = 0;
+  let quizQuestions = 0;
+  for (const content of Object.values(CONCEPT_CONTENT)) {
+    references += content.furtherReading?.length ?? 0;
+    quizQuestions += content.quiz?.length ?? 0;
+  }
+  return { references, quizQuestions };
+}

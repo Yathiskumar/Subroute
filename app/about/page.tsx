@@ -64,8 +64,8 @@ export default function AboutPage() {
       <div className="mt-16">
         <SectionHeading
           kicker="Currently"
-          title="This is a scaffold. Content drops in next."
-          description="What you see today is the shape of the platform with all real explanations stubbed out. The data model, components, and navigation are production-grade and ready to hold real content."
+          title="Built in the open, one topic at a time."
+          description="Several tracks are live end-to-end — written explanations, interactive prototypes, and quizzes. New topics ship regularly; see what's landed on the changelog and what's coming on the roadmap."
         />
         <div className="mt-8 flex flex-wrap gap-3">
           <Button asChild>

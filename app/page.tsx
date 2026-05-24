@@ -12,7 +12,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { TopicCard } from "@/components/cards/TopicCard";
 import { SectionHeading } from "@/components/shared/SectionHeading";
+import { InteractiveGrid } from "@/components/shared/InteractiveGrid";
 import { TOPICS } from "@/lib/data/topics";
+import { getContentStats } from "@/lib/content";
 
 const FEATURED = TOPICS;
 
@@ -56,14 +58,12 @@ const WHY = [
 ];
 
 export default function HomePage() {
+  const stats = getContentStats();
   return (
     <>
       {/* ============================ HERO ============================ */}
       <section className="relative overflow-hidden border-b border-border-subtle">
-        <div
-          aria-hidden
-          className="absolute inset-0 -z-10 bg-grid-fade"
-        />
+        <InteractiveGrid />
         <div
           aria-hidden
           className="pointer-events-none absolute left-1/2 top-0 -z-10 h-[480px] w-[680px] -translate-x-1/2 rounded-full opacity-30 blur-3xl"
@@ -75,17 +75,7 @@ export default function HomePage() {
 
         <div className="container relative pb-24 pt-16 md:pb-32 md:pt-24">
           <div className="mx-auto flex max-w-3xl flex-col items-center text-center">
-            <div className="inline-flex items-center gap-2 rounded-full border border-border-subtle bg-surface-elevated px-3 py-1.5">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent/70" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
-              </span>
-              <span className="font-mono text-2xs uppercase tracking-[0.18em] text-muted">
-                v0.1 · scaffold preview
-              </span>
-            </div>
-
-            <h1 className="mt-8 text-balance text-5xl font-semibold tracking-[-0.03em] md:text-7xl">
+            <h1 className="text-balance text-5xl font-semibold tracking-[-0.03em] md:text-7xl">
               Learn by{" "}
               <span className="relative inline-block">
                 <span className="relative z-10 text-accent">playing</span>
@@ -136,7 +126,11 @@ export default function HomePage() {
               label="Concepts"
               value={TOPICS.reduce((n, t) => n + t.concepts.length, 0).toString()}
             />
-            <Stat label="Static pages" value="0" hint="we hate them too" />
+            <Stat
+              label="References"
+              value={stats.references.toString()}
+              hint="curated & linked"
+            />
           </div>
         </div>
       </section>
@@ -144,9 +138,9 @@ export default function HomePage() {
       {/* ============================ FEATURED ============================ */}
       <section className="container py-24">
         <SectionHeading
-          kicker="Featured track"
+          kicker="Topic library"
           title="Start with something foundational"
-          description="Rate limiting — the first track wired end-to-end with live prototypes you can break."
+          description="Every track is wired end-to-end with live prototypes you can poke, twist, and break."
           action={
             <Button asChild variant="outline">
               <Link href="/topics">
@@ -246,8 +240,9 @@ export default function HomePage() {
               Ready to stop reading about systems and start running them?
             </h2>
             <p className="text-pretty text-muted">
-              The scaffold is here. Real prototypes and explanations are
-              landing topic-by-topic — start where you&apos;re curious.
+              Every topic is wired end-to-end — live prototypes and
+              explanations, ready to explore. Start wherever you&apos;re
+              curious.
             </p>
             <Button asChild size="lg" className="mt-2">
               <Link href="/topics">
