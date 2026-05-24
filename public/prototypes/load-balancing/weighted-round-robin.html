@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Load Balancing — Weighted Round Robin</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a; --accent-strong: #d56a1f;
+        --accent-soft: rgba(251,134,58,0.14); --accent-border: rgba(251,134,58,0.42);
+        --success: #5cc66f; --success-soft: rgba(92,198,111,0.14); --success-border: rgba(92,198,111,0.40);
+        --danger: #f06868; --danger-soft: rgba(240,104,104,0.14); --danger-border: rgba(240,104,104,0.42);
+        --info: #5e9ff6; --info-soft: rgba(94,159,246,0.14); --info-border: rgba(94,159,246,0.40);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --color-background-primary: var(--bg);
+        --color-background-secondary: var(--surface);
+        --color-text-primary: var(--fg);
+        --color-text-secondary: var(--muted);
+        --color-text-tertiary: var(--subtle);
+        --color-border-secondary: var(--border-strong);
+        --color-border-tertiary: var(--border);
+        --border-radius-lg: 12px;
+        --border-radius-md: 8px;
+        --font-mono: var(--mono);
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body { padding: 14px 16px 16px; background-image: linear-gradient(to right, rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.025) 1px, transparent 1px); background-size: 40px 40px; }
+      .container { max-width: 980px; margin: 0 auto; }
+
+      .stage svg { display: block; }
+      .t { fill: var(--fg); font-family: var(--sans); }
+      .ts { fill: var(--muted); font-family: var(--sans); }
+      .c-gray rect { fill: var(--elevated); stroke: var(--border-strong); stroke-width: 1; }
+      .c-purple rect { fill: var(--accent-soft); stroke: var(--accent-border); stroke-width: 1; }
+      .c-teal rect { fill: var(--info-soft); stroke: var(--info-border); stroke-width: 1; }
+
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; padding: 9px 13px; transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover { filter: brightness(1.10); background: var(--accent); }
+      input[type="range"] { accent-color: var(--accent); }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+
+      .conn { transition: stroke 0.2s, stroke-width 0.2s; }
+      .conn.active { stroke: var(--accent); }
+      .server-g rect { transition: stroke-width 0.15s; }
+      .flash rect { animation: f 0.55s ease-out; }
+      @keyframes f { 0%,100% { stroke-width: 1; } 45% { stroke-width: 4; } }
+      .w-stepper { background: var(--color-background-primary); border: 1px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; }
+      .w-stepper .lbl { font-size: 11px; color: var(--color-text-secondary); }
+      .w-stepper .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+      .w-stepper button { min-width: 28px; padding: 4px 8px; font-size: 14px; line-height: 1.2; }
+      .w-stepper .v { font-weight: 600; min-width: 14px; text-align: center; font-size: 15px; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2 class="sr-only">Weighted round robin load balancing simulator. Four servers receive requests in proportion to their assigned weights. Connection thickness scales with weight, and weights can be adjusted live.</h2>
+
+      <div class="stage" style="background: var(--color-background-secondary); border: 1px solid var(--border); border-radius: var(--border-radius-lg); padding: 1rem; margin-bottom: 1rem;">
+        <svg viewBox="0 0 640 340" width="100%" id="lb-svg" role="img" aria-label="Weighted round robin load balancer routing requests in proportion to server weights">
+          <line x1="100" y1="180" x2="250" y2="180" stroke="var(--color-border-secondary)" stroke-width="1.5" stroke-dasharray="5 4"/>
+
+          <line class="conn" data-idx="0" x1="370" y1="180" x2="490" y2="65" stroke="var(--color-border-tertiary)"/>
+          <line class="conn" data-idx="1" x1="370" y1="180" x2="490" y2="135" stroke="var(--color-border-tertiary)"/>
+          <line class="conn" data-idx="2" x1="370" y1="180" x2="490" y2="205" stroke="var(--color-border-tertiary)"/>
+          <line class="conn" data-idx="3" x1="370" y1="180" x2="490" y2="275" stroke="var(--color-border-tertiary)"/>
+
+          <g class="c-gray">
+            <rect x="20" y="155" width="80" height="50" rx="6"/>
+            <text class="t" x="60" y="180" text-anchor="middle" font-size="13" font-weight="500">Client</text>
+            <text class="ts" x="60" y="196" text-anchor="middle" font-size="11">Incoming</text>
+          </g>
+
+          <g class="c-purple">
+            <rect x="250" y="135" width="120" height="90" rx="6"/>
+            <text class="t" x="310" y="160" text-anchor="middle" font-size="14" font-weight="500">Load balancer</text>
+            <text class="ts" x="310" y="180" text-anchor="middle" font-size="11">Weighted round robin</text>
+            <text class="ts" x="310" y="205" text-anchor="middle" font-size="11">Next: <tspan id="next-label" font-weight="500">S1 (1/3)</tspan></text>
+          </g>
+
+          <g class="c-teal server-g" id="server-0">
+            <rect x="490" y="40" width="130" height="50" rx="6"/>
+            <text class="t" x="555" y="62" text-anchor="middle" font-size="13" font-weight="500">Server 1 · w<tspan id="w-0" font-weight="500">3</tspan></text>
+            <text class="ts" x="555" y="80" text-anchor="middle" font-size="11">Handled: <tspan id="count-0" font-weight="500">0</tspan></text>
+          </g>
+          <g class="c-teal server-g" id="server-1">
+            <rect x="490" y="110" width="130" height="50" rx="6"/>
+            <text class="t" x="555" y="132" text-anchor="middle" font-size="13" font-weight="500">Server 2 · w<tspan id="w-1" font-weight="500">1</tspan></text>
+            <text class="ts" x="555" y="150" text-anchor="middle" font-size="11">Handled: <tspan id="count-1" font-weight="500">0</tspan></text>
+          </g>
+          <g class="c-teal server-g" id="server-2">
+            <rect x="490" y="180" width="130" height="50" rx="6"/>
+            <text class="t" x="555" y="202" text-anchor="middle" font-size="13" font-weight="500">Server 3 · w<tspan id="w-2" font-weight="500">2</tspan></text>
+            <text class="ts" x="555" y="220" text-anchor="middle" font-size="11">Handled: <tspan id="count-2" font-weight="500">0</tspan></text>
+          </g>
+          <g class="c-teal server-g" id="server-3">
+            <rect x="490" y="250" width="130" height="50" rx="6"/>
+            <text class="t" x="555" y="272" text-anchor="middle" font-size="13" font-weight="500">Server 4 · w<tspan id="w-3" font-weight="500">1</tspan></text>
+            <text class="ts" x="555" y="290" text-anchor="middle" font-size="11">Handled: <tspan id="count-3" font-weight="500">0</tspan></text>
+          </g>
+
+          <g id="packets"></g>
+        </svg>
+      </div>
+
+      <div style="background: var(--color-background-secondary); border: 1px solid var(--border); border-radius: var(--border-radius-md); padding: 0.75rem 1rem; margin-bottom: 1rem;">
+        <div style="font-size: 12px; color: var(--color-text-secondary); margin-bottom: 6px;">Cycle pattern</div>
+        <div style="font-size: 13px; font-weight: 600; font-family: var(--font-mono); color: var(--color-text-primary);" id="pattern">S1 → S1 → S1 → S2 → S3 → S3 → S4  ↺</div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 1rem;">
+        <div class="w-stepper" data-i="0"><span class="lbl">S1 weight</span><div class="row"><button data-d="-1">−</button><span class="v" id="wv-0">3</span><button data-d="1">+</button></div></div>
+        <div class="w-stepper" data-i="1"><span class="lbl">S2 weight</span><div class="row"><button data-d="-1">−</button><span class="v" id="wv-1">1</span><button data-d="1">+</button></div></div>
+        <div class="w-stepper" data-i="2"><span class="lbl">S3 weight</span><div class="row"><button data-d="-1">−</button><span class="v" id="wv-2">2</span><button data-d="1">+</button></div></div>
+        <div class="w-stepper" data-i="3"><span class="lbl">S4 weight</span><div class="row"><button data-d="-1">−</button><span class="v" id="wv-3">1</span><button data-d="1">+</button></div></div>
+      </div>
+
+      <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 1rem;">
+        <button id="btn-send" class="primary"><i class="ti ti-plus" aria-hidden="true"></i> Send one</button>
+        <button id="btn-play"><i class="ti ti-player-play" aria-hidden="true"></i> Start auto</button>
+        <button id="btn-reset"><i class="ti ti-refresh" aria-hidden="true"></i> Reset</button>
+        <div style="display: flex; align-items: center; gap: 10px; margin-left: auto;">
+          <label style="font-size: 13px; color: var(--color-text-secondary);">Auto speed</label>
+          <input type="range" min="250" max="1800" value="800" step="50" id="speed" style="width: 130px;"/>
+          <span style="font-size: 12px; color: var(--color-text-tertiary); min-width: 52px;" id="speed-out">800 ms</span>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;">
+        <div style="background: var(--color-background-secondary); border: 1px solid var(--border); border-radius: var(--border-radius-md); padding: 0.85rem 1rem;">
+          <div style="font-size: 13px; color: var(--color-text-secondary);">Total requests</div>
+          <div style="font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums;" id="stat-total">0</div>
+        </div>
+        <div style="background: var(--color-background-secondary); border: 1px solid var(--border); border-radius: var(--border-radius-md); padding: 0.85rem 1rem;">
+          <div style="font-size: 13px; color: var(--color-text-secondary);">In flight</div>
+          <div style="font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums;" id="stat-flight">0</div>
+        </div>
+        <div style="background: var(--color-background-secondary); border: 1px solid var(--border); border-radius: var(--border-radius-md); padding: 0.85rem 1rem;">
+          <div style="font-size: 13px; color: var(--color-text-secondary);">Actual vs target share</div>
+          <div style="font-size: 13px; font-weight: 600; margin-top: 4px; font-family: var(--font-mono);" id="stat-dist">— — — —</div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+    (function() {
+      const state = {
+        weights: [3, 1, 2, 1],
+        current: 0,
+        count: 0,
+        counts: [0,0,0,0],
+        total: 0,
+        packets: [],
+        auto: false,
+        autoTimer: null,
+        speed: 800,
+        seq: 0,
+        lineActive: [0,0,0,0]
+      };
+
+      const pos = {
+        client: { x: 100, y: 180 },
+        lb:     { x: 370, y: 180 },
+        servers: [
+          { x: 490, y: 65 }, { x: 490, y: 135 },
+          { x: 490, y: 205 }, { x: 490, y: 275 }
+        ]
+      };
+
+      const group = document.getElementById('packets');
+      const SVG_NS = 'http://www.w3.org/2000/svg';
+      const PHASE_MS = 650;
+
+      function baseStroke(w) { return 0.9 + w * 0.85; }
+
+      function updateLineStyle(idx) {
+        const line = document.querySelector(`.conn[data-idx="${idx}"]`);
+        if (!line) return;
+        const base = baseStroke(state.weights[idx]);
+        const active = state.lineActive[idx] > 0;
+        line.setAttribute('stroke-width', active ? base + 1.2 : base);
+        line.classList.toggle('active', active);
+      }
+
+      function setLineActive(idx, delta) {
+        state.lineActive[idx] = Math.max(0, state.lineActive[idx] + delta);
+        updateLineStyle(idx);
+      }
+
+      function nextPick() {
+        if (state.count >= state.weights[state.current]) {
+          state.current = (state.current + 1) % 4;
+          state.count = 0;
+        }
+        return { server: state.current, turn: state.count + 1, total: state.weights[state.current] };
+      }
+
+      function sendRequest() {
+        const pick = nextPick();
+        const target = pick.server;
+        const p = { id: ++state.seq, target, phase: 'to-lb', t0: performance.now(), litLine: false };
+        const c = document.createElementNS(SVG_NS, 'circle');
+        c.setAttribute('id', `pkt-${p.id}`);
+        c.setAttribute('r', '7');
+        c.setAttribute('fill', '#fb863a');
+        c.setAttribute('stroke', 'var(--color-background-primary)');
+        c.setAttribute('stroke-width', '1.5');
+        c.setAttribute('cx', pos.client.x);
+        c.setAttribute('cy', pos.client.y);
+        group.appendChild(c);
+        state.packets.push(p);
+        state.count++;
+        state.total++;
+        updateUI();
+      }
+
+      function flashServer(idx) {
+        const el = document.getElementById(`server-${idx}`);
+        if (!el) return;
+        el.classList.remove('flash');
+        void el.offsetWidth;
+        el.classList.add('flash');
+        setTimeout(() => el.classList.remove('flash'), 600);
+      }
+
+      function updateNextLabel() {
+        const peek = (() => {
+          let cur = state.current, cnt = state.count;
+          if (cnt >= state.weights[cur]) { cur = (cur + 1) % 4; cnt = 0; }
+          return { server: cur, turn: cnt + 1, total: state.weights[cur] };
+        })();
+        document.getElementById('next-label').textContent = `S${peek.server + 1} (${peek.turn}/${peek.total})`;
+      }
+
+      function updatePattern() {
+        const parts = [];
+        for (let s = 0; s < 4; s++) {
+          for (let k = 0; k < state.weights[s]; k++) parts.push(`S${s+1}`);
+        }
+        document.getElementById('pattern').textContent = parts.join(' → ') + '  ↺';
+      }
+
+      function updateDist() {
+        const totalW = state.weights.reduce((a,b)=>a+b, 0);
+        const parts = state.counts.map((c, i) => {
+          const actual = state.total > 0 ? Math.round((c / state.total) * 100) : 0;
+          const target = Math.round((state.weights[i] / totalW) * 100);
+          return `S${i+1} ${actual}/${target}%`;
+        });
+        document.getElementById('stat-dist').textContent = parts.join('  ');
+      }
+
+      function updateUI() {
+        document.getElementById('stat-total').textContent = state.total;
+        document.getElementById('stat-flight').textContent = state.packets.length;
+        state.counts.forEach((v, i) => {
+          document.getElementById(`count-${i}`).textContent = v;
+        });
+        updateDist();
+        updateNextLabel();
+      }
+
+      function animate(now) {
+        state.packets = state.packets.filter(p => {
+          const elapsed = now - p.t0;
+          const t = Math.min(elapsed / PHASE_MS, 1);
+          let from, to;
+          if (p.phase === 'to-lb') { from = pos.client; to = pos.lb; }
+          else {
+            from = pos.lb; to = pos.servers[p.target];
+            if (!p.litLine) { setLineActive(p.target, 1); p.litLine = true; }
+          }
+          const x = from.x + (to.x - from.x) * t;
+          const y = from.y + (to.y - from.y) * t;
+          const el = document.getElementById(`pkt-${p.id}`);
+          if (el) { el.setAttribute('cx', x); el.setAttribute('cy', y); }
+          if (t >= 1) {
+            if (p.phase === 'to-lb') {
+              p.phase = 'to-server';
+              p.t0 = now;
+              return true;
+            } else {
+              state.counts[p.target]++;
+              flashServer(p.target);
+              setLineActive(p.target, -1);
+              if (el) el.remove();
+              updateUI();
+              return false;
+            }
+          }
+          return true;
+        });
+        requestAnimationFrame(animate);
+      }
+      requestAnimationFrame(animate);
+
+      function setWeight(idx, delta) {
+        const next = Math.max(1, Math.min(5, state.weights[idx] + delta));
+        if (next === state.weights[idx]) return;
+        state.weights[idx] = next;
+        document.getElementById(`wv-${idx}`).textContent = next;
+        document.getElementById(`w-${idx}`).textContent = next;
+        updateLineStyle(idx);
+        updatePattern();
+        updateNextLabel();
+        updateDist();
+      }
+
+      document.querySelectorAll('.w-stepper').forEach(stepper => {
+        const idx = parseInt(stepper.dataset.i, 10);
+        stepper.querySelectorAll('button').forEach(btn => {
+          btn.addEventListener('click', () => setWeight(idx, parseInt(btn.dataset.d, 10)));
+        });
+      });
+
+      document.getElementById('btn-send').addEventListener('click', sendRequest);
+
+      document.getElementById('btn-play').addEventListener('click', function() {
+        state.auto = !state.auto;
+        if (state.auto) {
+          this.innerHTML = '<i class="ti ti-player-pause" aria-hidden="true"></i> Pause auto';
+          const tick = () => {
+            if (!state.auto) return;
+            sendRequest();
+            state.autoTimer = setTimeout(tick, state.speed);
+          };
+          tick();
+        } else {
+          this.innerHTML = '<i class="ti ti-player-play" aria-hidden="true"></i> Start auto';
+          clearTimeout(state.autoTimer);
+        }
+      });
+
+      document.getElementById('btn-reset').addEventListener('click', function() {
+        state.auto = false;
+        clearTimeout(state.autoTimer);
+        document.getElementById('btn-play').innerHTML = '<i class="ti ti-player-play" aria-hidden="true"></i> Start auto';
+        state.current = 0;
+        state.count = 0;
+        state.counts = [0, 0, 0, 0];
+        state.total = 0;
+        state.packets = [];
+        state.lineActive = [0, 0, 0, 0];
+        document.querySelectorAll('.conn').forEach(l => l.classList.remove('active'));
+        group.innerHTML = '';
+        for (let i = 0; i < 4; i++) updateLineStyle(i);
+        updateUI();
+      });
+
+      const speedInput = document.getElementById('speed');
+      const speedOut = document.getElementById('speed-out');
+      speedInput.addEventListener('input', e => {
+        state.speed = parseInt(e.target.value, 10);
+        speedOut.textContent = `${state.speed} ms`;
+      });
+
+      for (let i = 0; i < 4; i++) updateLineStyle(i);
+      updatePattern();
+      updateUI();
+    })();
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

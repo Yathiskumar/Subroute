@@ -354,6 +354,100 @@ export const TOPICS: Topic[] = [
       },
     ],
   },
+  {
+    slug: "load-balancing",
+    title: "Load Balancing",
+    description:
+      "Run more than one server and something has to decide which one handles each request. Nine algorithms, from a blind counter to capacity-and-load-aware routing — built up one signal at a time.",
+    difficulty: "intermediate",
+    icon: "Network",
+    tags: ["distributed", "scaling", "throughput"],
+    estimatedTime: "75 min",
+    prerequisites: ["HTTP basics", "Concurrency intuition"],
+    concepts: [
+      {
+        slug: "round-robin",
+        title: "Round Robin",
+        oneLiner:
+          "Deal requests out like cards — server 1, 2, 3, 4, repeat. Perfectly even counts, blind to everything else.",
+        difficulty: "beginner",
+        estimatedTime: "8 min",
+        prototypePath: "/prototypes/load-balancing/round-robin.html",
+      },
+      {
+        slug: "weighted-round-robin",
+        title: "Weighted Round Robin",
+        oneLiner:
+          "Round robin with capacity: give the big servers a higher weight and they take proportionally more turns.",
+        difficulty: "beginner",
+        estimatedTime: "9 min",
+        prototypePath: "/prototypes/load-balancing/weighted-round-robin.html",
+      },
+      {
+        slug: "random",
+        title: "Random",
+        oneLiner:
+          "Flip a coin per request. Lumpy up close, perfectly even in the limit — and it needs no shared state at all.",
+        difficulty: "beginner",
+        estimatedTime: "8 min",
+        prototypePath: "/prototypes/load-balancing/random.html",
+      },
+      {
+        slug: "least-connections",
+        title: "Least Connections",
+        oneLiner:
+          "Route to the shortest queue. The first state-aware method — it follows real-time busyness, not request counts.",
+        difficulty: "intermediate",
+        estimatedTime: "10 min",
+        prototypePath: "/prototypes/load-balancing/least-connections.html",
+      },
+      {
+        slug: "weighted-least-connections",
+        title: "Weighted Least Connections",
+        oneLiner:
+          "Route by active ÷ weight. Capacity and live load in one number — the most adaptive of the classic set.",
+        difficulty: "intermediate",
+        estimatedTime: "10 min",
+        prototypePath: "/prototypes/load-balancing/weighted-least-connections.html",
+      },
+      {
+        slug: "least-response-time",
+        title: "Least Response Time",
+        oneLiner:
+          "Pick the server that's been answering fastest — connection count weighted by measured latency.",
+        difficulty: "intermediate",
+        estimatedTime: "10 min",
+        prototypePath: "/prototypes/load-balancing/least-response-time.html",
+      },
+      {
+        slug: "ewma",
+        title: "EWMA — Exponentially Weighted Moving Average",
+        oneLiner:
+          "Smooth each server's recent latency into a decaying average and route to the lowest. The basis of modern adaptive LBs.",
+        difficulty: "advanced",
+        estimatedTime: "11 min",
+        prototypePath: "/prototypes/load-balancing/ewma.html",
+      },
+      {
+        slug: "ip-hash",
+        title: "IP Hash",
+        oneLiner:
+          "Hash the client's address to a server so the same client always lands on the same backend — sticky sessions, no shared store.",
+        difficulty: "intermediate",
+        estimatedTime: "9 min",
+        prototypePath: "/prototypes/load-balancing/ip-hash.html",
+      },
+      {
+        slug: "power-of-two-choices",
+        title: "Power of Two Choices",
+        oneLiner:
+          "Probe two servers at random, route to the less busy one. Almost stateless, almost as good as least connections.",
+        difficulty: "advanced",
+        estimatedTime: "11 min",
+        prototypePath: "/prototypes/load-balancing/power-of-two-choices.html",
+      },
+    ],
+  },
 ];
 
 export const ALL_TAGS = Array.from(

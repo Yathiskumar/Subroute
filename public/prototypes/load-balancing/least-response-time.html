@@ -1,0 +1,629 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Load Balancing — Least Response Time</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a; --accent-strong: #d56a1f;
+        --accent-soft: rgba(251,134,58,0.14); --accent-border: rgba(251,134,58,0.42);
+        --success: #5cc66f; --success-soft: rgba(92,198,111,0.14); --success-border: rgba(92,198,111,0.40);
+        --danger: #f06868; --danger-soft: rgba(240,104,104,0.14); --danger-border: rgba(240,104,104,0.42);
+        --info: #5e9ff6; --info-soft: rgba(94,159,246,0.14); --info-border: rgba(94,159,246,0.40);
+        --warning: #f0b568; --warning-soft: rgba(240,181,104,0.16); --warning-border: rgba(240,181,104,0.45);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --color-background-primary: var(--bg);
+        --color-background-secondary: var(--surface);
+        --color-text-primary: var(--fg);
+        --color-text-secondary: var(--muted);
+        --color-text-tertiary: var(--subtle);
+        --color-border-secondary: var(--border-strong);
+        --color-border-tertiary: var(--border);
+        --border-radius-lg: 12px;
+        --border-radius-md: 8px;
+        --font-mono: var(--mono);
+        --font-sans: var(--sans);
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body { padding: 14px 16px 16px; background-image: linear-gradient(to right, rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.025) 1px, transparent 1px); background-size: 40px 40px; }
+      .container { max-width: 980px; margin: 0 auto; }
+
+      .stage svg { display: block; }
+      .t { fill: var(--fg); font-family: var(--sans); }
+      .ts { fill: var(--muted); font-family: var(--sans); }
+      .c-gray rect { fill: var(--elevated); stroke: var(--border-strong); stroke-width: 1; }
+      .c-purple rect { fill: var(--accent-soft); stroke: var(--accent-border); stroke-width: 1; }
+      .c-teal rect { fill: var(--info-soft); stroke: var(--info-border); stroke-width: 1; }
+
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; padding: 9px 13px; transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover { filter: brightness(1.10); background: var(--accent); }
+      input[type="range"] { accent-color: var(--accent); }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+
+      .conn { transition: stroke 0.2s, stroke-width 0.2s; }
+      .conn.active { stroke: var(--accent); }
+      .server-g rect { transition: stroke-width 0.15s; }
+      .flash rect { animation: f 0.55s ease-out; }
+      @keyframes f { 0%,100% { stroke-width: 1; } 45% { stroke-width: 3.5; } }
+      #lb-box.commit > rect { animation: lbf 0.4s ease-out; }
+      @keyframes lbf { 0%,100% { stroke-width: 1; } 50% { stroke-width: 3.5; } }
+      #packets circle { transition: r 0.25s ease-out, opacity 0.25s; }
+      .dur-lbl { font-size: 9.5px; fill: var(--color-text-secondary); font-family: var(--font-mono); pointer-events: none; }
+      .ghost-slot { fill: none; stroke: var(--info); stroke-width: 1; stroke-dasharray: 2 2; opacity: 0.65; }
+      .w-stepper { background: var(--color-background-primary); border: 1px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; }
+      .w-stepper .lbl { font-size: 11px; color: var(--color-text-secondary); }
+      .w-stepper .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+      .w-stepper button { min-width: 28px; padding: 4px 8px; font-size: 14px; line-height: 1.2; }
+      .w-stepper .v { font-weight: 600; min-width: 22px; text-align: center; font-size: 14px; }
+
+      .scores-grid { display: flex; flex-direction: column; gap: 4px; }
+      .score-row { display: grid; grid-template-columns: 28px 56px 14px 60px 14px 64px 1fr; gap: 6px; align-items: center; padding: 5px 9px; border-radius: 6px; font-family: var(--font-mono); font-size: 13px; transition: background-color 0.2s; }
+      .score-row .srv { font-weight: 600; color: var(--color-text-secondary); }
+      .score-row .paren, .score-row .op, .score-row .eq { color: var(--color-text-tertiary); }
+      .score-row .num { font-weight: 600; color: var(--color-text-primary); }
+      .score-row .result { font-weight: 600; color: var(--color-text-primary); }
+      .score-row .badge { font-size: 11px; font-family: var(--font-sans); color: var(--color-text-tertiary); justify-self: start; }
+      .score-row.picked { background: var(--accent-soft); }
+      .score-row.picked .badge { color: var(--accent); font-weight: 600; }
+      .score-row.skipped { opacity: 0.55; }
+      .score-row.skipped .badge { color: var(--color-text-tertiary); font-style: italic; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2 class="sr-only">Least response time load balancer with the score calculation made visible for each server. Score is (active connections plus one) times the server's average response time; the lowest score wins. Per-server latency multipliers can be adjusted to make some servers intrinsically slower.</h2>
+
+      <div class="stage" style="background: var(--color-background-secondary); border: 1px solid var(--border); border-radius: var(--border-radius-lg); padding: 1rem; margin-bottom: 1rem;">
+        <svg viewBox="0 0 640 380" width="100%" id="lb-svg" role="img" aria-label="Least response time load balancer scoring each server by active connections times average response time">
+          <line x1="100" y1="195" x2="250" y2="195" stroke="var(--color-border-secondary)" stroke-width="1.5" stroke-dasharray="5 4"/>
+
+          <line class="conn" data-idx="0" x1="370" y1="195" x2="490" y2="65" stroke="var(--color-border-tertiary)"/>
+          <line class="conn" data-idx="1" x1="370" y1="195" x2="490" y2="142" stroke="var(--color-border-tertiary)"/>
+          <line class="conn" data-idx="2" x1="370" y1="195" x2="490" y2="219" stroke="var(--color-border-tertiary)"/>
+          <line class="conn" data-idx="3" x1="370" y1="195" x2="490" y2="296" stroke="var(--color-border-tertiary)"/>
+
+          <g class="c-gray">
+            <rect x="20" y="170" width="80" height="50" rx="6"/>
+            <text class="t" x="60" y="194" text-anchor="middle" font-size="13" font-weight="500">Client</text>
+            <text class="ts" x="60" y="210" text-anchor="middle" font-size="11">Incoming</text>
+          </g>
+
+          <g class="c-purple" id="lb-box">
+            <rect x="250" y="150" width="120" height="90" rx="6"/>
+            <text class="t" x="310" y="175" text-anchor="middle" font-size="14" font-weight="500">Load balancer</text>
+            <text class="ts" x="310" y="195" text-anchor="middle" font-size="11">Least response time</text>
+            <text class="ts" x="310" y="220" text-anchor="middle" font-size="11">Next: <tspan id="next-label" font-weight="500">S1</tspan></text>
+          </g>
+
+          <g class="c-teal server-g" id="server-0">
+            <rect x="490" y="30" width="130" height="70" rx="6"/>
+            <text class="t" x="555" y="50" text-anchor="middle" font-size="13" font-weight="500">Server 1 · ×<tspan id="m-0" font-weight="500">1</tspan></text>
+            <text class="ts" x="555" y="68" text-anchor="middle" font-size="11">Done <tspan id="count-0" font-weight="500">0</tspan> · Act <tspan id="active-0" font-weight="500">0</tspan> · RT <tspan id="rt-0" font-weight="500">—</tspan></text>
+            <line x1="498" y1="94" x2="612" y2="94" stroke="var(--color-border-tertiary)" stroke-width="0.5" stroke-dasharray="2 2"/>
+          </g>
+          <g class="c-teal server-g" id="server-1">
+            <rect x="490" y="107" width="130" height="70" rx="6"/>
+            <text class="t" x="555" y="127" text-anchor="middle" font-size="13" font-weight="500">Server 2 · ×<tspan id="m-1" font-weight="500">1</tspan></text>
+            <text class="ts" x="555" y="145" text-anchor="middle" font-size="11">Done <tspan id="count-1" font-weight="500">0</tspan> · Act <tspan id="active-1" font-weight="500">0</tspan> · RT <tspan id="rt-1" font-weight="500">—</tspan></text>
+            <line x1="498" y1="171" x2="612" y2="171" stroke="var(--color-border-tertiary)" stroke-width="0.5" stroke-dasharray="2 2"/>
+          </g>
+          <g class="c-teal server-g" id="server-2">
+            <rect x="490" y="184" width="130" height="70" rx="6"/>
+            <text class="t" x="555" y="204" text-anchor="middle" font-size="13" font-weight="500">Server 3 · ×<tspan id="m-2" font-weight="500">3</tspan></text>
+            <text class="ts" x="555" y="222" text-anchor="middle" font-size="11">Done <tspan id="count-2" font-weight="500">0</tspan> · Act <tspan id="active-2" font-weight="500">0</tspan> · RT <tspan id="rt-2" font-weight="500">—</tspan></text>
+            <line x1="498" y1="248" x2="612" y2="248" stroke="var(--color-border-tertiary)" stroke-width="0.5" stroke-dasharray="2 2"/>
+          </g>
+          <g class="c-teal server-g" id="server-3">
+            <rect x="490" y="261" width="130" height="70" rx="6"/>
+            <text class="t" x="555" y="281" text-anchor="middle" font-size="13" font-weight="500">Server 4 · ×<tspan id="m-3" font-weight="500">1</tspan></text>
+            <text class="ts" x="555" y="299" text-anchor="middle" font-size="11">Done <tspan id="count-3" font-weight="500">0</tspan> · Act <tspan id="active-3" font-weight="500">0</tspan> · RT <tspan id="rt-3" font-weight="500">—</tspan></text>
+            <line x1="498" y1="325" x2="612" y2="325" stroke="var(--color-border-tertiary)" stroke-width="0.5" stroke-dasharray="2 2"/>
+          </g>
+
+          <g id="packets"></g>
+        </svg>
+      </div>
+
+      <div style="background: var(--color-background-secondary); border: 1px solid var(--border); border-radius: var(--border-radius-md); padding: 0.85rem 1rem; margin-bottom: 1rem;">
+        <div style="font-size: 12px; color: var(--color-text-secondary); margin-bottom: 10px;">
+          Score = <span style="font-family: var(--font-mono); font-weight: 600; color: var(--color-text-primary);">(active + 1) × avg_rt</span> — lowest wins
+        </div>
+        <div class="scores-grid">
+          <div class="score-row" id="srow-0">
+            <span class="srv">S1</span>
+            <span class="paren">(<span class="num" id="s-act-0">0</span> + 1)</span>
+            <span class="op">×</span>
+            <span class="num" id="s-rt-0">1.50s*</span>
+            <span class="eq">=</span>
+            <span class="result" id="s-val-0">1.50</span>
+            <span class="badge" id="s-bdg-0"></span>
+          </div>
+          <div class="score-row" id="srow-1">
+            <span class="srv">S2</span>
+            <span class="paren">(<span class="num" id="s-act-1">0</span> + 1)</span>
+            <span class="op">×</span>
+            <span class="num" id="s-rt-1">1.50s*</span>
+            <span class="eq">=</span>
+            <span class="result" id="s-val-1">1.50</span>
+            <span class="badge" id="s-bdg-1"></span>
+          </div>
+          <div class="score-row" id="srow-2">
+            <span class="srv">S3</span>
+            <span class="paren">(<span class="num" id="s-act-2">0</span> + 1)</span>
+            <span class="op">×</span>
+            <span class="num" id="s-rt-2">1.50s*</span>
+            <span class="eq">=</span>
+            <span class="result" id="s-val-2">1.50</span>
+            <span class="badge" id="s-bdg-2"></span>
+          </div>
+          <div class="score-row" id="srow-3">
+            <span class="srv">S4</span>
+            <span class="paren">(<span class="num" id="s-act-3">0</span> + 1)</span>
+            <span class="op">×</span>
+            <span class="num" id="s-rt-3">1.50s*</span>
+            <span class="eq">=</span>
+            <span class="result" id="s-val-3">1.50</span>
+            <span class="badge" id="s-bdg-3"></span>
+          </div>
+        </div>
+        <div style="font-size: 11px; color: var(--color-text-tertiary); margin-top: 8px;">* default RT used until first measurement comes in</div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 1rem;">
+        <div class="w-stepper" data-i="0"><span class="lbl">S1 latency</span><div class="row"><button data-d="-1">−</button><span class="v" id="mv-0">×1</span><button data-d="1">+</button></div></div>
+        <div class="w-stepper" data-i="1"><span class="lbl">S2 latency</span><div class="row"><button data-d="-1">−</button><span class="v" id="mv-1">×1</span><button data-d="1">+</button></div></div>
+        <div class="w-stepper" data-i="2"><span class="lbl">S3 latency</span><div class="row"><button data-d="-1">−</button><span class="v" id="mv-2">×3</span><button data-d="1">+</button></div></div>
+        <div class="w-stepper" data-i="3"><span class="lbl">S4 latency</span><div class="row"><button data-d="-1">−</button><span class="v" id="mv-3">×1</span><button data-d="1">+</button></div></div>
+      </div>
+
+      <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 1rem;">
+        <button id="btn-send" class="primary"><i class="ti ti-plus" aria-hidden="true"></i> Send 1</button>
+        <button id="btn-burst"><i class="ti ti-stack-2" aria-hidden="true"></i> Send 10</button>
+        <button id="btn-play"><i class="ti ti-player-play" aria-hidden="true"></i> Auto</button>
+        <button id="btn-reset"><i class="ti ti-refresh" aria-hidden="true"></i> Reset</button>
+        <div style="display: flex; align-items: center; gap: 10px; margin-left: auto;">
+          <label style="font-size: 13px; color: var(--color-text-secondary);">Arrival every</label>
+          <input type="range" min="200" max="1500" value="500" step="50" id="speed" style="width: 110px;"/>
+          <span style="font-size: 12px; color: var(--color-text-tertiary); min-width: 52px;" id="speed-out">500 ms</span>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px;">
+        <div style="background: var(--color-background-secondary); border: 1px solid var(--border); border-radius: var(--border-radius-md); padding: 0.7rem 0.9rem;">
+          <div style="font-size: 12px; color: var(--color-text-secondary);">Completed</div>
+          <div style="font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums;" id="stat-total">0</div>
+        </div>
+        <div style="background: var(--color-background-secondary); border: 1px solid var(--border); border-radius: var(--border-radius-md); padding: 0.7rem 0.9rem;">
+          <div style="font-size: 12px; color: var(--color-text-secondary);">In progress</div>
+          <div style="font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums;" id="stat-active">0</div>
+        </div>
+        <div style="background: var(--color-background-secondary); border: 1px solid var(--border); border-radius: var(--border-radius-md); padding: 0.7rem 0.9rem;">
+          <div style="font-size: 12px; color: var(--color-text-secondary);">Mean RT</div>
+          <div style="font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums;" id="stat-mean">—</div>
+        </div>
+        <div style="background: var(--color-background-secondary); border: 1px solid var(--border); border-radius: var(--border-radius-md); padding: 0.7rem 0.9rem;">
+          <div style="font-size: 12px; color: var(--color-text-secondary);">RT spread</div>
+          <div style="font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums;" id="stat-spread">—</div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+    (function() {
+      const state = {
+        multiplier: [1, 1, 3, 1],
+        counts: [0,0,0,0],
+        active: [0,0,0,0],
+        avgRT: [0, 0, 0, 0],
+        slots: [[],[],[],[]],
+        total: 0,
+        packets: [],
+        auto: false,
+        autoTimer: null,
+        speed: 500,
+        seq: 0,
+        lineActive: [0,0,0,0]
+      };
+
+      const serverBox = [
+        { x: 490, y: 30 }, { x: 490, y: 107 },
+        { x: 490, y: 184 }, { x: 490, y: 261 }
+      ];
+
+      const pos = {
+        client: { x: 100, y: 195 },
+        lb:     { x: 370, y: 195 },
+        serverEntry: [
+          { x: 490, y: 65 }, { x: 490, y: 142 },
+          { x: 490, y: 219 }, { x: 490, y: 296 }
+        ]
+      };
+
+      const group = document.getElementById('packets');
+      const SVG_NS = 'http://www.w3.org/2000/svg';
+      const PHASE_MS = 600;
+      const SLOT_MS = 250;
+      const MIN_DUR = 1000;
+      const MAX_DUR = 2200;
+      const MAX_MULT = 4;
+      const MAX_ACTUAL = MAX_DUR * MAX_MULT;
+      const BAR_MAX_H = 24;
+      const BAR_W = 8;
+      const ALPHA = 0.3;
+      const DEFAULT_RT_MS = 1500;
+
+      function lineWidth(idx) {
+        return Math.max(1, 4 / state.multiplier[idx]);
+      }
+
+      function updateLineStyle(idx) {
+        const line = document.querySelector(`.conn[data-idx="${idx}"]`);
+        if (!line) return;
+        const base = lineWidth(idx);
+        const isActive = state.lineActive[idx] > 0;
+        line.setAttribute('stroke-width', isActive ? base + 1.2 : base);
+        line.classList.toggle('active', isActive);
+      }
+
+      function setLineActive(idx, delta) {
+        state.lineActive[idx] = Math.max(0, state.lineActive[idx] + delta);
+        updateLineStyle(idx);
+      }
+
+      function slotPos(serverIdx, slotIdx) {
+        const b = serverBox[serverIdx];
+        return { x: b.x + 14 + (slotIdx * 12), y: b.y + 66 };
+      }
+
+      function assignSlot(serverIdx, packetId) {
+        const slots = state.slots[serverIdx];
+        for (let i = 0; i < slots.length; i++) {
+          if (slots[i] === null) { slots[i] = packetId; return i; }
+        }
+        slots.push(packetId);
+        return slots.length - 1;
+      }
+
+      function freeSlot(serverIdx, packetId) {
+        const slots = state.slots[serverIdx];
+        const i = slots.indexOf(packetId);
+        if (i >= 0) slots[i] = null;
+        while (slots.length > 0 && slots[slots.length - 1] === null) slots.pop();
+      }
+
+      function rtFor(i) {
+        return state.avgRT[i] || DEFAULT_RT_MS;
+      }
+
+      function scoreFor(i) {
+        return (state.active[i] + 1) * (rtFor(i) / 1000);
+      }
+
+      function pickLeastRT() {
+        let min = Infinity, target = 0;
+        for (let i = 0; i < 4; i++) {
+          const s = scoreFor(i);
+          if (s < min) { min = s; target = i; }
+        }
+        return target;
+      }
+
+      function pulseLB() {
+        const el = document.getElementById('lb-box');
+        el.classList.remove('commit');
+        void el.offsetWidth;
+        el.classList.add('commit');
+        setTimeout(() => el.classList.remove('commit'), 420);
+      }
+
+      function createGhost(p) {
+        const sp = slotPos(p.target, p.slotIdx);
+        const g = document.createElementNS(SVG_NS, 'rect');
+        g.setAttribute('id', `ghost-${p.id}`);
+        g.setAttribute('class', 'ghost-slot');
+        g.setAttribute('x', sp.x - BAR_W/2);
+        g.setAttribute('width', BAR_W);
+        g.setAttribute('rx', 1.5);
+        const h = (p.actualDur / MAX_ACTUAL) * BAR_MAX_H;
+        g.setAttribute('y', sp.y - h);
+        g.setAttribute('height', h);
+        group.appendChild(g);
+      }
+
+      function sendRequest() {
+        const baseDuration = MIN_DUR + Math.random() * (MAX_DUR - MIN_DUR);
+        const p = {
+          id: ++state.seq,
+          target: null,
+          phase: 'to-lb',
+          t0: performance.now(),
+          baseDuration,
+          actualDur: null,
+          slotIdx: null,
+          litLine: false
+        };
+
+        const c = document.createElementNS(SVG_NS, 'circle');
+        c.setAttribute('id', `pkt-${p.id}`);
+        c.setAttribute('r', '7');
+        c.setAttribute('fill', '#fb863a');
+        c.setAttribute('stroke', 'var(--color-background-primary)');
+        c.setAttribute('stroke-width', '1.5');
+        c.setAttribute('cx', pos.client.x);
+        c.setAttribute('cy', pos.client.y);
+        group.appendChild(c);
+
+        const lbl = document.createElementNS(SVG_NS, 'text');
+        lbl.setAttribute('id', `lbl-${p.id}`);
+        lbl.setAttribute('class', 'dur-lbl');
+        lbl.setAttribute('x', pos.client.x + 10);
+        lbl.setAttribute('y', pos.client.y - 8);
+        lbl.textContent = `${(baseDuration/1000).toFixed(1)}s`;
+        group.appendChild(lbl);
+
+        state.packets.push(p);
+      }
+
+      function flashServer(idx) {
+        const el = document.getElementById(`server-${idx}`);
+        if (!el) return;
+        el.classList.remove('flash');
+        void el.offsetWidth;
+        el.classList.add('flash');
+        setTimeout(() => el.classList.remove('flash'), 600);
+      }
+
+      function updateAvgRT(idx, rt) {
+        if (state.avgRT[idx] === 0) state.avgRT[idx] = rt;
+        else state.avgRT[idx] = ALPHA * rt + (1 - ALPHA) * state.avgRT[idx];
+      }
+
+      function fmtRT(ms) {
+        if (!ms) return '—';
+        return `${(ms/1000).toFixed(2)}s`;
+      }
+
+      function updateScoresGrid() {
+        const scores = [0,1,2,3].map(i => scoreFor(i));
+        const minScore = Math.min(...scores);
+        const maxScore = Math.max(...scores);
+        const winnerIdx = scores.indexOf(minScore);
+
+        [0,1,2,3].forEach(i => {
+          document.getElementById(`s-act-${i}`).textContent = state.active[i];
+          const known = state.avgRT[i] > 0;
+          const rtVal = rtFor(i);
+          document.getElementById(`s-rt-${i}`).textContent = known
+            ? `${(rtVal/1000).toFixed(2)}s`
+            : `${(rtVal/1000).toFixed(2)}s*`;
+          document.getElementById(`s-val-${i}`).textContent = scores[i].toFixed(2);
+
+          const row = document.getElementById(`srow-${i}`);
+          row.classList.toggle('picked', i === winnerIdx);
+          row.classList.toggle('skipped', i !== winnerIdx && scores[i] === maxScore && maxScore > minScore * 1.1);
+
+          const bdg = document.getElementById(`s-bdg-${i}`);
+          if (i === winnerIdx) bdg.textContent = '← lowest, will be picked';
+          else if (scores[i] === maxScore && maxScore > minScore * 1.1) bdg.textContent = 'avoided';
+          else bdg.textContent = '';
+        });
+      }
+
+      function updateNextLabel() {
+        const idx = pickLeastRT();
+        document.getElementById('next-label').textContent = `S${idx+1}`;
+      }
+
+      function updateStats() {
+        document.getElementById('stat-total').textContent = state.total;
+        document.getElementById('stat-active').textContent = state.active.reduce((a,b)=>a+b, 0);
+        const rts = state.avgRT.filter(r => r > 0);
+        if (rts.length > 0) {
+          const mean = rts.reduce((a,b)=>a+b,0) / rts.length;
+          document.getElementById('stat-mean').textContent = fmtRT(mean);
+          const spread = Math.max(...rts) - Math.min(...rts);
+          document.getElementById('stat-spread').textContent = rts.length >= 2 ? fmtRT(spread) : '—';
+        } else {
+          document.getElementById('stat-mean').textContent = '—';
+          document.getElementById('stat-spread').textContent = '—';
+        }
+        state.counts.forEach((v, i) => {
+          document.getElementById(`count-${i}`).textContent = v;
+          document.getElementById(`active-${i}`).textContent = state.active[i];
+          document.getElementById(`rt-${i}`).textContent = fmtRT(state.avgRT[i]);
+        });
+        updateScoresGrid();
+        updateNextLabel();
+      }
+
+      function animate(now) {
+        state.packets = state.packets.filter(p => {
+          const el = document.getElementById(`pkt-${p.id}`);
+          const lbl = document.getElementById(`lbl-${p.id}`);
+
+          if (p.phase === 'to-lb') {
+            const t = Math.min((now - p.t0) / PHASE_MS, 1);
+            const x = pos.client.x + (pos.lb.x - pos.client.x) * t;
+            const y = pos.client.y + (pos.lb.y - pos.client.y) * t;
+            if (el) { el.setAttribute('cx', x); el.setAttribute('cy', y); }
+            if (lbl) { lbl.setAttribute('x', x + 10); lbl.setAttribute('y', y - 8); }
+            if (t >= 1) {
+              p.target = pickLeastRT();
+              p.actualDur = p.baseDuration * state.multiplier[p.target];
+              p.slotIdx = assignSlot(p.target, p.id);
+              state.active[p.target]++;
+              createGhost(p);
+              pulseLB();
+              p.phase = 'to-server';
+              p.t0 = now;
+              updateStats();
+            }
+            return true;
+          }
+
+          if (p.phase === 'to-server') {
+            if (!p.litLine) { setLineActive(p.target, 1); p.litLine = true; }
+            const entry = pos.serverEntry[p.target];
+            const t = Math.min((now - p.t0) / PHASE_MS, 1);
+            const x = pos.lb.x + (entry.x - pos.lb.x) * t;
+            const y = pos.lb.y + (entry.y - pos.lb.y) * t;
+            if (el) { el.setAttribute('cx', x); el.setAttribute('cy', y); }
+            if (lbl) { lbl.setAttribute('x', x + 10); lbl.setAttribute('y', y - 8); }
+            if (t >= 1) {
+              setLineActive(p.target, -1);
+              p.phase = 'to-slot';
+              p.t0 = now;
+              if (el) el.setAttribute('r', '4');
+            }
+            return true;
+          }
+
+          if (p.phase === 'to-slot') {
+            const entry = pos.serverEntry[p.target];
+            const target = slotPos(p.target, p.slotIdx);
+            const t = Math.min((now - p.t0) / SLOT_MS, 1);
+            const x = entry.x + (target.x - entry.x) * t;
+            const y = entry.y + (target.y - entry.y) * t;
+            if (el) { el.setAttribute('cx', x); el.setAttribute('cy', y); }
+            if (lbl) { lbl.setAttribute('x', x + 8); lbl.setAttribute('y', y - 6); }
+            if (t >= 1) {
+              if (el) el.remove();
+              if (lbl) lbl.remove();
+              const ghost = document.getElementById(`ghost-${p.id}`);
+              if (ghost) ghost.remove();
+              const sp = slotPos(p.target, p.slotIdx);
+              const bar = document.createElementNS(SVG_NS, 'rect');
+              bar.setAttribute('id', `pkt-${p.id}`);
+              bar.setAttribute('x', sp.x - BAR_W/2);
+              bar.setAttribute('width', BAR_W);
+              bar.setAttribute('rx', 1.5);
+              bar.setAttribute('fill', '#5e9ff6');
+              const h = (p.actualDur / MAX_ACTUAL) * BAR_MAX_H;
+              bar.setAttribute('y', sp.y - h);
+              bar.setAttribute('height', h);
+              group.appendChild(bar);
+              p.phase = 'processing';
+              p.processStart = now;
+            }
+            return true;
+          }
+
+          if (p.phase === 'processing') {
+            const elapsed = now - p.processStart;
+            const remaining = Math.max(0, p.actualDur - elapsed);
+            const sp = slotPos(p.target, p.slotIdx);
+            const h = (remaining / MAX_ACTUAL) * BAR_MAX_H;
+            const bar = document.getElementById(`pkt-${p.id}`);
+            if (bar) {
+              bar.setAttribute('y', sp.y - h);
+              bar.setAttribute('height', h);
+            }
+            if (elapsed >= p.actualDur) {
+              state.active[p.target]--;
+              state.counts[p.target]++;
+              state.total++;
+              updateAvgRT(p.target, p.actualDur);
+              freeSlot(p.target, p.id);
+              flashServer(p.target);
+              if (bar) {
+                bar.setAttribute('opacity', '0');
+                setTimeout(() => bar.remove(), 250);
+              }
+              updateStats();
+              return false;
+            }
+            return true;
+          }
+
+          return true;
+        });
+        requestAnimationFrame(animate);
+      }
+      requestAnimationFrame(animate);
+
+      function setMultiplier(idx, delta) {
+        const next = Math.max(1, Math.min(MAX_MULT, state.multiplier[idx] + delta));
+        if (next === state.multiplier[idx]) return;
+        state.multiplier[idx] = next;
+        document.getElementById(`mv-${idx}`).textContent = `×${next}`;
+        document.getElementById(`m-${idx}`).textContent = next;
+        updateLineStyle(idx);
+        updateStats();
+      }
+
+      document.querySelectorAll('.w-stepper').forEach(stepper => {
+        const idx = parseInt(stepper.dataset.i, 10);
+        stepper.querySelectorAll('button').forEach(btn => {
+          btn.addEventListener('click', () => setMultiplier(idx, parseInt(btn.dataset.d, 10)));
+        });
+      });
+
+      document.getElementById('btn-send').addEventListener('click', sendRequest);
+
+      document.getElementById('btn-burst').addEventListener('click', () => {
+        let n = 0;
+        const fire = () => {
+          sendRequest();
+          n++;
+          if (n < 10) setTimeout(fire, 120);
+        };
+        fire();
+      });
+
+      document.getElementById('btn-play').addEventListener('click', function() {
+        state.auto = !state.auto;
+        if (state.auto) {
+          this.innerHTML = '<i class="ti ti-player-pause" aria-hidden="true"></i> Pause';
+          const tick = () => {
+            if (!state.auto) return;
+            sendRequest();
+            state.autoTimer = setTimeout(tick, state.speed);
+          };
+          tick();
+        } else {
+          this.innerHTML = '<i class="ti ti-player-play" aria-hidden="true"></i> Auto';
+          clearTimeout(state.autoTimer);
+        }
+      });
+
+      document.getElementById('btn-reset').addEventListener('click', function() {
+        state.auto = false;
+        clearTimeout(state.autoTimer);
+        document.getElementById('btn-play').innerHTML = '<i class="ti ti-player-play" aria-hidden="true"></i> Auto';
+        state.counts = [0,0,0,0];
+        state.active = [0,0,0,0];
+        state.avgRT = [0,0,0,0];
+        state.slots = [[],[],[],[]];
+        state.total = 0;
+        state.packets = [];
+        state.lineActive = [0,0,0,0];
+        document.querySelectorAll('.conn').forEach(l => l.classList.remove('active'));
+        group.innerHTML = '';
+        [0,1,2,3].forEach(updateLineStyle);
+        updateStats();
+      });
+
+      const speedInput = document.getElementById('speed');
+      const speedOut = document.getElementById('speed-out');
+      speedInput.addEventListener('input', e => {
+        state.speed = parseInt(e.target.value, 10);
+        speedOut.textContent = `${state.speed} ms`;
+      });
+
+      [0,1,2,3].forEach(updateLineStyle);
+      updateStats();
+    })();
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

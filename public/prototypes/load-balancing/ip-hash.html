@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Load Balancing — IP Hash</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a; --accent-strong: #d56a1f;
+        --accent-soft: rgba(251,134,58,0.14); --accent-border: rgba(251,134,58,0.42);
+        --success: #5cc66f; --success-soft: rgba(92,198,111,0.14); --success-border: rgba(92,198,111,0.40);
+        --danger: #f06868; --danger-soft: rgba(240,104,104,0.14); --danger-border: rgba(240,104,104,0.42);
+        --info: #5e9ff6; --info-soft: rgba(94,159,246,0.14); --info-border: rgba(94,159,246,0.40);
+        --warning: #f0b568; --warning-soft: rgba(240,181,104,0.16); --warning-border: rgba(240,181,104,0.45);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --color-background-primary: var(--bg);
+        --color-background-secondary: var(--surface);
+        --color-text-primary: var(--fg);
+        --color-text-secondary: var(--muted);
+        --color-text-tertiary: var(--subtle);
+        --color-border-secondary: var(--border-strong);
+        --color-border-tertiary: var(--border);
+        --border-radius-lg: 12px;
+        --border-radius-md: 8px;
+        --font-mono: var(--mono);
+        --font-sans: var(--sans);
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body { padding: 14px 16px 16px; background-image: linear-gradient(to right, rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.025) 1px, transparent 1px); background-size: 40px 40px; }
+      .container { max-width: 980px; margin: 0 auto; }
+
+      .stage svg { display: block; }
+      .t { fill: var(--fg); font-family: var(--sans); }
+      .ts { fill: var(--muted); font-family: var(--sans); }
+      .c-gray rect { fill: var(--elevated); stroke: var(--border-strong); stroke-width: 1; }
+      .c-purple rect { fill: var(--accent-soft); stroke: var(--accent-border); stroke-width: 1; }
+      .c-teal rect { fill: var(--info-soft); stroke: var(--info-border); stroke-width: 1; }
+
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; padding: 9px 13px; transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover { filter: brightness(1.10); background: var(--accent); }
+      input[type="range"] { accent-color: var(--accent); }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+
+      .client-box { cursor: pointer; }
+      .client-box rect { transition: stroke-width 0.15s; }
+      .client-box:hover rect { stroke-width: 2; }
+      .cline.active { stroke: var(--accent); stroke-width: 2; stroke-dasharray: none; }
+      .sline.active { stroke: var(--accent); stroke-width: 2.5; }
+      .flash rect { animation: f 0.55s ease-out; }
+      @keyframes f { 0%,100% { stroke-width: 1; } 45% { stroke-width: 3.5; } }
+      .rt-grid { display: flex; flex-direction: column; gap: 4px; }
+      .rt-row { display: grid; grid-template-columns: 70px 110px 90px 1fr; gap: 8px; padding: 5px 8px; border-radius: 4px; font-size: 12.5px; align-items: center; font-family: var(--font-mono); transition: background-color 0.3s; }
+      .rt-row .name { font-weight: 600; color: var(--color-text-primary); font-family: var(--font-sans); }
+      .rt-row .ip { color: var(--color-text-secondary); }
+      .rt-row .arrow { color: var(--color-text-tertiary); }
+      .rt-row .count { color: var(--color-text-secondary); }
+      .rt-row.recent { background: var(--accent-soft); }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2 class="sr-only">IP hash load balancer. Five clients with different IP addresses are deterministically routed to servers based on the hash of their IP modulo the server count. The same client always lands on the same server. Click a client to send a request from it and watch the hash calculation.</h2>
+
+      <div class="stage" style="background: var(--color-background-secondary); border: 1px solid var(--border); border-radius: var(--border-radius-lg); padding: 1rem; margin-bottom: 1rem;">
+        <svg viewBox="0 0 640 380" width="100%" id="lb-svg" role="img" aria-label="IP hash load balancer mapping each client IP deterministically to a server">
+          <line class="cline" data-c="0" x1="105" y1="109" x2="250" y2="190" stroke="var(--color-border-secondary)" stroke-width="1" stroke-dasharray="3 3"/>
+          <line class="cline" data-c="1" x1="105" y1="154" x2="250" y2="190" stroke="var(--color-border-secondary)" stroke-width="1" stroke-dasharray="3 3"/>
+          <line class="cline" data-c="2" x1="105" y1="199" x2="250" y2="190" stroke="var(--color-border-secondary)" stroke-width="1" stroke-dasharray="3 3"/>
+          <line class="cline" data-c="3" x1="105" y1="244" x2="250" y2="190" stroke="var(--color-border-secondary)" stroke-width="1" stroke-dasharray="3 3"/>
+          <line class="cline" data-c="4" x1="105" y1="289" x2="250" y2="190" stroke="var(--color-border-secondary)" stroke-width="1" stroke-dasharray="3 3"/>
+
+          <line class="sline" data-s="0" x1="380" y1="190" x2="495" y2="60" stroke="var(--color-border-tertiary)" stroke-width="1.5"/>
+          <line class="sline" data-s="1" x1="380" y1="190" x2="495" y2="140" stroke="var(--color-border-tertiary)" stroke-width="1.5"/>
+          <line class="sline" data-s="2" x1="380" y1="190" x2="495" y2="220" stroke="var(--color-border-tertiary)" stroke-width="1.5"/>
+          <line class="sline" data-s="3" x1="380" y1="190" x2="495" y2="300" stroke="var(--color-border-tertiary)" stroke-width="1.5"/>
+
+          <g class="c-gray client-box" data-i="0">
+            <rect x="15" y="89" width="90" height="40" rx="6"/>
+            <text class="t" x="60" y="107" text-anchor="middle" font-size="12" font-weight="500">Client A</text>
+            <text class="ts" x="60" y="121" text-anchor="middle" font-size="9.5" font-family="var(--font-mono)">192.168.1.10</text>
+          </g>
+          <g class="c-gray client-box" data-i="1">
+            <rect x="15" y="134" width="90" height="40" rx="6"/>
+            <text class="t" x="60" y="152" text-anchor="middle" font-size="12" font-weight="500">Client B</text>
+            <text class="ts" x="60" y="166" text-anchor="middle" font-size="9.5" font-family="var(--font-mono)">192.168.1.42</text>
+          </g>
+          <g class="c-gray client-box" data-i="2">
+            <rect x="15" y="179" width="90" height="40" rx="6"/>
+            <text class="t" x="60" y="197" text-anchor="middle" font-size="12" font-weight="500">Client C</text>
+            <text class="ts" x="60" y="211" text-anchor="middle" font-size="9.5" font-family="var(--font-mono)">10.0.0.7</text>
+          </g>
+          <g class="c-gray client-box" data-i="3">
+            <rect x="15" y="224" width="90" height="40" rx="6"/>
+            <text class="t" x="60" y="242" text-anchor="middle" font-size="12" font-weight="500">Client D</text>
+            <text class="ts" x="60" y="256" text-anchor="middle" font-size="9.5" font-family="var(--font-mono)">172.16.0.99</text>
+          </g>
+          <g class="c-gray client-box" data-i="4">
+            <rect x="15" y="269" width="90" height="40" rx="6"/>
+            <text class="t" x="60" y="287" text-anchor="middle" font-size="12" font-weight="500">Client E</text>
+            <text class="ts" x="60" y="301" text-anchor="middle" font-size="9.5" font-family="var(--font-mono)">192.168.1.200</text>
+          </g>
+
+          <g class="c-purple" id="lb-box">
+            <rect x="250" y="145" width="130" height="90" rx="6"/>
+            <text class="t" x="315" y="170" text-anchor="middle" font-size="14" font-weight="500">Load balancer</text>
+            <text class="ts" x="315" y="190" text-anchor="middle" font-size="11">IP hash</text>
+            <text x="315" y="212" text-anchor="middle" font-size="10" font-family="var(--font-mono)" fill="var(--color-text-secondary)">hash(IP) % N</text>
+          </g>
+
+          <g class="c-teal server-g" id="server-0">
+            <rect x="495" y="35" width="130" height="50" rx="6"/>
+            <text class="t" x="560" y="55" text-anchor="middle" font-size="13" font-weight="500">Server 1</text>
+            <text class="ts" x="560" y="73" text-anchor="middle" font-size="11">Handled: <tspan id="count-0" font-weight="500">0</tspan></text>
+          </g>
+          <g class="c-teal server-g" id="server-1">
+            <rect x="495" y="115" width="130" height="50" rx="6"/>
+            <text class="t" x="560" y="135" text-anchor="middle" font-size="13" font-weight="500">Server 2</text>
+            <text class="ts" x="560" y="153" text-anchor="middle" font-size="11">Handled: <tspan id="count-1" font-weight="500">0</tspan></text>
+          </g>
+          <g class="c-teal server-g" id="server-2">
+            <rect x="495" y="195" width="130" height="50" rx="6"/>
+            <text class="t" x="560" y="215" text-anchor="middle" font-size="13" font-weight="500">Server 3</text>
+            <text class="ts" x="560" y="233" text-anchor="middle" font-size="11">Handled: <tspan id="count-2" font-weight="500">0</tspan></text>
+          </g>
+          <g class="c-teal server-g" id="server-3">
+            <rect x="495" y="275" width="130" height="50" rx="6"/>
+            <text class="t" x="560" y="295" text-anchor="middle" font-size="13" font-weight="500">Server 4</text>
+            <text class="ts" x="560" y="313" text-anchor="middle" font-size="11">Handled: <tspan id="count-3" font-weight="500">0</tspan></text>
+          </g>
+
+          <g id="packets"></g>
+        </svg>
+      </div>
+
+      <div style="background: var(--color-background-secondary); border: 1px solid var(--border); border-radius: var(--border-radius-md); padding: 0.85rem 1rem; margin-bottom: 1rem;">
+        <div style="font-size: 12px; color: var(--color-text-secondary); margin-bottom: 6px;">Latest hash calculation</div>
+        <div id="hash-strip" style="font-family: var(--font-mono); font-size: 13px; color: var(--color-text-secondary);">
+          Click any client to send a request from them.
+        </div>
+      </div>
+
+      <div style="background: var(--color-background-secondary); border: 1px solid var(--border); border-radius: var(--border-radius-md); padding: 0.85rem 1rem; margin-bottom: 1rem;">
+        <div style="font-size: 12px; color: var(--color-text-secondary); margin-bottom: 8px;">Routing table — each client deterministically maps to one server</div>
+        <div class="rt-grid" id="rt-grid"></div>
+      </div>
+
+      <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 1rem;">
+        <button id="btn-play" class="primary"><i class="ti ti-player-play" aria-hidden="true"></i> Auto (random client)</button>
+        <button id="btn-burst"><i class="ti ti-stack-2" aria-hidden="true"></i> Send 20 random</button>
+        <button id="btn-reset"><i class="ti ti-refresh" aria-hidden="true"></i> Reset</button>
+        <div style="display: flex; align-items: center; gap: 10px; margin-left: auto;">
+          <label style="font-size: 13px; color: var(--color-text-secondary);">Auto rate</label>
+          <input type="range" min="200" max="1500" value="600" step="50" id="speed" style="width: 110px;"/>
+          <span style="font-size: 12px; color: var(--color-text-tertiary); min-width: 52px;" id="speed-out">600 ms</span>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px;">
+        <div style="background: var(--color-background-secondary); border: 1px solid var(--border); border-radius: var(--border-radius-md); padding: 0.7rem 0.9rem;">
+          <div style="font-size: 12px; color: var(--color-text-secondary);">Total requests</div>
+          <div style="font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums;" id="stat-total">0</div>
+        </div>
+        <div style="background: var(--color-background-secondary); border: 1px solid var(--border); border-radius: var(--border-radius-md); padding: 0.7rem 0.9rem;">
+          <div style="font-size: 12px; color: var(--color-text-secondary);">Distribution (S1·S2·S3·S4)</div>
+          <div style="font-size: 14px; font-weight: 600; font-family: var(--font-mono); margin-top: 4px;" id="stat-dist">0·0·0·0</div>
+        </div>
+        <div style="background: var(--color-background-secondary); border: 1px solid var(--border); border-radius: var(--border-radius-md); padding: 0.7rem 0.9rem;">
+          <div style="font-size: 12px; color: var(--color-text-secondary);">Spread (max − min)</div>
+          <div style="font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums;" id="stat-spread">0</div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+    (function() {
+      const state = {
+        clients: [
+          { name: 'Client A', ip: '192.168.1.10', count: 0 },
+          { name: 'Client B', ip: '192.168.1.42', count: 0 },
+          { name: 'Client C', ip: '10.0.0.7', count: 0 },
+          { name: 'Client D', ip: '172.16.0.99', count: 0 },
+          { name: 'Client E', ip: '192.168.1.200', count: 0 }
+        ],
+        serverCounts: [0,0,0,0],
+        total: 0,
+        packets: [],
+        auto: false,
+        autoTimer: null,
+        speed: 600,
+        seq: 0,
+        lastClient: null
+      };
+
+      const clientPos = [
+        { x: 105, y: 109 }, { x: 105, y: 154 }, { x: 105, y: 199 },
+        { x: 105, y: 244 }, { x: 105, y: 289 }
+      ];
+      const serverEntry = [
+        { x: 495, y: 60 }, { x: 495, y: 140 },
+        { x: 495, y: 220 }, { x: 495, y: 300 }
+      ];
+      const lbIn = { x: 250, y: 190 };
+      const lbOut = { x: 380, y: 190 };
+
+      const group = document.getElementById('packets');
+      const SVG_NS = 'http://www.w3.org/2000/svg';
+      const PHASE_MS = 550;
+
+      function hashIP(ip) {
+        let h = 5381;
+        for (let i = 0; i < ip.length; i++) {
+          h = ((h << 5) + h + ip.charCodeAt(i)) | 0;
+        }
+        return Math.abs(h);
+      }
+
+      function routeFor(ip) {
+        return hashIP(ip) % 4;
+      }
+
+      function setLineActive(selector, on) {
+        const el = document.querySelector(selector);
+        if (el) el.classList.toggle('active', on);
+      }
+
+      function sendFromClient(clientIdx) {
+        const c = state.clients[clientIdx];
+        const h = hashIP(c.ip);
+        const target = h % 4;
+
+        const p = {
+          id: ++state.seq, clientIdx, target,
+          phase: 'to-lb', t0: performance.now()
+        };
+        const circ = document.createElementNS(SVG_NS, 'circle');
+        circ.setAttribute('id', `pkt-${p.id}`);
+        circ.setAttribute('r', '7');
+        circ.setAttribute('fill', '#fb863a');
+        circ.setAttribute('stroke', 'var(--color-background-primary)');
+        circ.setAttribute('stroke-width', '1.5');
+        circ.setAttribute('cx', clientPos[clientIdx].x);
+        circ.setAttribute('cy', clientPos[clientIdx].y);
+        group.appendChild(circ);
+        state.packets.push(p);
+
+        setLineActive(`.cline[data-c="${clientIdx}"]`, true);
+
+        c.count++;
+        state.serverCounts[target]++;
+        state.total++;
+        state.lastClient = clientIdx;
+
+        document.getElementById('hash-strip').innerHTML =
+          `hash(<span style="color:var(--color-text-primary);font-weight:600">"${c.ip}"</span>) = <span style="color:var(--success);font-weight:600">${h}</span> &nbsp;&nbsp; ${h} mod 4 = <span style="color:var(--success);font-weight:600">${target}</span> &nbsp;&nbsp; → <span style="color:var(--accent);font-weight:600">Server ${target+1}</span>`;
+
+        updateUI();
+      }
+
+      function flashServer(idx) {
+        const el = document.getElementById(`server-${idx}`);
+        if (!el) return;
+        el.classList.remove('flash');
+        void el.offsetWidth;
+        el.classList.add('flash');
+        setTimeout(() => el.classList.remove('flash'), 600);
+      }
+
+      function buildRoutingTable() {
+        const grid = document.getElementById('rt-grid');
+        grid.innerHTML = '';
+        state.clients.forEach((c, i) => {
+          const target = routeFor(c.ip);
+          const row = document.createElement('div');
+          row.className = 'rt-row';
+          row.id = `rt-row-${i}`;
+          row.innerHTML = `
+            <span class="name">${c.name}</span>
+            <span class="ip">${c.ip}</span>
+            <span class="arrow">→ Server ${target+1}</span>
+            <span class="count"><span id="rt-cnt-${i}">${c.count}</span> requests</span>
+          `;
+          grid.appendChild(row);
+        });
+      }
+
+      function updateUI() {
+        document.getElementById('stat-total').textContent = state.total;
+        document.getElementById('stat-dist').textContent = state.serverCounts.join('·');
+        const spread = Math.max(...state.serverCounts) - Math.min(...state.serverCounts);
+        document.getElementById('stat-spread').textContent = spread;
+        state.serverCounts.forEach((v, i) => {
+          document.getElementById(`count-${i}`).textContent = v;
+        });
+        state.clients.forEach((c, i) => {
+          const cnt = document.getElementById(`rt-cnt-${i}`);
+          if (cnt) cnt.textContent = c.count;
+          const row = document.getElementById(`rt-row-${i}`);
+          if (row) row.classList.toggle('recent', i === state.lastClient);
+        });
+      }
+
+      function animate(now) {
+        state.packets = state.packets.filter(p => {
+          const el = document.getElementById(`pkt-${p.id}`);
+          const cp = clientPos[p.clientIdx];
+          const sp = serverEntry[p.target];
+
+          if (p.phase === 'to-lb') {
+            const t = Math.min((now - p.t0) / PHASE_MS, 1);
+            const x = cp.x + (lbIn.x - cp.x) * t;
+            const y = cp.y + (lbIn.y - cp.y) * t;
+            if (el) { el.setAttribute('cx', x); el.setAttribute('cy', y); }
+            if (t >= 1) {
+              setLineActive(`.cline[data-c="${p.clientIdx}"]`, false);
+              setLineActive(`.sline[data-s="${p.target}"]`, true);
+              p.phase = 'to-server';
+              p.t0 = now;
+            }
+            return true;
+          }
+
+          if (p.phase === 'to-server') {
+            const t = Math.min((now - p.t0) / PHASE_MS, 1);
+            const x = lbOut.x + (sp.x - lbOut.x) * t;
+            const y = lbOut.y + (sp.y - lbOut.y) * t;
+            if (el) { el.setAttribute('cx', x); el.setAttribute('cy', y); }
+            if (t >= 1) {
+              setLineActive(`.sline[data-s="${p.target}"]`, false);
+              flashServer(p.target);
+              if (el) { el.setAttribute('opacity', '0'); setTimeout(() => el.remove(), 200); }
+              return false;
+            }
+            return true;
+          }
+
+          return true;
+        });
+        requestAnimationFrame(animate);
+      }
+      requestAnimationFrame(animate);
+
+      document.querySelectorAll('.client-box').forEach(el => {
+        el.addEventListener('click', () => sendFromClient(parseInt(el.dataset.i, 10)));
+      });
+
+      document.getElementById('btn-play').addEventListener('click', function() {
+        state.auto = !state.auto;
+        if (state.auto) {
+          this.innerHTML = '<i class="ti ti-player-pause" aria-hidden="true"></i> Pause auto';
+          const tick = () => {
+            if (!state.auto) return;
+            sendFromClient(Math.floor(Math.random() * 5));
+            state.autoTimer = setTimeout(tick, state.speed);
+          };
+          tick();
+        } else {
+          this.innerHTML = '<i class="ti ti-player-play" aria-hidden="true"></i> Auto (random client)';
+          clearTimeout(state.autoTimer);
+        }
+      });
+
+      document.getElementById('btn-burst').addEventListener('click', () => {
+        let n = 0;
+        const fire = () => {
+          sendFromClient(Math.floor(Math.random() * 5));
+          n++;
+          if (n < 20) setTimeout(fire, 100);
+        };
+        fire();
+      });
+
+      document.getElementById('btn-reset').addEventListener('click', function() {
+        state.auto = false;
+        clearTimeout(state.autoTimer);
+        document.getElementById('btn-play').innerHTML = '<i class="ti ti-player-play" aria-hidden="true"></i> Auto (random client)';
+        state.serverCounts = [0,0,0,0];
+        state.total = 0;
+        state.packets = [];
+        state.lastClient = null;
+        state.clients.forEach(c => c.count = 0);
+        document.querySelectorAll('.cline, .sline').forEach(l => l.classList.remove('active'));
+        group.innerHTML = '';
+        document.getElementById('hash-strip').textContent = 'Click any client to send a request from them.';
+        updateUI();
+      });
+
+      const speedInput = document.getElementById('speed');
+      const speedOut = document.getElementById('speed-out');
+      speedInput.addEventListener('input', e => {
+        state.speed = parseInt(e.target.value, 10);
+        speedOut.textContent = `${state.speed} ms`;
+      });
+
+      buildRoutingTable();
+      updateUI();
+    })();
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

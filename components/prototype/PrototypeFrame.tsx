@@ -169,28 +169,47 @@ export function PrototypeFrame({
         }
       >
         {src ? (
+          // One stable div > div > iframe tree in both modes so toggling
+          // fullscreen never remounts (and resets) the running prototype.
+          // Fullscreen: the OUTER box takes the *scaled* size so the grid can
+          // center it, while the INNER box keeps the prototype's logical size
+          // and scales from its top-left. (Scaling the inner box alone would
+          // leave its unscaled height in layout, dropping the content into the
+          // lower part of the screen with a big empty band on top.)
           <div
             className={isFullscreen ? "shrink-0" : "absolute inset-0"}
             style={
               isFullscreen
                 ? {
-                    width: FS_WIDTH,
-                    height: contentHeight ?? 640,
-                    transform: `scale(${fsScale})`,
-                    transformOrigin: "center",
+                    width: FS_WIDTH * fsScale,
+                    height: (contentHeight ?? 640) * fsScale,
                   }
                 : undefined
             }
           >
-            <iframe
-              key={key}
-              ref={iframeRef}
-              src={src}
-              title={`${title} prototype`}
-              sandbox="allow-scripts"
-              loading="lazy"
-              className="block h-full w-full"
-            />
+            <div
+              className={isFullscreen ? undefined : "h-full w-full"}
+              style={
+                isFullscreen
+                  ? {
+                      width: FS_WIDTH,
+                      height: contentHeight ?? 640,
+                      transform: `scale(${fsScale})`,
+                      transformOrigin: "top left",
+                    }
+                  : undefined
+              }
+            >
+              <iframe
+                key={key}
+                ref={iframeRef}
+                src={src}
+                title={`${title} prototype`}
+                sandbox="allow-scripts"
+                loading="lazy"
+                className="block h-full w-full"
+              />
+            </div>
           </div>
         ) : (
           <PlaceholderPanel />

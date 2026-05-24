@@ -36,6 +36,16 @@ import { worstFit } from "./memory-allocation/worst-fit";
 import { nextFit } from "./memory-allocation/next-fit";
 import { buddy } from "./memory-allocation/buddy";
 import { slab } from "./memory-allocation/slab";
+import { loadBalancingTopic } from "./load-balancing/_topic";
+import { roundRobin } from "./load-balancing/round-robin";
+import { weightedRoundRobin } from "./load-balancing/weighted-round-robin";
+import { random as lbRandom } from "./load-balancing/random";
+import { leastConnections } from "./load-balancing/least-connections";
+import { weightedLeastConnections } from "./load-balancing/weighted-least-connections";
+import { leastResponseTime } from "./load-balancing/least-response-time";
+import { ewma } from "./load-balancing/ewma";
+import { ipHash } from "./load-balancing/ip-hash";
+import { powerOfTwoChoices } from "./load-balancing/power-of-two-choices";
 
 // Indexed by `${topicSlug}/${conceptSlug}`
 const CONCEPT_CONTENT: Record<string, ConceptContent> = {
@@ -71,6 +81,15 @@ const CONCEPT_CONTENT: Record<string, ConceptContent> = {
   "memory-allocation/next-fit": nextFit,
   "memory-allocation/buddy": buddy,
   "memory-allocation/slab": slab,
+  "load-balancing/round-robin": roundRobin,
+  "load-balancing/weighted-round-robin": weightedRoundRobin,
+  "load-balancing/random": lbRandom,
+  "load-balancing/least-connections": leastConnections,
+  "load-balancing/weighted-least-connections": weightedLeastConnections,
+  "load-balancing/least-response-time": leastResponseTime,
+  "load-balancing/ewma": ewma,
+  "load-balancing/ip-hash": ipHash,
+  "load-balancing/power-of-two-choices": powerOfTwoChoices,
 };
 
 // Indexed by topic slug
@@ -80,6 +99,7 @@ const TOPIC_CONTENT: Record<string, TopicContent> = {
   "cache-eviction": cacheEvictionTopic,
   "garbage-collection": garbageCollectionTopic,
   "memory-allocation": memoryAllocationTopic,
+  "load-balancing": loadBalancingTopic,
 };
 
 export function getConceptContent(
