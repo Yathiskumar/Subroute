@@ -46,6 +46,9 @@ import { leastResponseTime } from "./load-balancing/least-response-time";
 import { ewma } from "./load-balancing/ewma";
 import { ipHash } from "./load-balancing/ip-hash";
 import { powerOfTwoChoices } from "./load-balancing/power-of-two-choices";
+import { consistentHashingTopic } from "./consistent-hashing/_topic";
+import { vanillaRing } from "./consistent-hashing/vanilla-ring";
+import { virtualNodes } from "./consistent-hashing/virtual-nodes";
 
 // Indexed by `${topicSlug}/${conceptSlug}`
 const CONCEPT_CONTENT: Record<string, ConceptContent> = {
@@ -90,6 +93,8 @@ const CONCEPT_CONTENT: Record<string, ConceptContent> = {
   "load-balancing/ewma": ewma,
   "load-balancing/ip-hash": ipHash,
   "load-balancing/power-of-two-choices": powerOfTwoChoices,
+  "consistent-hashing/vanilla-ring": vanillaRing,
+  "consistent-hashing/virtual-nodes": virtualNodes,
 };
 
 // Indexed by topic slug
@@ -100,6 +105,7 @@ const TOPIC_CONTENT: Record<string, TopicContent> = {
   "garbage-collection": garbageCollectionTopic,
   "memory-allocation": memoryAllocationTopic,
   "load-balancing": loadBalancingTopic,
+  "consistent-hashing": consistentHashingTopic,
 };
 
 export function getConceptContent(

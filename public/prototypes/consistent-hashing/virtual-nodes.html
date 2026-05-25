@@ -1,0 +1,583 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Consistent Hashing — Virtual Nodes</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a; --accent-strong: #d56a1f;
+        --success: #5cc66f; --danger: #f06868; --info: #5e9ff6;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --color-background-primary: var(--bg);
+        --color-background-secondary: var(--surface);
+        --color-text-primary: var(--fg);
+        --color-text-secondary: var(--muted);
+        --color-text-tertiary: var(--subtle);
+        --color-border-secondary: var(--border-strong);
+        --color-border-tertiary: var(--border);
+        --color-background-info: rgba(94,159,246,0.10);
+        --color-text-info: #cdddf7;
+        --color-border-info: rgba(94,159,246,0.28);
+        --border-radius-lg: 12px;
+        --border-radius-md: 8px;
+        --font-mono: var(--mono);
+        --font-sans: var(--sans);
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body { padding: 14px 16px 16px; background-image: linear-gradient(to right, rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.025) 1px, transparent 1px); background-size: 40px 40px; }
+      .container { max-width: 620px; margin: 0 auto; }
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: var(--border-radius-lg); padding: 0.5rem; margin-bottom: 1rem; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; padding: 9px 13px; transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+      .vc-wrap { padding: 0.25rem 0; }
+      .vc-narrate { background: var(--color-background-info); border: 1px solid var(--color-border-info); border-radius: var(--border-radius-lg); padding: 13px 15px; margin-bottom: 1rem; font-size: 13.5px; line-height: 1.55; color: var(--color-text-info); }
+      .vc-narrate .title { font-weight: 600; display: block; margin-bottom: 4px; font-size: 13px; color: #eaf2fd; }
+      .vc-narrate b { font-weight: 600; color: #eaf2fd; }
+      .vc-svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+      .vc-track { fill: none; stroke: var(--color-border-tertiary); stroke-width: 1; }
+      .vc-track-fill { fill: none; stroke: var(--elevated); stroke-width: 30; }
+      .vc-tick { stroke: var(--color-border-secondary); }
+      .vc-vnode { stroke: var(--color-background-primary); stroke-width: 1.5; cursor: pointer; transition: r 0.2s; }
+      .vc-key-dot { cursor: pointer; transition: r 0.2s; }
+      .vc-arc { fill: none; stroke-width: 18; opacity: 0; transition: opacity 0.25s; pointer-events: none; }
+      .vc-arc.show { opacity: 0.26; }
+      .vc-assign { fill: none; stroke-width: 1.2; stroke-dasharray: 3 3; opacity: 0.3; pointer-events: none; transition: opacity 0.2s; }
+      .vc-assign.faded { opacity: 0.06; }
+      .vc-assign.highlight { opacity: 0.95; stroke-width: 1.8; }
+      @keyframes vc-pulse { 0% { r: 3; } 35% { r: 8; } 100% { r: 3; } }
+      .vc-key-dot.moved { animation: vc-pulse 1.3s ease-out; }
+      .vc-inspector { font-family: var(--font-mono); font-size: 12px; color: var(--color-text-secondary); text-align: center; min-height: 18px; margin: 0.5rem 0 1rem; }
+      .vc-inspector b { color: var(--color-text-primary); font-weight: 600; }
+      .vc-slider-row { display: flex; align-items: center; gap: 12px; max-width: 460px; margin: 0 auto 1rem; padding: 10px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--border-radius-md); }
+      .vc-slider-row label { font-size: 12.5px; color: var(--color-text-secondary); flex-shrink: 0; }
+      .vc-slider-row input[type="range"] { flex: 1; min-width: 0; accent-color: var(--accent); }
+      .vc-slider-row output { font-family: var(--font-mono); font-size: 14px; font-weight: 600; color: var(--color-text-primary); min-width: 24px; text-align: right; }
+      .vc-controls { display: flex; gap: 8px; justify-content: center; margin-bottom: 1rem; flex-wrap: wrap; }
+      .vc-demo-btn { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      .vc-demo-btn:hover:not(:disabled) { filter: brightness(1.10); background: var(--accent); border-color: transparent; }
+      .vc-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+      .vc-stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--border-radius-md); padding: 10px 12px; position: relative; overflow: hidden; cursor: pointer; }
+      .vc-stat-bar { position: absolute; left: 0; top: 0; bottom: 0; opacity: 0.2; transition: width 0.3s; }
+      .vc-stat-row { display: flex; align-items: center; gap: 8px; position: relative; }
+      .vc-swatch { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+      .vc-stat-name { font-family: var(--font-mono); font-size: 12.5px; color: var(--color-text-primary); flex: 1; }
+      .vc-stat-sub { font-family: var(--font-mono); font-size: 11px; color: var(--color-text-tertiary); margin-top: 4px; position: relative; }
+      .vc-stat-value { font-family: var(--font-mono); font-size: 15px; color: var(--color-text-primary); font-weight: 600; margin-top: 2px; position: relative; }
+      .vc-stat-pct { font-size: 11px; color: var(--color-text-tertiary); margin-left: 4px; }
+      .vc-stat-empty { grid-column: 1 / -1; text-align: center; padding: 1rem; color: var(--color-text-tertiary); font-size: 13px; }
+      .vc-summary { font-family: var(--font-mono); font-size: 12px; color: var(--color-text-tertiary); text-align: center; margin-top: 0.75rem; display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+      .vc-summary b { color: var(--color-text-secondary); font-weight: 600; }
+      .vc-summary b.good { color: var(--color-text-success); }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="vc-wrap">
+        <h2 class="sr-only">Virtual nodes simulator. Each server is placed at V positions on the hash ring. A slider controls V; raising it makes the per-server load more even. Click a server to remove it and watch its keys scatter across the survivors.</h2>
+
+        <div class="vc-narrate" id="vc-narrate">
+          <span class="title">How to read this</span>
+          Each server has <b>V</b> positions on the ring, called <b>vnodes</b>. With V=3, server <b>alpha</b> has <b>a1</b>, <b>a2</b>, <b>a3</b> — each at a different hash, scattered around the ring. Same colour means same server. Slide V to add more, or hit the demo.
+        </div>
+
+        <div class="stage">
+          <svg class="vc-svg" id="vc-svg" viewBox="0 0 500 500" width="500" height="500" role="img" aria-label="Hash ring with labelled virtual nodes">
+            <circle cx="250" cy="250" r="180" class="vc-track-fill"></circle>
+            <circle cx="250" cy="250" r="180" class="vc-track"></circle>
+            <line x1="250" y1="62" x2="250" y2="78" class="vc-tick"></line>
+            <line x1="438" y1="250" x2="422" y2="250" class="vc-tick"></line>
+            <line x1="250" y1="438" x2="250" y2="422" class="vc-tick"></line>
+            <line x1="62" y1="250" x2="78" y2="250" class="vc-tick"></line>
+            <text x="250" y="52" text-anchor="middle" font-family="var(--font-mono)" font-size="11" fill="var(--color-text-tertiary)">0</text>
+            <text x="448" y="254" text-anchor="middle" font-family="var(--font-mono)" font-size="11" fill="var(--color-text-tertiary)">¼</text>
+            <text x="250" y="450" text-anchor="middle" font-family="var(--font-mono)" font-size="11" fill="var(--color-text-tertiary)">½</text>
+            <text x="40" y="254" text-anchor="middle" font-family="var(--font-mono)" font-size="11" fill="var(--color-text-tertiary)">¾</text>
+            <text x="250" y="244" text-anchor="middle" font-family="var(--font-mono)" font-size="11" fill="var(--color-text-tertiary)" letter-spacing="0.08em">clockwise →</text>
+            <text x="250" y="265" text-anchor="middle" font-family="var(--font-sans)" font-size="11" fill="var(--color-text-tertiary)" id="vc-mid-info">3 servers · 9 vnodes</text>
+            <g id="vc-arcs"></g>
+            <g id="vc-assign"></g>
+            <g id="vc-keys"></g>
+            <g id="vc-nodes"></g>
+            <g id="vc-labels"></g>
+          </svg>
+        </div>
+
+        <div class="vc-inspector" id="vc-inspector">Hover any dot to see what it is</div>
+
+        <div class="vc-slider-row">
+          <label for="vc-slider">Vnodes per server (V)</label>
+          <input type="range" min="1" max="15" value="3" step="1" id="vc-slider">
+          <output id="vc-value">3</output>
+        </div>
+
+        <div class="vc-controls">
+          <button id="vc-demo-btn" class="vc-demo-btn" onclick="vcDemo()"><i class="ti ti-player-play" aria-hidden="true"></i> Watch the demo</button>
+          <button class="vc-user-btn" onclick="vcAddServer()"><i class="ti ti-plus" aria-hidden="true"></i> Add server</button>
+          <button class="vc-user-btn" onclick="vcAddKeys(6)">+6 keys</button>
+          <button class="vc-user-btn" onclick="vcReset()"><i class="ti ti-refresh" aria-hidden="true"></i> Reset</button>
+        </div>
+
+        <div class="vc-stats" id="vc-stats"></div>
+        <div class="vc-summary" id="vc-summary"></div>
+      </div>
+    </div>
+
+    <script>
+    (function() {
+      const HASH_SPACE = 2 ** 32;
+      const CX = 250, CY = 250, R_RING = 180, R_KEY = 148, R_LABEL = 200;
+      const PALETTE = ['#fb863a', '#5e9ff6', '#5cc66f', '#f0b568', '#f06888', '#a78bfa'];
+      const NODE_NAMES = ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta'];
+      const KEY_PREFIXES = ['user:', 'order:', 'cart:', 'photo:', 'msg:', 'doc:'];
+
+      function fnv1a(str) {
+        let h = 2166136261 >>> 0;
+        for (let i = 0; i < str.length; i++) {
+          h ^= str.charCodeAt(i);
+          h = Math.imul(h, 16777619) >>> 0;
+        }
+        return h >>> 0;
+      }
+      function fmix32(h) {
+        h ^= h >>> 16;
+        h = Math.imul(h, 0x85ebca6b) >>> 0;
+        h ^= h >>> 13;
+        h = Math.imul(h, 0xc2b2ae35) >>> 0;
+        h ^= h >>> 16;
+        return h >>> 0;
+      }
+      function hash(s) { return fmix32(fnv1a(s)); }
+
+      const toDeg = (p) => (p / HASH_SPACE) * 360;
+      const degToXY = (deg, r) => {
+        const rad = (deg - 90) * Math.PI / 180;
+        return { x: CX + r * Math.cos(rad), y: CY + r * Math.sin(rad) };
+      };
+      const arcPath = (degA, degB, r) => {
+        const a = degToXY(degA, r), b = degToXY(degB, r);
+        let sweep = degB - degA; if (sweep < 0) sweep += 360;
+        return `M ${a.x} ${a.y} A ${r} ${r} 0 ${sweep > 180 ? 1 : 0} 1 ${b.x} ${b.y}`;
+      };
+      const assignPath = (kDeg, nDeg) => {
+        const r = R_KEY - 4;
+        const a = degToXY(kDeg, r), b = degToXY(nDeg, r);
+        let sweep = nDeg - kDeg; if (sweep < 0) sweep += 360;
+        return `M ${a.x} ${a.y} A ${r} ${r} 0 ${sweep > 180 ? 1 : 0} 1 ${b.x} ${b.y}`;
+      };
+      const esc = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+      const state = {
+        servers: [], vnodes: [], keys: [], V: 3,
+        hoveredServerId: null, hoveredVnodeKey: null, hoveredKey: null,
+        moved: new Set(), nNode: 0, nKey: 0, demoPlaying: false,
+      };
+
+      function vnodeLabel(serverName, idx) { return serverName.charAt(0) + (idx + 1); }
+
+      function recomputeVnodes() {
+        const out = [];
+        for (const server of state.servers) {
+          for (let i = 0; i < state.V; i++) {
+            const h = hash('vn|' + server.name + '|' + i);
+            out.push({ serverId: server.id, hash: h, deg: toDeg(h), idx: i, label: vnodeLabel(server.name, i) });
+          }
+        }
+        out.sort((a, b) => a.hash - b.hash);
+        state.vnodes = out;
+      }
+      function findOwnerVnode(kHash) {
+        if (state.vnodes.length === 0) return null;
+        for (const v of state.vnodes) if (v.hash >= kHash) return v;
+        return state.vnodes[0];
+      }
+      function serverFor(v) { return v ? state.servers.find(s => s.id === v.serverId) : null; }
+      function assignments() {
+        const byServer = new Map(state.servers.map(s => [s.id, []]));
+        const list = state.keys.map(k => {
+          const v = findOwnerVnode(k.hash);
+          const s = serverFor(v);
+          if (s) byServer.get(s.id).push(k);
+          return { key: k, vnode: v, server: s };
+        });
+        return { list, byServer };
+      }
+      function snapshot() {
+        const m = new Map();
+        for (const { key, server } of assignments().list) m.set(key.id, server?.id || null);
+        return m;
+      }
+      function computeImbalance() {
+        if (state.servers.length === 0 || state.keys.length === 0) return 0;
+        const { byServer } = assignments();
+        const counts = state.servers.map(s => byServer.get(s.id).length);
+        const mean = counts.reduce((a, b) => a + b, 0) / counts.length;
+        if (mean === 0) return 0;
+        const variance = counts.reduce((a, c) => a + (c - mean) ** 2, 0) / counts.length;
+        return Math.round((Math.sqrt(variance) / mean) * 100);
+      }
+      function narrate(html, title) {
+        const t = title ? `<span class="title">${esc(title)}</span>` : '';
+        document.getElementById('vc-narrate').innerHTML = t + html;
+      }
+
+      function setUserControlsDisabled(disabled) {
+        document.querySelectorAll('.vc-user-btn').forEach(b => { b.disabled = disabled; });
+        document.getElementById('vc-slider').disabled = disabled;
+        const demoBtn = document.getElementById('vc-demo-btn');
+        demoBtn.disabled = disabled;
+        demoBtn.innerHTML = disabled
+          ? '<i class="ti ti-player-pause" aria-hidden="true"></i> Demo playing…'
+          : '<i class="ti ti-player-play" aria-hidden="true"></i> Watch the demo';
+      }
+
+      function addServer(name, doNarrate) {
+        if (state.servers.length >= 5) return null;
+        name = name || NODE_NAMES[state.nNode % NODE_NAMES.length];
+        let final = name, i = 1;
+        while (state.servers.some(s => s.name === final)) { final = name + '-' + (++i); }
+        const color = PALETTE[state.nNode % PALETTE.length];
+        state.servers.push({ id: 'srv' + state.nNode, name: final, color });
+        state.nNode++;
+        recomputeVnodes();
+        if (doNarrate) {
+          const labels = [];
+          for (let j = 0; j < state.V; j++) labels.push(vnodeLabel(final, j));
+          narrate(`Added <b>${esc(final)}</b>. It now has <b>${state.V}</b> vnodes on the ring: <b>${labels.join(', ')}</b> — each at a different hash position.`, 'Server added');
+        }
+        render();
+        return state.servers[state.servers.length - 1];
+      }
+
+      function removeServer(id, doNarrate) {
+        const server = state.servers.find(s => s.id === id);
+        if (!server) return;
+        const before = snapshot();
+        state.servers = state.servers.filter(s => s.id !== id);
+        recomputeVnodes();
+        if (state.hoveredServerId === id) state.hoveredServerId = null;
+        const after = snapshot();
+        const moved = [];
+        for (const [keyId, prevId] of before.entries()) if (after.get(keyId) !== prevId) moved.push(keyId);
+        state.moved = new Set(moved);
+        if (doNarrate) {
+          narrate(`Removed <b>${esc(server.name)}</b> — all <b>${state.V}</b> of its vnodes vanished. <b>${moved.length}</b> of <b>${state.keys.length}</b> keys reassigned to the next vnode clockwise. Notice they spread across the survivors instead of all landing on one.`, 'Server removed');
+        }
+        render();
+        setTimeout(() => { state.moved = new Set(); render(); }, 1300);
+      }
+
+      function addKey(name) {
+        if (state.keys.length >= 50) return null;
+        if (!name) {
+          const p = KEY_PREFIXES[Math.floor(Math.random() * KEY_PREFIXES.length)];
+          name = p + (Math.floor(Math.random() * 9000) + 1000);
+        }
+        if (state.keys.some(k => k.name === name)) name += '-' + state.nKey;
+        const h = hash('k|' + name);
+        state.keys.push({ id: 'k' + state.nKey, name, hash: h, deg: toDeg(h) });
+        state.nKey++;
+      }
+
+      function setV(newV, doNarrate) {
+        const v = Math.max(1, Math.min(15, newV | 0));
+        if (v === state.V) {
+          document.getElementById('vc-slider').value = v;
+          document.getElementById('vc-value').textContent = v;
+          return;
+        }
+        const before = snapshot();
+        state.V = v;
+        recomputeVnodes();
+        const after = snapshot();
+        const moved = [];
+        for (const [keyId, prevId] of before.entries()) if (after.get(keyId) !== prevId) moved.push(keyId);
+        state.moved = new Set(moved);
+        document.getElementById('vc-slider').value = v;
+        document.getElementById('vc-value').textContent = v;
+        if (doNarrate) {
+          const imb = computeImbalance();
+          const example = state.servers[0];
+          let exStr = '';
+          if (example && v <= 6) {
+            const labels = [];
+            for (let j = 0; j < v; j++) labels.push(vnodeLabel(example.name, j));
+            exStr = ` For example <b>${esc(example.name)}</b> now has <b>${labels.join(', ')}</b>.`;
+          }
+          narrate(`Now <b>V=${v}</b>. Each server has ${v} scattered position${v===1?'':'s'} on the ring.${exStr} Imbalance is <b>${imb}%</b> — lower is more even.`, 'Vnodes changed');
+        }
+        render();
+        setTimeout(() => { state.moved = new Set(); render(); }, 1200);
+      }
+
+      window.vcAddServer = () => { if (!state.demoPlaying) addServer(null, true); };
+      window.vcAddKeys = (n) => {
+        if (state.demoPlaying) return;
+        for (let i = 0; i < n; i++) addKey();
+        narrate(`Added <b>${n}</b> keys. Each was hashed to a position, then walked clockwise to the nearest vnode.`, 'Keys added');
+        render();
+      };
+      window.vcReset = () => {
+        if (state.demoPlaying) return;
+        state.servers = []; state.vnodes = []; state.keys = []; state.V = 3;
+        state.hoveredServerId = null; state.hoveredKey = null; state.hoveredVnodeKey = null;
+        state.moved = new Set(); state.nNode = 0; state.nKey = 0;
+        document.getElementById('vc-slider').value = 3;
+        document.getElementById('vc-value').textContent = 3;
+        seed();
+        narrate(`Reset. 3 servers, each with 3 vnodes (<b>a1 a2 a3</b>, <b>b1 b2 b3</b>, <b>c1 c2 c3</b>) scattered on the ring, plus 12 keys.`, 'Reset');
+        render();
+      };
+
+      window.vcDemo = () => {
+        if (state.demoPlaying) return;
+        state.demoPlaying = true;
+        setUserControlsDisabled(true);
+        // start from the lumpy V=1 ring
+        state.servers = []; state.vnodes = []; state.keys = []; state.V = 1;
+        state.hoveredServerId = null; state.hoveredKey = null; state.hoveredVnodeKey = null;
+        state.moved = new Set(); state.nNode = 0; state.nKey = 0;
+        document.getElementById('vc-slider').value = 1;
+        document.getElementById('vc-value').textContent = 1;
+        addServer('alpha', false); addServer('beta', false); addServer('gamma', false);
+        for (let i = 0; i < 12; i++) addKey();
+        render();
+
+        const at = (ms, fn) => setTimeout(fn, ms);
+
+        at(0, () => narrate('At <b>V=1</b> this is the plain ring — one point per server. Look at the stat bars and the <b>imbalance</b> below: the random placement makes load lumpy.', 'Step 1 of 4 — the lumpy ring'));
+
+        // ramp V up so the imbalance visibly shrinks
+        const ramp = [2, 3, 4, 6, 8];
+        ramp.forEach((v, i) => {
+          at(2200 + i * 700, () => { setVquiet(v); });
+        });
+
+        at(2200 + ramp.length * 700 + 200, () => {
+          const imb = computeImbalance();
+          narrate(`Now each server sits at <b>8 points</b> scattered around the ring. The little arcs interleave, so every server's share converges toward its fair slice — imbalance dropped to <b>${imb}%</b>.`, 'Step 2 of 4 — raise V');
+        });
+
+        at(2200 + ramp.length * 700 + 2400, () => {
+          const beta = state.servers.find(s => s.name === 'beta');
+          if (beta) { state.hoveredServerId = beta.id; render(); }
+          narrate('Highlighted are all of <b>beta</b>\'s vnodes and the arcs they own — many small slices all over the ring, not one big wedge.', 'Step 3 of 4 — one server\'s share');
+        });
+
+        at(2200 + ramp.length * 700 + 5000, () => {
+          state.hoveredServerId = null;
+          const beta = state.servers.find(s => s.name === 'beta');
+          if (beta) removeServer(beta.id, true);
+        });
+
+        at(2200 + ramp.length * 700 + 8200, () => {
+          narrate('See how beta\'s keys <b>scattered</b> across alpha and gamma instead of dumping on one neighbour? That smooth failover, plus the even load, is why real systems (Dynamo, Cassandra) always run virtual nodes. Now drag the slider and try it yourself.', 'Demo complete');
+          state.demoPlaying = false;
+          setUserControlsDisabled(false);
+        });
+      };
+
+      // setV without narration, used by the demo ramp (keeps slider in sync)
+      function setVquiet(v) { setV(v, false); }
+
+      function render() {
+        const totalV = state.vnodes.length;
+        document.getElementById('vc-mid-info').textContent = `${state.servers.length} server${state.servers.length===1?'':'s'} · ${totalV} vnode${totalV===1?'':'s'}`;
+
+        const vnodeRadius = state.V <= 4 ? 8 : state.V <= 8 ? 6 : 4.5;
+        const showLabels = totalV <= 18;
+
+        const arcsEl = document.getElementById('vc-arcs');
+        if (state.hoveredServerId && state.vnodes.length > 0) {
+          const server = state.servers.find(s => s.id === state.hoveredServerId);
+          let p = '';
+          for (let i = 0; i < state.vnodes.length; i++) {
+            const v = state.vnodes[i];
+            if (v.serverId !== state.hoveredServerId) continue;
+            const prev = state.vnodes[(i - 1 + state.vnodes.length) % state.vnodes.length];
+            p += `<path d="${arcPath(prev.deg, v.deg, R_RING)}" stroke="${server.color}" class="vc-arc show"></path>`;
+          }
+          arcsEl.innerHTML = p;
+        } else arcsEl.innerHTML = '';
+
+        const { list, byServer } = assignments();
+
+        const assignEl = document.getElementById('vc-assign');
+        let aHtml = '';
+        const fk = state.hoveredKey, fs = state.hoveredServerId, fv = state.hoveredVnodeKey;
+        const anyFocus = fk || fs || fv;
+        for (const { key, vnode, server } of list) {
+          if (!server) continue;
+          let cls = 'vc-assign';
+          const isFocus = (fk && key.id === fk) || (fs && server.id === fs) || (fv && vnode && (vnode.serverId + ':' + vnode.idx) === fv);
+          if (isFocus) cls += ' highlight';
+          else if (anyFocus) cls += ' faded';
+          aHtml += `<path d="${assignPath(key.deg, vnode.deg)}" class="${cls}" stroke="${server.color}"></path>`;
+        }
+        assignEl.innerHTML = aHtml;
+
+        const keysEl = document.getElementById('vc-keys');
+        let kHtml = '';
+        for (const { key, server } of list) {
+          const pt = degToXY(key.deg, R_KEY);
+          const tIn = degToXY(key.deg, R_KEY + 4);
+          const tOut = degToXY(key.deg, R_RING - 4);
+          const color = server ? server.color : 'var(--color-text-tertiary)';
+          const isH = state.hoveredKey === key.id;
+          const isM = state.moved.has(key.id);
+          const r = isH ? 5.5 : 3;
+          kHtml += `<line x1="${tIn.x}" y1="${tIn.y}" x2="${tOut.x}" y2="${tOut.y}" stroke="${color}" stroke-width="1" opacity="0.35" pointer-events="none"></line>`;
+          kHtml += `<circle cx="${pt.x}" cy="${pt.y}" r="${r}" fill="${color}" class="vc-key-dot ${isM ? 'moved' : ''}" data-id="${key.id}"></circle>`;
+        }
+        keysEl.innerHTML = kHtml;
+
+        const nodesEl = document.getElementById('vc-nodes');
+        let nHtml = '';
+        for (const v of state.vnodes) {
+          const pt = degToXY(v.deg, R_RING);
+          const server = serverFor(v);
+          if (!server) continue;
+          const isH = state.hoveredServerId === server.id || state.hoveredVnodeKey === (v.serverId + ':' + v.idx);
+          const r = isH ? vnodeRadius + 2 : vnodeRadius;
+          nHtml += `<circle cx="${pt.x}" cy="${pt.y}" r="${r}" fill="${server.color}" class="vc-vnode" data-server="${server.id}" data-vkey="${v.serverId}:${v.idx}"></circle>`;
+        }
+        nodesEl.innerHTML = nHtml;
+
+        const labelsEl = document.getElementById('vc-labels');
+        let lHtml = '';
+        if (showLabels) {
+          for (const v of state.vnodes) {
+            const server = serverFor(v);
+            if (!server) continue;
+            const lp = degToXY(v.deg, R_LABEL);
+            let anchor = 'middle';
+            if (v.deg > 20 && v.deg < 160) anchor = 'start';
+            else if (v.deg > 200 && v.deg < 340) anchor = 'end';
+            lHtml += `<text x="${lp.x}" y="${lp.y}" text-anchor="${anchor}" dominant-baseline="middle" font-family="var(--font-mono)" font-size="12" font-weight="600" fill="${server.color}" pointer-events="none">${esc(v.label)}</text>`;
+          }
+        }
+        labelsEl.innerHTML = lHtml;
+
+        const insp = document.getElementById('vc-inspector');
+        if (state.hoveredKey) {
+          const k = state.keys.find(x => x.id === state.hoveredKey);
+          const a = list.find(x => x.key.id === k?.id);
+          if (k && a) insp.innerHTML = `key <b>${esc(k.name)}</b> walks clockwise to vnode <b>${esc(a.vnode?.label || '?')}</b> · owned by <b>${esc(a.server?.name || '?')}</b>`;
+        } else if (state.hoveredVnodeKey && !state.hoveredServerId) {
+          const v = state.vnodes.find(x => (x.serverId + ':' + x.idx) === state.hoveredVnodeKey);
+          const s = serverFor(v);
+          if (v && s) insp.innerHTML = `vnode <b>${esc(v.label)}</b> at <b>${v.deg.toFixed(0)}°</b> · belongs to server <b>${esc(s.name)}</b>`;
+        } else if (state.hoveredServerId) {
+          const s = state.servers.find(x => x.id === state.hoveredServerId);
+          const c = byServer.get(state.hoveredServerId)?.length || 0;
+          if (s) insp.innerHTML = `server <b>${esc(s.name)}</b> · <b>${state.V}</b> vnodes · owns <b>${c}</b> of ${state.keys.length} keys · click to remove`;
+        } else {
+          insp.innerHTML = state.servers.length === 0 ? 'Add a server to begin' : 'Hover anything · click a server to remove it';
+        }
+
+        const statsEl = document.getElementById('vc-stats');
+        if (state.servers.length === 0) {
+          statsEl.innerHTML = `<div class="vc-stat-empty">No servers yet.</div>`;
+        } else {
+          let sHtml = '';
+          for (const server of state.servers) {
+            const count = byServer.get(server.id).length;
+            const pct = state.keys.length ? Math.round((count / state.keys.length) * 100) : 0;
+            const labels = [];
+            const maxShow = state.V <= 6 ? state.V : 3;
+            for (let j = 0; j < maxShow; j++) labels.push(vnodeLabel(server.name, j));
+            const ellip = state.V > maxShow ? ` …+${state.V - maxShow}` : '';
+            sHtml += `<div class="vc-stat" data-server="${server.id}">
+              <div class="vc-stat-bar" style="width:${pct}%; background:${server.color}"></div>
+              <div class="vc-stat-row"><span class="vc-swatch" style="background:${server.color}"></span><span class="vc-stat-name">${esc(server.name)}</span></div>
+              <div class="vc-stat-value">${count} key${count===1?'':'s'}<span class="vc-stat-pct">${pct}%</span></div>
+              <div class="vc-stat-sub">vnodes: ${labels.join(' ')}${ellip}</div>
+            </div>`;
+          }
+          statsEl.innerHTML = sHtml;
+        }
+
+        const sumEl = document.getElementById('vc-summary');
+        if (state.servers.length > 0 && state.keys.length > 0) {
+          const imb = computeImbalance();
+          const ideal = (state.keys.length / state.servers.length).toFixed(1);
+          const cls = imb <= 20 ? ' good' : '';
+          sumEl.innerHTML = `ideal per server <b>${ideal} keys</b> · imbalance σ/μ <b class="${cls.trim()}">${imb}%</b> · lower is better`;
+        } else sumEl.innerHTML = '';
+      }
+
+      const svgEl = document.getElementById('vc-svg');
+      function setHover(opts) {
+        if (state.demoPlaying) return;
+        const ns = opts.serverId || null;
+        const nk = opts.keyId || null;
+        const nv = opts.vkey || null;
+        if (ns !== state.hoveredServerId || nk !== state.hoveredKey || nv !== state.hoveredVnodeKey) {
+          state.hoveredServerId = ns;
+          state.hoveredKey = nk;
+          state.hoveredVnodeKey = nv;
+          render();
+        }
+      }
+      svgEl.addEventListener('mouseover', (e) => {
+        const t = e.target;
+        if (!t?.classList) return;
+        if (t.classList.contains('vc-vnode')) {
+          setHover({ serverId: t.getAttribute('data-server'), vkey: t.getAttribute('data-vkey') });
+        } else if (t.classList.contains('vc-key-dot')) {
+          setHover({ keyId: t.getAttribute('data-id') });
+        } else {
+          setHover({});
+        }
+      });
+      svgEl.addEventListener('mouseleave', () => setHover({}));
+      svgEl.addEventListener('click', (e) => {
+        const t = e.target;
+        if (state.demoPlaying) return;
+        if (t?.classList?.contains('vc-vnode')) {
+          removeServer(t.getAttribute('data-server'), true);
+        }
+      });
+
+      const statsContainer = document.getElementById('vc-stats');
+      statsContainer.addEventListener('mouseover', (e) => {
+        const c = e.target.closest('.vc-stat');
+        if (c) setHover({ serverId: c.getAttribute('data-server') });
+      });
+      statsContainer.addEventListener('mouseleave', () => setHover({}));
+      statsContainer.addEventListener('click', (e) => {
+        if (state.demoPlaying) return;
+        const c = e.target.closest('.vc-stat');
+        if (c) removeServer(c.getAttribute('data-server'), true);
+      });
+
+      const slider = document.getElementById('vc-slider');
+      slider.addEventListener('input', (e) => {
+        document.getElementById('vc-value').textContent = e.target.value;
+      });
+      slider.addEventListener('change', (e) => {
+        if (state.demoPlaying) return;
+        setV(parseInt(e.target.value, 10), true);
+      });
+
+      function seed() {
+        addServer('alpha', false); addServer('beta', false); addServer('gamma', false);
+        for (let i = 0; i < 12; i++) addKey();
+      }
+      seed();
+      render();
+    })();
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

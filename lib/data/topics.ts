@@ -448,6 +448,64 @@ export const TOPICS: Topic[] = [
       },
     ],
   },
+  {
+    slug: "consistent-hashing",
+    title: "Consistent Hashing",
+    description:
+      "Map keys to servers so that adding or removing a server moves as few keys as possible. Five methods, from the classic hash ring to the table-based hashing inside modern network load balancers.",
+    difficulty: "intermediate",
+    icon: "CircleDashed",
+    tags: ["distributed", "scaling", "patterns"],
+    estimatedTime: "55 min",
+    prerequisites: ["Hash functions", "Modular arithmetic", "Sharding basics"],
+    concepts: [
+      {
+        slug: "vanilla-ring",
+        title: "Vanilla Ring",
+        oneLiner:
+          "Place servers and keys on a circle; a key belongs to the first server clockwise. Membership changes move only K/N keys instead of all of them.",
+        difficulty: "beginner",
+        estimatedTime: "10 min",
+        prototypePath: "/prototypes/consistent-hashing/vanilla-ring.html",
+      },
+      {
+        slug: "virtual-nodes",
+        title: "Virtual Nodes",
+        oneLiner:
+          "Give each server many points on the ring so load evens out and a failure spreads across all survivors — the version real systems actually ship.",
+        difficulty: "intermediate",
+        estimatedTime: "11 min",
+        prototypePath: "/prototypes/consistent-hashing/virtual-nodes.html",
+      },
+      {
+        slug: "rendezvous-hrw",
+        title: "Rendezvous Hashing (HRW)",
+        oneLiner:
+          "Score every server for the key with hash(key, server) and pick the highest. No ring, even load, and weighting is trivial.",
+        difficulty: "intermediate",
+        estimatedTime: "10 min",
+        prototypePath: null,
+      },
+      {
+        slug: "jump-hash",
+        title: "Jump Consistent Hash",
+        oneLiner:
+          "A tiny formula maps a key and a bucket count to a bucket — near-perfect balance, zero memory, no ring at all.",
+        difficulty: "advanced",
+        estimatedTime: "11 min",
+        prototypePath: null,
+      },
+      {
+        slug: "maglev",
+        title: "Maglev Hashing",
+        oneLiner:
+          "Precompute a lookup table so routing is O(1) and disruption is minimal — Google's hashing for software network load balancers.",
+        difficulty: "advanced",
+        estimatedTime: "12 min",
+        prototypePath: null,
+      },
+    ],
+  },
 ];
 
 export const ALL_TAGS = Array.from(

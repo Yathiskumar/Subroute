@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Consistent Hashing — Vanilla Ring</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a; --accent-strong: #d56a1f;
+        --success: #5cc66f; --danger: #f06868; --info: #5e9ff6;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        /* aliases so the ring fragment's var() references map to the dark theme */
+        --color-background-primary: var(--bg);
+        --color-background-secondary: var(--surface);
+        --color-text-primary: var(--fg);
+        --color-text-secondary: var(--muted);
+        --color-text-tertiary: var(--subtle);
+        --color-text-success: var(--success);
+        --color-text-danger: var(--danger);
+        --color-border-secondary: var(--border-strong);
+        --color-border-tertiary: var(--border);
+        --color-background-info: rgba(94,159,246,0.10);
+        --color-text-info: #cdddf7;
+        --color-border-info: rgba(94,159,246,0.28);
+        --border-radius-lg: 12px;
+        --border-radius-md: 8px;
+        --font-mono: var(--mono);
+        --font-sans: var(--sans);
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body { padding: 14px 16px 16px; background-image: linear-gradient(to right, rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.025) 1px, transparent 1px); background-size: 40px 40px; }
+      .container { max-width: 620px; margin: 0 auto; }
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: var(--border-radius-lg); padding: 0.5rem; margin-bottom: 1rem; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; padding: 9px 13px; transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+
+      .ch-wrap { padding: 0.25rem 0; }
+      .ch-narrate { background: var(--color-background-info); border: 1px solid var(--color-border-info); border-radius: var(--border-radius-lg); padding: 14px 16px; margin-bottom: 1rem; font-size: 13.5px; line-height: 1.6; color: var(--color-text-info); }
+      .ch-narrate .title { font-weight: 600; display: block; margin-bottom: 4px; font-size: 13px; color: #eaf2fd; }
+      .ch-narrate b { font-weight: 600; color: #eaf2fd; }
+      .ch-narrate .moves { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--color-border-info); font-family: var(--font-mono); font-size: 12px; line-height: 1.7; }
+      .ch-narrate .moves .arrow { color: var(--color-text-tertiary); margin: 0 4px; }
+      .ch-svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+      .ch-track { fill: none; stroke: var(--color-border-tertiary); stroke-width: 1; }
+      .ch-track-fill { fill: none; stroke: var(--elevated); stroke-width: 30; }
+      .ch-track-inner { fill: none; stroke: var(--color-border-tertiary); stroke-width: 1; opacity: 0.35; stroke-dasharray: 2 4; }
+      .ch-tick { stroke: var(--color-border-secondary); }
+      .ch-node-circle { stroke: var(--color-background-primary); stroke-width: 2; cursor: pointer; transition: r 0.2s; }
+      .ch-key-dot { cursor: pointer; transition: r 0.2s; }
+      .ch-arc-resp { fill: none; stroke-width: 4; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+      .ch-arc-resp.show { opacity: 0.6; }
+      .ch-assign { fill: none; stroke-width: 1.5; stroke-dasharray: 3 3; opacity: 0.34; pointer-events: none; transition: opacity 0.2s, stroke-width 0.2s; }
+      .ch-assign.faded { opacity: 0.08; }
+      .ch-assign.highlight { opacity: 0.95; stroke-width: 2; stroke-dasharray: 4 3; }
+      .ch-key-tick { stroke-width: 1; opacity: 0.5; pointer-events: none; }
+      .ch-arrow-cw { font-size: 11px; fill: var(--color-text-tertiary); font-family: var(--font-mono); }
+      @keyframes ch-pulse-reassign { 0% { r: 3.5; } 30% { r: 8.5; } 100% { r: 3.5; } }
+      .ch-key-dot.reassigned { animation: ch-pulse-reassign 1.4s ease-out; }
+      .ch-inspector { font-family: var(--font-mono); font-size: 12px; color: var(--color-text-secondary); text-align: center; min-height: 18px; margin: 0.5rem 0 0.75rem; }
+      .ch-inspector b { color: var(--color-text-primary); font-weight: 600; }
+      .ch-controls { display: flex; gap: 8px; justify-content: center; margin-bottom: 1rem; flex-wrap: wrap; }
+      .ch-controls button:disabled { opacity: 0.5; cursor: not-allowed; }
+      .ch-demo-btn { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      .ch-demo-btn:hover:not(:disabled) { filter: brightness(1.10); background: var(--accent); border-color: transparent; }
+      .ch-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+      .ch-stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--border-radius-md); padding: 10px 12px; position: relative; overflow: hidden; }
+      .ch-stat-bar { position: absolute; left: 0; top: 0; bottom: 0; opacity: 0.18; transition: width 0.3s; }
+      .ch-stat-row { display: flex; align-items: center; gap: 8px; position: relative; }
+      .ch-swatch { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+      .ch-stat-name { font-family: var(--font-mono); font-size: 12px; color: var(--color-text-primary); }
+      .ch-stat-value { font-family: var(--font-mono); font-size: 16px; color: var(--color-text-primary); font-weight: 600; margin-top: 4px; position: relative; }
+      .ch-stat-pct { font-size: 11px; color: var(--color-text-tertiary); margin-left: 4px; }
+      .ch-stat-empty { grid-column: 1 / -1; text-align: center; padding: 1rem; color: var(--color-text-tertiary); font-size: 13px; }
+      .ch-compare { margin-top: 1rem; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--border-radius-md); font-size: 12.5px; line-height: 1.6; color: var(--color-text-secondary); }
+      .ch-compare .head { color: var(--color-text-primary); font-weight: 600; margin-bottom: 4px; display: block; }
+      .ch-compare b { color: var(--color-text-success); font-weight: 600; }
+      .ch-compare .bad { color: var(--color-text-danger); font-weight: 600; }
+      .ch-compare code { font-family: var(--font-mono); font-size: 12px; background: var(--elevated); padding: 1px 5px; border-radius: 4px; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="ch-wrap">
+        <h2 class="sr-only">Interactive teaching simulator for consistent hashing. Servers and keys are placed on a circular hash ring; each key is owned by the first server reached walking clockwise. Add or remove servers to see how few keys move.</h2>
+
+        <div class="ch-narrate" id="ch-narrate">
+          <span class="title">How to read this</span>
+          Every <b>server</b> (large dot) and every <b>key</b> (small dot) is placed on the ring by hashing its name. To find a key's server, walk <b>clockwise</b> from the key until you hit one — that's the owner. The dashed lines are those clockwise walks. Try the demo button below.
+        </div>
+
+        <div class="stage">
+          <svg class="ch-svg" id="ch-svg" viewBox="0 0 500 500" width="500" height="500" role="img" aria-label="Hash ring visualisation">
+            <circle cx="250" cy="250" r="180" class="ch-track-fill"></circle>
+            <circle cx="250" cy="250" r="180" class="ch-track"></circle>
+            <circle cx="250" cy="250" r="148" class="ch-track-inner"></circle>
+            <line x1="250" y1="62" x2="250" y2="78" class="ch-tick"></line>
+            <line x1="438" y1="250" x2="422" y2="250" class="ch-tick"></line>
+            <line x1="250" y1="438" x2="250" y2="422" class="ch-tick"></line>
+            <line x1="62" y1="250" x2="78" y2="250" class="ch-tick"></line>
+            <text x="250" y="52" text-anchor="middle" font-family="var(--font-mono)" font-size="11" fill="var(--color-text-tertiary)">hash 0</text>
+            <text x="448" y="254" text-anchor="middle" font-family="var(--font-mono)" font-size="11" fill="var(--color-text-tertiary)">¼</text>
+            <text x="250" y="450" text-anchor="middle" font-family="var(--font-mono)" font-size="11" fill="var(--color-text-tertiary)">½</text>
+            <text x="40" y="254" text-anchor="middle" font-family="var(--font-mono)" font-size="11" fill="var(--color-text-tertiary)">¾</text>
+            <text x="380" y="118" class="ch-arrow-cw" text-anchor="middle">clockwise →</text>
+            <text x="250" y="232" text-anchor="middle" font-family="var(--font-mono)" font-size="11" fill="var(--color-text-tertiary)" letter-spacing="0.08em">ring state</text>
+            <text x="250" y="262" text-anchor="middle" font-family="var(--font-sans)" font-size="24" fill="var(--color-text-primary)" font-weight="600" id="ch-summary-mid">3 · 6</text>
+            <text x="250" y="282" text-anchor="middle" font-family="var(--font-mono)" font-size="11" fill="var(--color-text-tertiary)" letter-spacing="0.08em">servers · keys</text>
+            <g id="ch-arcs"></g>
+            <g id="ch-assign"></g>
+            <g id="ch-keys"></g>
+            <g id="ch-nodes"></g>
+          </svg>
+        </div>
+
+        <div class="ch-inspector" id="ch-inspector">Click a server to remove it · hover anything to inspect</div>
+
+        <div class="ch-controls" id="ch-controls">
+          <button id="ch-demo-btn" class="ch-demo-btn" onclick="chDemo()"><i class="ti ti-player-play" aria-hidden="true"></i> Watch the demo</button>
+          <button class="ch-user-btn" onclick="chAddNode()"><i class="ti ti-plus" aria-hidden="true"></i> Add server</button>
+          <button class="ch-user-btn" onclick="chAddKey()"><i class="ti ti-plus" aria-hidden="true"></i> Add key</button>
+          <button class="ch-user-btn" onclick="chAddKeys(5)">+5 keys</button>
+          <button class="ch-user-btn" onclick="chReset()"><i class="ti ti-refresh" aria-hidden="true"></i> Reset</button>
+        </div>
+
+        <div class="ch-stats" id="ch-stats"></div>
+        <div class="ch-compare" id="ch-compare">
+          <span class="head">Why this matters</span>
+          With naive sharding (<code>hash(key) % N</code>), changing N reshuffles <span class="bad">almost every key</span>. With consistent hashing, only the keys in the affected arc move — usually a small fraction. Try removing a server to see this in action.
+        </div>
+      </div>
+    </div>
+
+    <script>
+    (function() {
+      const HASH_SPACE = 2 ** 32;
+      const CX = 250, CY = 250, R_RING = 180, R_KEY = 148, R_LABEL_NODE = 208, R_LABEL_KEY = 132;
+      const PALETTE = ['#fb863a', '#5e9ff6', '#5cc66f', '#f0b568', '#f06888', '#a78bfa'];
+      const NODE_NAMES = ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta'];
+      const KEY_PREFIXES = ['user:', 'order:', 'cart:', 'photo:', 'msg:', 'doc:'];
+
+      function fnv1a(str) {
+        let h = 2166136261 >>> 0;
+        for (let i = 0; i < str.length; i++) {
+          h ^= str.charCodeAt(i);
+          h = Math.imul(h, 16777619) >>> 0;
+        }
+        return h >>> 0;
+      }
+      const toDeg = (p) => (p / HASH_SPACE) * 360;
+      const degToXY = (deg, r) => {
+        const rad = (deg - 90) * Math.PI / 180;
+        return { x: CX + r * Math.cos(rad), y: CY + r * Math.sin(rad) };
+      };
+      const arcPath = (degA, degB, r) => {
+        const a = degToXY(degA, r), b = degToXY(degB, r);
+        let sweep = degB - degA; if (sweep < 0) sweep += 360;
+        return `M ${a.x} ${a.y} A ${r} ${r} 0 ${sweep > 180 ? 1 : 0} 1 ${b.x} ${b.y}`;
+      };
+      const assignPath = (kDeg, nDeg) => {
+        const r = R_KEY - 4;
+        const a = degToXY(kDeg, r), b = degToXY(nDeg, r);
+        let sweep = nDeg - kDeg; if (sweep < 0) sweep += 360;
+        return `M ${a.x} ${a.y} A ${r} ${r} 0 ${sweep > 180 ? 1 : 0} 1 ${b.x} ${b.y}`;
+      };
+      const esc = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+      const state = { nodes: [], keys: [], hoveredNode: null, hoveredKey: null, nNode: 0, nKey: 0, reassigned: new Set(), demoPlaying: false };
+
+      function sortedNodes() { return [...state.nodes].sort((a, b) => a.hash - b.hash); }
+      function findOwner(kHash, s) {
+        if (s.length === 0) return null;
+        for (const n of s) if (n.hash >= kHash) return n;
+        return s[0];
+      }
+      function assignments() {
+        const s = sortedNodes();
+        const byNode = new Map(s.map(n => [n.id, []]));
+        const list = state.keys.map(k => {
+          const o = findOwner(k.hash, s);
+          if (o) byNode.get(o.id).push(k);
+          return { key: k, owner: o };
+        });
+        return { list, byNode, sorted: s };
+      }
+      function snapshotAssignments() {
+        const m = new Map();
+        for (const { key, owner } of assignments().list) m.set(key.id, owner?.id || null);
+        return m;
+      }
+
+      function narrate(title, body) {
+        document.getElementById('ch-narrate').innerHTML = `<span class="title">${esc(title)}</span>${body}`;
+      }
+
+      function setUserButtonsDisabled(disabled) {
+        document.querySelectorAll('.ch-user-btn').forEach(b => { b.disabled = disabled; });
+        const demoBtn = document.getElementById('ch-demo-btn');
+        demoBtn.disabled = disabled;
+        if (disabled) {
+          demoBtn.innerHTML = '<i class="ti ti-player-pause" aria-hidden="true"></i> Demo playing…';
+        } else {
+          demoBtn.innerHTML = '<i class="ti ti-player-play" aria-hidden="true"></i> Watch the demo';
+        }
+      }
+
+      function addNode(name, narrateAction) {
+        if (state.nodes.length >= 6) return null;
+        name = name || NODE_NAMES[state.nNode % NODE_NAMES.length];
+        let final = name, i = 1;
+        while (state.nodes.some(n => n.name === final)) { final = name + '-' + (++i); }
+        const hash = fnv1a('node:' + final);
+        const color = PALETTE[state.nNode % PALETTE.length];
+        const node = { id: 'n' + state.nNode, name: final, hash, deg: toDeg(hash), color };
+        state.nodes.push(node);
+        state.nNode++;
+        if (narrateAction) {
+          narrate('Server added', `Hashed <b>${esc(final)}</b> → landed at <b>${node.deg.toFixed(0)}°</b> on the ring. It now owns the arc just counter-clockwise of itself — every key in that arc routes to <b>${esc(final)}</b>.`);
+        }
+        render();
+        return node;
+      }
+
+      function removeNode(id, narrateAction) {
+        const node = state.nodes.find(n => n.id === id);
+        if (!node) return;
+        const before = snapshotAssignments();
+        state.nodes = state.nodes.filter(n => n.id !== id);
+        if (state.hoveredNode === id) state.hoveredNode = null;
+        const after = snapshotAssignments();
+        const moves = [];
+        for (const [keyId, prevOwnerId] of before.entries()) {
+          const newOwnerId = after.get(keyId);
+          if (prevOwnerId !== newOwnerId) moves.push({ keyId, prevOwnerId, newOwnerId });
+        }
+        state.reassigned = new Set(moves.map(m => m.keyId));
+        if (narrateAction) {
+          const total = state.keys.length;
+          const moved = moves.length;
+          const stayed = total - moved;
+          let moveList = '';
+          if (moves.length > 0 && moves.length <= 6) {
+            const lines = moves.map(m => {
+              const k = state.keys.find(x => x.id === m.keyId);
+              const newName = state.nodes.find(n => n.id === m.newOwnerId)?.name || 'none';
+              return `<code>${esc(k.name)}</code><span class="arrow">→</span><b>${esc(newName)}</b>`;
+            });
+            moveList = `<div class="moves">${lines.join('<br>')}</div>`;
+          }
+          const stayBit = stayed > 0 ? ` <b>${stayed}</b> stayed put on their original servers — that's the point.` : '';
+          narrate('Server removed', `Took <b>${esc(node.name)}</b> off the ring. <b>${moved}</b> of <b>${total}</b> keys had to find a new home — they walked clockwise to the next server.${stayBit}${moveList}`);
+          updateCompare(moved, total);
+        }
+        render();
+        setTimeout(() => { state.reassigned = new Set(); render(); }, 1400);
+      }
+
+      function addKey(name, narrateAction) {
+        if (state.keys.length >= 30) return null;
+        if (!name) {
+          const p = KEY_PREFIXES[Math.floor(Math.random() * KEY_PREFIXES.length)];
+          name = p + (Math.floor(Math.random() * 9000) + 1000);
+        }
+        if (state.keys.some(k => k.name === name)) name += '-' + state.nKey;
+        const hash = fnv1a('key:' + name);
+        const key = { id: 'k' + state.nKey, name, hash, deg: toDeg(hash) };
+        state.keys.push(key);
+        state.nKey++;
+        const owner = findOwner(hash, sortedNodes());
+        if (narrateAction) {
+          const ownerName = owner ? esc(owner.name) : 'no server (ring is empty)';
+          narrate('Key added', `Hashed <b>${esc(name)}</b> → landed at <b>${key.deg.toFixed(0)}°</b>. Walking clockwise, the next server is <b>${ownerName}</b>. So <b>${ownerName}</b> stores this key.`);
+        }
+        render();
+        return key;
+      }
+
+      function updateCompare(moved, total) {
+        const el = document.getElementById('ch-compare');
+        el.innerHTML = `<span class="head">Compare to naive <code>hash(key) % N</code></span>
+          Consistent hashing moved <b>${moved}</b> of <b>${total}</b> keys (<b>${total ? Math.round(moved/total*100) : 0}%</b>).
+          Naive <code>% N</code> would have moved <span class="bad">roughly all ${total} keys</span> because changing N changes every key's modulo result. That's the value of the ring.`;
+      }
+
+      window.chAddNode = () => { if (!state.demoPlaying) addNode(null, true); };
+      window.chAddKey = () => { if (!state.demoPlaying) addKey(null, true); };
+      window.chAddKeys = (n) => {
+        if (state.demoPlaying) return;
+        for (let i = 0; i < n; i++) addKey(null, false);
+        narrate('Keys added', `Added <b>${n}</b> random keys. Each was hashed to a position and routed to the next server clockwise.`);
+      };
+      window.chReset = () => {
+        if (state.demoPlaying) return;
+        state.nodes = []; state.keys = []; state.hoveredNode = null; state.hoveredKey = null; state.reassigned = new Set();
+        state.nNode = 0; state.nKey = 0;
+        document.getElementById('ch-compare').innerHTML = `<span class="head">Why this matters</span>
+          With naive sharding (<code>hash(key) % N</code>), changing N reshuffles <span class="bad">almost every key</span>. With consistent hashing, only the keys in the affected arc move — usually a small fraction. Try removing a server to see this in action.`;
+        narrate('Empty ring', 'The circle is the hash space. Add servers and keys to populate it. Each gets a position by hashing its name.');
+        render();
+      };
+
+      window.chDemo = () => {
+        if (state.demoPlaying) return;
+        state.demoPlaying = true;
+        setUserButtonsDisabled(true);
+        state.nodes = []; state.keys = []; state.nNode = 0; state.nKey = 0; state.reassigned = new Set(); state.hoveredNode = null; state.hoveredKey = null;
+        render();
+
+        const at = (ms, fn) => setTimeout(fn, ms);
+
+        at(0, () => narrate('Step 1 of 5 — empty ring', 'Imagine this circle as <b>4 billion hash positions</b>, with the end joined back to the start. Nothing on it yet. Watch what happens.'));
+
+        at(1800, () => {
+          addNode('alpha', false);
+          addNode('beta', false);
+          addNode('gamma', false);
+          narrate('Step 2 of 5 — place 3 servers', 'Each server\'s name was hashed, giving it a fixed position on the ring. <b>alpha</b>, <b>beta</b>, and <b>gamma</b> now sit at their hash positions.');
+        });
+
+        at(4200, () => {
+          ['user:42', 'order:7', 'cart:99', 'photo:x9', 'msg:88', 'doc:2'].forEach(k => addKey(k, false));
+          narrate('Step 3 of 5 — place 6 keys', 'Keys are hashed the same way. The dashed curved lines you now see are the <b>clockwise walks</b> from each key to its owning server. That walk <em>is</em> the lookup rule.');
+        });
+
+        at(6800, () => {
+          const alpha = state.nodes.find(n => n.name === 'alpha');
+          if (alpha) {
+            state.hoveredNode = alpha.id;
+            render();
+            const { byNode } = assignments();
+            const count = byNode.get(alpha.id)?.length || 0;
+            narrate('Step 4 of 5 — a server\'s zone', `The highlighted arc is <b>alpha</b>\'s zone of responsibility. Every key whose hash lands in that arc belongs to alpha. Right now that\'s <b>${count}</b> key${count===1?'':'s'}.`);
+          }
+        });
+
+        at(10000, () => {
+          state.hoveredNode = null;
+          const alpha = state.nodes.find(n => n.name === 'alpha');
+          if (alpha) removeNode(alpha.id, true);
+        });
+
+        at(13500, () => {
+          narrate('Demo complete', 'See how only the keys in alpha\'s arc moved? Every other key stayed exactly where it was. That\'s consistent hashing\'s superpower — adding or removing servers disturbs <b>only a small slice</b> of your data. Now try it yourself: add a server, remove one, see what happens.');
+          state.demoPlaying = false;
+          setUserButtonsDisabled(false);
+        });
+      };
+
+      function render() {
+        document.getElementById('ch-summary-mid').textContent = state.nodes.length + ' · ' + state.keys.length;
+
+        const arcsEl = document.getElementById('ch-arcs');
+        if (state.hoveredNode) {
+          const s = sortedNodes();
+          const idx = s.findIndex(n => n.id === state.hoveredNode);
+          if (idx !== -1) {
+            const node = s[idx];
+            const prev = s[(idx - 1 + s.length) % s.length];
+            const path = s.length === 1
+              ? `M ${CX} ${CY - R_RING} A ${R_RING} ${R_RING} 0 1 1 ${CX - 0.01} ${CY - R_RING}`
+              : arcPath(prev.deg, node.deg, R_RING);
+            arcsEl.innerHTML = `<path d="${path}" class="ch-arc-resp show" stroke="${node.color}"></path>`;
+          } else arcsEl.innerHTML = '';
+        } else arcsEl.innerHTML = '';
+
+        const { list, byNode, sorted: s } = assignments();
+
+        const assignEl = document.getElementById('ch-assign');
+        let aHtml = '';
+        const focusKey = state.hoveredKey;
+        const focusNode = state.hoveredNode;
+        for (const { key, owner } of list) {
+          if (!owner) continue;
+          let cls = 'ch-assign';
+          const isFocus = (focusKey && key.id === focusKey) || (focusNode && owner.id === focusNode);
+          const anyFocus = focusKey || focusNode;
+          if (isFocus) cls += ' highlight';
+          else if (anyFocus) cls += ' faded';
+          aHtml += `<path d="${assignPath(key.deg, owner.deg)}" class="${cls}" stroke="${owner.color}"></path>`;
+        }
+        assignEl.innerHTML = aHtml;
+
+        const keysEl = document.getElementById('ch-keys');
+        let kHtml = '';
+        for (const { key, owner } of list) {
+          const pt = degToXY(key.deg, R_KEY);
+          const tIn = degToXY(key.deg, R_KEY + 4);
+          const tOut = degToXY(key.deg, R_RING - 4);
+          const color = owner ? owner.color : 'var(--color-text-tertiary)';
+          const isH = state.hoveredKey === key.id;
+          const isReassigned = state.reassigned.has(key.id);
+          const r = isH ? 5.5 : 3.5;
+          kHtml += `<line x1="${tIn.x}" y1="${tIn.y}" x2="${tOut.x}" y2="${tOut.y}" stroke="${color}" class="ch-key-tick"></line>`;
+          kHtml += `<circle cx="${pt.x}" cy="${pt.y}" r="${r}" fill="${color}" class="ch-key-dot ${isReassigned ? 'reassigned' : ''}" data-id="${key.id}"></circle>`;
+          const lp = degToXY(key.deg, R_LABEL_KEY);
+          let anchor = 'middle';
+          if (key.deg > 25 && key.deg < 155) anchor = 'end';
+          else if (key.deg > 205 && key.deg < 335) anchor = 'start';
+          kHtml += `<text x="${lp.x}" y="${lp.y}" text-anchor="${anchor}" dominant-baseline="middle" font-family="var(--font-mono)" font-size="11" fill="var(--color-text-secondary)" pointer-events="none">${esc(key.name)}</text>`;
+        }
+        keysEl.innerHTML = kHtml;
+
+        const nodesEl = document.getElementById('ch-nodes');
+        let nHtml = '';
+        for (const node of state.nodes) {
+          const pt = degToXY(node.deg, R_RING);
+          const lp = degToXY(node.deg, R_LABEL_NODE);
+          const isH = state.hoveredNode === node.id;
+          const r = isH ? 10 : 7.5;
+          let anchor = 'middle';
+          if (node.deg > 25 && node.deg < 155) anchor = 'start';
+          else if (node.deg > 205 && node.deg < 335) anchor = 'end';
+          nHtml += `<circle cx="${pt.x}" cy="${pt.y}" r="${r}" fill="${node.color}" class="ch-node-circle" data-id="${node.id}"></circle>`;
+          nHtml += `<text x="${lp.x}" y="${lp.y}" text-anchor="${anchor}" dominant-baseline="middle" font-family="var(--font-mono)" font-size="12" font-weight="600" fill="${node.color}" pointer-events="none">${esc(node.name)}</text>`;
+        }
+        nodesEl.innerHTML = nHtml;
+
+        const insp = document.getElementById('ch-inspector');
+        if (state.hoveredKey) {
+          const k = state.keys.find(x => x.id === state.hoveredKey);
+          const a = list.find(x => x.key.id === k.id);
+          if (k) insp.innerHTML = `key <b>${esc(k.name)}</b> at <b>${k.deg.toFixed(0)}°</b> → owned by <b>${esc(a?.owner?.name || 'none')}</b>`;
+        } else if (state.hoveredNode) {
+          const n = state.nodes.find(x => x.id === state.hoveredNode);
+          const c = byNode.get(state.hoveredNode)?.length || 0;
+          if (n) insp.innerHTML = `server <b>${esc(n.name)}</b> at <b>${n.deg.toFixed(0)}°</b> · owns <b>${c}</b> key${c === 1 ? '' : 's'} · click to remove`;
+        } else {
+          insp.innerHTML = state.nodes.length === 0 ? 'Add a server to begin' : 'Click a server to remove it · hover anything to inspect';
+        }
+
+        const statsEl = document.getElementById('ch-stats');
+        if (state.nodes.length === 0) {
+          statsEl.innerHTML = `<div class="ch-stat-empty">No servers yet.</div>`;
+        } else {
+          let sHtml = '';
+          for (const node of s) {
+            const count = byNode.get(node.id).length;
+            const pct = state.keys.length ? Math.round((count / state.keys.length) * 100) : 0;
+            sHtml += `<div class="ch-stat">
+              <div class="ch-stat-bar" style="width:${pct}%; background:${node.color}"></div>
+              <div class="ch-stat-row"><span class="ch-swatch" style="background:${node.color}"></span><span class="ch-stat-name">${esc(node.name)}</span></div>
+              <div class="ch-stat-value">${count}<span class="ch-stat-pct">${pct}%</span></div>
+            </div>`;
+          }
+          statsEl.innerHTML = sHtml;
+        }
+      }
+
+      const svgEl = document.getElementById('ch-svg');
+
+      svgEl.addEventListener('mouseover', (e) => {
+        const t = e.target;
+        if (!t || !t.classList) return;
+        if (t.classList.contains('ch-node-circle')) {
+          const id = t.getAttribute('data-id');
+          if (state.hoveredNode !== id || state.hoveredKey !== null) {
+            state.hoveredNode = id;
+            state.hoveredKey = null;
+            render();
+          }
+        } else if (t.classList.contains('ch-key-dot')) {
+          const id = t.getAttribute('data-id');
+          if (state.hoveredKey !== id || state.hoveredNode !== null) {
+            state.hoveredKey = id;
+            state.hoveredNode = null;
+            render();
+          }
+        } else {
+          if (state.hoveredNode || state.hoveredKey) {
+            state.hoveredNode = null;
+            state.hoveredKey = null;
+            render();
+          }
+        }
+      });
+
+      svgEl.addEventListener('mouseleave', () => {
+        if (state.hoveredNode || state.hoveredKey) {
+          state.hoveredNode = null;
+          state.hoveredKey = null;
+          render();
+        }
+      });
+
+      svgEl.addEventListener('click', (e) => {
+        const t = e.target;
+        if (!t || !t.classList) return;
+        if (t.classList.contains('ch-node-circle') && !state.demoPlaying) {
+          removeNode(t.getAttribute('data-id'), true);
+        }
+      });
+
+      ['alpha', 'beta', 'gamma'].forEach(n => addNode(n, false));
+      ['user:42', 'order:7', 'cart:99', 'photo:x9', 'msg:88', 'doc:2'].forEach(k => addKey(k, false));
+      render();
+    })();
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

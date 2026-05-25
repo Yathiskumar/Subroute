@@ -16,7 +16,8 @@ import { InteractiveGrid } from "@/components/shared/InteractiveGrid";
 import { TOPICS } from "@/lib/data/topics";
 import { getContentStats } from "@/lib/content";
 
-const FEATURED = TOPICS;
+// Home page features the original six topics; newer topics live under /topics.
+const FEATURED = TOPICS.slice(0, 6);
 
 const STEPS = [
   {
