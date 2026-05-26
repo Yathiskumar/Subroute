@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Consistent Hashing — Maglev Hashing</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a; --success: #5cc66f; --danger: #f06868; --info: #5e9ff6;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --color-background-primary: var(--bg);
+        --color-background-secondary: var(--surface);
+        --color-text-primary: var(--fg);
+        --color-text-secondary: var(--muted);
+        --color-text-tertiary: var(--subtle);
+        --color-border-secondary: var(--border-strong);
+        --color-border-tertiary: var(--border);
+        --color-background-info: rgba(94,159,246,0.10);
+        --color-text-info: #cdddf7;
+        --color-border-info: rgba(94,159,246,0.28);
+        --color-background-success: rgba(92,198,111,0.16);
+        --color-text-success: var(--success);
+        --color-border-success: rgba(92,198,111,0.45);
+        --color-background-danger: rgba(240,104,104,0.16);
+        --color-text-danger: var(--danger);
+        --color-border-danger: rgba(240,104,104,0.45);
+        --border-radius-lg: 12px;
+        --border-radius-md: 8px;
+        --font-mono: var(--mono);
+        --font-sans: var(--sans);
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body { padding: 14px 16px 16px; background-image: linear-gradient(to right, rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.025) 1px, transparent 1px); background-size: 40px 40px; }
+      .container { max-width: 720px; margin: 0 auto; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+
+      .mag-wrap { padding: 0.25rem 0; }
+
+      .mag-narrate { background: var(--color-background-info); border: 1px solid var(--color-border-info); border-radius: var(--border-radius-lg); padding: 13px 15px; margin-bottom: 1rem; font-size: 13.5px; line-height: 1.6; color: var(--color-text-info); }
+      .mag-narrate b { font-weight: 600; color: #eaf2fd; }
+      .mag-narrate code { font-family: var(--font-mono); font-size: 12px; background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 3px; }
+
+      .mag-section-title { font-family: var(--font-mono); font-size: 11px; color: var(--color-text-tertiary); letter-spacing: 0.06em; margin: 0 0 8px; text-transform: uppercase; display: flex; align-items: center; gap: 8px; }
+      .mag-section-title .pill { font-size: 12.5px; background: var(--color-background-primary); padding: 2px 8px; border-radius: 4px; color: var(--color-text-primary); text-transform: none; letter-spacing: 0; font-weight: 600; }
+
+      .mag-m-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 1rem; padding: 10px 14px; background: var(--color-background-secondary); border: 1px solid var(--border); border-radius: var(--border-radius-md); }
+      .mag-m-row .label { font-size: 12.5px; color: var(--color-text-secondary); }
+      .mag-m-row .note { font-family: var(--font-mono); font-size: 11px; color: var(--color-text-tertiary); margin-left: auto; }
+      .mag-m-buttons { display: flex; gap: 4px; flex-wrap: wrap; }
+      .mag-m-buttons button { padding: 5px 11px; font-family: var(--font-mono); font-size: 12px; background: var(--color-background-primary); color: var(--color-text-secondary); border: 1px solid var(--color-border-tertiary); border-radius: 4px; cursor: pointer; transition: all 0.15s; }
+      .mag-m-buttons button:hover { border-color: var(--color-border-secondary); color: var(--color-text-primary); }
+      .mag-m-buttons button.active { background: var(--color-text-info); color: #06101f; border-color: var(--color-text-info); font-weight: 600; }
+
+      .mag-table { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 1.25rem; padding: 8px; background: var(--color-background-secondary); border: 1px solid var(--border); border-radius: var(--border-radius-md); }
+      .mag-cell { flex: 1 1 30px; min-width: 30px; min-height: 52px; border-radius: 5px; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: transform 0.3s, box-shadow 0.3s, opacity 0.3s; cursor: default; color: #0c0d10; }
+      .mag-cell.empty { background: var(--color-background-primary) !important; color: var(--color-text-tertiary); border: 1px dashed var(--color-border-tertiary); }
+      .mag-cell-letter { font-family: var(--font-mono); font-size: 14px; font-weight: 700; line-height: 1; }
+      .mag-cell-idx { font-family: var(--font-mono); font-size: 9.5px; opacity: 0.75; margin-top: 3px; }
+      .mag-cell.empty .mag-cell-idx { opacity: 1; }
+      .mag-cell.highlighted { transform: scale(1.12); box-shadow: 0 0 0 2px var(--color-text-primary); z-index: 2; }
+      .mag-cell.server-hover { transform: scale(1.08); box-shadow: 0 0 0 2px var(--color-text-primary); }
+      .mag-cell.dim { opacity: 0.3; }
+      @keyframes mag-claim { 0% { transform: scale(0.4); opacity: 0; } 60% { transform: scale(1.15); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+      .mag-cell.claimed { animation: mag-claim 0.4s ease-out; }
+
+      .mag-draft-status { font-family: var(--font-mono); font-size: 12px; color: var(--color-text-secondary); text-align: center; min-height: 18px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--color-border-tertiary); }
+      .mag-draft-status b { color: var(--color-text-primary); font-weight: 600; }
+      .mag-draft-status .arrow { color: var(--color-text-tertiary); margin: 0 4px; }
+      .mag-draft-status .conflict { color: var(--color-text-danger); }
+
+      .mag-servers { display: grid; grid-template-columns: 1fr; gap: 8px; margin-bottom: 1.25rem; }
+      .mag-server { background: var(--color-background-secondary); border: 1px solid var(--border); border-radius: var(--border-radius-md); padding: 10px 12px; position: relative; transition: border-color 0.15s; }
+      .mag-server:hover { border-color: var(--color-border-secondary); }
+      .mag-server-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+      .mag-server-swatch { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+      .mag-server-name { font-family: var(--font-mono); font-size: 13px; color: var(--color-text-primary); font-weight: 600; }
+      .mag-server-slots { margin-left: auto; margin-right: 32px; font-family: var(--font-mono); font-size: 11.5px; color: var(--color-text-secondary); background: var(--color-background-primary); padding: 2px 8px; border-radius: 4px; }
+      .mag-server-close { position: absolute; top: 8px; right: 8px; width: 22px; height: 22px; border-radius: 50%; background: var(--color-background-primary); color: var(--color-text-tertiary); border: 1px solid var(--color-border-tertiary); display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 14px; line-height: 1; padding: 0; transition: background 0.15s, color 0.15s, border-color 0.15s; }
+      .mag-server-close:hover { background: var(--color-background-danger); color: var(--color-text-danger); border-color: var(--color-border-danger); }
+      .mag-server-meta { font-family: var(--font-mono); font-size: 11px; color: var(--color-text-tertiary); line-height: 1.6; }
+      .mag-server-meta b { color: var(--color-text-secondary); font-weight: 600; }
+      .mag-server-prefs { font-family: var(--font-mono); font-size: 11px; color: var(--color-text-tertiary); margin-top: 4px; word-break: break-all; line-height: 1.5; }
+      .mag-server-prefs .num { color: var(--color-text-secondary); }
+      .mag-server-prefs .num.taken { opacity: 0.4; text-decoration: line-through; }
+
+      .mag-keys-section { background: var(--color-background-secondary); border: 1px solid var(--border); border-radius: var(--border-radius-lg); padding: 12px 14px; margin-bottom: 1.25rem; }
+      .mag-keys { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+      .mag-key-chip { padding: 5px 11px; border-radius: 999px; font-family: var(--font-mono); font-size: 11.5px; cursor: pointer; border: 1.5px solid; transition: transform 0.15s, border-color 0.15s; user-select: none; color: var(--color-text-primary); }
+      .mag-key-chip:hover { transform: translateY(-1px); }
+      .mag-key-chip.selected { font-weight: 700; }
+      .mag-lookup-result { font-family: var(--font-mono); font-size: 12px; color: var(--color-text-secondary); line-height: 1.7; padding: 10px 12px; background: var(--color-background-primary); border-radius: var(--border-radius-md); border-left: 3px solid var(--color-text-info); }
+      .mag-lookup-result.empty { color: var(--color-text-tertiary); font-style: italic; border-left-color: var(--color-border-tertiary); }
+      .mag-lookup-result b { color: var(--color-text-primary); font-weight: 600; }
+      .mag-lookup-result code { font-family: var(--font-mono); background: rgba(255,255,255,0.06); padding: 1px 4px; border-radius: 3px; }
+      .mag-lookup-result .step { display: block; margin-bottom: 2px; }
+      .mag-lookup-result .arrow { color: var(--color-text-tertiary); margin: 0 6px; }
+      .mag-lookup-result .final { background: var(--color-background-success); color: var(--color-text-success); padding: 1px 6px; border-radius: 3px; font-weight: 600; }
+
+      .mag-controls { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 1rem; }
+      .mag-controls button { padding: 9px 13px; font-family: var(--font-sans); font-size: 12px; font-weight: 500; background: var(--elevated); color: var(--fg); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; transition: filter 150ms ease, transform 100ms ease, background 150ms, border-color 150ms; display: inline-flex; align-items: center; gap: 5px; }
+      .mag-controls button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); }
+      .mag-controls button:active:not(:disabled) { transform: scale(0.97); }
+      .mag-controls button:disabled { opacity: 0.5; cursor: not-allowed; }
+      .mag-controls .play-btn { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      .mag-controls .play-btn:hover:not(:disabled) { filter: brightness(1.10); background: var(--accent); }
+
+      .mag-compare { font-family: var(--font-mono); font-size: 11.5px; color: var(--color-text-tertiary); text-align: center; line-height: 1.6; }
+      .mag-compare b { color: var(--color-text-secondary); font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="mag-wrap">
+        <h2 class="sr-only">Maglev hashing interactive simulator. A fixed-size lookup table of M slots is filled by a round-robin draft: each backend repeatedly claims its most-preferred free slot until the table is full. Key lookup is then hash(key) mod M, read the table cell — O(1). Play the draft, change M, or remove a backend to see the table rebuild.</h2>
+
+        <div class="mag-narrate" id="mag-narrate">
+          <b>Maglev hashing</b> (Google, 2016) precomputes a fixed-size lookup table of <b>M slots</b>. Each backend has a pseudorandom <b>preference list</b> — the order it would pick slots if it could. The table fills via a <b>round-robin draft</b>: backends take turns claiming their most-preferred unclaimed slot until every slot is full. Lookup is then <code>hash(key) % M → table[slot] → backend</code> — pure O(1).
+        </div>
+
+        <div class="mag-m-row">
+          <span class="label">Table size (M, prime):</span>
+          <div class="mag-m-buttons" id="mag-m-buttons">
+            <button data-m="7">7</button>
+            <button data-m="11">11</button>
+            <button data-m="13" class="active">13</button>
+            <button data-m="17">17</button>
+            <button data-m="23">23</button>
+            <button data-m="31">31</button>
+          </div>
+          <span class="note">production uses ~65537</span>
+        </div>
+
+        <div class="mag-section-title"><span>Lookup table</span><span class="pill" id="mag-table-info">M=13 · 3 backends</span></div>
+        <div class="mag-table" id="mag-table"></div>
+        <div class="mag-draft-status" id="mag-draft-status">Click <b>Play draft</b> to watch the table get filled</div>
+
+        <div class="mag-section-title" style="margin-top:1.25rem"><span>Backends · their preferences and slots</span></div>
+        <div class="mag-servers" id="mag-servers"></div>
+
+        <div class="mag-keys-section">
+          <div class="mag-section-title" style="margin-bottom:8px"><span>O(1) key lookup</span></div>
+          <div class="mag-keys" id="mag-keys"></div>
+          <div class="mag-lookup-result empty" id="mag-lookup-result">Click any key above to see hash(key) mod M → slot → backend</div>
+        </div>
+
+        <div class="mag-controls">
+          <button class="play-btn" onclick="magPlayDraft()" id="mag-play-btn"><i class="ti ti-player-play" aria-hidden="true"></i> Play draft</button>
+          <button onclick="magAddServer()"><i class="ti ti-plus" aria-hidden="true"></i> Add backend</button>
+          <button onclick="magAddKey()"><i class="ti ti-plus" aria-hidden="true"></i> Add key</button>
+          <button onclick="magAddKeys(5)">+5 keys</button>
+          <button onclick="magReset()"><i class="ti ti-refresh" aria-hidden="true"></i> Reset</button>
+        </div>
+
+        <div class="mag-compare">
+          vs ring · HRW · jump: <b>O(1) lookup</b> (fastest) · very even balance · bounded disruption (~slightly worse than jump) · uses O(M) memory · powers Google's load balancer
+        </div>
+      </div>
+    </div>
+
+    <script>
+    (function() {
+      const PRIMES = [7, 11, 13, 17, 23, 31];
+      const PALETTE = ['#fb863a', '#5e9ff6', '#5cc66f', '#f0b568', '#f06888', '#a78bfa'];
+      const NODE_NAMES = ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta'];
+      const KEY_PREFIXES = ['user:', 'order:', 'cart:', 'photo:', 'msg:', 'doc:', 'sess:'];
+
+      function fnv1a(str) {
+        let h = 2166136261 >>> 0;
+        for (let i = 0; i < str.length; i++) {
+          h ^= str.charCodeAt(i);
+          h = Math.imul(h, 16777619) >>> 0;
+        }
+        return h >>> 0;
+      }
+      function fmix32(h) {
+        h ^= h >>> 16;
+        h = Math.imul(h, 0x85ebca6b) >>> 0;
+        h ^= h >>> 13;
+        h = Math.imul(h, 0xc2b2ae35) >>> 0;
+        h ^= h >>> 16;
+        return h >>> 0;
+      }
+      function hash(s) { return fmix32(fnv1a(s)); }
+      const esc = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+      function hexToRgba(hex, a) {
+        const r = parseInt(hex.slice(1,3), 16);
+        const g = parseInt(hex.slice(3,5), 16);
+        const b = parseInt(hex.slice(5,7), 16);
+        return `rgba(${r},${g},${b},${a})`;
+      }
+
+      function generatePreferences(name, M) {
+        const h1 = hash(name + ':offset');
+        const h2 = hash(name + ':skip');
+        const offset = h1 % M;
+        const skip = (h2 % (M - 1)) + 1;
+        const list = [];
+        for (let j = 0; j < M; j++) list.push((offset + j * skip) % M);
+        return { offset, skip, list };
+      }
+
+      function buildTable(servers, M) {
+        const table = new Array(M).fill(null);
+        const nextIdx = servers.map(() => 0);
+        let filled = 0;
+        while (filled < M) {
+          for (let i = 0; i < servers.length; i++) {
+            if (filled >= M) break;
+            while (table[servers[i].preferences.list[nextIdx[i]]] !== null) {
+              nextIdx[i]++;
+            }
+            const slot = servers[i].preferences.list[nextIdx[i]];
+            table[slot] = servers[i].id;
+            nextIdx[i]++;
+            filled++;
+          }
+        }
+        return table;
+      }
+
+      function buildTableSteps(servers, M) {
+        const table = new Array(M).fill(null);
+        const nextIdx = servers.map(() => 0);
+        const steps = [];
+        let filled = 0;
+        let round = 1;
+        while (filled < M) {
+          for (let i = 0; i < servers.length; i++) {
+            if (filled >= M) break;
+            const conflicts = [];
+            while (table[servers[i].preferences.list[nextIdx[i]]] !== null) {
+              conflicts.push(servers[i].preferences.list[nextIdx[i]]);
+              nextIdx[i]++;
+            }
+            const slot = servers[i].preferences.list[nextIdx[i]];
+            table[slot] = servers[i].id;
+            nextIdx[i]++;
+            steps.push({ round, serverIdx: i, slot, conflicts });
+            filled++;
+          }
+          round++;
+        }
+        return steps;
+      }
+
+      const state = {
+        M: 13,
+        servers: [],
+        keys: [],
+        table: [],
+        selectedKeyId: null,
+        hoveredServerId: null,
+        playing: false,
+        draftAnim: { activeServerId: null, currentSlot: null, conflicts: [], stepText: '' },
+        nNode: 0,
+        nKey: 0,
+      };
+
+      function rebuild() {
+        for (const server of state.servers) {
+          server.preferences = generatePreferences(server.name, state.M);
+        }
+        state.table = state.servers.length === 0 ? new Array(state.M).fill(null) : buildTable(state.servers, state.M);
+      }
+
+      function addServer(name, doNarrate) {
+        if (state.servers.length >= 6) return null;
+        name = name || NODE_NAMES[state.nNode % NODE_NAMES.length];
+        let final = name, i = 1;
+        while (state.servers.some(s => s.name === final)) { final = name + '-' + (++i); }
+        const color = PALETTE[state.nNode % PALETTE.length];
+        state.servers.push({ id: 'srv' + state.nNode, name: final, color, preferences: generatePreferences(final, state.M) });
+        state.nNode++;
+        rebuild();
+        if (doNarrate) {
+          narrate(`Added backend <b>${esc(final)}</b>. Its preference list (offset=${state.servers[state.servers.length-1].preferences.offset}, skip=${state.servers[state.servers.length-1].preferences.skip}) joins the draft. The whole table re-builds — some slots stay, others change.`);
+        }
+        render();
+      }
+
+      function removeServer(id) {
+        const s = state.servers.find(x => x.id === id);
+        if (!s) return;
+        state.servers = state.servers.filter(x => x.id !== id);
+        rebuild();
+        narrate(`Removed <b>${esc(s.name)}</b>. The remaining backends redraft the slots it used to own. Maglev guarantees only a bounded fraction of slots change.`);
+        render();
+      }
+
+      function addKey(name) {
+        if (state.keys.length >= 25) return null;
+        if (!name) {
+          const p = KEY_PREFIXES[Math.floor(Math.random() * KEY_PREFIXES.length)];
+          name = p + (Math.floor(Math.random() * 9000) + 1000);
+        }
+        if (state.keys.some(k => k.name === name)) name += '-' + state.nKey;
+        state.keys.push({ id: 'k' + state.nKey, name, hash: hash(name) });
+        state.nKey++;
+        return state.keys[state.keys.length - 1];
+      }
+
+      function setM(newM) {
+        if (state.playing) return;
+        if (!PRIMES.includes(newM)) return;
+        state.M = newM;
+        rebuild();
+        narrate(`Table size <b>M = ${newM}</b>. Bigger M means smoother balance and finer-grained disruption when backends change. Production Maglev uses M ≈ 65537.`);
+        document.querySelectorAll('#mag-m-buttons button').forEach(b => {
+          b.classList.toggle('active', parseInt(b.getAttribute('data-m'), 10) === newM);
+        });
+        render();
+      }
+
+      function selectKey(keyId) {
+        state.selectedKeyId = keyId;
+        const k = state.keys.find(x => x.id === keyId);
+        if (k) {
+          narrate(`Looking up key <b>${esc(k.name)}</b>. Hash it once, mod by M, read the table cell. That's it — no scanning, no walks. O(1).`);
+        }
+        render();
+      }
+
+      function narrate(html) { document.getElementById('mag-narrate').innerHTML = html; }
+
+      window.magAddServer = () => { if (!state.playing) addServer(null, true); };
+      window.magAddKey = () => {
+        if (state.playing) return;
+        const k = addKey();
+        if (k) {
+          state.selectedKeyId = k.id;
+          narrate(`Added key <b>${esc(k.name)}</b>. Click the chip below to see its O(1) lookup.`);
+        }
+        render();
+      };
+      window.magAddKeys = (n) => {
+        if (state.playing) return;
+        for (let i = 0; i < n; i++) addKey();
+        narrate(`Added <b>${n}</b> keys. Each is one hash + one mod + one table read away from its backend. Click any chip to inspect.`);
+        render();
+      };
+      window.magReset = () => {
+        if (state.playing) return;
+        state.M = 13; state.servers = []; state.keys = []; state.table = [];
+        state.selectedKeyId = null; state.hoveredServerId = null;
+        state.nNode = 0; state.nKey = 0;
+        document.querySelectorAll('#mag-m-buttons button').forEach(b => {
+          b.classList.toggle('active', parseInt(b.getAttribute('data-m'), 10) === 13);
+        });
+        seed();
+        narrate(`Reset. 3 backends, M = 13, 8 keys. Click <b>Play draft</b> to watch the round-robin fill the table.`);
+        render();
+      };
+
+      window.magPlayDraft = async () => {
+        if (state.playing || state.servers.length === 0) return;
+        state.playing = true;
+        document.getElementById('mag-play-btn').disabled = true;
+        document.getElementById('mag-play-btn').innerHTML = '<i class="ti ti-player-pause" aria-hidden="true"></i> Drafting…';
+
+        state.table = new Array(state.M).fill(null);
+        state.draftAnim = { activeServerId: null, currentSlot: null, conflicts: [], stepText: 'Starting draft…' };
+        renderTable();
+        renderDraftStatus();
+        await wait(500);
+
+        const steps = buildTableSteps(state.servers, state.M);
+
+        for (let i = 0; i < steps.length; i++) {
+          const step = steps[i];
+          const server = state.servers[step.serverIdx];
+          state.draftAnim = {
+            activeServerId: server.id,
+            currentSlot: step.slot,
+            conflicts: step.conflicts,
+            stepText: `<b>round ${step.round}</b> · <span style="color:${server.color}">${server.name}</span> claims slot <b>${step.slot}</b>` + (step.conflicts.length > 0 ? ` <span class="conflict">(skipped: ${step.conflicts.join(', ')})</span>` : ''),
+          };
+          state.table[step.slot] = server.id;
+          renderTable(true);
+          renderDraftStatus();
+          const delay = Math.max(220, 700 - state.M * 12);
+          await wait(delay);
+        }
+
+        state.draftAnim = { activeServerId: null, currentSlot: null, conflicts: [], stepText: '<b>Draft complete.</b> Every slot is owned. Lookups are now O(1).' };
+        renderTable();
+        renderDraftStatus();
+
+        setTimeout(() => {
+          state.playing = false;
+          const btn = document.getElementById('mag-play-btn');
+          btn.disabled = false;
+          btn.innerHTML = '<i class="ti ti-repeat" aria-hidden="true"></i> Replay draft';
+        }, 800);
+      };
+
+      function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+      function render() {
+        renderTableInfo();
+        renderTable();
+        renderDraftStatus();
+        renderServers();
+        renderKeys();
+        renderLookup();
+      }
+
+      function renderTableInfo() {
+        document.getElementById('mag-table-info').textContent = `M=${state.M} · ${state.servers.length} backend${state.servers.length===1?'':'s'}`;
+      }
+
+      function renderTable(animateClaim) {
+        const el = document.getElementById('mag-table');
+        const lookupSlot = (() => {
+          if (!state.selectedKeyId) return null;
+          const k = state.keys.find(x => x.id === state.selectedKeyId);
+          return k ? k.hash % state.M : null;
+        })();
+
+        let html = '';
+        for (let i = 0; i < state.M; i++) {
+          const sid = state.table[i];
+          const server = state.servers.find(s => s.id === sid);
+          const isEmpty = !server;
+          const isClaiming = animateClaim && state.draftAnim.currentSlot === i;
+          const isHighlighted = lookupSlot === i;
+          const isServerHovered = state.hoveredServerId && server && server.id === state.hoveredServerId;
+          const isDimmed = state.hoveredServerId && server && server.id !== state.hoveredServerId;
+          const classes = ['mag-cell'];
+          if (isEmpty) classes.push('empty');
+          if (isClaiming) classes.push('claimed');
+          if (isHighlighted) classes.push('highlighted');
+          if (isServerHovered) classes.push('server-hover');
+          if (isDimmed) classes.push('dim');
+          const bg = server ? server.color : 'transparent';
+          const letter = server ? server.name.charAt(0).toUpperCase() : '';
+          html += `<div class="${classes.join(' ')}" style="background:${bg}" data-slot="${i}">
+            <span class="mag-cell-letter">${letter}</span>
+            <span class="mag-cell-idx">${i}</span>
+          </div>`;
+        }
+        el.innerHTML = html;
+      }
+
+      function renderDraftStatus() {
+        const el = document.getElementById('mag-draft-status');
+        if (state.playing) {
+          el.innerHTML = state.draftAnim.stepText;
+        } else if (state.draftAnim.stepText) {
+          el.innerHTML = state.draftAnim.stepText;
+        } else {
+          el.innerHTML = state.servers.length === 0 ? 'Add a backend to begin' : 'Click <b>Play draft</b> to watch the table get filled';
+        }
+      }
+
+      function renderServers() {
+        const el = document.getElementById('mag-servers');
+        if (state.servers.length === 0) {
+          el.innerHTML = '<div style="text-align:center;color:var(--color-text-tertiary);font-size:13px;padding:0.5rem;font-style:italic">No backends — add one</div>';
+          return;
+        }
+
+        let html = '';
+        for (const server of state.servers) {
+          const slotsOwned = [];
+          state.table.forEach((sid, i) => { if (sid === server.id) slotsOwned.push(i); });
+          const pct = state.table.filter(s => s !== null).length > 0 ? Math.round(slotsOwned.length / state.M * 100) : 0;
+          const prefList = server.preferences.list;
+          const prefShow = Math.min(12, prefList.length);
+          let prefHtml = '';
+          for (let i = 0; i < prefShow; i++) {
+            const p = prefList[i];
+            const isOwned = slotsOwned.includes(p);
+            prefHtml += `<span class="num ${isOwned ? '' : 'taken'}">${p}${i < prefShow - 1 ? ', ' : ''}</span>`;
+          }
+          if (prefList.length > prefShow) prefHtml += `<span class="num taken">, …</span>`;
+
+          html += `<div class="mag-server" data-server-id="${server.id}">
+            <div class="mag-server-header">
+              <span class="mag-server-swatch" style="background:${server.color}"></span>
+              <span class="mag-server-name">${esc(server.name)}</span>
+              <span class="mag-server-slots">${slotsOwned.length} slot${slotsOwned.length===1?'':'s'} · ${pct}%</span>
+              <button class="mag-server-close" data-remove="${server.id}" aria-label="Remove ${esc(server.name)}"><i class="ti ti-x" aria-hidden="true"></i></button>
+            </div>
+            <div class="mag-server-meta">
+              owns slots: <b>[${slotsOwned.join(', ')}]</b><br>
+              formula: <b>offset=${server.preferences.offset}, skip=${server.preferences.skip}</b>
+            </div>
+            <div class="mag-server-prefs">
+              preferences (first ${prefShow}): [${prefHtml}]
+            </div>
+          </div>`;
+        }
+        el.innerHTML = html;
+      }
+
+      function renderKeys() {
+        const el = document.getElementById('mag-keys');
+        if (state.keys.length === 0) {
+          el.innerHTML = '<div style="color:var(--color-text-tertiary);font-style:italic;font-size:12.5px">No keys yet</div>';
+          return;
+        }
+        let html = '';
+        for (const k of state.keys) {
+          const slot = k.hash % state.M;
+          const sid = state.table[slot];
+          const server = state.servers.find(s => s.id === sid);
+          const color = server ? server.color : '#888';
+          const isSel = state.selectedKeyId === k.id;
+          const bg = hexToRgba(color, 0.20);
+          const borderColor = isSel ? 'var(--color-text-primary)' : hexToRgba(color, 0.45);
+          html += `<span class="mag-key-chip ${isSel ? 'selected' : ''}" style="background:${bg};border-color:${borderColor}" data-key-id="${k.id}">${esc(k.name)}</span>`;
+        }
+        el.innerHTML = html;
+      }
+
+      function renderLookup() {
+        const el = document.getElementById('mag-lookup-result');
+        if (!state.selectedKeyId) {
+          el.className = 'mag-lookup-result empty';
+          el.textContent = 'Click any key above to see hash(key) mod M → slot → backend';
+          return;
+        }
+        const k = state.keys.find(x => x.id === state.selectedKeyId);
+        if (!k) { el.textContent = ''; return; }
+        const slot = k.hash % state.M;
+        const sid = state.table[slot];
+        const server = state.servers.find(s => s.id === sid);
+        const hexStr = '0x' + k.hash.toString(16).padStart(8, '0');
+        el.className = 'mag-lookup-result';
+        el.innerHTML = `
+          <span class="step"><b>1.</b> hash(<code>${esc(k.name)}</code>) = <b>${hexStr}</b></span>
+          <span class="step"><b>2.</b> <code>${hexStr} mod ${state.M}</code> = <b>slot ${slot}</b></span>
+          <span class="step"><b>3.</b> <code>table[${slot}]</code> = <span class="final">${server ? esc(server.name) : 'empty'}</span></span>
+        `;
+      }
+
+      document.getElementById('mag-m-buttons').addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-m]');
+        if (btn) setM(parseInt(btn.getAttribute('data-m'), 10));
+      });
+      document.getElementById('mag-keys').addEventListener('click', (e) => {
+        const chip = e.target.closest('.mag-key-chip');
+        if (chip) selectKey(chip.getAttribute('data-key-id'));
+      });
+      document.getElementById('mag-servers').addEventListener('click', (e) => {
+        const close = e.target.closest('.mag-server-close');
+        if (close) { e.stopPropagation(); removeServer(close.getAttribute('data-remove')); }
+      });
+      document.getElementById('mag-servers').addEventListener('mouseover', (e) => {
+        if (state.playing) return;
+        const srv = e.target.closest('.mag-server');
+        if (srv && state.hoveredServerId !== srv.getAttribute('data-server-id')) {
+          state.hoveredServerId = srv.getAttribute('data-server-id');
+          renderTable();
+        }
+      });
+      document.getElementById('mag-servers').addEventListener('mouseleave', () => {
+        if (state.hoveredServerId) {
+          state.hoveredServerId = null;
+          renderTable();
+        }
+      });
+
+      function seed() {
+        addServer('alpha', false); addServer('beta', false); addServer('gamma', false);
+        ['user:42', 'order:7', 'cart:99', 'photo:x9', 'msg:88', 'doc:2', 'sess:11', 'user:1337'].forEach(k => addKey(k));
+        if (state.keys.length > 0) state.selectedKeyId = state.keys[0].id;
+      }
+      seed();
+      render();
+    })();
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>
