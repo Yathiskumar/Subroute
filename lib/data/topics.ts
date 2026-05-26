@@ -484,7 +484,7 @@ export const TOPICS: Topic[] = [
           "Score every server for the key with hash(key, server) and pick the highest. No ring, even load, and weighting is trivial.",
         difficulty: "intermediate",
         estimatedTime: "10 min",
-        prototypePath: null,
+        prototypePath: "/prototypes/consistent-hashing/rendezvous-hrw.html",
       },
       {
         slug: "jump-hash",
@@ -493,7 +493,7 @@ export const TOPICS: Topic[] = [
           "A tiny formula maps a key and a bucket count to a bucket — near-perfect balance, zero memory, no ring at all.",
         difficulty: "advanced",
         estimatedTime: "11 min",
-        prototypePath: null,
+        prototypePath: "/prototypes/consistent-hashing/jump-hash.html",
       },
       {
         slug: "maglev",
@@ -502,7 +502,7 @@ export const TOPICS: Topic[] = [
           "Precompute a lookup table so routing is O(1) and disruption is minimal — Google's hashing for software network load balancers.",
         difficulty: "advanced",
         estimatedTime: "12 min",
-        prototypePath: null,
+        prototypePath: "/prototypes/consistent-hashing/maglev.html",
       },
     ],
   },

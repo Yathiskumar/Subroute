@@ -49,6 +49,9 @@ import { powerOfTwoChoices } from "./load-balancing/power-of-two-choices";
 import { consistentHashingTopic } from "./consistent-hashing/_topic";
 import { vanillaRing } from "./consistent-hashing/vanilla-ring";
 import { virtualNodes } from "./consistent-hashing/virtual-nodes";
+import { rendezvousHrw } from "./consistent-hashing/rendezvous-hrw";
+import { jumpHash } from "./consistent-hashing/jump-hash";
+import { maglev } from "./consistent-hashing/maglev";
 
 // Indexed by `${topicSlug}/${conceptSlug}`
 const CONCEPT_CONTENT: Record<string, ConceptContent> = {
@@ -95,6 +98,9 @@ const CONCEPT_CONTENT: Record<string, ConceptContent> = {
   "load-balancing/power-of-two-choices": powerOfTwoChoices,
   "consistent-hashing/vanilla-ring": vanillaRing,
   "consistent-hashing/virtual-nodes": virtualNodes,
+  "consistent-hashing/rendezvous-hrw": rendezvousHrw,
+  "consistent-hashing/jump-hash": jumpHash,
+  "consistent-hashing/maglev": maglev,
 };
 
 // Indexed by topic slug
