@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Page Replacement — Second Chance</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a; --success: #5cc66f; --danger: #f06868; --warning: #f0b568; --info: #5e9ff6; --purple: #a78bfa;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --color-background-primary: var(--bg); --color-background-secondary: var(--surface);
+        --color-text-primary: var(--fg); --color-text-secondary: var(--muted); --color-text-tertiary: var(--subtle);
+        --color-border-secondary: var(--border-strong); --color-border-tertiary: var(--border);
+        --border-radius-lg: 12px; --border-radius-md: 8px; --font-mono: var(--mono); --font-sans: var(--sans);
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body { padding: 16px 18px 18px; background-image: linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px); background-size: 40px 40px; }
+      .container { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; }
+      #decision-box { order: 1; }
+      .container > div:last-child { order: 2; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; padding: 9px 12px; transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); }
+      input[type=text], input[type=number] { background: var(--elevated); color: var(--fg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font: 13px var(--sans); }
+      input[type=text]:focus, input[type=number]:focus { outline: none; border-color: var(--accent); }
+      input[type=range] { accent-color: var(--accent); }
+
+      .sc-frame{display:flex;align-items:center;justify-content:center;width:58px;height:58px;border-radius:var(--border-radius-md);font-size:21px;font-weight:600;border:1px solid var(--border-strong);background:var(--elevated);transition:background .3s,color .3s,border-color .3s,transform .3s,box-shadow .3s;position:relative}
+      .sc-frame.empty{color:var(--color-text-tertiary);border-style:dashed;font-size:18px;font-weight:400}
+      .sc-frame.new{background:rgba(94,159,246,0.18);color:#cdddf7;border-color:#5e9ff6;transform:scale(1.08);box-shadow:0 0 0 3px rgba(94,159,246,.25)}
+      .sc-frame.hit{background:rgba(92,198,111,0.18);color:#bfe8c6;border-color:#5cc66f;transform:scale(1.08);box-shadow:0 0 0 3px rgba(92,198,111,.25)}
+      .sc-frame.spared{background:rgba(167,139,250,0.16);border-color:#a78bfa;box-shadow:0 0 0 2px rgba(167,139,250,.3)}
+      .sc-frame.front{box-shadow:0 0 0 2px #f0b568}
+      .bit-pill{font-size:10px;font-weight:600;padding:1px 7px;border-radius:8px;font-family:var(--font-mono)}
+      .bit-pill.on{background:rgba(92,198,111,0.2);color:#bfe8c6;border:1px solid rgba(92,198,111,0.5)}
+      .bit-pill.off{background:rgba(255,255,255,0.06);color:var(--muted);border:1px solid var(--border-strong)}
+      .frame-col{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:58px}
+      .frame-meta{font-size:10px;color:var(--color-text-tertiary);height:14px;line-height:14px}
+      .frame-tag-top{height:18px;display:flex;align-items:center;justify-content:center}
+      .ref-cell{width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:var(--border-radius-md);font-size:14px;font-weight:600;background:var(--elevated);color:var(--color-text-secondary);transition:all .25s;flex-shrink:0;position:relative}
+      .ref-cell.current{background:rgba(94,159,246,0.18);color:#cdddf7;transform:scale(1.12)}
+      .ref-cell.current::after{content:"";position:absolute;top:-10px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:6px solid #5e9ff6}
+      .ref-cell.done{background:transparent;color:var(--color-text-tertiary);border:1px solid var(--color-border-tertiary)}
+      .ref-cell.hit-marker{box-shadow:inset 0 0 0 1.5px #5cc66f;color:#bfe8c6}
+      .ref-cell.fault-marker{box-shadow:inset 0 0 0 1.5px #f06868}
+      .history-row td{padding:8px 10px;font-size:13px;border-bottom:1px solid var(--color-border-tertiary);vertical-align:middle;height:36px;box-sizing:border-box}
+      .history-row.filler td{color:transparent}
+      .history-row:last-child td{border-bottom:none}
+      .history-row.current-row{background:var(--surface)}
+      .preset-btn{padding:5px 10px;font-size:12px}
+      .queue-arrow{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:var(--color-text-tertiary);min-width:54px}
+      .queue-arrow .lbl{font-size:10px;text-align:center;line-height:1.2}
+      .queue-arrow .arr{font-size:18px;line-height:1}
+      .front-pill{font-size:9px;color:#f0c887;background:rgba(240,181,104,0.16);padding:2px 6px;border-radius:8px;font-weight:600;letter-spacing:.3px}
+      .back-pill{font-size:9px;color:#cdddf7;background:rgba(94,159,246,0.16);padding:2px 6px;border-radius:8px;font-weight:600;letter-spacing:.3px}
+      .decision-card{padding:12px 14px;border-radius:var(--border-radius-md);font-size:13px;line-height:1.55;border:1px solid var(--color-border-tertiary);background:var(--surface)}
+      .decision-card.hit{background:rgba(92,198,111,0.10);border-color:rgba(92,198,111,0.4);color:#bfe8c6}
+      .decision-card.fault{background:rgba(240,104,104,0.10);border-color:rgba(240,104,104,0.4);color:#f3b0b0}
+      .decision-card.empty-fault{background:rgba(240,181,104,0.10);border-color:rgba(240,181,104,0.4);color:#f0c887}
+      .decision-card strong{color:var(--fg)}
+      .decision-card.hit strong{color:#dcf3e0}.decision-card.fault strong{color:#fcd9d9}.decision-card.empty-fault strong{color:#f7ddb4}
+      .scan-log{font-family:var(--font-mono);font-size:12px;display:block;margin-top:6px;line-height:1.8;color:var(--color-text-secondary)}
+      .scan-log .chance{color:#d3c4fb}
+      .kbd{font-family:var(--font-mono);font-size:12px;padding:1px 5px;border-radius:4px;background:rgba(255,255,255,.08)}
+      .panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--border-radius-lg)}
+      .stat{background:var(--surface);border:1px solid var(--border);padding:1rem;border-radius:var(--border-radius-md)}
+    </style>
+  </head>
+  <body>
+    <div class="container">
+    <h2 class="sr-only">Interactive Second Chance page replacement simulator: a FIFO queue with reference bits, where pages with their bit set are rotated to the back instead of evicted.</h2>
+
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin:0 0 .75rem;align-items:flex-end">
+      <div style="flex:1;min-width:240px">
+        <label style="font-size:13px;color:var(--color-text-secondary);display:block;margin-bottom:4px">Reference string</label>
+        <input type="text" id="ref-input" value="7 0 1 2 0 3 0 4 2 3 0 3 2" style="width:100%" placeholder="e.g. 7 0 1 2 0 3 0 4"/>
+      </div>
+      <div style="width:110px">
+        <label style="font-size:13px;color:var(--color-text-secondary);display:block;margin-bottom:4px">Frames</label>
+        <input type="number" id="frame-count" value="3" min="2" max="6" step="1" style="width:100%"/>
+      </div>
+      <button id="apply-btn" class="primary">Apply</button>
+    </div>
+
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:1.5rem;align-items:center">
+      <span style="font-size:12px;color:var(--color-text-tertiary);margin-right:4px">Presets</span>
+      <button class="preset-btn" data-ref="7 0 1 2 0 3 0 4 2 3 0 3 2" data-frames="3">Classic textbook</button>
+      <button class="preset-btn" data-ref="1 2 3 1 4 1 5 1 6 1 2" data-frames="3">Hot page spared</button>
+      <button class="preset-btn" data-ref="1 2 3 4 5 1 2 3 4 5" data-frames="4">Full rotation</button>
+      <button class="preset-btn" data-ref="1 1 2 2 3 3 4 4 1 2" data-frames="3">Bits stay set</button>
+    </div>
+
+    <div style="margin-bottom:1.5rem">
+      <div style="font-size:13px;color:var(--color-text-secondary);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
+        <span>Reference string</span>
+        <span style="font-size:11px;color:var(--color-text-tertiary)">processed left to right</span>
+      </div>
+      <div id="ref-display" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:.75rem;flex-wrap:wrap">
+      <div style="font-size:13px;color:var(--color-text-secondary)">Step <span id="step-num" style="color:var(--color-text-primary);font-weight:600">0</span> / <span id="step-total">0</span></div>
+      <div style="flex:1"></div>
+      <div id="result-badge" style="font-size:12px;color:var(--color-text-tertiary)">Idle</div>
+    </div>
+
+    <div id="decision-box" class="decision-card" style="margin-bottom:1.25rem;color:var(--color-text-secondary)">
+      Press <span class="kbd">play</span> or step forward to begin. Second Chance is FIFO with a reference bit. On a hit, the page's bit is set to 1. On a fault, inspect the page at the front of the queue: if its bit is 1, clear it and move it to the back (a second chance); repeat until you reach a page with bit 0 — that one is evicted.
+    </div>
+
+    <div class="panel" style="padding:1.25rem 1rem 1rem;margin-bottom:1.25rem">
+      <div style="font-size:13px;color:var(--color-text-secondary);margin-bottom:14px;text-align:center">FIFO queue with reference bits · front (oldest) → back (newest)</div>
+      <div style="display:flex;gap:10px;align-items:flex-end;justify-content:center;flex-wrap:wrap">
+        <div class="queue-arrow"><span class="arr"><i class="ti ti-arrow-left" aria-hidden="true"></i></span><span class="lbl">inspect<br>front</span></div>
+        <div id="frames-display" style="display:flex;gap:10px;align-items:flex-end"></div>
+        <div class="queue-arrow"><span class="arr"><i class="ti ti-arrow-right" aria-hidden="true"></i></span><span class="lbl">load /<br>spared</span></div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:1.5rem;flex-wrap:wrap">
+      <button id="prev-btn" aria-label="Previous step"><i class="ti ti-player-skip-back" aria-hidden="true"></i></button>
+      <button id="play-btn" class="primary" aria-label="Play or pause"><i class="ti ti-player-play" id="play-icon" aria-hidden="true"></i></button>
+      <button id="next-btn" aria-label="Next step"><i class="ti ti-player-skip-forward" aria-hidden="true"></i></button>
+      <button id="reset-btn" aria-label="Reset to start"><i class="ti ti-refresh" aria-hidden="true"></i></button>
+      <div style="display:flex;align-items:center;gap:10px;margin-left:12px;flex:1;min-width:160px">
+        <span style="font-size:13px;color:var(--color-text-secondary)">Speed</span>
+        <input type="range" id="speed-slider" min="1" max="10" step="1" value="6" style="flex:1;max-width:200px"/>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:1.5rem">
+      <div class="stat"><div style="font-size:12px;color:var(--color-text-secondary)">Faults</div><div style="font-size:22px;font-weight:600;color:#f06868" id="stat-faults">0</div></div>
+      <div class="stat"><div style="font-size:12px;color:var(--color-text-secondary)">Hits</div><div style="font-size:22px;font-weight:600;color:#5cc66f" id="stat-hits">0</div></div>
+      <div class="stat"><div style="font-size:12px;color:var(--color-text-secondary)">Hit ratio</div><div style="font-size:22px;font-weight:600" id="stat-ratio">0%</div></div>
+      <div class="stat"><div style="font-size:12px;color:var(--color-text-secondary)">Chances given</div><div style="font-size:22px;font-weight:600;color:#a78bfa" id="stat-chances">0</div></div>
+    </div>
+
+    <div>
+      <div style="font-size:13px;color:var(--color-text-secondary);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center"><span>Step history</span><span style="font-size:11px;color:var(--color-text-tertiary)">latest 2 steps</span></div>
+      <div class="panel" style="overflow:hidden">
+        <table style="width:100%;border-collapse:collapse;table-layout:fixed">
+          <thead>
+            <tr style="background:var(--surface)">
+              <th style="text-align:left;padding:8px 10px;font-size:12px;color:var(--color-text-secondary);font-weight:600;width:40px">#</th>
+              <th style="text-align:left;padding:8px 10px;font-size:12px;color:var(--color-text-secondary);font-weight:600;width:50px">Pg</th>
+              <th style="text-align:left;padding:8px 10px;font-size:12px;color:var(--color-text-secondary);font-weight:600">Queue front→back (page:bit)</th>
+              <th style="text-align:left;padding:8px 10px;font-size:12px;color:var(--color-text-secondary);font-weight:600;width:160px">Result</th>
+            </tr>
+          </thead>
+          <tbody id="history-body">
+            <tr class="history-row"><td colspan="4" style="text-align:center;color:var(--color-text-tertiary)">No steps yet</td></tr><tr class="history-row filler"><td colspan="4">&nbsp;</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    </div>
+
+    <script>
+    (function(){
+      let refString=[],frameCount=3,steps=[],currentStep=0,playing=false,speedLevel=6,playTimer=null;
+      const C={hitT:'#bfe8c6',hitBg:'rgba(92,198,111,0.16)',faultT:'#f3b0b0',faultBg:'rgba(240,104,104,0.16)',warnT:'#f0c887',warnBg:'rgba(240,181,104,0.16)'};
+
+      function parseRef(t){return t.trim().split(/[\s,]+/).filter(Boolean).slice(0,30);}
+
+      function compute(){
+        steps=[];
+        let queue=[]; // front = index 0
+        let faults=0,hits=0,chances=0;
+        for(let i=0;i<refString.length;i++){
+          const page=refString[i];
+          let action,evicted=null,newPage=null,hitIdx=null;
+          const scanLog=[];
+          const idx=queue.findIndex(s=>s.page===page);
+          if(idx>=0){hits++;action='hit';queue[idx].refBit=1;hitIdx=idx;}
+          else{
+            faults++;
+            if(queue.length<frameCount){queue.push({page,refBit:1});newPage=page;action='fault-empty';}
+            else{
+              let guard=0;
+              while(guard<frameCount*3){
+                const front=queue[0];
+                if(front.refBit===1){
+                  scanLog.push({page:front.page,act:'chance'});
+                  front.refBit=0;queue.push(queue.shift());chances++;guard++;
+                } else {
+                  scanLog.push({page:front.page,act:'evict'});
+                  evicted=front.page;queue.shift();queue.push({page,refBit:1});break;
+                }
+              }
+              newPage=page;action='fault-evict';
+            }
+          }
+          steps.push({index:i,page,action,queue:queue.map(s=>({...s})),evicted,newPage,hitIdx,scanLog,faults,hits,chances});
+        }
+      }
+
+      function render(){
+        const rd=document.getElementById('ref-display');
+        rd.innerHTML='';
+        refString.forEach((page,i)=>{
+          const cell=document.createElement('div');
+          cell.className='ref-cell';
+          if(i+1===currentStep)cell.classList.add('current');
+          else if(i+1<currentStep){
+            cell.classList.add('done');
+            const s=steps[i];
+            if(s.action==='hit')cell.classList.add('hit-marker');else cell.classList.add('fault-marker');
+          }
+          cell.textContent=page;
+          rd.appendChild(cell);
+        });
+
+        document.getElementById('step-num').textContent=currentStep;
+        document.getElementById('step-total').textContent=refString.length;
+
+        const fd=document.getElementById('frames-display');
+        fd.innerHTML='';
+        let q=[],si=null;
+        if(currentStep>0){si=steps[currentStep-1];q=si.queue;}
+        const spared=new Set(si?si.scanLog.filter(e=>e.act==='chance').map(e=>e.page):[]);
+
+        for(let i=0;i<frameCount;i++){
+          const col=document.createElement('div');
+          col.className='frame-col';
+          const top=document.createElement('div');
+          top.className='frame-tag-top';
+          const slot=q[i];
+          const isFull=q.length===frameCount;
+          if(i===0&&isFull){const t=document.createElement('span');t.className='front-pill';t.textContent='front';top.appendChild(t);}
+          else if(i===q.length-1&&si&&slot&&slot.page===si.newPage&&si.action!=='hit'){const t=document.createElement('span');t.className='back-pill';t.textContent='just in';top.appendChild(t);}
+          col.appendChild(top);
+
+          const frame=document.createElement('div');
+          frame.className='sc-frame';
+          if(!slot){frame.classList.add('empty');frame.textContent='–';}
+          else{
+            frame.textContent=slot.page;
+            if(si&&slot.page===si.newPage&&si.action!=='hit')frame.classList.add('new');
+            else if(si&&si.action==='hit'&&i===si.hitIdx)frame.classList.add('hit');
+            else if(spared.has(slot.page))frame.classList.add('spared');
+            if(i===0&&isFull&&!(si&&slot.page===si.newPage&&si.action!=='hit'))frame.classList.add('front');
+          }
+          col.appendChild(frame);
+
+          const bit=document.createElement('div');
+          if(slot){bit.className='bit-pill '+(slot.refBit===1?'on':'off');bit.textContent='R '+slot.refBit;}
+          else{bit.className='frame-meta';bit.textContent='empty';}
+          col.appendChild(bit);
+          fd.appendChild(col);
+        }
+
+        const rb=document.getElementById('result-badge');
+        const db=document.getElementById('decision-box');
+        db.className='decision-card';
+        if(si){
+          if(si.action==='hit'){
+            rb.innerHTML='<span style="color:'+C.hitT+'"><i class="ti ti-check" aria-hidden="true"></i> Page hit</span>';
+            db.classList.add('hit');
+            db.innerHTML='Page <strong>'+si.page+'</strong> is already in the queue. Set its reference bit to 1 — it keeps its place; the queue order is unchanged.';
+          } else if(si.action==='fault-evict'){
+            rb.innerHTML='<span style="color:'+C.faultT+'"><i class="ti ti-arrows-exchange" aria-hidden="true"></i> Fault · evicted '+si.evicted+'</span>';
+            db.classList.add('fault');
+            let log='';
+            for(const ev of si.scanLog){
+              if(ev.act==='chance')log+='<span class="chance">Front '+ev.page+' has bit 1 → clear bit, rotate to back (second chance)</span>';
+              else log+='<span style="color:'+C.faultT+'">Front '+ev.page+' has bit 0 → evict, load '+si.page+' at the back</span>';
+            }
+            db.innerHTML='Page <strong>'+si.page+'</strong> not in memory, queue full. Inspect from the front:<span class="scan-log">'+log+'</span>';
+          } else {
+            rb.innerHTML='<span style="color:'+C.warnT+'"><i class="ti ti-plus" aria-hidden="true"></i> Fault · empty frame</span>';
+            db.classList.add('empty-fault');
+            db.innerHTML='Page <strong>'+si.page+'</strong> not in memory, but a frame is free. Append it to the back of the queue with bit = 1 — no eviction needed yet.';
+          }
+        } else {
+          rb.innerHTML='<span style="color:var(--color-text-tertiary)">Idle</span>';
+          db.style.color='var(--color-text-secondary)';
+          db.innerHTML='Press <span class="kbd">play</span> or step forward to begin. Second Chance is FIFO with a reference bit. On a hit, the page\'s bit is set to 1. On a fault, inspect the page at the front of the queue: if its bit is 1, clear it and move it to the back (a second chance); repeat until you reach a page with bit 0 — that one is evicted.';
+        }
+
+        const f=si?si.faults:0,h=si?si.hits:0,ch=si?si.chances:0,total=f+h;
+        document.getElementById('stat-faults').textContent=f;
+        document.getElementById('stat-hits').textContent=h;
+        document.getElementById('stat-ratio').textContent=total>0?Math.round((h/total)*100)+'%':'0%';
+        document.getElementById('stat-chances').textContent=ch;
+
+        const body=document.getElementById('history-body');
+        if(currentStep===0){
+          body.innerHTML='<tr class="history-row"><td colspan="4" style="text-align:center;color:var(--color-text-tertiary)">No steps yet</td></tr><tr class="history-row filler"><td colspan="4">&nbsp;</td></tr>';
+        } else {
+          body.innerHTML='';
+          for(let i=Math.max(0,currentStep-2);i<currentStep;i++){
+            const s=steps[i];
+            const row=document.createElement('tr');
+            row.className='history-row'+(i+1===currentStep?' current-row':'');
+            let badge;
+            if(s.action==='hit')badge='<span style="background:'+C.hitBg+';color:'+C.hitT+';padding:3px 8px;border-radius:6px;font-size:12px"><i class="ti ti-check" aria-hidden="true"></i> Hit</span>';
+            else if(s.action==='fault-evict')badge='<span style="background:'+C.faultBg+';color:'+C.faultT+';padding:3px 8px;border-radius:6px;font-size:12px">Fault · ev. '+s.evicted+'</span>';
+            else badge='<span style="background:'+C.warnBg+';color:'+C.warnT+';padding:3px 8px;border-radius:6px;font-size:12px">Fault · empty</span>';
+            const qStr=s.queue.map(sl=>sl.page+':'+sl.refBit).join('  ');
+            row.innerHTML='<td style="color:var(--color-text-secondary)">'+(i+1)+'</td><td style="font-weight:600;font-size:14px">'+s.page+'</td><td style="font-family:var(--font-mono);font-size:12px;color:var(--color-text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+qStr+'</td><td>'+badge+'</td>';
+            body.appendChild(row);
+          }
+          while(body.children.length<2)body.insertAdjacentHTML('beforeend','<tr class="history-row filler"><td colspan="4">&nbsp;</td></tr>');
+        }
+
+        document.getElementById('play-icon').className=playing?'ti ti-player-pause':'ti ti-player-play';
+      }
+
+      function getDelay(){return Math.round(2100-speedLevel*200);}
+      function stepForward(){if(currentStep<refString.length){currentStep++;render();return true;}return false;}
+      function stepBackward(){if(currentStep>0){currentStep--;render();}}
+      function play(){if(playing){pause();return;}if(currentStep>=refString.length)currentStep=0;playing=true;render();playTimer=setInterval(()=>{if(!stepForward())pause();},getDelay());}
+      function pause(){playing=false;if(playTimer)clearInterval(playTimer);playTimer=null;render();}
+      function reset(){pause();currentStep=0;render();}
+      function apply(){
+        pause();
+        refString=parseRef(document.getElementById('ref-input').value);
+        if(refString.length===0)refString=['1'];
+        frameCount=Math.max(2,Math.min(6,parseInt(document.getElementById('frame-count').value)||3));
+        document.getElementById('frame-count').value=frameCount;
+        document.getElementById('ref-input').value=refString.join(' ');
+        currentStep=0;compute();render();
+      }
+
+      document.getElementById('apply-btn').addEventListener('click',apply);
+      document.getElementById('prev-btn').addEventListener('click',()=>{pause();stepBackward();});
+      document.getElementById('next-btn').addEventListener('click',()=>{pause();stepForward();});
+      document.getElementById('play-btn').addEventListener('click',play);
+      document.getElementById('reset-btn').addEventListener('click',reset);
+      document.getElementById('speed-slider').addEventListener('input',(e)=>{speedLevel=parseInt(e.target.value);if(playing){clearInterval(playTimer);playTimer=setInterval(()=>{if(!stepForward())pause();},getDelay());}});
+      document.getElementById('ref-input').addEventListener('keydown',(e)=>{if(e.key==='Enter')apply();});
+      document.getElementById('frame-count').addEventListener('change',apply);
+      document.querySelectorAll('.preset-btn').forEach(b=>{b.addEventListener('click',()=>{document.getElementById('ref-input').value=b.dataset.ref;document.getElementById('frame-count').value=b.dataset.frames;apply();});});
+      document.addEventListener('keydown',(e)=>{if(e.target.tagName==='INPUT')return;if(e.key==='ArrowRight'){pause();stepForward();}else if(e.key==='ArrowLeft'){pause();stepBackward();}else if(e.key===' '){e.preventDefault();play();}});
+
+      apply();
+    })();
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

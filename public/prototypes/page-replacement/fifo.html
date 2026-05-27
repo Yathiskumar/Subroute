@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Page Replacement — FIFO</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a; --accent-strong: #d56a1f;
+        --success: #5cc66f; --danger: #f06868; --warning: #f0b568; --info: #5e9ff6; --purple: #a78bfa;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        /* aliases so the fragment's var() references map to the dark theme */
+        --color-background-primary: var(--bg);
+        --color-background-secondary: var(--surface);
+        --color-text-primary: var(--fg);
+        --color-text-secondary: var(--muted);
+        --color-text-tertiary: var(--subtle);
+        --color-border-secondary: var(--border-strong);
+        --color-border-tertiary: var(--border);
+        --color-background-info: rgba(94,159,246,0.12);
+        --color-text-info: #cdddf7;
+        --border-radius-lg: 12px; --border-radius-md: 8px;
+        --font-mono: var(--mono); --font-sans: var(--sans);
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body { padding: 16px 18px 18px; background-image: linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px); background-size: 40px 40px; }
+      .container { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; }
+      #decision-box { order: 1; }
+      .container > div:last-child { order: 2; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; padding: 9px 12px; transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); }
+      input[type=text], input[type=number] { background: var(--elevated); color: var(--fg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font: 13px var(--sans); }
+      input[type=text]:focus, input[type=number]:focus { outline: none; border-color: var(--accent); }
+      input[type=range] { accent-color: var(--accent); }
+
+      .fifo-frame{display:flex;align-items:center;justify-content:center;width:64px;height:64px;border-radius:var(--border-radius-md);font-size:22px;font-weight:600;border:1px solid var(--border-strong);background:var(--elevated);transition:background .3s,color .3s,border-color .3s,transform .3s,box-shadow .3s;position:relative}
+      .fifo-frame.empty{color:var(--color-text-tertiary);border-style:dashed;font-size:18px;font-weight:400}
+      .fifo-frame.new{background:rgba(94,159,246,0.18);color:#cdddf7;border-color:#5e9ff6;transform:scale(1.08);box-shadow:0 0 0 3px rgba(94,159,246,.25)}
+      .fifo-frame.hit{background:rgba(92,198,111,0.18);color:#bfe8c6;border-color:#5cc66f;transform:scale(1.08);box-shadow:0 0 0 3px rgba(92,198,111,.25)}
+      .fifo-frame.oldest{box-shadow:0 0 0 2px #f0b568}
+      .fifo-frame.new.oldest{box-shadow:0 0 0 3px rgba(94,159,246,.25),0 0 0 2px #f0b568}
+      .frame-col{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:64px}
+      .frame-meta{font-size:10px;color:var(--color-text-tertiary);height:14px;line-height:14px}
+      .frame-tag-top{height:20px;display:flex;align-items:center;justify-content:center}
+      .ref-cell{width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:var(--border-radius-md);font-size:14px;font-weight:600;background:var(--elevated);color:var(--color-text-secondary);transition:all .25s;flex-shrink:0;position:relative}
+      .ref-cell.current{background:rgba(94,159,246,0.18);color:#cdddf7;transform:scale(1.12)}
+      .ref-cell.current::after{content:"";position:absolute;top:-10px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:6px solid #5e9ff6}
+      .ref-cell.done{background:transparent;color:var(--color-text-tertiary);border:1px solid var(--color-border-tertiary)}
+      .ref-cell.hit-marker{box-shadow:inset 0 0 0 1.5px #5cc66f;color:#bfe8c6}
+      .ref-cell.fault-marker{box-shadow:inset 0 0 0 1.5px #f06868}
+      .history-row td{padding:8px 10px;font-size:13px;border-bottom:1px solid var(--color-border-tertiary);vertical-align:middle;height:36px;box-sizing:border-box}
+      .history-row.filler td{color:transparent}
+      .history-row:last-child td{border-bottom:none}
+      .history-row.current-row{background:var(--surface)}
+      .preset-btn{padding:5px 10px;font-size:12px}
+      .queue-arrow{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:var(--color-text-tertiary);min-width:50px}
+      .queue-arrow .lbl{font-size:10px;text-transform:none}
+      .queue-arrow .arr{font-size:18px;line-height:1}
+      .next-out-pill{font-size:9px;color:#f0c887;background:rgba(240,181,104,0.16);padding:2px 6px;border-radius:8px;font-weight:600;letter-spacing:.3px}
+      .just-in-pill{font-size:9px;color:#cdddf7;background:rgba(94,159,246,0.16);padding:2px 6px;border-radius:8px;font-weight:600;letter-spacing:.3px}
+      .decision-card{padding:12px 14px;border-radius:var(--border-radius-md);font-size:13px;line-height:1.55;border:1px solid var(--color-border-tertiary);background:var(--surface)}
+      .decision-card.hit{background:rgba(92,198,111,0.10);border-color:rgba(92,198,111,0.4);color:#bfe8c6}
+      .decision-card.fault{background:rgba(240,104,104,0.10);border-color:rgba(240,104,104,0.4);color:#f3b0b0}
+      .decision-card.empty-fault{background:rgba(240,181,104,0.10);border-color:rgba(240,181,104,0.4);color:#f0c887}
+      .decision-card strong{color:var(--fg)}
+      .decision-card.hit strong{color:#dcf3e0}
+      .decision-card.fault strong{color:#fcd9d9}
+      .decision-card.empty-fault strong{color:#f7ddb4}
+      .kbd{font-family:var(--font-mono);font-size:12px;padding:1px 5px;border-radius:4px;background:rgba(255,255,255,.08)}
+      .panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--border-radius-lg)}
+      .stat{background:var(--surface);border:1px solid var(--border);padding:1rem;border-radius:var(--border-radius-md)}
+    </style>
+  </head>
+  <body>
+    <div class="container">
+    <h2 class="sr-only">Interactive FIFO page replacement simulator with queue visualization, decision explainer, step controls, statistics, and step history.</h2>
+
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin:0 0 .75rem;align-items:flex-end">
+      <div style="flex:1;min-width:240px">
+        <label style="font-size:13px;color:var(--color-text-secondary);display:block;margin-bottom:4px">Reference string</label>
+        <input type="text" id="ref-input" value="7 0 1 2 0 3 0 4 2 3 0 3 2" style="width:100%" placeholder="e.g. 7 0 1 2 0 3 0 4"/>
+      </div>
+      <div style="width:110px">
+        <label style="font-size:13px;color:var(--color-text-secondary);display:block;margin-bottom:4px">Frames</label>
+        <input type="number" id="frame-count" value="3" min="1" max="6" step="1" style="width:100%"/>
+      </div>
+      <button id="apply-btn" class="primary">Apply</button>
+    </div>
+
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:1.5rem;align-items:center">
+      <span style="font-size:12px;color:var(--color-text-tertiary);margin-right:4px">Presets</span>
+      <button class="preset-btn" data-ref="7 0 1 2 0 3 0 4 2 3 0 3 2" data-frames="3">Classic textbook</button>
+      <button class="preset-btn" data-ref="1 2 3 4 1 2 5 1 2 3 4 5" data-frames="3">Belady's anomaly</button>
+      <button class="preset-btn" data-ref="1 2 3 1 2 3 1 2 3" data-frames="3">Loop (warm cache)</button>
+      <button class="preset-btn" data-ref="5 4 3 2 1 5 4 3 2 1" data-frames="3">Worst case</button>
+    </div>
+
+    <div style="margin-bottom:1.5rem">
+      <div style="font-size:13px;color:var(--color-text-secondary);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
+        <span>Reference string</span>
+        <span style="font-size:11px;color:var(--color-text-tertiary)">processed left to right</span>
+      </div>
+      <div id="ref-display" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:.75rem;flex-wrap:wrap">
+      <div style="font-size:13px;color:var(--color-text-secondary)">Step <span id="step-num" style="color:var(--color-text-primary);font-weight:600">0</span> / <span id="step-total">0</span></div>
+      <div style="flex:1"></div>
+      <div id="result-badge" style="font-size:12px;color:var(--color-text-tertiary)">Idle</div>
+    </div>
+
+    <div id="decision-box" class="decision-card" style="margin-bottom:1.25rem;color:var(--color-text-secondary)">
+      Press <span class="kbd">play</span> or step forward to begin. FIFO checks each requested page: if it's already in a frame, that's a hit; otherwise it loads the page, evicting the oldest one when memory is full.
+    </div>
+
+    <div class="panel" style="padding:1.25rem 1rem 1rem;margin-bottom:1.25rem">
+      <div style="font-size:13px;color:var(--color-text-secondary);margin-bottom:14px;text-align:center">Memory frames as a FIFO queue</div>
+      <div style="display:flex;gap:10px;align-items:flex-end;justify-content:center;flex-wrap:wrap">
+        <div class="queue-arrow"><span class="arr"><i class="ti ti-arrow-left" aria-hidden="true"></i></span><span class="lbl">evict</span></div>
+        <div id="frames-display" style="display:flex;gap:10px;align-items:flex-end"></div>
+        <div class="queue-arrow"><span class="arr"><i class="ti ti-arrow-right" aria-hidden="true"></i></span><span class="lbl">load</span></div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:1.5rem;flex-wrap:wrap">
+      <button id="prev-btn" aria-label="Previous step"><i class="ti ti-player-skip-back" aria-hidden="true"></i></button>
+      <button id="play-btn" class="primary" aria-label="Play or pause"><i class="ti ti-player-play" id="play-icon" aria-hidden="true"></i></button>
+      <button id="next-btn" aria-label="Next step"><i class="ti ti-player-skip-forward" aria-hidden="true"></i></button>
+      <button id="reset-btn" aria-label="Reset to start"><i class="ti ti-refresh" aria-hidden="true"></i></button>
+      <div style="display:flex;align-items:center;gap:10px;margin-left:12px;flex:1;min-width:160px">
+        <span style="font-size:13px;color:var(--color-text-secondary)">Speed</span>
+        <input type="range" id="speed-slider" min="1" max="10" step="1" value="6" style="flex:1;max-width:200px"/>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:1.5rem">
+      <div class="stat"><div style="font-size:13px;color:var(--color-text-secondary)">Page faults</div><div style="font-size:24px;font-weight:600;color:#f06868" id="stat-faults">0</div></div>
+      <div class="stat"><div style="font-size:13px;color:var(--color-text-secondary)">Page hits</div><div style="font-size:24px;font-weight:600;color:#5cc66f" id="stat-hits">0</div></div>
+      <div class="stat"><div style="font-size:13px;color:var(--color-text-secondary)">Hit ratio</div><div style="font-size:24px;font-weight:600" id="stat-ratio">0%</div></div>
+    </div>
+
+    <div>
+      <div style="font-size:13px;color:var(--color-text-secondary);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center"><span>Step history</span><span style="font-size:11px;color:var(--color-text-tertiary)">latest 2 steps</span></div>
+      <div class="panel" style="overflow:hidden">
+        <table style="width:100%;border-collapse:collapse;table-layout:fixed">
+          <thead>
+            <tr style="background:var(--surface)">
+              <th style="text-align:left;padding:8px 10px;font-size:12px;color:var(--color-text-secondary);font-weight:600;width:50px">#</th>
+              <th style="text-align:left;padding:8px 10px;font-size:12px;color:var(--color-text-secondary);font-weight:600;width:60px">Page</th>
+              <th style="text-align:left;padding:8px 10px;font-size:12px;color:var(--color-text-secondary);font-weight:600">Frames after</th>
+              <th style="text-align:left;padding:8px 10px;font-size:12px;color:var(--color-text-secondary);font-weight:600;width:170px">Result</th>
+            </tr>
+          </thead>
+          <tbody id="history-body">
+            <tr class="history-row"><td colspan="4" style="text-align:center;color:var(--color-text-tertiary)">No steps yet</td></tr><tr class="history-row filler"><td colspan="4">&nbsp;</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    </div>
+
+    <script>
+    (function(){
+      let refString=[],frameCount=3,steps=[],currentStep=0,playing=false,speedLevel=6,playTimer=null;
+      const C={hitT:'#bfe8c6',hitBg:'rgba(92,198,111,0.16)',faultT:'#f3b0b0',faultBg:'rgba(240,104,104,0.16)',warnT:'#f0c887',warnBg:'rgba(240,181,104,0.16)'};
+
+      function parseRef(t){return t.trim().split(/[\s,]+/).filter(Boolean).slice(0,30);}
+
+      function compute(){
+        steps=[];
+        const frames=[];
+        const arrival={};
+        let faults=0,hits=0;
+        refString.forEach((page,i)=>{
+          const inFrame=frames.includes(page);
+          let action,evicted=null,newFrame=null;
+          if(inFrame){hits++;action='hit';}
+          else{
+            faults++;
+            if(frames.length<frameCount){
+              frames.push(page);newFrame=page;arrival[page]=i+1;
+              action='fault-empty';
+            } else {
+              evicted=frames.shift();
+              delete arrival[evicted];
+              frames.push(page);newFrame=page;arrival[page]=i+1;
+              action='fault-evict';
+            }
+          }
+          steps.push({index:i,page,action,frames:[...frames],arrival:{...arrival},evicted,newFrame,faults,hits});
+        });
+      }
+
+      function render(){
+        const rd=document.getElementById('ref-display');
+        rd.innerHTML='';
+        refString.forEach((page,i)=>{
+          const cell=document.createElement('div');
+          cell.className='ref-cell';
+          if(i+1===currentStep)cell.classList.add('current');
+          else if(i+1<currentStep){
+            cell.classList.add('done');
+            const s=steps[i];
+            if(s.action==='hit')cell.classList.add('hit-marker');
+            else cell.classList.add('fault-marker');
+          }
+          cell.textContent=page;
+          rd.appendChild(cell);
+        });
+
+        document.getElementById('step-num').textContent=currentStep;
+        document.getElementById('step-total').textContent=refString.length;
+
+        const fd=document.getElementById('frames-display');
+        fd.innerHTML='';
+        let cf=[],si=null,arrival={};
+        if(currentStep>0){si=steps[currentStep-1];cf=si.frames;arrival=si.arrival;}
+
+        for(let i=0;i<frameCount;i++){
+          const col=document.createElement('div');
+          col.className='frame-col';
+          const top=document.createElement('div');
+          top.className='frame-tag-top';
+          const page=cf[i];
+          const isFull=cf.length===frameCount;
+          if(i===0&&isFull){
+            const t=document.createElement('span');t.className='next-out-pill';t.textContent='next out';top.appendChild(t);
+          } else if(i===cf.length-1&&si&&page===si.newFrame&&si.action!=='hit'){
+            const t=document.createElement('span');t.className='just-in-pill';t.textContent='just in';top.appendChild(t);
+          }
+          col.appendChild(top);
+
+          const frame=document.createElement('div');
+          frame.className='fifo-frame';
+          if(page===undefined){frame.classList.add('empty');frame.textContent='–';}
+          else{
+            frame.textContent=page;
+            if(si&&page===si.newFrame&&si.action!=='hit')frame.classList.add('new');
+            else if(si&&page===si.page&&si.action==='hit')frame.classList.add('hit');
+            if(i===0&&isFull)frame.classList.add('oldest');
+          }
+          col.appendChild(frame);
+
+          const meta=document.createElement('div');
+          meta.className='frame-meta';
+          if(page!==undefined&&arrival[page]){meta.textContent='loaded @ step '+arrival[page];}
+          else if(page===undefined){meta.textContent='empty';}
+          col.appendChild(meta);
+          fd.appendChild(col);
+        }
+
+        const rb=document.getElementById('result-badge');
+        const db=document.getElementById('decision-box');
+        db.className='decision-card';
+        if(si){
+          if(si.action==='hit'){
+            rb.innerHTML='<span style="color:'+C.hitT+'"><i class="ti ti-check" aria-hidden="true"></i> Page hit</span>';
+            db.classList.add('hit');
+            db.innerHTML='Page <strong>'+si.page+'</strong> is already in memory — no fault, no eviction. The queue order is unchanged.';
+          } else if(si.action==='fault-evict'){
+            rb.innerHTML='<span style="color:'+C.faultT+'"><i class="ti ti-arrows-exchange" aria-hidden="true"></i> Fault · evicted '+si.evicted+'</span>';
+            db.classList.add('fault');
+            db.innerHTML='Page <strong>'+si.page+'</strong> is not in memory and all frames are full. FIFO evicts the oldest page (<strong>'+si.evicted+'</strong>, loaded earliest) and loads <strong>'+si.page+'</strong> at the back of the queue.';
+          } else {
+            rb.innerHTML='<span style="color:'+C.warnT+'"><i class="ti ti-plus" aria-hidden="true"></i> Fault · empty frame</span>';
+            db.classList.add('empty-fault');
+            db.innerHTML='Page <strong>'+si.page+'</strong> is not in memory, but a frame is still free. Load <strong>'+si.page+'</strong> into the empty slot — no eviction needed yet.';
+          }
+        } else {
+          rb.innerHTML='<span style="color:var(--color-text-tertiary)">Idle</span>';
+          db.style.color='var(--color-text-secondary)';
+          db.innerHTML='Press <span class="kbd">play</span> or step forward to begin. FIFO checks each requested page: if it\'s already in a frame, that\'s a hit; otherwise it loads the page, evicting the oldest one when memory is full.';
+        }
+
+        const f=si?si.faults:0,h=si?si.hits:0,total=f+h;
+        document.getElementById('stat-faults').textContent=f;
+        document.getElementById('stat-hits').textContent=h;
+        document.getElementById('stat-ratio').textContent=total>0?Math.round((h/total)*100)+'%':'0%';
+
+        const body=document.getElementById('history-body');
+        if(currentStep===0){
+          body.innerHTML='<tr class="history-row"><td colspan="4" style="text-align:center;color:var(--color-text-tertiary)">No steps yet</td></tr><tr class="history-row filler"><td colspan="4">&nbsp;</td></tr>';
+        } else {
+          body.innerHTML='';
+          for(let i=Math.max(0,currentStep-2);i<currentStep;i++){
+            const s=steps[i];
+            const row=document.createElement('tr');
+            row.className='history-row'+(i+1===currentStep?' current-row':'');
+            let badge;
+            if(s.action==='hit'){badge='<span style="background:'+C.hitBg+';color:'+C.hitT+';padding:3px 8px;border-radius:6px;font-size:12px"><i class="ti ti-check" aria-hidden="true"></i> Hit</span>';}
+            else if(s.action==='fault-evict'){badge='<span style="background:'+C.faultBg+';color:'+C.faultT+';padding:3px 8px;border-radius:6px;font-size:12px">Fault · evicted '+s.evicted+'</span>';}
+            else{badge='<span style="background:'+C.warnBg+';color:'+C.warnT+';padding:3px 8px;border-radius:6px;font-size:12px">Fault · empty</span>';}
+            row.innerHTML='<td style="color:var(--color-text-secondary)">'+(i+1)+'</td><td style="font-weight:600;font-size:14px">'+s.page+'</td><td style="font-family:var(--font-mono);font-size:12px;color:var(--color-text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">['+s.frames.join(', ')+']</td><td>'+badge+'</td>';
+            body.appendChild(row);
+          }
+          while(body.children.length<2)body.insertAdjacentHTML('beforeend','<tr class="history-row filler"><td colspan="4">&nbsp;</td></tr>');
+        }
+
+        document.getElementById('play-icon').className=playing?'ti ti-player-pause':'ti ti-player-play';
+      }
+
+      function getDelay(){return Math.round(2100-speedLevel*200);}
+      function stepForward(){if(currentStep<refString.length){currentStep++;render();return true;}return false;}
+      function stepBackward(){if(currentStep>0){currentStep--;render();}}
+      function play(){
+        if(playing){pause();return;}
+        if(currentStep>=refString.length)currentStep=0;
+        playing=true;render();
+        playTimer=setInterval(()=>{if(!stepForward())pause();},getDelay());
+      }
+      function pause(){playing=false;if(playTimer)clearInterval(playTimer);playTimer=null;render();}
+      function reset(){pause();currentStep=0;render();}
+      function apply(){
+        pause();
+        refString=parseRef(document.getElementById('ref-input').value);
+        if(refString.length===0)refString=['1'];
+        frameCount=Math.max(1,Math.min(6,parseInt(document.getElementById('frame-count').value)||3));
+        document.getElementById('frame-count').value=frameCount;
+        document.getElementById('ref-input').value=refString.join(' ');
+        currentStep=0;
+        compute();render();
+      }
+
+      document.getElementById('apply-btn').addEventListener('click',apply);
+      document.getElementById('prev-btn').addEventListener('click',()=>{pause();stepBackward();});
+      document.getElementById('next-btn').addEventListener('click',()=>{pause();stepForward();});
+      document.getElementById('play-btn').addEventListener('click',play);
+      document.getElementById('reset-btn').addEventListener('click',reset);
+      document.getElementById('speed-slider').addEventListener('input',(e)=>{
+        speedLevel=parseInt(e.target.value);
+        if(playing){clearInterval(playTimer);playTimer=setInterval(()=>{if(!stepForward())pause();},getDelay());}
+      });
+      document.getElementById('ref-input').addEventListener('keydown',(e)=>{if(e.key==='Enter')apply();});
+      document.getElementById('frame-count').addEventListener('change',apply);
+      document.querySelectorAll('.preset-btn').forEach(b=>{
+        b.addEventListener('click',()=>{
+          document.getElementById('ref-input').value=b.dataset.ref;
+          document.getElementById('frame-count').value=b.dataset.frames;
+          apply();
+        });
+      });
+      document.addEventListener('keydown',(e)=>{
+        if(e.target.tagName==='INPUT')return;
+        if(e.key==='ArrowRight'){pause();stepForward();}
+        else if(e.key==='ArrowLeft'){pause();stepBackward();}
+        else if(e.key===' '){e.preventDefault();play();}
+      });
+
+      apply();
+    })();
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>
