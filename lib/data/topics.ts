@@ -506,6 +506,91 @@ export const TOPICS: Topic[] = [
       },
     ],
   },
+  {
+    slug: "page-replacement",
+    title: "Page Replacement",
+    description:
+      "When memory is full and a new page must come in, which page do you throw out? Eight algorithms, from the simple FIFO baseline through the unbeatable Optimal to the LRU approximations real operating systems actually ship.",
+    difficulty: "intermediate",
+    icon: "Replace",
+    tags: ["os", "memory", "caching"],
+    estimatedTime: "70 min",
+    prerequisites: ["Virtual memory basics", "Pages and frames", "Hit/miss intuition"],
+    concepts: [
+      {
+        slug: "fifo",
+        title: "FIFO",
+        oneLiner:
+          "Evict the oldest-loaded page. The simplest baseline — and the famous home of Belady's anomaly, where more memory can mean more faults.",
+        difficulty: "beginner",
+        estimatedTime: "8 min",
+        prototypePath: "/prototypes/page-replacement/fifo.html",
+      },
+      {
+        slug: "optimal",
+        title: "Optimal (Belady's)",
+        oneLiner:
+          "Evict the page used furthest in the future. Unbeatable but unimplementable — it needs to see the future, so it's the yardstick every real policy is measured against.",
+        difficulty: "intermediate",
+        estimatedTime: "8 min",
+        prototypePath: "/prototypes/page-replacement/optimal.html",
+      },
+      {
+        slug: "lru",
+        title: "LRU",
+        oneLiner:
+          "Evict the least-recently-used page. Bet the recent past predicts the near future — the practical gold standard that often lands close to Optimal.",
+        difficulty: "intermediate",
+        estimatedTime: "9 min",
+        prototypePath: "/prototypes/page-replacement/lru.html",
+      },
+      {
+        slug: "second-chance",
+        title: "Second Chance",
+        oneLiner:
+          "FIFO plus one reference bit: spare a page that was used recently by rotating it to the back instead of evicting it. The cheap upgrade over FIFO.",
+        difficulty: "intermediate",
+        estimatedTime: "8 min",
+        prototypePath: "/prototypes/page-replacement/second-chance.html",
+      },
+      {
+        slug: "clock",
+        title: "Clock",
+        oneLiner:
+          "Second Chance done efficiently: pages stay in a ring and a hand sweeps for a victim. The LRU approximation operating systems and buffer pools really ship.",
+        difficulty: "intermediate",
+        estimatedTime: "9 min",
+        prototypePath: "/prototypes/page-replacement/clock.html",
+      },
+      {
+        slug: "nru",
+        title: "NRU",
+        oneLiner:
+          "Sort pages into four classes by referenced and dirty bits, then evict from the cheapest class — folding writeback cost into the decision.",
+        difficulty: "intermediate",
+        estimatedTime: "9 min",
+        prototypePath: "/prototypes/page-replacement/nru.html",
+      },
+      {
+        slug: "aging",
+        title: "Aging",
+        oneLiner:
+          "Give each page a shift-register counter that ages old use away one bit at a time. Software's close, cheap imitation of LRU.",
+        difficulty: "advanced",
+        estimatedTime: "10 min",
+        prototypePath: "/prototypes/page-replacement/aging.html",
+      },
+      {
+        slug: "lfu",
+        title: "LFU",
+        oneLiner:
+          "Evict the least-frequently-used page. Popularity over recency — great for a stable hot set, but stale-but-popular pages cling forever without decay.",
+        difficulty: "advanced",
+        estimatedTime: "9 min",
+        prototypePath: "/prototypes/page-replacement/lfu.html",
+      },
+    ],
+  },
 ];
 
 export const ALL_TAGS = Array.from(

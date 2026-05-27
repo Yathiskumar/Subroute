@@ -52,6 +52,15 @@ import { virtualNodes } from "./consistent-hashing/virtual-nodes";
 import { rendezvousHrw } from "./consistent-hashing/rendezvous-hrw";
 import { jumpHash } from "./consistent-hashing/jump-hash";
 import { maglev } from "./consistent-hashing/maglev";
+import { pageReplacementTopic } from "./page-replacement/_topic";
+import { fifo as prFifo } from "./page-replacement/fifo";
+import { optimal as prOptimal } from "./page-replacement/optimal";
+import { lru as prLru } from "./page-replacement/lru";
+import { secondChance as prSecondChance } from "./page-replacement/second-chance";
+import { clock as prClock } from "./page-replacement/clock";
+import { nru as prNru } from "./page-replacement/nru";
+import { aging as prAging } from "./page-replacement/aging";
+import { lfu as prLfu } from "./page-replacement/lfu";
 
 // Indexed by `${topicSlug}/${conceptSlug}`
 const CONCEPT_CONTENT: Record<string, ConceptContent> = {
@@ -101,6 +110,14 @@ const CONCEPT_CONTENT: Record<string, ConceptContent> = {
   "consistent-hashing/rendezvous-hrw": rendezvousHrw,
   "consistent-hashing/jump-hash": jumpHash,
   "consistent-hashing/maglev": maglev,
+  "page-replacement/fifo": prFifo,
+  "page-replacement/optimal": prOptimal,
+  "page-replacement/lru": prLru,
+  "page-replacement/second-chance": prSecondChance,
+  "page-replacement/clock": prClock,
+  "page-replacement/nru": prNru,
+  "page-replacement/aging": prAging,
+  "page-replacement/lfu": prLfu,
 };
 
 // Indexed by topic slug
@@ -112,6 +129,7 @@ const TOPIC_CONTENT: Record<string, TopicContent> = {
   "memory-allocation": memoryAllocationTopic,
   "load-balancing": loadBalancingTopic,
   "consistent-hashing": consistentHashingTopic,
+  "page-replacement": pageReplacementTopic,
 };
 
 export function getConceptContent(
