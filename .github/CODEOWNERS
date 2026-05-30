@@ -1,0 +1,3 @@
+# Default owner for everything in the repo.
+# CODEOWNERS auto-requests review from these users on every PR.
+* @Yathiskumar
