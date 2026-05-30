@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Circuit Breaker — Error Percentage</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --danger: #f06868; --warning: #f0b568; --info: #5e9ff6;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --color-background-primary: var(--bg);
+        --color-background-secondary: var(--surface);
+        --color-text-primary: var(--fg);
+        --color-text-secondary: var(--muted);
+        --color-text-tertiary: var(--subtle);
+        --color-border-secondary: var(--border-strong);
+        --color-border-tertiary: var(--border);
+        --color-text-success: var(--success);
+        --color-text-danger: var(--danger);
+        --color-text-warning: var(--warning);
+        --color-text-info: var(--info);
+        --color-background-success: rgba(92,198,111,0.14);
+        --color-background-danger: rgba(240,104,104,0.14);
+        --color-background-warning: rgba(240,181,104,0.14);
+        --color-background-info: rgba(94,159,246,0.14);
+        --color-border-success: rgba(92,198,111,0.5);
+        --color-border-danger: rgba(240,104,104,0.5);
+        --color-border-warning: rgba(240,181,104,0.5);
+        --border-radius-lg: 12px; --border-radius-md: 8px;
+        --font-mono: var(--mono); --font-sans: var(--sans);
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body { padding: 16px 18px 18px; background-image: linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px); background-size: 40px 40px; }
+      .container { max-width: 760px; margin: 0 auto; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; padding: 9px 12px; transition: filter 150ms, transform 100ms, background 150ms, border-color 150ms; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      input[type=range] { accent-color: var(--accent); width: 100%; }
+      input[type=checkbox] { accent-color: var(--accent); }
+
+      .pill { font-family: var(--font-mono); font-size: 12px; padding: 5px 10px; border-radius: var(--border-radius-md); border: 1px solid var(--border); color: var(--muted); }
+      .field { display: flex; align-items: center; gap: 10px; }
+      .field label { font-size: 13px; color: var(--muted); min-width: 130px; }
+      .field output { font-family: var(--font-mono); font-size: 12px; font-weight: 500; min-width: 52px; text-align: right; color: var(--fg); }
+      .state-badge { font-family: var(--font-mono); font-size: 13px; font-weight: 500; padding: 7px 14px; border-radius: var(--border-radius-md); border: 1px solid var(--border); display: inline-flex; align-items: center; gap: 8px; }
+      .state-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+      .stat-card { background: var(--surface); border: 1px solid var(--border); padding: .7rem .8rem; border-radius: var(--border-radius-md); }
+      .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+      .stat-value { font-size: 22px; font-weight: 600; font-family: var(--font-mono); margin-top: 2px; }
+      .track { position: relative; height: 12px; border-radius: 99px; background: var(--surface); border: 1px solid var(--border); }
+      .etag { font-family: var(--font-mono); font-size: 11px; padding: 4px 9px; border-radius: var(--border-radius-md); border: 1px solid var(--border); color: var(--muted); display: inline-flex; align-items: center; gap: 4px; }
+      .control-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--border-radius-lg); padding: 1rem 1.1rem; margin-bottom: 1.25rem; }
+      .log { font-family: var(--font-mono); font-size: 12px; line-height: 1.85; color: var(--subtle); min-height: 80px; max-height: 140px; overflow: hidden; }
+      .log .time { color: var(--subtle); margin-right: 8px; }
+      .kbd { font-family: var(--font-mono); font-size: 11px; padding: 1px 5px; border-radius: 4px; background: rgba(255,255,255,.08); color: var(--muted); }
+      .verdict-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: var(--surface); border: 1px solid var(--border); border-radius: var(--border-radius-md); padding: 12px 14px; margin-bottom: 1.25rem; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2 class="sr-only">Error-percentage circuit breaker showing how it trips only when both a request-volume threshold and an error-percentage threshold are crossed.</h2>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
+        <span id="e-state" class="state-badge" style="background:var(--color-background-success);color:var(--success);border-color:var(--color-border-success);"><span class="dot"></span><span id="e-state-text">closed</span></span>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span class="pill" id="ep-closed">closed</span>
+          <i class="ti ti-arrow-right" style="color:var(--subtle)" aria-hidden="true"></i>
+          <span class="pill" id="ep-open">open</span>
+          <i class="ti ti-arrow-right" style="color:var(--subtle)" aria-hidden="true"></i>
+          <span class="pill" id="ep-half">half-open</span>
+        </div>
+      </div>
+
+      <p id="e-status" style="font-size:14px;color:var(--muted);margin:0 0 1.5rem;line-height:1.6;">Requests flow through. The breaker won't trip until there's both enough traffic and too high an error rate.</p>
+
+      <div style="margin-bottom:18px;">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:7px;">
+          <span style="font-size:13px;color:var(--muted);">① Enough traffic? · requests in last <span id="e-ws">10</span>s</span>
+          <span id="e-vol-read" style="font-family:var(--font-mono);font-size:13px;font-weight:500;color:var(--fg);">0 / 10</span>
+        </div>
+        <div class="track" style="margin-bottom:6px;">
+          <div id="e-vol-bar" style="height:100%;width:0%;border-radius:99px;background:var(--info);transition:width .2s ease;"></div>
+          <div id="e-vol-mk" style="position:absolute;top:-4px;bottom:-4px;width:2px;left:60%;background:var(--fg);"></div>
+        </div>
+        <span style="font-size:11px;color:var(--subtle);font-family:var(--font-mono);">below the line, error rate is ignored — too few samples to trust</span>
+      </div>
+
+      <div style="margin-bottom:18px;">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:7px;">
+          <span style="font-size:13px;color:var(--muted);">② Too many errors? · error rate over the window</span>
+          <span id="e-err-read" style="font-family:var(--font-mono);font-size:13px;font-weight:500;color:var(--fg);">0%</span>
+        </div>
+        <div class="track" style="margin-bottom:6px;">
+          <div id="e-err-bar" style="height:100%;width:0%;border-radius:99px;background:var(--success);transition:width .2s ease;"></div>
+          <div id="e-err-mk" style="position:absolute;top:-4px;bottom:-4px;width:2px;left:50%;background:var(--fg);"></div>
+        </div>
+        <span style="font-size:11px;color:var(--subtle);font-family:var(--font-mono);">trips at <span id="e-th-read">50</span>% — but only if ① is also met</span>
+      </div>
+
+      <div class="verdict-row">
+        <span id="e-cond1" class="etag">① traffic</span>
+        <span style="color:var(--subtle);font-size:13px;">and</span>
+        <span id="e-cond2" class="etag">② errors</span>
+        <i class="ti ti-arrow-right" style="color:var(--subtle)" aria-hidden="true"></i>
+        <span id="e-verdict" style="font-family:var(--font-mono);font-size:13px;font-weight:500;">stays closed</span>
+      </div>
+
+      <p id="e-detail" style="font-size:13px;color:var(--subtle);font-family:var(--font-mono);margin:0 0 1.25rem;min-height:18px;"></p>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+        <button id="e-ok"><i class="ti ti-check" style="color:var(--success)" aria-hidden="true"></i>healthy call</button>
+        <button id="e-fail"><i class="ti ti-x" style="color:var(--danger)" aria-hidden="true"></i>failing call</button>
+        <button id="e-reset" style="margin-left:auto;"><i class="ti ti-refresh" aria-hidden="true"></i>reset</button>
+      </div>
+
+      <div class="control-card">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+          <input type="checkbox" id="e-auto" style="width:auto;flex:0 0 auto;" />
+          <label for="e-auto" style="font-size:14px;font-weight:500;cursor:pointer;">Auto traffic — simulate a real client</label>
+        </div>
+        <div class="field" style="margin-bottom:10px;">
+          <label for="e-rate">Traffic rate</label>
+          <input type="range" id="e-rate" min="1" max="12" step="1" value="4" />
+          <output id="e-rate-o">4/s</output>
+        </div>
+        <div class="field">
+          <label for="e-down">Downstream errors</label>
+          <input type="range" id="e-down" min="0" max="100" step="5" value="30" />
+          <output id="e-down-o">30%</output>
+        </div>
+        <p style="font-size:12px;color:var(--subtle);margin:10px 0 0;line-height:1.5;">Set errors to 100% but turn traffic down to 1/s — watch it refuse to trip. The volume gate ignores a tiny, noisy sample.</p>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 22px;margin-bottom:1.25rem;">
+        <div class="field"><label for="e-win">Window length</label><input type="range" id="e-win" min="4" max="16" step="1" value="10" /><output id="e-win-o">10s</output></div>
+        <div class="field"><label for="e-min">Min requests</label><input type="range" id="e-min" min="3" max="30" step="1" value="10" /><output id="e-min-o">10</output></div>
+        <div class="field"><label for="e-th">Error threshold</label><input type="range" id="e-th" min="10" max="90" step="5" value="50" /><output id="e-th-o">50%</output></div>
+        <div class="field"><label for="e-wait">Open wait</label><input type="range" id="e-wait" min="1" max="10" step="1" value="4" /><output id="e-wait-o">4s</output></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:1.25rem;">
+        <div class="stat-card"><div class="stat-label">total</div><div id="es-total" class="stat-value">0</div></div>
+        <div class="stat-card"><div class="stat-label">allowed</div><div id="es-allow" class="stat-value" style="color:var(--success)">0</div></div>
+        <div class="stat-card"><div class="stat-label">short-circuited</div><div id="es-reject" class="stat-value" style="color:var(--danger)">0</div></div>
+        <div class="stat-card"><div class="stat-label">trips</div><div id="es-trip" class="stat-value" style="color:var(--danger)">0</div></div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px;">
+        <span style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;">Event log</span>
+        <span style="font-size:11px;color:var(--subtle);font-family:var(--font-mono);"><span class="kbd">space</span> = healthy &middot; <span class="kbd">x</span> = fail &middot; <span class="kbd">r</span> = reset</span>
+      </div>
+      <div id="e-log" class="log"></div>
+    </div>
+
+    <script>
+      (function () {
+        var S = { state: 'CLOSED', calls: [], openUntil: 0, allow: 0, reject: 0, trip: 0,
+          p: { win: 10, min: 10, th: 50, wait: 4, rate: 4, down: 30 }, auto: false, lastAuto: 0 };
+        var $ = function (id) { return document.getElementById(id); };
+        function prune(now) { var lo = now - S.p.win * 1000; S.calls = S.calls.filter(function (c) { return c.t > lo; }); }
+        function errs() { return S.calls.filter(function (c) { return !c.ok; }).length; }
+        function errPct() { return S.calls.length ? Math.round(errs() / S.calls.length * 100) : 0; }
+
+        function attempt(ok) {
+          var now = Date.now();
+          if (S.state === 'OPEN') { S.reject++; log('short-circuited · fail fast', 'danger'); render(); return; }
+          if (S.state === 'HALF_OPEN') {
+            S.allow++;
+            if (ok) { S.state = 'CLOSED'; S.calls = []; log('trial request ok → CLOSED', 'success'); }
+            else { S.state = 'OPEN'; S.openUntil = now + S.p.wait * 1000; S.trip++; log('trial request failed → OPEN', 'danger'); }
+            render(); return;
+          }
+          S.allow++; S.calls.push({ t: now, ok: ok }); prune(now);
+          log('call ' + (ok ? 'ok' : 'failed'), ok ? 'success' : 'danger');
+          if (S.calls.length >= S.p.min && errPct() >= S.p.th) { S.state = 'OPEN'; S.openUntil = now + S.p.wait * 1000; S.trip++; log('volume + error % met → OPEN', 'danger'); }
+          render();
+        }
+
+        function log(msg, kind) {
+          var c = kind === 'danger' ? 'var(--danger)' : kind === 'success' ? 'var(--success)' : kind === 'warning' ? 'var(--warning)' : 'var(--subtle)';
+          var el = $('e-log'); var d = new Date(); var hh = String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') + ':' + String(d.getSeconds()).padStart(2,'0');
+          el.innerHTML = '<div style="color:' + c + '"><span class="time">' + hh + '</span>' + msg + '</div>' + el.innerHTML;
+          while (el.children.length > 7) el.removeChild(el.children[el.children.length - 1]);
+        }
+
+        function tag(el, on, kind) {
+          var bg = on ? (kind === 'ok' ? '--color-background-success' : '--color-background-danger') : 'transparent';
+          var fg = on ? (kind === 'ok' ? '--success' : '--danger') : '--subtle';
+          var bd = on ? (kind === 'ok' ? '--color-border-success' : '--color-border-danger') : '--border';
+          el.style.background = bg === 'transparent' ? 'transparent' : 'var(' + bg + ')';
+          el.style.color = 'var(' + fg + ')';
+          el.style.borderColor = 'var(' + bd + ')';
+        }
+
+        function render() {
+          var now = Date.now(); prune(now);
+          var vol = S.calls.length, ep = errPct(), hasVol = vol >= S.p.min, hasErr = ep >= S.p.th;
+          var stateClass = S.state === 'CLOSED' ? { t: 'closed', bg: '--color-background-success', fg: '--success', bd: '--color-border-success' }
+                          : S.state === 'OPEN' ? { t: 'open', bg: '--color-background-danger', fg: '--danger', bd: '--color-border-danger' }
+                          : { t: 'half-open', bg: '--color-background-warning', fg: '--warning', bd: '--color-border-warning' };
+          var b = $('e-state'); $('e-state-text').textContent = stateClass.t; b.style.background = 'var(' + stateClass.bg + ')'; b.style.color = 'var(' + stateClass.fg + ')'; b.style.borderColor = 'var(' + stateClass.bd + ')';
+          [['ep-closed', 'CLOSED'], ['ep-open', 'OPEN'], ['ep-half', 'HALF_OPEN']].forEach(function (p) {
+            var el = $(p[0]), on = S.state === p[1];
+            el.style.background = on ? 'var(' + stateClass.bg + ')' : 'transparent';
+            el.style.color = on ? 'var(' + stateClass.fg + ')' : 'var(--subtle)';
+            el.style.borderColor = on ? 'var(' + stateClass.bd + ')' : 'var(--border)';
+            el.style.fontWeight = on ? '500' : '400';
+          });
+          $('e-status').textContent = { CLOSED: 'Requests flow through. It trips only when there are at least ' + S.p.min + ' requests in the window and the error rate hits ' + S.p.th + '%.',
+            OPEN: 'Tripped. Every call is short-circuited instantly — no requests reach the downstream.',
+            HALF_OPEN: 'Testing recovery. Exactly one trial request is allowed; its result decides everything.' }[S.state];
+
+          $('e-ws').textContent = S.p.win; $('e-th-read').textContent = S.p.th;
+          var volMax = Math.max(S.p.min * 1.6, vol * 1.05, 1);
+          $('e-vol-read').textContent = vol + ' / ' + S.p.min;
+          $('e-vol-bar').style.width = Math.min(100, Math.round(vol / volMax * 100)) + '%';
+          $('e-vol-bar').style.background = 'var(' + (hasVol ? '--success' : '--info') + ')';
+          $('e-vol-mk').style.left = Math.min(100, Math.round(S.p.min / volMax * 100)) + '%';
+          $('e-err-read').textContent = ep + '%';
+          $('e-err-bar').style.width = ep + '%';
+          $('e-err-bar').style.background = 'var(' + (hasErr ? '--danger' : '--success') + ')';
+          $('e-err-mk').style.left = S.p.th + '%';
+
+          tag($('e-cond1'), hasVol, 'ok'); $('e-cond1').innerHTML = hasVol ? '① traffic ✓' : '① traffic ✗';
+          tag($('e-cond2'), hasErr, 'bad'); $('e-cond2').innerHTML = hasErr ? '② errors ✓' : '② errors ✗';
+          var v = $('e-verdict');
+          if (S.state === 'OPEN') { v.textContent = 'tripped open'; v.style.color = 'var(--danger)'; }
+          else if (hasVol && hasErr) { v.textContent = 'would trip'; v.style.color = 'var(--danger)'; }
+          else if (!hasVol) { v.textContent = 'stays closed (too few requests)'; v.style.color = 'var(--muted)'; }
+          else { v.textContent = 'stays closed (errors under threshold)'; v.style.color = 'var(--muted)'; }
+
+          var det;
+          if (S.state === 'OPEN') det = '⏳ one trial request allowed in ' + Math.max(0, (S.openUntil - now) / 1000).toFixed(1) + 's';
+          else if (S.state === 'HALF_OPEN') det = 'one trial request allowed — the next call decides close or re-open';
+          else if (!hasVol) det = 'gate closed — ' + vol + ' / ' + S.p.min + ' requests so far, error rate not yet considered';
+          else det = 'armed — error rate is ' + (hasErr ? 'over' : 'under') + ' the ' + S.p.th + '% line';
+          $('e-detail').textContent = det;
+
+          $('es-total').textContent = S.allow + S.reject; $('es-allow').textContent = S.allow; $('es-reject').textContent = S.reject; $('es-trip').textContent = S.trip;
+        }
+
+        $('e-ok').onclick = function () { attempt(true); };
+        $('e-fail').onclick = function () { attempt(false); };
+        $('e-reset').onclick = function () { S.state = 'CLOSED'; S.calls = []; S.allow = 0; S.reject = 0; S.trip = 0; S.auto = false; $('e-auto').checked = false; $('e-log').innerHTML = ''; render(); };
+        $('e-auto').onchange = function (ev) { S.auto = ev.target.checked; S.lastAuto = 0; };
+        function bind(id, key, suf) { $(id).oninput = function (ev) { S.p[key] = +ev.target.value; $(id + '-o').textContent = ev.target.value + (suf || ''); render(); }; }
+        bind('e-rate', 'rate', '/s'); bind('e-down', 'down', '%'); bind('e-win', 'win', 's'); bind('e-min', 'min', ''); bind('e-th', 'th', '%'); bind('e-wait', 'wait', 's');
+
+        document.addEventListener('keydown', function (e) {
+          if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON')) return;
+          if (e.key === ' ') { e.preventDefault(); attempt(true); }
+          else if (e.key === 'x' || e.key === 'X') { e.preventDefault(); attempt(false); }
+          else if (e.key === 'r' || e.key === 'R') { e.preventDefault(); $('e-reset').click(); }
+        });
+
+        setInterval(function () {
+          var now = Date.now();
+          if (S.state === 'OPEN' && now >= S.openUntil) { S.state = 'HALF_OPEN'; log('cooldown done → HALF-OPEN (one trial)', 'warning'); render(); }
+          if (S.auto && now - S.lastAuto >= Math.round(1000 / S.p.rate)) { S.lastAuto = now; attempt(Math.random() * 100 >= S.p.down); }
+          else render();
+        }, 120);
+
+        render();
+
+        function postHeight() { parent.postMessage({ type: 'prototype:height', height: document.body.scrollHeight }, '*'); }
+        if (typeof ResizeObserver !== 'undefined') new ResizeObserver(postHeight).observe(document.body);
+        postHeight();
+      })();
+    </script>
+  </body>
+</html>

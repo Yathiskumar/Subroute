@@ -591,6 +591,73 @@ export const TOPICS: Topic[] = [
       },
     ],
   },
+  {
+    slug: "circuit-breaker",
+    title: "Circuit Breaker",
+    description:
+      "When a downstream service is failing, stop hammering it — fail fast instead. Six variants, from the state machine itself to the trip-condition tweaks that production resilience libraries actually ship.",
+    difficulty: "intermediate",
+    icon: "ZapOff",
+    tags: ["distributed", "resilience", "patterns"],
+    estimatedTime: "70 min",
+    prerequisites: ["HTTP basics", "Latency vs error intuition", "Timeouts & retries"],
+    concepts: [
+      {
+        slug: "state-machine",
+        title: "The State Machine",
+        oneLiner:
+          "Closed lets calls through. Open rejects them all. Half-Open peeks at recovery with a handful of trials. Learn the three-state dance before any of the trip-rules.",
+        difficulty: "beginner",
+        estimatedTime: "9 min",
+        prototypePath: "/prototypes/circuit-breaker/state-machine.html",
+      },
+      {
+        slug: "count-based",
+        title: "Count-Based",
+        oneLiner:
+          "Trip on the failure rate across the last N calls. The simplest sliding window — small, fixed memory, fast to evaluate.",
+        difficulty: "beginner",
+        estimatedTime: "9 min",
+        prototypePath: "/prototypes/circuit-breaker/count-based.html",
+      },
+      {
+        slug: "time-based",
+        title: "Time-Based",
+        oneLiner:
+          "Trip on the failure rate over the last N seconds. Old calls age out on their own — quiet periods recover the breaker without any clicks.",
+        difficulty: "intermediate",
+        estimatedTime: "10 min",
+        prototypePath: "/prototypes/circuit-breaker/time-based.html",
+      },
+      {
+        slug: "slow-call-rate",
+        title: "Slow Call Rate",
+        oneLiner:
+          "Trip on latency, not just errors. A downstream that returns 200 OK in 5 seconds is broken too — and this is the variant that catches it.",
+        difficulty: "intermediate",
+        estimatedTime: "10 min",
+        prototypePath: "/prototypes/circuit-breaker/slow-call-rate.html",
+      },
+      {
+        slug: "error-percentage",
+        title: "Error Percentage (Hystrix)",
+        oneLiner:
+          "Two gates: trip only if traffic clears a minimum volume AND the error rate crosses a threshold. The original Netflix Hystrix rule that stops tiny noisy samples from tripping.",
+        difficulty: "intermediate",
+        estimatedTime: "11 min",
+        prototypePath: "/prototypes/circuit-breaker/error-percentage.html",
+      },
+      {
+        slug: "adaptive",
+        title: "Adaptive",
+        oneLiner:
+          "Exponential-backoff cooldowns that grow on every re-trip, plus a 10 → 25 → 50 → 100% recovery ramp so the downstream isn't slammed the moment it comes back.",
+        difficulty: "advanced",
+        estimatedTime: "12 min",
+        prototypePath: "/prototypes/circuit-breaker/adaptive.html",
+      },
+    ],
+  },
 ];
 
 export const ALL_TAGS = Array.from(

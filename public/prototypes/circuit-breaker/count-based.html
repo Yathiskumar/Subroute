@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Circuit Breaker — Count-Based</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --danger: #f06868; --warning: #f0b568; --info: #5e9ff6;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --color-background-primary: var(--bg);
+        --color-background-secondary: var(--surface);
+        --color-text-primary: var(--fg);
+        --color-text-secondary: var(--muted);
+        --color-text-tertiary: var(--subtle);
+        --color-border-secondary: var(--border-strong);
+        --color-border-tertiary: var(--border);
+        --color-text-success: var(--success);
+        --color-text-danger: var(--danger);
+        --color-text-warning: var(--warning);
+        --color-text-info: var(--info);
+        --color-background-success: rgba(92,198,111,0.14);
+        --color-background-danger: rgba(240,104,104,0.14);
+        --color-background-warning: rgba(240,181,104,0.14);
+        --color-background-info: rgba(94,159,246,0.14);
+        --color-border-success: rgba(92,198,111,0.5);
+        --color-border-danger: rgba(240,104,104,0.5);
+        --color-border-warning: rgba(240,181,104,0.5);
+        --border-radius-lg: 12px; --border-radius-md: 8px;
+        --font-mono: var(--mono); --font-sans: var(--sans);
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body { padding: 16px 18px 18px; background-image: linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px); background-size: 40px 40px; }
+      .container { max-width: 760px; margin: 0 auto; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; padding: 9px 12px; transition: filter 150ms, transform 100ms, background 150ms, border-color 150ms; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      input[type=range] { accent-color: var(--accent); width: 100%; }
+      input[type=checkbox] { accent-color: var(--accent); }
+
+      .cbcell { width: 30px; height: 30px; border-radius: var(--border-radius-md); border: 1px dashed var(--border-strong); display: flex; align-items: center; justify-content: center; font-size: 14px; color: var(--subtle); background: transparent; flex: 0 0 auto; }
+      .cbcell.pop { animation: cbpop .25s ease; }
+      @keyframes cbpop { from { transform: scale(.55); opacity: .2; } to { transform: scale(1); opacity: 1; } }
+
+      .pill { font-family: var(--font-mono); font-size: 12px; padding: 5px 10px; border-radius: var(--border-radius-md); border: 1px solid var(--border); color: var(--muted); }
+      .field { display: flex; align-items: center; gap: 10px; }
+      .field label { font-size: 13px; color: var(--muted); min-width: 130px; }
+      .field output { font-family: var(--font-mono); font-size: 12px; font-weight: 500; min-width: 48px; text-align: right; color: var(--fg); }
+
+      .state-badge { font-family: var(--font-mono); font-size: 13px; font-weight: 500; padding: 7px 14px; border-radius: var(--border-radius-md); border: 1px solid var(--border); display: inline-flex; align-items: center; gap: 8px; }
+      .state-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+      .stat-card { background: var(--surface); border: 1px solid var(--border); padding: .7rem .8rem; border-radius: var(--border-radius-md); }
+      .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+      .stat-value { font-size: 22px; font-weight: 600; font-family: var(--font-mono); margin-top: 2px; }
+
+      .control-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--border-radius-lg); padding: 1rem 1.1rem; margin-bottom: 1.25rem; }
+      .log { font-family: var(--font-mono); font-size: 12px; line-height: 1.85; color: var(--subtle); min-height: 80px; max-height: 140px; overflow: hidden; }
+      .log .time { color: var(--subtle); margin-right: 8px; }
+      .kbd { font-family: var(--font-mono); font-size: 11px; padding: 1px 5px; border-radius: 4px; background: rgba(255,255,255,.08); color: var(--muted); }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2 class="sr-only">Count-based circuit breaker showing how the last N call results trip the breaker between closed, open and half-open.</h2>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
+        <span id="cb-state" class="state-badge" style="background:var(--color-background-success);color:var(--success);border-color:var(--color-border-success);"><span class="dot"></span><span id="cb-state-text">closed</span></span>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span class="pill" id="pill-closed">closed</span>
+          <i class="ti ti-arrow-right" style="color:var(--subtle)" aria-hidden="true"></i>
+          <span class="pill" id="pill-open">open</span>
+          <i class="ti ti-arrow-right" style="color:var(--subtle)" aria-hidden="true"></i>
+          <span class="pill" id="pill-half">half-open</span>
+        </div>
+      </div>
+
+      <p id="cb-status" style="font-size:14px;color:var(--muted);margin:0 0 1.25rem;line-height:1.6;">Requests flow through. Watching the last few calls for failures.</p>
+
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px;">
+        <span id="cb-cells-label" style="font-size:13px;color:var(--muted);">Sliding window · last <span id="cb-n">10</span> calls</span>
+        <span id="cb-rate-read" style="font-family:var(--font-mono);font-size:13px;font-weight:500;color:var(--fg);">0 / 0 failed · 0%</span>
+      </div>
+
+      <div id="cb-cells" style="display:flex;flex-wrap:wrap;gap:6px;min-height:30px;margin-bottom:14px;"></div>
+
+      <div style="position:relative;height:10px;border-radius:99px;background:var(--surface);margin-bottom:6px;border:1px solid var(--border);">
+        <div id="cb-bar" style="height:100%;width:0%;border-radius:99px;background:var(--success);transition:width .2s ease;"></div>
+        <div id="cb-thresh" style="position:absolute;top:-4px;bottom:-4px;width:2px;left:50%;background:var(--fg);"></div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-bottom:14px;">
+        <span style="font-size:11px;color:var(--subtle);font-family:var(--font-mono);">trip threshold <span id="cb-th-read">50</span>%</span>
+      </div>
+
+      <p id="cb-detail" style="font-size:13px;color:var(--subtle);font-family:var(--font-mono);margin:0 0 1.25rem;min-height:18px;"></p>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+        <button id="cb-ok"><i class="ti ti-check" style="color:var(--success)" aria-hidden="true"></i>healthy call</button>
+        <button id="cb-fail"><i class="ti ti-x" style="color:var(--danger)" aria-hidden="true"></i>failing call</button>
+        <button id="cb-reset" style="margin-left:auto;"><i class="ti ti-refresh" aria-hidden="true"></i>reset</button>
+      </div>
+
+      <div class="control-card">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+          <input type="checkbox" id="cb-auto" style="width:auto;flex:0 0 auto;" />
+          <label for="cb-auto" style="font-size:14px;font-weight:500;cursor:pointer;">Auto traffic — simulate a real client</label>
+        </div>
+        <div class="field">
+          <label for="cb-down">Downstream failures</label>
+          <input type="range" id="cb-down" min="0" max="100" step="5" value="20" />
+          <output id="cb-down-o">20%</output>
+        </div>
+        <p style="font-size:12px;color:var(--subtle);margin:8px 0 0;line-height:1.5;">Drag this above the threshold to make the breaker trip, then drag it back down and watch it recover through Half-Open trials.</p>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 22px;margin-bottom:1.25rem;">
+        <div class="field"><label for="cb-size">Window size</label><input type="range" id="cb-size" min="4" max="16" step="1" value="10" /><output id="cb-size-o">10</output></div>
+        <div class="field"><label for="cb-th">Failure threshold</label><input type="range" id="cb-th" min="10" max="90" step="5" value="50" /><output id="cb-th-o">50%</output></div>
+        <div class="field"><label for="cb-wait">Open wait</label><input type="range" id="cb-wait" min="1" max="10" step="1" value="4" /><output id="cb-wait-o">4s</output></div>
+        <div class="field"><label for="cb-trial">Half-open trials</label><input type="range" id="cb-trial" min="1" max="6" step="1" value="3" /><output id="cb-trial-o">3</output></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:1.25rem;">
+        <div class="stat-card"><div class="stat-label">total</div><div id="st-total" class="stat-value">0</div></div>
+        <div class="stat-card"><div class="stat-label">allowed</div><div id="st-allow" class="stat-value" style="color:var(--success)">0</div></div>
+        <div class="stat-card"><div class="stat-label">rejected</div><div id="st-reject" class="stat-value" style="color:var(--danger)">0</div></div>
+        <div class="stat-card"><div class="stat-label">trips</div><div id="st-trip" class="stat-value" style="color:var(--warning)">0</div></div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px;">
+        <span style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;">Event log</span>
+        <span style="font-size:11px;color:var(--subtle);font-family:var(--font-mono);"><span class="kbd">space</span> = healthy &middot; <span class="kbd">x</span> = fail &middot; <span class="kbd">r</span> = reset</span>
+      </div>
+      <div id="cb-log" class="log"></div>
+    </div>
+
+    <script>
+      (function () {
+        var S = { state: 'CLOSED', win: [], trials: [], openUntil: 0, allow: 0, reject: 0, trip: 0,
+          p: { size: 10, th: 50, wait: 4, trial: 3, down: 20 }, auto: false, lastAuto: 0, autoMs: 600 };
+        var $ = function (id) { return document.getElementById(id); };
+        function minCalls() { return Math.min(5, S.p.size); }
+        function rate(arr) { if (!arr.length) return 0; var f = arr.filter(function (x) { return !x; }).length; return Math.round(f / arr.length * 100); }
+        function fails(arr) { return arr.filter(function (x) { return !x; }).length; }
+
+        function trip() { S.state = 'OPEN'; S.openUntil = Date.now() + S.p.wait * 1000; S.trip++; log('breaker tripped → OPEN', 'danger'); }
+        function toHalf() { S.state = 'HALF_OPEN'; S.trials = []; log('cooldown done → HALF-OPEN (testing)', 'warning'); }
+        function close() { S.state = 'CLOSED'; S.win = []; log('all trials passed → CLOSED', 'success'); }
+
+        function attempt(ok) {
+          if (S.state === 'OPEN') { S.reject++; log('rejected · fail fast', 'danger'); render(); return; }
+          if (S.state === 'HALF_OPEN') {
+            S.allow++; S.trials.push(ok); log('trial call · ' + (ok ? 'ok' : 'fail'), ok ? 'success' : 'danger');
+            if (S.trials.length >= S.p.trial) {
+              if (rate(S.trials) >= S.p.th) { S.state = 'OPEN'; S.openUntil = Date.now() + S.p.wait * 1000; S.trip++; log('trials failed → OPEN', 'danger'); }
+              else close();
+            }
+            render(true); return;
+          }
+          S.allow++; S.win.push(ok); if (S.win.length > S.p.size) S.win.shift();
+          log('call · ' + (ok ? 'ok' : 'fail'), ok ? 'success' : 'danger');
+          if (S.win.length >= minCalls() && rate(S.win) >= S.p.th) trip();
+          render(true);
+        }
+
+        function log(msg, kind) {
+          var c = kind === 'danger' ? 'var(--danger)' : kind === 'success' ? 'var(--success)' : kind === 'warning' ? 'var(--warning)' : 'var(--subtle)';
+          var el = $('cb-log'); var t = new Date(); var hh = String(t.getHours()).padStart(2,'0') + ':' + String(t.getMinutes()).padStart(2,'0') + ':' + String(t.getSeconds()).padStart(2,'0');
+          var line = '<div style="color:' + c + '"><span class="time">' + hh + '</span>' + msg + '</div>';
+          el.innerHTML = line + el.innerHTML;
+          while (el.children.length > 7) el.removeChild(el.children[el.children.length - 1]);
+        }
+
+        function render(pop) {
+          var stateClass = S.state === 'CLOSED' ? { t: 'closed', bg: '--color-background-success', fg: '--success', bd: '--color-border-success' }
+                          : S.state === 'OPEN' ? { t: 'open', bg: '--color-background-danger', fg: '--danger', bd: '--color-border-danger' }
+                          : { t: 'half-open', bg: '--color-background-warning', fg: '--warning', bd: '--color-border-warning' };
+          var b = $('cb-state'); $('cb-state-text').textContent = stateClass.t; b.style.background = 'var(' + stateClass.bg + ')'; b.style.color = 'var(' + stateClass.fg + ')'; b.style.borderColor = 'var(' + stateClass.bd + ')';
+          [['pill-closed', 'CLOSED'], ['pill-open', 'OPEN'], ['pill-half', 'HALF_OPEN']].forEach(function (p) {
+            var el = $(p[0]), on = S.state === p[1];
+            el.style.background = on ? 'var(' + stateClass.bg + ')' : 'transparent';
+            el.style.color = on ? 'var(' + stateClass.fg + ')' : 'var(--subtle)';
+            el.style.borderColor = on ? 'var(' + stateClass.bd + ')' : 'var(--border)';
+            el.style.fontWeight = on ? '500' : '400';
+          });
+
+          var status = { CLOSED: 'Requests flow through. The breaker records each call in a window of the last ' + S.p.size + '.',
+            OPEN: 'Tripped. Every call is rejected instantly — failing fast so the broken downstream gets a break.',
+            HALF_OPEN: 'Testing recovery. A few trial calls are allowed through; their result decides close or re-open.' }[S.state];
+          $('cb-status').textContent = status;
+
+          var inHalf = S.state === 'HALF_OPEN';
+          var arr = inHalf ? S.trials : S.win;
+          var cap = inHalf ? S.p.trial : S.p.size;
+          $('cb-cells-label').innerHTML = inHalf ? ('Trial calls · ' + S.p.trial + ' allowed') : ('Sliding window · last <span id="cb-n">' + S.p.size + '</span> calls');
+          var cont = $('cb-cells'); cont.innerHTML = '';
+          for (var i = 0; i < cap; i++) {
+            var d = document.createElement('div'); d.className = 'cbcell';
+            var v = arr[i];
+            if (v === true) { d.style.background = 'var(--color-background-success)'; d.style.border = '1px solid var(--color-border-success)'; d.innerHTML = '<i class="ti ti-check" style="color:var(--success)"></i>'; }
+            else if (v === false) { d.style.background = 'var(--color-background-danger)'; d.style.border = '1px solid var(--color-border-danger)'; d.innerHTML = '<i class="ti ti-x" style="color:var(--danger)"></i>'; }
+            if (pop && i === arr.length - 1) d.classList.add('pop');
+            cont.appendChild(d);
+          }
+          var r = rate(arr);
+          $('cb-rate-read').textContent = fails(arr) + ' / ' + arr.length + ' failed · ' + r + '%';
+          $('cb-bar').style.width = r + '%';
+          $('cb-bar').style.background = r >= S.p.th ? 'var(--danger)' : 'var(--success)';
+          $('cb-thresh').style.left = S.p.th + '%';
+          $('cb-th-read').textContent = S.p.th;
+
+          var det = '';
+          if (S.state === 'OPEN') { det = '⏳ reopening for trials in ' + Math.max(0, (S.openUntil - Date.now()) / 1000).toFixed(1) + 's'; }
+          else if (S.state === 'HALF_OPEN') { det = 'trial ' + S.trials.length + ' / ' + S.p.trial + ' — ' + (S.p.trial - S.trials.length) + ' to decide'; }
+          else { det = S.win.length < minCalls() ? ('need ' + minCalls() + ' calls before it can trip (' + S.win.length + ' so far)') : 'armed — will trip if failures reach ' + S.p.th + '%'; }
+          $('cb-detail').textContent = det;
+
+          $('st-total').textContent = S.allow + S.reject; $('st-allow').textContent = S.allow; $('st-reject').textContent = S.reject; $('st-trip').textContent = S.trip;
+        }
+
+        $('cb-ok').onclick = function () { attempt(true); };
+        $('cb-fail').onclick = function () { attempt(false); };
+        $('cb-reset').onclick = function () { S.state = 'CLOSED'; S.win = []; S.trials = []; S.allow = 0; S.reject = 0; S.trip = 0; S.auto = false; $('cb-auto').checked = false; $('cb-log').innerHTML = ''; render(); };
+        $('cb-auto').onchange = function (e) { S.auto = e.target.checked; S.lastAuto = 0; };
+        function bind(id, key, suf) { $(id).oninput = function (e) { S.p[key] = +e.target.value; $(id + '-o').textContent = e.target.value + (suf || ''); if (key === 'size') while (S.win.length > S.p.size) S.win.shift(); render(); }; }
+        bind('cb-down', 'down', '%'); bind('cb-size', 'size', ''); bind('cb-th', 'th', '%'); bind('cb-wait', 'wait', 's'); bind('cb-trial', 'trial', '');
+
+        document.addEventListener('keydown', function (e) {
+          if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON')) return;
+          if (e.key === ' ') { e.preventDefault(); attempt(true); }
+          else if (e.key === 'x' || e.key === 'X') { e.preventDefault(); attempt(false); }
+          else if (e.key === 'r' || e.key === 'R') { e.preventDefault(); $('cb-reset').click(); }
+        });
+
+        setInterval(function () {
+          if (S.state === 'OPEN') { if (Date.now() >= S.openUntil) { toHalf(); render(); } else { $('cb-detail').textContent = '⏳ reopening for trials in ' + Math.max(0, (S.openUntil - Date.now()) / 1000).toFixed(1) + 's'; } }
+          if (S.auto && Date.now() - S.lastAuto >= S.autoMs) { S.lastAuto = Date.now(); attempt(Math.random() * 100 >= S.p.down); }
+        }, 100);
+
+        render();
+
+        function postHeight() { parent.postMessage({ type: 'prototype:height', height: document.body.scrollHeight }, '*'); }
+        if (typeof ResizeObserver !== 'undefined') new ResizeObserver(postHeight).observe(document.body);
+        postHeight();
+      })();
+    </script>
+  </body>
+</html>
