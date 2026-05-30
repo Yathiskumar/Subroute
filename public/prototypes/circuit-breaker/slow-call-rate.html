@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Circuit Breaker — Slow Call Rate</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --danger: #f06868; --warning: #f0b568; --info: #5e9ff6;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --color-background-primary: var(--bg);
+        --color-background-secondary: var(--surface);
+        --color-text-primary: var(--fg);
+        --color-text-secondary: var(--muted);
+        --color-text-tertiary: var(--subtle);
+        --color-border-secondary: var(--border-strong);
+        --color-border-tertiary: var(--border);
+        --color-text-success: var(--success);
+        --color-text-danger: var(--danger);
+        --color-text-warning: var(--warning);
+        --color-background-success: rgba(92,198,111,0.14);
+        --color-background-danger: rgba(240,104,104,0.14);
+        --color-background-warning: rgba(240,181,104,0.14);
+        --color-border-success: rgba(92,198,111,0.5);
+        --color-border-danger: rgba(240,104,104,0.5);
+        --color-border-warning: rgba(240,181,104,0.5);
+        --border-radius-lg: 12px; --border-radius-md: 8px;
+        --font-mono: var(--mono); --font-sans: var(--sans);
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body { padding: 16px 18px 18px; background-image: linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px); background-size: 40px 40px; }
+      .container { max-width: 760px; margin: 0 auto; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; padding: 9px 12px; transition: filter 150ms, transform 100ms, background 150ms, border-color 150ms; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      input[type=range] { accent-color: var(--accent); width: 100%; }
+      input[type=checkbox] { accent-color: var(--accent); }
+
+      .scell { width: 30px; height: 30px; border-radius: var(--border-radius-md); border: 1px dashed var(--border-strong); display: flex; align-items: center; justify-content: center; font-size: 14px; color: var(--subtle); background: transparent; flex: 0 0 auto; }
+      .pill { font-family: var(--font-mono); font-size: 12px; padding: 5px 10px; border-radius: var(--border-radius-md); border: 1px solid var(--border); color: var(--muted); }
+      .field { display: flex; align-items: center; gap: 10px; }
+      .field label { font-size: 13px; color: var(--muted); min-width: 130px; }
+      .field output { font-family: var(--font-mono); font-size: 12px; font-weight: 500; min-width: 56px; text-align: right; color: var(--fg); }
+      .state-badge { font-family: var(--font-mono); font-size: 13px; font-weight: 500; padding: 7px 14px; border-radius: var(--border-radius-md); border: 1px solid var(--border); display: inline-flex; align-items: center; gap: 8px; }
+      .state-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+      .stat-card { background: var(--surface); border: 1px solid var(--border); padding: .7rem .8rem; border-radius: var(--border-radius-md); }
+      .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+      .stat-value { font-size: 22px; font-weight: 600; font-family: var(--font-mono); margin-top: 2px; }
+      .control-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--border-radius-lg); padding: 1rem 1.1rem; margin-bottom: 1.25rem; }
+      .log { font-family: var(--font-mono); font-size: 12px; line-height: 1.85; color: var(--subtle); min-height: 80px; max-height: 140px; overflow: hidden; }
+      .log .time { color: var(--subtle); margin-right: 8px; }
+      .kbd { font-family: var(--font-mono); font-size: 11px; padding: 1px 5px; border-radius: 4px; background: rgba(255,255,255,.08); color: var(--muted); }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2 class="sr-only">Slow-call-rate circuit breaker showing how calls slower than a duration threshold trip the breaker once their share crosses a rate threshold.</h2>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
+        <span id="s-state" class="state-badge" style="background:var(--color-background-success);color:var(--success);border-color:var(--color-border-success);"><span class="dot"></span><span id="s-state-text">closed</span></span>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span class="pill" id="sp-closed">closed</span>
+          <i class="ti ti-arrow-right" style="color:var(--subtle)" aria-hidden="true"></i>
+          <span class="pill" id="sp-open">open</span>
+          <i class="ti ti-arrow-right" style="color:var(--subtle)" aria-hidden="true"></i>
+          <span class="pill" id="sp-half">half-open</span>
+        </div>
+      </div>
+
+      <p id="s-status" style="font-size:14px;color:var(--muted);margin:0 0 1.25rem;line-height:1.6;">Requests flow through. Every call succeeds — but the breaker is timing how long each one takes.</p>
+
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px;">
+        <span id="s-label" style="font-size:13px;color:var(--muted);">Call latency · last 10 calls</span>
+        <span id="s-rate-read" style="font-family:var(--font-mono);font-size:13px;font-weight:500;color:var(--fg);">0 / 0 slow · 0%</span>
+      </div>
+
+      <div id="s-chart" style="position:relative;display:flex;align-items:flex-end;gap:4px;height:96px;margin-bottom:4px;">
+        <div id="s-line" style="position:absolute;left:0;right:0;bottom:46px;height:0;border-top:1px dashed var(--warning);pointer-events:none;"></div>
+        <div id="s-line-lbl" style="position:absolute;right:0;bottom:48px;font-size:10px;font-family:var(--font-mono);color:var(--warning);background:var(--bg);padding:0 3px;">slow ≥ 500ms</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--subtle);font-family:var(--font-mono);margin-bottom:14px;"><span>← older</span><span>newest →</span></div>
+
+      <div style="position:relative;height:10px;border-radius:99px;background:var(--surface);margin-bottom:6px;border:1px solid var(--border);">
+        <div id="s-bar" style="height:100%;width:0%;border-radius:99px;background:var(--success);transition:width .2s ease;"></div>
+        <div id="s-thresh" style="position:absolute;top:-4px;bottom:-4px;width:2px;left:50%;background:var(--fg);"></div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-bottom:14px;">
+        <span style="font-size:11px;color:var(--subtle);font-family:var(--font-mono);">slow-call rate trips at <span id="s-th-read">50</span>%</span>
+      </div>
+
+      <p id="s-detail" style="font-size:13px;color:var(--subtle);font-family:var(--font-mono);margin:0 0 1.25rem;min-height:18px;"></p>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+        <button id="s-fast"><i class="ti ti-bolt" style="color:var(--success)" aria-hidden="true"></i>fast call</button>
+        <button id="s-slow"><i class="ti ti-clock" style="color:var(--warning)" aria-hidden="true"></i>slow call</button>
+        <button id="s-reset" style="margin-left:auto;"><i class="ti ti-refresh" aria-hidden="true"></i>reset</button>
+      </div>
+
+      <div class="control-card">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+          <input type="checkbox" id="s-auto" style="width:auto;flex:0 0 auto;" />
+          <label for="s-auto" style="font-size:14px;font-weight:500;cursor:pointer;">Auto traffic — simulate a real client</label>
+        </div>
+        <div class="field">
+          <label for="s-lat">Downstream latency</label>
+          <input type="range" id="s-lat" min="50" max="1500" step="50" value="200" />
+          <output id="s-lat-o">200ms</output>
+        </div>
+        <p style="font-size:12px;color:var(--subtle);margin:8px 0 0;line-height:1.5;">Drag this above the slow line and the bars turn amber — the downstream isn't erroring, just lagging. Push slow calls past the rate threshold and it trips anyway.</p>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px 22px;margin-bottom:1.25rem;">
+        <div class="field"><label for="s-size">Window size</label><input type="range" id="s-size" min="4" max="16" step="1" value="10" /><output id="s-size-o">10</output></div>
+        <div class="field"><label for="s-dur">Slow if over</label><input type="range" id="s-dur" min="100" max="1200" step="50" value="500" /><output id="s-dur-o">500ms</output></div>
+        <div class="field"><label for="s-rate">Slow-rate trip</label><input type="range" id="s-rate" min="10" max="90" step="5" value="50" /><output id="s-rate-o">50%</output></div>
+        <div class="field"><label for="s-wait">Open wait</label><input type="range" id="s-wait" min="1" max="10" step="1" value="4" /><output id="s-wait-o">4s</output></div>
+        <div class="field"><label for="s-trial">Half-open trials</label><input type="range" id="s-trial" min="1" max="6" step="1" value="3" /><output id="s-trial-o">3</output></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:1.25rem;">
+        <div class="stat-card"><div class="stat-label">total</div><div id="ss-total" class="stat-value">0</div></div>
+        <div class="stat-card"><div class="stat-label">slow calls</div><div id="ss-slow" class="stat-value" style="color:var(--warning)">0</div></div>
+        <div class="stat-card"><div class="stat-label">rejected</div><div id="ss-reject" class="stat-value" style="color:var(--danger)">0</div></div>
+        <div class="stat-card"><div class="stat-label">trips</div><div id="ss-trip" class="stat-value" style="color:var(--danger)">0</div></div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px;">
+        <span style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;">Event log</span>
+        <span style="font-size:11px;color:var(--subtle);font-family:var(--font-mono);"><span class="kbd">f</span> = fast &middot; <span class="kbd">s</span> = slow &middot; <span class="kbd">r</span> = reset</span>
+      </div>
+      <div id="s-log" class="log"></div>
+    </div>
+
+    <script>
+      (function () {
+        var S = { state: 'CLOSED', calls: [], trials: [], openUntil: 0, allow: 0, reject: 0, trip: 0, slowTot: 0,
+          p: { size: 10, dur: 500, rate: 50, wait: 4, trial: 3, lat: 200 }, auto: false, lastAuto: 0, autoMs: 430 };
+        var $ = function (id) { return document.getElementById(id); };
+        function minCalls() { return Math.min(5, S.p.size); }
+        function slowCount(a) { var d = S.p.dur, n = 0; a.forEach(function (l) { if (l >= d) n++; }); return n; }
+        function slowRate(a) { if (!a.length) return 0; return Math.round(slowCount(a) / a.length * 100); }
+        function genFast() { return Math.round(40 + Math.random() * (S.p.dur * 0.6)); }
+        function genSlow() { return Math.round(S.p.dur * 1.2 + Math.random() * S.p.dur * 0.9); }
+        function genAuto() { return Math.max(20, Math.round(S.p.lat * (0.7 + Math.random() * 0.6))); }
+
+        function attempt(lat) {
+          var now = Date.now();
+          if (S.state === 'OPEN') { S.reject++; log('rejected · fail fast', 'danger'); chrome(); return; }
+          if (lat >= S.p.dur) S.slowTot++;
+          if (S.state === 'HALF_OPEN') {
+            S.allow++; S.trials.push(lat); log('trial call · ' + lat + 'ms ' + (lat >= S.p.dur ? '(slow)' : '(fast)'), lat >= S.p.dur ? 'warning' : 'success');
+            if (S.trials.length >= S.p.trial) {
+              if (slowRate(S.trials) >= S.p.rate) { S.state = 'OPEN'; S.openUntil = now + S.p.wait * 1000; S.trip++; log('still slow → OPEN', 'danger'); }
+              else { S.state = 'CLOSED'; S.calls = []; log('trials fast enough → CLOSED', 'success'); }
+            }
+            chrome(); win(); return;
+          }
+          S.allow++; S.calls.push(lat); if (S.calls.length > S.p.size) S.calls.shift();
+          log('call ok · ' + lat + 'ms ' + (lat >= S.p.dur ? '(slow)' : '(fast)'), lat >= S.p.dur ? 'warning' : 'success');
+          if (S.calls.length >= minCalls() && slowRate(S.calls) >= S.p.rate) { S.state = 'OPEN'; S.openUntil = now + S.p.wait * 1000; S.trip++; log('too many slow calls → OPEN', 'danger'); }
+          chrome(); win();
+        }
+
+        function log(msg, kind) {
+          var c = kind === 'danger' ? 'var(--danger)' : kind === 'success' ? 'var(--success)' : kind === 'warning' ? 'var(--warning)' : 'var(--subtle)';
+          var el = $('s-log'); var d = new Date(); var hh = String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') + ':' + String(d.getSeconds()).padStart(2,'0');
+          el.innerHTML = '<div style="color:' + c + '"><span class="time">' + hh + '</span>' + msg + '</div>' + el.innerHTML;
+          while (el.children.length > 7) el.removeChild(el.children[el.children.length - 1]);
+        }
+
+        function chrome() {
+          var stateClass = S.state === 'CLOSED' ? { t: 'closed', bg: '--color-background-success', fg: '--success', bd: '--color-border-success' }
+                          : S.state === 'OPEN' ? { t: 'open', bg: '--color-background-danger', fg: '--danger', bd: '--color-border-danger' }
+                          : { t: 'half-open', bg: '--color-background-warning', fg: '--warning', bd: '--color-border-warning' };
+          var b = $('s-state'); $('s-state-text').textContent = stateClass.t; b.style.background = 'var(' + stateClass.bg + ')'; b.style.color = 'var(' + stateClass.fg + ')'; b.style.borderColor = 'var(' + stateClass.bd + ')';
+          [['sp-closed', 'CLOSED'], ['sp-open', 'OPEN'], ['sp-half', 'HALF_OPEN']].forEach(function (p) {
+            var el = $(p[0]), on = S.state === p[1];
+            el.style.background = on ? 'var(' + stateClass.bg + ')' : 'transparent';
+            el.style.color = on ? 'var(' + stateClass.fg + ')' : 'var(--subtle)';
+            el.style.borderColor = on ? 'var(' + stateClass.bd + ')' : 'var(--border)';
+            el.style.fontWeight = on ? '500' : '400';
+          });
+          $('s-status').textContent = { CLOSED: 'Requests flow through and succeed — but the breaker times each one and counts how many are slower than ' + S.p.dur + 'ms.',
+            OPEN: 'Tripped. Calls are rejected instantly so threads stop piling up behind the slow downstream.',
+            HALF_OPEN: 'Testing recovery. A few trial calls check whether responses are quick again.' }[S.state];
+          $('ss-total').textContent = S.allow + S.reject; $('ss-slow').textContent = S.slowTot; $('ss-reject').textContent = S.reject; $('ss-trip').textContent = S.trip;
+          $('s-th-read').textContent = S.p.rate; $('s-thresh').style.left = S.p.rate + '%';
+        }
+
+        function win() {
+          var chart = $('s-chart'), line = $('s-line'), lbl = $('s-line-lbl');
+          var inHalf = S.state === 'HALF_OPEN';
+          var arr = inHalf ? S.trials : S.calls, cap = inHalf ? S.p.trial : S.p.size;
+          Array.prototype.slice.call(chart.querySelectorAll('.sbar')).forEach(function (n) { n.remove(); });
+          if (inHalf) {
+            line.style.display = 'none'; lbl.style.display = 'none'; chart.style.alignItems = 'center';
+            $('s-label').textContent = 'Trial calls · ' + S.p.trial + ' allowed';
+            for (var k = 0; k < cap; k++) {
+              var v = arr[k];
+              var ic = v === undefined ? '' : (v >= S.p.dur ? '<i class="ti ti-clock" style="color:var(--warning)"></i>' : '<i class="ti ti-bolt" style="color:var(--success)"></i>');
+              var bg = v === undefined ? 'border:1px dashed var(--border-strong)' : (v >= S.p.dur ? 'background:var(--color-background-warning);border:1px solid var(--color-border-warning)' : 'background:var(--color-background-success);border:1px solid var(--color-border-success)');
+              var el = document.createElement('div'); el.className = 'scell sbar'; el.setAttribute('style', 'width:30px;height:30px;border-radius:var(--border-radius-md);display:flex;align-items:center;justify-content:center;' + bg); el.innerHTML = ic; chart.appendChild(el);
+            }
+          } else {
+            line.style.display = 'block'; lbl.style.display = 'block'; chart.style.alignItems = 'flex-end';
+            $('s-label').textContent = 'Call latency · last ' + S.p.size + ' calls';
+            var mx = Math.max(S.p.dur * 1.7, 300); arr.forEach(function (l) { if (l > mx) mx = l; });
+            var H = 92;
+            for (var g = 0; g < cap; g++) {
+              var l = arr[g];
+              var el = document.createElement('div'); el.className = 'sbar';
+              if (l === undefined) { el.setAttribute('style', 'flex:1;height:3px;border-radius:2px;background:var(--border);'); }
+              else { var hpx = Math.max(3, Math.round(l / mx * H)); var slow = l >= S.p.dur; el.setAttribute('style', 'flex:1;height:' + hpx + 'px;border-radius:3px 3px 0 0;background:var(' + (slow ? '--warning' : '--success') + ');'); }
+              chart.appendChild(el);
+            }
+            var pos = Math.round(S.p.dur / mx * H); line.style.bottom = pos + 'px'; lbl.style.bottom = (pos + 2) + 'px'; lbl.textContent = 'slow ≥ ' + S.p.dur + 'ms';
+          }
+          var sc = slowCount(arr), r = slowRate(arr);
+          $('s-rate-read').textContent = sc + ' / ' + arr.length + ' slow · ' + r + '%';
+          $('s-bar').style.width = r + '%'; $('s-bar').style.background = r >= S.p.rate ? 'var(--danger)' : 'var(--success)';
+          var det;
+          if (S.state === 'OPEN') det = '⏳ reopening for trials in ' + Math.max(0, (S.openUntil - Date.now()) / 1000).toFixed(1) + 's';
+          else if (S.state === 'HALF_OPEN') det = 'trial ' + S.trials.length + ' / ' + S.p.trial + ' — ' + Math.max(0, S.p.trial - S.trials.length) + ' to decide';
+          else det = S.calls.length < minCalls() ? ('need ' + minCalls() + ' calls before it can trip (' + S.calls.length + ' so far)') : 'armed — trips when ' + S.p.rate + '% of calls run slower than ' + S.p.dur + 'ms';
+          $('s-detail').textContent = det;
+        }
+
+        $('s-fast').onclick = function () { attempt(genFast()); };
+        $('s-slow').onclick = function () { attempt(genSlow()); };
+        $('s-reset').onclick = function () { S.state = 'CLOSED'; S.calls = []; S.trials = []; S.allow = 0; S.reject = 0; S.trip = 0; S.slowTot = 0; S.auto = false; $('s-auto').checked = false; $('s-log').innerHTML = ''; chrome(); win(); };
+        $('s-auto').onchange = function (e) { S.auto = e.target.checked; S.lastAuto = 0; };
+        function bind(id, key, suf) { $(id).oninput = function (e) { S.p[key] = +e.target.value; $(id + '-o').textContent = e.target.value + (suf || ''); if (key === 'size') while (S.calls.length > S.p.size) S.calls.shift(); chrome(); win(); }; }
+        bind('s-lat', 'lat', 'ms'); bind('s-size', 'size', ''); bind('s-dur', 'dur', 'ms'); bind('s-rate', 'rate', '%'); bind('s-wait', 'wait', 's'); bind('s-trial', 'trial', '');
+
+        document.addEventListener('keydown', function (e) {
+          if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON')) return;
+          if (e.key === 'f' || e.key === 'F') { e.preventDefault(); attempt(genFast()); }
+          else if (e.key === 's' || e.key === 'S') { e.preventDefault(); attempt(genSlow()); }
+          else if (e.key === 'r' || e.key === 'R') { e.preventDefault(); $('s-reset').click(); }
+        });
+
+        setInterval(function () {
+          var now = Date.now();
+          if (S.state === 'OPEN') { if (now >= S.openUntil) { S.state = 'HALF_OPEN'; S.trials = []; log('cooldown done → HALF-OPEN (testing)', 'warning'); chrome(); win(); } else $('s-detail').textContent = '⏳ reopening for trials in ' + Math.max(0, (S.openUntil - now) / 1000).toFixed(1) + 's'; }
+          if (S.auto && now - S.lastAuto >= S.autoMs) { S.lastAuto = now; attempt(genAuto()); }
+        }, 100);
+
+        chrome(); win();
+
+        function postHeight() { parent.postMessage({ type: 'prototype:height', height: document.body.scrollHeight }, '*'); }
+        if (typeof ResizeObserver !== 'undefined') new ResizeObserver(postHeight).observe(document.body);
+        postHeight();
+      })();
+    </script>
+  </body>
+</html>

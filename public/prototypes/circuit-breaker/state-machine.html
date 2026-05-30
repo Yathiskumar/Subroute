@@ -1,0 +1,689 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Circuit Breaker — State Machine</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --success-bg: rgba(92,198,111,0.14); --success-bd: rgba(92,198,111,0.45);
+        --danger: #f06868;  --danger-bg: rgba(240,104,104,0.14); --danger-bd: rgba(240,104,104,0.45);
+        --warning: #f0b568; --warning-bg: rgba(240,181,104,0.14); --warning-bd: rgba(240,181,104,0.45);
+        --info: #5e9ff6;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --radius-lg: 14px; --radius-md: 8px; --radius-sm: 6px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body {
+        padding: 18px 18px 24px;
+        background-image:
+          radial-gradient(1200px 600px at 50% -200px, rgba(251,134,58,0.06), transparent),
+          linear-gradient(to right, rgba(255,255,255,0.020) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.020) 1px, transparent 1px);
+        background-size: auto, 40px 40px, 40px 40px;
+      }
+      .container { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; padding: 9px 12px; transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); color: var(--fg); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); color: #1a1003; }
+      button.ghost { background: transparent; }
+      button i { font-size: 14px; }
+
+      /* ── Scenario tabs ─────────────────────────────────────────── */
+      .tabs { display: flex; gap: 6px; flex-wrap: wrap; padding: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); }
+      .tab { flex: 1; min-width: 130px; padding: 9px 12px; font: 500 12px/1 var(--sans); border-radius: var(--radius-sm); border: 1px solid transparent; background: transparent; color: var(--muted); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: all 150ms ease; }
+      .tab:hover { color: var(--fg); background: rgba(255,255,255,0.03); }
+      .tab.active { background: var(--elevated); color: var(--fg); border-color: var(--border-strong); box-shadow: 0 1px 0 rgba(0,0,0,0.4); }
+      .tab i { font-size: 14px; }
+
+      /* ── Diagram card (the hero) ───────────────────────────────── */
+      .diagram-card {
+        background: linear-gradient(180deg, rgba(255,255,255,0.014), transparent), var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: 18px 16px 12px;
+        position: relative;
+        overflow: hidden;
+      }
+      .diagram-card::before {
+        content: ""; position: absolute; inset: 0;
+        background:
+          radial-gradient(360px 200px at 20% 30%, rgba(92,198,111,0.05), transparent 60%),
+          radial-gradient(360px 200px at 80% 30%, rgba(240,104,104,0.05), transparent 60%),
+          radial-gradient(360px 200px at 50% 90%, rgba(240,181,104,0.05), transparent 60%);
+        pointer-events: none;
+      }
+      .diagram-card svg { display: block; width: 100%; height: auto; max-height: 320px; position: relative; z-index: 1; }
+
+      /* SVG node styles */
+      .node rect { fill: var(--elevated); stroke: var(--border-strong); stroke-width: 1.5; transition: all 350ms cubic-bezier(0.4, 0, 0.2, 1); }
+      .node .title { font: 700 14px var(--mono); fill: var(--muted); letter-spacing: 0.3px; transition: fill 250ms ease; }
+      .node .sub   { font: 500 10.5px var(--sans); fill: var(--subtle); transition: fill 250ms ease; }
+
+      .node.closed.on rect { fill: var(--success-bg); stroke: var(--success); stroke-width: 2.5; filter: drop-shadow(0 0 14px rgba(92,198,111,0.35)); }
+      .node.closed.on .title { fill: var(--success); }
+      .node.closed.on .sub { fill: #c5e9cd; }
+      .node.open.on rect   { fill: var(--danger-bg);  stroke: var(--danger);  stroke-width: 2.5; filter: drop-shadow(0 0 14px rgba(240,104,104,0.35)); }
+      .node.open.on .title { fill: var(--danger); }
+      .node.open.on .sub { fill: #f3c2c2; }
+      .node.half.on rect   { fill: var(--warning-bg); stroke: var(--warning); stroke-width: 2.5; filter: drop-shadow(0 0 14px rgba(240,181,104,0.4)); }
+      .node.half.on .title { fill: var(--warning); }
+      .node.half.on .sub { fill: #f3d3a8; }
+      .node.on rect { animation: pulse 2.2s ease-in-out infinite; }
+      @keyframes pulse {
+        0%, 100% { transform: scale(1); transform-origin: center; }
+        50%      { transform: scale(1.025); }
+      }
+
+      /* SVG edge styles */
+      .edge path { fill: none; stroke: #2f3641; stroke-width: 1.6; transition: stroke 250ms ease, stroke-width 250ms ease; }
+      .edge .lbl-bg { fill: var(--surface); stroke: var(--border); stroke-width: 1; }
+      .edge text { font: 500 10.5px var(--mono); fill: var(--muted); transition: fill 250ms ease; }
+      .edge.live path { stroke-width: 2.5; stroke-dasharray: 7 5; animation: flow 0.9s linear infinite; }
+      .edge.live text { fill: var(--fg); font-weight: 600; }
+      .edge.live .lbl-bg { stroke-width: 1.5; }
+      .edge.trip.live path     { stroke: var(--danger); }    .edge.trip.live .lbl-bg     { stroke: var(--danger); }
+      .edge.cool.live path     { stroke: var(--warning); }   .edge.cool.live .lbl-bg     { stroke: var(--warning); }
+      .edge.pass.live path     { stroke: var(--success); }   .edge.pass.live .lbl-bg     { stroke: var(--success); }
+      .edge.relapse path { stroke-dasharray: 4 4; }
+      .edge.relapse.live path  { stroke: var(--danger); }    .edge.relapse.live .lbl-bg  { stroke: var(--danger); }
+      @keyframes flow { to { stroke-dashoffset: -24; } }
+
+      /* ── Narration ribbon ──────────────────────────────────────── */
+      .narration {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: 14px 16px;
+        position: relative;
+        overflow: hidden;
+        transition: border-color 350ms ease;
+      }
+      .narration::before {
+        content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--border-strong); transition: background 350ms ease;
+      }
+      .narration.closed { border-color: rgba(92,198,111,0.25); }
+      .narration.closed::before { background: var(--success); }
+      .narration.open { border-color: rgba(240,104,104,0.25); }
+      .narration.open::before { background: var(--danger); }
+      .narration.half { border-color: rgba(240,181,104,0.3); }
+      .narration.half::before { background: var(--warning); }
+      .narr-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+      .badge { font: 600 10.5px var(--mono); padding: 4px 9px; border-radius: 999px; letter-spacing: 0.4px; text-transform: uppercase; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); color: var(--muted); background: var(--elevated); }
+      .badge.step { background: var(--elevated); border-color: var(--border-strong); color: var(--fg); }
+      .badge.state-closed { background: var(--success-bg); border-color: var(--success-bd); color: var(--success); }
+      .badge.state-open   { background: var(--danger-bg); border-color: var(--danger-bd); color: var(--danger); }
+      .badge.state-half   { background: var(--warning-bg); border-color: var(--warning-bd); color: var(--warning); }
+      .badge.event { background: transparent; }
+      .badge.event.trip { color: var(--danger); border-color: var(--danger-bd); }
+      .badge.event.cool { color: var(--warning); border-color: var(--warning-bd); }
+      .badge.event.pass { color: var(--success); border-color: var(--success-bd); }
+      .narr-text { margin: 0; font-size: 14px; line-height: 1.6; color: var(--fg); }
+      .narr-text strong { color: var(--fg); font-weight: 600; }
+
+      /* ── Step timeline ─────────────────────────────────────────── */
+      .timeline-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; }
+      .timeline-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font: 500 11px var(--mono); color: var(--muted); letter-spacing: 0.4px; text-transform: uppercase; }
+      .timeline-head .pos { color: var(--fg); font-weight: 600; text-transform: none; letter-spacing: 0; }
+      .timeline { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+      .tl-dot { flex: 1; min-width: 14px; height: 6px; border-radius: 99px; background: var(--border); transition: all 200ms ease; cursor: pointer; }
+      .tl-dot:hover { background: var(--border-strong); }
+      .tl-dot.done { background: var(--accent); opacity: 0.55; }
+      .tl-dot.now  { background: var(--accent); height: 10px; box-shadow: 0 0 8px rgba(251,134,58,0.5); }
+
+      /* ── Controls ──────────────────────────────────────────────── */
+      .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .controls .spacer { flex: 1; }
+      .kbd { font-family: var(--mono); font-size: 10.5px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); color: var(--muted); border: 1px solid var(--border); }
+      .hint { font: 11px var(--mono); color: var(--subtle); display: inline-flex; align-items: center; gap: 5px; }
+
+      /* ── Window strip ──────────────────────────────────────────── */
+      .window-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; }
+      .window-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; font-size: 12px; color: var(--muted); }
+      .window-head .read { font: 600 12px var(--mono); color: var(--fg); }
+      .cells { display: flex; gap: 6px; flex-wrap: wrap; }
+      .cell { width: 32px; height: 32px; border-radius: 7px; border: 1px dashed var(--border-strong); background: transparent; display: flex; align-items: center; justify-content: center; font-size: 14px; color: var(--subtle); transition: all 200ms ease; }
+      .cell.ok   { background: var(--success-bg); border: 1px solid var(--success-bd); color: var(--success); }
+      .cell.fail { background: var(--danger-bg);  border: 1px solid var(--danger-bd);  color: var(--danger); }
+      .cell.pop  { animation: pop .28s cubic-bezier(0.34,1.56,0.64,1); }
+      @keyframes pop { from { transform: scale(0.5); opacity: 0.2; } to { transform: scale(1); opacity: 1; } }
+
+      /* ── Free play ─────────────────────────────────────────────── */
+      .free-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px; }
+      .free-card h3 { margin: 0 0 10px; font: 500 11px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .free-buttons { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+
+      /* ── Stats grid ────────────────────────────────────────────── */
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; }
+      .stat .label { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .stat .value { font: 600 22px var(--mono); margin-top: 4px; line-height: 1; }
+      .stat .value.lc { font-size: 16px; text-transform: lowercase; padding-top: 4px; }
+
+      /* ── Log ───────────────────────────────────────────────────── */
+      .log-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; }
+      .log-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font: 500 11px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .log { font-family: var(--mono); font-size: 12px; line-height: 1.85; color: var(--subtle); min-height: 76px; max-height: 140px; overflow: hidden; }
+      .log .t { color: var(--subtle); margin-right: 10px; opacity: 0.7; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2 class="sr-only">Interactive circuit breaker state machine — closed, open and half-open transitions visualised.</h2>
+
+      <!-- Scenario tabs -->
+      <div class="tabs" role="tablist" aria-label="Scenario">
+        <button class="tab active" data-scenario="first-trip" role="tab"><i class="ti ti-bolt" aria-hidden="true"></i>First trip</button>
+        <button class="tab" data-scenario="recovery-ok" role="tab"><i class="ti ti-circle-check" aria-hidden="true"></i>Recovery succeeds</button>
+        <button class="tab" data-scenario="recovery-fail" role="tab"><i class="ti ti-circle-x" aria-hidden="true"></i>Recovery fails</button>
+        <button class="tab" data-scenario="free" role="tab"><i class="ti ti-hand-finger" aria-hidden="true"></i>Free play</button>
+      </div>
+
+      <!-- Diagram hero -->
+      <div class="diagram-card" aria-label="Circuit breaker state diagram">
+        <svg viewBox="0 0 720 320" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Closed, Open and Half-Open states with transitions.">
+          <defs>
+            <marker id="arr"           viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2f3641"/></marker>
+            <marker id="arr-danger"    viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#f06868"/></marker>
+            <marker id="arr-success"   viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5cc66f"/></marker>
+            <marker id="arr-warning"   viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#f0b568"/></marker>
+          </defs>
+
+          <!-- Edges (rendered first so nodes overlay) -->
+          <!-- trip: CLOSED right edge → OPEN left edge -->
+          <g class="edge trip" id="edge-trip">
+            <path d="M 220 90 Q 360 30 500 90" marker-end="url(#arr)" />
+            <rect class="lbl-bg" x="324" y="46" width="72" height="22" rx="11" />
+            <text x="360" y="60" text-anchor="middle">trip</text>
+          </g>
+          <!-- cooldown: OPEN bottom → HALF top-right -->
+          <g class="edge cool" id="edge-cool">
+            <path d="M 600 138 Q 640 230 484 246" marker-end="url(#arr)" />
+            <rect class="lbl-bg" x="566" y="190" width="100" height="22" rx="11" />
+            <text x="616" y="204" text-anchor="middle">cooldown done</text>
+          </g>
+          <!-- trials pass: HALF top-left → CLOSED bottom-right -->
+          <g class="edge pass" id="edge-pass">
+            <path d="M 236 246 Q 80 230 120 138" marker-end="url(#arr)" />
+            <rect class="lbl-bg" x="54" y="190" width="86" height="22" rx="11" />
+            <text x="97" y="204" text-anchor="middle">trials pass</text>
+          </g>
+          <!-- relapse: HALF top → OPEN bottom (dashed, curves up to right) -->
+          <g class="edge relapse" id="edge-relapse">
+            <path d="M 430 242 Q 530 200 560 138" marker-end="url(#arr)" />
+            <rect class="lbl-bg" x="498" y="174" width="78" height="22" rx="11" />
+            <text x="537" y="188" text-anchor="middle">trial fails</text>
+          </g>
+
+          <!-- Nodes -->
+          <g class="node closed on" id="node-closed">
+            <rect x="40" y="50" width="180" height="88" rx="14" />
+            <text class="title" x="130" y="92" text-anchor="middle">CLOSED</text>
+            <text class="sub"   x="130" y="112" text-anchor="middle">traffic flowing</text>
+          </g>
+          <g class="node open" id="node-open">
+            <rect x="500" y="50" width="180" height="88" rx="14" />
+            <text class="title" x="590" y="92" text-anchor="middle">OPEN</text>
+            <text class="sub"   x="590" y="112" text-anchor="middle">fail fast</text>
+          </g>
+          <g class="node half" id="node-half">
+            <rect x="240" y="244" width="240" height="64" rx="14" />
+            <text class="title" x="360" y="272" text-anchor="middle">HALF-OPEN</text>
+            <text class="sub"   x="360" y="290" text-anchor="middle">probing recovery</text>
+          </g>
+        </svg>
+      </div>
+
+      <!-- Narration ribbon -->
+      <div id="narration" class="narration closed">
+        <div class="narr-meta">
+          <span id="narr-step" class="badge step">Step 0 / 0</span>
+          <span id="narr-state" class="badge state-closed">closed</span>
+          <span id="narr-event" class="badge event" style="display:none"></span>
+        </div>
+        <p id="narr-text" class="narr-text"><strong>Closed.</strong> Traffic flows through. The breaker watches results and trips when the failure rule is met. Click <strong>Next</strong> to start.</p>
+      </div>
+
+      <!-- Step timeline -->
+      <div id="timeline-wrap" class="timeline-wrap">
+        <div class="timeline-head"><span>Scenario timeline</span><span class="pos" id="tl-pos">—</span></div>
+        <div id="timeline" class="timeline"></div>
+      </div>
+
+      <!-- Controls -->
+      <div id="step-controls" class="controls">
+        <button id="btn-prev"><i class="ti ti-chevron-left" aria-hidden="true"></i>Prev</button>
+        <button id="btn-play" class="primary"><i id="play-icon" class="ti ti-player-play" aria-hidden="true"></i><span id="play-label">Play</span></button>
+        <button id="btn-next"><i class="ti ti-chevron-right" aria-hidden="true"></i>Next</button>
+        <button id="btn-restart" class="ghost"><i class="ti ti-refresh" aria-hidden="true"></i>Restart</button>
+        <span class="spacer"></span>
+        <span class="hint"><span class="kbd">←</span><span class="kbd">→</span><span class="kbd">space</span></span>
+      </div>
+
+      <!-- Free play panel (hidden unless free scenario) -->
+      <div id="free-play" class="free-card" style="display:none">
+        <h3>Free play — drive it yourself</h3>
+        <div class="free-buttons">
+          <button id="fp-ok"><i class="ti ti-check" aria-hidden="true" style="color:var(--success)"></i>healthy call</button>
+          <button id="fp-fail"><i class="ti ti-x" aria-hidden="true" style="color:var(--danger)"></i>failing call</button>
+          <button id="fp-skip"><i class="ti ti-forward" aria-hidden="true" style="color:var(--warning)"></i>skip wait</button>
+          <span class="spacer" style="flex:1"></span>
+          <button id="fp-reset" class="ghost"><i class="ti ti-refresh" aria-hidden="true"></i>reset</button>
+        </div>
+      </div>
+
+      <!-- Window cells -->
+      <div class="window-card">
+        <div class="window-head">
+          <span id="window-label">Recent calls · last 5</span>
+          <span id="window-stats" class="read">0 / 0 failed</span>
+        </div>
+        <div id="cells" class="cells"></div>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats">
+        <div class="stat"><div class="label">state</div><div id="s-state" class="value lc" style="color:var(--success)">closed</div></div>
+        <div class="stat"><div class="label">allowed</div><div id="s-allow" class="value" style="color:var(--success)">0</div></div>
+        <div class="stat"><div class="label">rejected</div><div id="s-reject" class="value" style="color:var(--danger)">0</div></div>
+        <div class="stat"><div class="label">trips</div><div id="s-trip" class="value" style="color:var(--warning)">0</div></div>
+      </div>
+
+      <!-- Log -->
+      <div class="log-card">
+        <div class="log-head"><span>Event log</span><span id="cfg-line" style="text-transform:none;letter-spacing:0;color:var(--subtle)">trip ≥ 3 fails of 5 · trials = 3 · cooldown = 5s</span></div>
+        <div id="log" class="log"></div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        // ── Config ───────────────────────────────────────────────────
+        var CFG = { win: 5, threshold: 3, trials: 3, cooldownSec: 5 };
+
+        // ── State ────────────────────────────────────────────────────
+        var S = {
+          state: 'CLOSED',         // CLOSED | OPEN | HALF
+          window: [],              // booleans, last N call results
+          trialResults: [],        // booleans, results in HALF
+          allow: 0, reject: 0, trip: 0,
+          scenario: 'first-trip',
+          stepIdx: 0,              // current step in scripted scenarios
+          playing: false,
+          highlight: null,         // edge id to flash
+          eventTag: null,          // badge to show: { kind, text }
+          popLast: false,
+          lastNarr: null,
+        };
+
+        // ── Scripted scenarios ───────────────────────────────────────
+        function buildScenarios() {
+          var FIRST_TRIP = [
+            { narr: '<strong>Closed.</strong> Traffic flows through. The breaker watches results and trips when the failure rule is met.',
+              ev: null, do: function () {} },
+            { narr: 'A <strong>healthy call</strong> goes through. The window starts filling.',
+              ev: { kind: '', text: 'call ok' }, do: function () { recordCall(true); } },
+            { narr: 'Another <strong>healthy call</strong>. No failures yet — the bar stays green.',
+              ev: { kind: '', text: 'call ok' }, do: function () { recordCall(true); } },
+            { narr: 'A <strong>failing call</strong>. 1 of 3 failed — under threshold. Window: <code>OK OK FAIL</code>.',
+              ev: { kind: '', text: 'call fail' }, do: function () { recordCall(false); } },
+            { narr: 'Another <strong>failing call</strong>. 2 of 4 failed — but the window must hold ≥ 5 samples before it can trip.',
+              ev: { kind: '', text: 'call fail' }, do: function () { recordCall(false); } },
+            { narr: 'Third <strong>failing call</strong>. 3 of 5 failed = 60% ≥ 50%. <strong>Trip rule fires.</strong>',
+              ev: { kind: 'trip', text: 'Closed → Open' }, hl: 'edge-trip',
+              do: function () { recordCall(false); doTrip(); } },
+            { narr: '<strong>Open.</strong> Every new call is rejected immediately — failing fast so the downstream gets a break.',
+              ev: null, do: function () {} },
+            { narr: 'A call arrives — it is <strong>rejected instantly</strong>. The downstream is never contacted.',
+              ev: { kind: 'trip', text: 'short-circuit' }, do: function () { recordReject(); } },
+            { narr: 'Another rejected call. The reject counter grows; allowed stays the same.',
+              ev: { kind: 'trip', text: 'short-circuit' }, do: function () { recordReject(); } },
+            { narr: 'The cooldown elapses. Time to peek. <strong>Open → Half-Open.</strong>',
+              ev: { kind: 'cool', text: 'Open → Half-Open' }, hl: 'edge-cool',
+              do: function () { S.state = 'HALF'; S.trialResults = []; S.window = []; } },
+          ];
+          var RECOVERY_OK = [
+            { narr: '<strong>Open.</strong> The breaker tripped earlier; the cooldown is winding down.',
+              ev: null,
+              do: function () { S.state = 'OPEN'; S.window = [false, false, false, false, false]; S.trialResults = []; S.trip = 1; } },
+            { narr: 'Cooldown done. <strong>Open → Half-Open.</strong> Trial calls are now allowed.',
+              ev: { kind: 'cool', text: 'Open → Half-Open' }, hl: 'edge-cool',
+              do: function () { S.state = 'HALF'; S.trialResults = []; S.window = []; } },
+            { narr: 'Trial 1 of 3 — <strong>ok</strong>. The downstream answered cleanly.',
+              ev: { kind: '', text: 'trial ok' }, do: function () { recordTrial(true); } },
+            { narr: 'Trial 2 of 3 — <strong>ok</strong>. Still healthy.',
+              ev: { kind: '', text: 'trial ok' }, do: function () { recordTrial(true); } },
+            { narr: 'Trial 3 of 3 — <strong>ok</strong>. All trials passed. <strong>Half-Open → Closed.</strong>',
+              ev: { kind: 'pass', text: 'Half-Open → Closed' }, hl: 'edge-pass',
+              do: function () { recordTrial(true); S.state = 'CLOSED'; S.window = []; S.trialResults = []; } },
+            { narr: '<strong>Closed.</strong> Full traffic resumes. The breaker is again just watching.',
+              ev: null, do: function () {} },
+          ];
+          var RECOVERY_FAIL = [
+            { narr: '<strong>Open.</strong> Same starting position — the cooldown is about to elapse.',
+              ev: null,
+              do: function () { S.state = 'OPEN'; S.window = [false, false, false, false, false]; S.trialResults = []; S.trip = 1; } },
+            { narr: 'Cooldown done. <strong>Open → Half-Open.</strong> Trial calls allowed.',
+              ev: { kind: 'cool', text: 'Open → Half-Open' }, hl: 'edge-cool',
+              do: function () { S.state = 'HALF'; S.trialResults = []; S.window = []; } },
+            { narr: 'Trial 1 of 3 — <strong>ok</strong>. Looks promising.',
+              ev: { kind: '', text: 'trial ok' }, do: function () { recordTrial(true); } },
+            { narr: 'Trial 2 of 3 — <strong>fail</strong>. One bad trial is enough. <strong>Half-Open → Open</strong> and the cooldown restarts.',
+              ev: { kind: 'trip', text: 'Half-Open → Open' }, hl: 'edge-relapse',
+              do: function () { recordTrial(false); doTrip(); S.window = [false, false, false, false, false]; } },
+            { narr: '<strong>Open.</strong> Back to fail-fast. The breaker will probe again after another cooldown.',
+              ev: null, do: function () {} },
+          ];
+          return { 'first-trip': FIRST_TRIP, 'recovery-ok': RECOVERY_OK, 'recovery-fail': RECOVERY_FAIL };
+        }
+        var SCENARIOS = buildScenarios();
+
+        // ── State helpers ────────────────────────────────────────────
+        function recordCall(ok) { S.allow++; S.window.push(ok); if (S.window.length > CFG.win) S.window.shift(); S.popLast = true; }
+        function recordReject() { S.reject++; }
+        function recordTrial(ok) { S.allow++; S.trialResults.push(ok); S.popLast = true; }
+        function doTrip() { S.state = 'OPEN'; S.trip++; }
+
+        // ── Logging ──────────────────────────────────────────────────
+        function log(msg, kind) {
+          var col = kind === 'danger' ? 'var(--danger)' : kind === 'success' ? 'var(--success)' : kind === 'warning' ? 'var(--warning)' : 'var(--subtle)';
+          var el = document.getElementById('log');
+          var t = new Date();
+          var hh = String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0') + ':' + String(t.getSeconds()).padStart(2, '0');
+          var line = document.createElement('div');
+          line.style.color = col;
+          line.innerHTML = '<span class="t">' + hh + '</span>' + msg;
+          el.insertBefore(line, el.firstChild);
+          while (el.children.length > 5) el.removeChild(el.lastChild);
+        }
+
+        // ── Rendering ────────────────────────────────────────────────
+        function classFor(state) { return state === 'CLOSED' ? 'closed' : state === 'OPEN' ? 'open' : 'half'; }
+        function labelFor(state) { return state === 'CLOSED' ? 'closed' : state === 'OPEN' ? 'open' : 'half-open'; }
+        function colorFor(state) { return state === 'CLOSED' ? 'var(--success)' : state === 'OPEN' ? 'var(--danger)' : 'var(--warning)'; }
+
+        function render() {
+          var sc = classFor(S.state);
+
+          // Diagram nodes
+          ['closed', 'open', 'half'].forEach(function (k) {
+            var on = (sc === k);
+            var node = document.getElementById('node-' + k);
+            node.classList.toggle('on', on);
+          });
+          // Diagram edges
+          ['edge-trip', 'edge-cool', 'edge-pass', 'edge-relapse'].forEach(function (id) {
+            var g = document.getElementById(id);
+            var live = id === S.highlight;
+            g.classList.toggle('live', live);
+            // Swap arrow marker color
+            if (live) {
+              var col = id === 'edge-trip' ? 'arr-danger' : id === 'edge-cool' ? 'arr-warning' : id === 'edge-pass' ? 'arr-success' : 'arr-danger';
+              g.querySelector('path').setAttribute('marker-end', 'url(#' + col + ')');
+            } else {
+              g.querySelector('path').setAttribute('marker-end', 'url(#arr)');
+            }
+          });
+
+          // Narration ribbon
+          var narr = document.getElementById('narration');
+          narr.className = 'narration ' + sc;
+          var def = {
+            CLOSED: '<strong>Closed.</strong> Traffic flows through. The breaker watches results and trips when the failure rule is met.',
+            OPEN: '<strong>Open.</strong> Every call is rejected instantly so the broken downstream gets a break. The cooldown is ticking.',
+            HALF: '<strong>Half-Open.</strong> A small number of trial calls are allowed through. Their results decide: pass → Closed, fail → Open again.'
+          };
+          document.getElementById('narr-text').innerHTML = S.lastNarr || def[S.state];
+
+          // Narration badges
+          var stepBadge = document.getElementById('narr-step');
+          var stateBadge = document.getElementById('narr-state');
+          var evBadge = document.getElementById('narr-event');
+          if (S.scenario === 'free') {
+            stepBadge.textContent = 'Free play';
+          } else {
+            var script = SCENARIOS[S.scenario];
+            stepBadge.textContent = 'Step ' + S.stepIdx + ' / ' + (script.length - 1);
+          }
+          stateBadge.className = 'badge state-' + sc;
+          stateBadge.textContent = labelFor(S.state);
+          if (S.eventTag) {
+            evBadge.style.display = '';
+            evBadge.className = 'badge event' + (S.eventTag.kind ? (' ' + S.eventTag.kind) : '');
+            evBadge.textContent = S.eventTag.text;
+          } else {
+            evBadge.style.display = 'none';
+          }
+
+          // Timeline
+          var tlWrap = document.getElementById('timeline-wrap');
+          var tl = document.getElementById('timeline');
+          var tlPos = document.getElementById('tl-pos');
+          if (S.scenario === 'free') {
+            tlWrap.style.display = 'none';
+          } else {
+            tlWrap.style.display = '';
+            var script = SCENARIOS[S.scenario];
+            tl.innerHTML = '';
+            for (var i = 0; i < script.length; i++) {
+              var d = document.createElement('div');
+              d.className = 'tl-dot' + (i < S.stepIdx ? ' done' : '') + (i === S.stepIdx ? ' now' : '');
+              (function (idx) { d.onclick = function () { applyStep(idx); }; })(i);
+              tl.appendChild(d);
+            }
+            tlPos.textContent = (S.stepIdx + 1) + ' of ' + script.length;
+          }
+
+          // Window cells
+          var inHalf = S.state === 'HALF';
+          var arr = inHalf ? S.trialResults : S.window;
+          var cap = inHalf ? CFG.trials : CFG.win;
+          var winLabel = document.getElementById('window-label');
+          var winStats = document.getElementById('window-stats');
+          winLabel.textContent = inHalf ? ('Trial calls · ' + CFG.trials + ' allowed') : ('Recent calls · last ' + CFG.win);
+          var fails = arr.filter(function (x) { return !x; }).length;
+          winStats.textContent = fails + ' / ' + arr.length + (inHalf ? ' trials failed' : ' failed');
+
+          var cont = document.getElementById('cells');
+          cont.innerHTML = '';
+          for (var i = 0; i < cap; i++) {
+            var c = document.createElement('div');
+            c.className = 'cell';
+            var v = arr[i];
+            if (v === true)  { c.className = 'cell ok';   c.innerHTML = '<i class="ti ti-check"></i>'; }
+            if (v === false) { c.className = 'cell fail'; c.innerHTML = '<i class="ti ti-x"></i>'; }
+            if (S.popLast && i === arr.length - 1 && v !== undefined) c.classList.add('pop');
+            cont.appendChild(c);
+          }
+          S.popLast = false;
+
+          // Stats
+          var sState = document.getElementById('s-state');
+          sState.textContent = labelFor(S.state);
+          sState.style.color = colorFor(S.state);
+          document.getElementById('s-allow').textContent = S.allow;
+          document.getElementById('s-reject').textContent = S.reject;
+          document.getElementById('s-trip').textContent = S.trip;
+
+          // Controls disabled state
+          if (S.scenario !== 'free') {
+            var script = SCENARIOS[S.scenario];
+            document.getElementById('btn-prev').disabled = S.stepIdx <= 0;
+            document.getElementById('btn-next').disabled = S.stepIdx >= script.length - 1;
+          }
+        }
+
+        // ── Scripted scenario engine ─────────────────────────────────
+        function applyStep(targetIdx) {
+          var script = SCENARIOS[S.scenario];
+          if (!script) return;
+          // Reset and re-apply 0..targetIdx — fully deterministic
+          resetState(true);
+          S.highlight = null; S.eventTag = null;
+          for (var i = 0; i <= targetIdx; i++) {
+            var st = script[i];
+            st.do();
+            if (i === targetIdx) {
+              S.lastNarr = st.narr;
+              S.highlight = st.hl || null;
+              S.eventTag = st.ev || null;
+            }
+          }
+          S.stepIdx = targetIdx;
+          render();
+        }
+        function stepNext() {
+          var script = SCENARIOS[S.scenario];
+          if (S.stepIdx < script.length - 1) {
+            applyStep(S.stepIdx + 1);
+            log(stripTags(script[S.stepIdx].narr), kindForState());
+          } else {
+            setPlaying(false);
+          }
+        }
+        function stepPrev() { if (S.stepIdx > 0) applyStep(S.stepIdx - 1); }
+        function kindForState() { return S.state === 'OPEN' ? 'danger' : S.state === 'HALF' ? 'warning' : 'success'; }
+        function stripTags(html) { return html.replace(/<[^>]+>/g, ''); }
+
+        // ── Auto-play ────────────────────────────────────────────────
+        var playTimer = null;
+        function setPlaying(on) {
+          S.playing = on;
+          document.getElementById('play-label').textContent = on ? 'Pause' : 'Play';
+          document.getElementById('play-icon').className = on ? 'ti ti-player-pause' : 'ti ti-player-play';
+          if (playTimer) { clearInterval(playTimer); playTimer = null; }
+          if (on) playTimer = setInterval(function () {
+            var script = SCENARIOS[S.scenario];
+            if (!script) { setPlaying(false); return; }
+            if (S.stepIdx < script.length - 1) stepNext();
+            else setPlaying(false);
+          }, 1500);
+        }
+
+        // ── Reset / scenario switch ──────────────────────────────────
+        function resetState(keepCounters) {
+          S.state = 'CLOSED';
+          S.window = []; S.trialResults = [];
+          S.highlight = null; S.eventTag = null; S.lastNarr = null;
+          if (!keepCounters) { S.allow = 0; S.reject = 0; S.trip = 0; document.getElementById('log').innerHTML = ''; }
+        }
+        function pickScenario(name) {
+          S.scenario = name;
+          var tabs = document.querySelectorAll('.tab');
+          for (var i = 0; i < tabs.length; i++) tabs[i].classList.toggle('active', tabs[i].dataset.scenario === name);
+          setPlaying(false);
+          var stepCtl = document.getElementById('step-controls');
+          var fp = document.getElementById('free-play');
+          if (name === 'free') {
+            stepCtl.style.display = 'none';
+            fp.style.display = '';
+            resetState();
+            S.lastNarr = '<strong>Free play.</strong> Click <em>healthy call</em> or <em>failing call</em>. Trip the breaker, then use <em>skip wait</em> to jump to Half-Open.';
+            render();
+          } else {
+            stepCtl.style.display = '';
+            fp.style.display = 'none';
+            applyStep(0);
+          }
+        }
+
+        // ── Free play actions ────────────────────────────────────────
+        function fpAct(kind) {
+          if (kind === 'reset') { resetState(); S.lastNarr = '<strong>Free play.</strong> Click <em>healthy call</em> or <em>failing call</em>. Trip the breaker, then use <em>skip wait</em>.'; render(); return; }
+          if (kind === 'skip') {
+            if (S.state === 'OPEN') {
+              S.state = 'HALF'; S.trialResults = []; S.window = [];
+              S.lastNarr = 'Cooldown skipped. <strong>Half-Open</strong> — try a few trial calls.';
+              S.highlight = 'edge-cool'; S.eventTag = { kind: 'cool', text: 'Open → Half-Open' };
+              log('cooldown skipped → HALF-OPEN', 'warning');
+            } else {
+              S.lastNarr = '<strong>Skip wait</strong> only applies while Open.';
+            }
+            render(); return;
+          }
+          var ok = (kind === 'ok');
+          if (S.state === 'OPEN') {
+            S.reject++;
+            S.lastNarr = 'Rejected. Open means <strong>fail fast</strong> — the call never reached the downstream.';
+            S.highlight = null; S.eventTag = { kind: 'trip', text: 'short-circuit' };
+            log('rejected (fail fast)', 'danger');
+            render(); return;
+          }
+          if (S.state === 'HALF') {
+            recordTrial(ok);
+            log('trial · ' + (ok ? 'ok' : 'fail'), ok ? 'success' : 'danger');
+            if (!ok) {
+              doTrip();
+              S.lastNarr = 'A trial <strong>failed</strong>. Half-Open → Open and the cooldown restarts.';
+              S.highlight = 'edge-relapse'; S.eventTag = { kind: 'trip', text: 'Half-Open → Open' };
+            } else if (S.trialResults.length >= CFG.trials) {
+              S.state = 'CLOSED'; S.window = []; S.trialResults = [];
+              S.lastNarr = 'All ' + CFG.trials + ' trials passed. <strong>Half-Open → Closed.</strong> Full traffic resumes.';
+              S.highlight = 'edge-pass'; S.eventTag = { kind: 'pass', text: 'Half-Open → Closed' };
+              log('all trials passed → CLOSED', 'success');
+            } else {
+              S.lastNarr = 'Trial ' + S.trialResults.length + ' of ' + CFG.trials + ' — ok. Need ' + (CFG.trials - S.trialResults.length) + ' more.';
+              S.highlight = null; S.eventTag = { kind: '', text: 'trial ok' };
+            }
+            render(); return;
+          }
+          // CLOSED
+          recordCall(ok);
+          log('call · ' + (ok ? 'ok' : 'fail'), ok ? 'success' : 'danger');
+          var fails = S.window.filter(function (x) { return !x; }).length;
+          if (S.window.length >= CFG.win && fails >= CFG.threshold) {
+            doTrip();
+            S.lastNarr = fails + ' of ' + S.window.length + ' failed. <strong>Tripped.</strong> Closed → Open.';
+            S.highlight = 'edge-trip'; S.eventTag = { kind: 'trip', text: 'Closed → Open' };
+            log('breaker tripped → OPEN', 'danger');
+          } else if (ok) {
+            S.lastNarr = '<strong>Healthy call.</strong> ' + fails + ' of ' + S.window.length + ' failed. Threshold is ' + CFG.threshold + ' of ' + CFG.win + '.';
+            S.highlight = null; S.eventTag = { kind: '', text: 'call ok' };
+          } else {
+            S.lastNarr = '<strong>Failing call.</strong> ' + fails + ' of ' + S.window.length + ' failed. Threshold is ' + CFG.threshold + ' of ' + CFG.win + '.';
+            S.highlight = null; S.eventTag = { kind: '', text: 'call fail' };
+          }
+          render();
+        }
+
+        // ── Wire up ─────────────────────────────────────────────────
+        var tabs = document.querySelectorAll('.tab');
+        for (var i = 0; i < tabs.length; i++) {
+          (function (t) { t.addEventListener('click', function () { pickScenario(t.dataset.scenario); }); })(tabs[i]);
+        }
+        document.getElementById('btn-prev').addEventListener('click', stepPrev);
+        document.getElementById('btn-next').addEventListener('click', stepNext);
+        document.getElementById('btn-play').addEventListener('click', function () { setPlaying(!S.playing); });
+        document.getElementById('btn-restart').addEventListener('click', function () { setPlaying(false); applyStep(0); });
+        document.getElementById('fp-ok').addEventListener('click', function () { fpAct('ok'); });
+        document.getElementById('fp-fail').addEventListener('click', function () { fpAct('fail'); });
+        document.getElementById('fp-skip').addEventListener('click', function () { fpAct('skip'); });
+        document.getElementById('fp-reset').addEventListener('click', function () { fpAct('reset'); });
+
+        document.addEventListener('keydown', function (e) {
+          if (S.scenario === 'free') return;
+          if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); stepNext(); }
+          else if (e.key === 'ArrowLeft') { e.preventDefault(); stepPrev(); }
+        });
+
+        pickScenario('first-trip');
+
+        // ── Iframe height ────────────────────────────────────────────
+        function postHeight() { parent.postMessage({ type: 'prototype:height', height: document.body.scrollHeight }, '*'); }
+        if (typeof ResizeObserver !== 'undefined') new ResizeObserver(postHeight).observe(document.body);
+        postHeight();
+      })();
+    </script>
+  </body>
+</html>

@@ -61,6 +61,13 @@ import { clock as prClock } from "./page-replacement/clock";
 import { nru as prNru } from "./page-replacement/nru";
 import { aging as prAging } from "./page-replacement/aging";
 import { lfu as prLfu } from "./page-replacement/lfu";
+import { circuitBreakerTopic } from "./circuit-breaker/_topic";
+import { stateMachine as cbStateMachine } from "./circuit-breaker/state-machine";
+import { countBased as cbCountBased } from "./circuit-breaker/count-based";
+import { timeBased as cbTimeBased } from "./circuit-breaker/time-based";
+import { slowCallRate as cbSlowCallRate } from "./circuit-breaker/slow-call-rate";
+import { errorPercentage as cbErrorPercentage } from "./circuit-breaker/error-percentage";
+import { adaptive as cbAdaptive } from "./circuit-breaker/adaptive";
 
 // Indexed by `${topicSlug}/${conceptSlug}`
 const CONCEPT_CONTENT: Record<string, ConceptContent> = {
@@ -118,6 +125,12 @@ const CONCEPT_CONTENT: Record<string, ConceptContent> = {
   "page-replacement/nru": prNru,
   "page-replacement/aging": prAging,
   "page-replacement/lfu": prLfu,
+  "circuit-breaker/state-machine": cbStateMachine,
+  "circuit-breaker/count-based": cbCountBased,
+  "circuit-breaker/time-based": cbTimeBased,
+  "circuit-breaker/slow-call-rate": cbSlowCallRate,
+  "circuit-breaker/error-percentage": cbErrorPercentage,
+  "circuit-breaker/adaptive": cbAdaptive,
 };
 
 // Indexed by topic slug
@@ -130,6 +143,7 @@ const TOPIC_CONTENT: Record<string, TopicContent> = {
   "load-balancing": loadBalancingTopic,
   "consistent-hashing": consistentHashingTopic,
   "page-replacement": pageReplacementTopic,
+  "circuit-breaker": circuitBreakerTopic,
 };
 
 export function getConceptContent(

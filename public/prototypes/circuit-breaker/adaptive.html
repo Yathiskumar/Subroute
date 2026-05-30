@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Circuit Breaker — Adaptive</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --danger: #f06868; --warning: #f0b568; --info: #5e9ff6;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --color-background-primary: var(--bg);
+        --color-background-secondary: var(--surface);
+        --color-text-primary: var(--fg);
+        --color-text-secondary: var(--muted);
+        --color-text-tertiary: var(--subtle);
+        --color-border-secondary: var(--border-strong);
+        --color-border-tertiary: var(--border);
+        --color-text-success: var(--success);
+        --color-text-danger: var(--danger);
+        --color-text-warning: var(--warning);
+        --color-background-success: rgba(92,198,111,0.14);
+        --color-background-danger: rgba(240,104,104,0.14);
+        --color-background-warning: rgba(240,181,104,0.14);
+        --color-border-success: rgba(92,198,111,0.5);
+        --color-border-danger: rgba(240,104,104,0.5);
+        --color-border-warning: rgba(240,181,104,0.5);
+        --border-radius-lg: 12px; --border-radius-md: 8px;
+        --font-mono: var(--mono); --font-sans: var(--sans);
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body { padding: 16px 18px 18px; background-image: linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px); background-size: 40px 40px; }
+      .container { max-width: 760px; margin: 0 auto; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; padding: 9px 12px; transition: filter 150ms, transform 100ms, background 150ms, border-color 150ms; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      input[type=range] { accent-color: var(--accent); width: 100%; }
+      input[type=checkbox] { accent-color: var(--accent); }
+
+      .pill { font-family: var(--font-mono); font-size: 12px; padding: 5px 10px; border-radius: var(--border-radius-md); border: 1px solid var(--border); color: var(--muted); }
+      .field { display: flex; align-items: center; gap: 10px; }
+      .field label { font-size: 13px; color: var(--muted); min-width: 130px; }
+      .field output { font-family: var(--font-mono); font-size: 12px; font-weight: 500; min-width: 52px; text-align: right; color: var(--fg); }
+      .state-badge { font-family: var(--font-mono); font-size: 13px; font-weight: 500; padding: 7px 14px; border-radius: var(--border-radius-md); border: 1px solid var(--border); display: inline-flex; align-items: center; gap: 8px; }
+      .state-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+      .stat-card { background: var(--surface); border: 1px solid var(--border); padding: .7rem .8rem; border-radius: var(--border-radius-md); }
+      .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+      .stat-value { font-size: 22px; font-weight: 600; font-family: var(--font-mono); margin-top: 2px; }
+      .alv { flex: 1; text-align: center; font-family: var(--font-mono); font-size: 13px; padding: 10px 0; border-radius: var(--border-radius-md); border: 1px solid var(--border); color: var(--subtle); transition: all .2s ease; background: var(--surface); }
+      .acell { width: 28px; height: 28px; border-radius: var(--border-radius-md); border: 1px dashed var(--border-strong); display: flex; align-items: center; justify-content: center; font-size: 14px; color: var(--subtle); flex: 0 0 auto; }
+      .control-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--border-radius-lg); padding: 1rem 1.1rem; margin-bottom: 1.25rem; }
+      .log { font-family: var(--font-mono); font-size: 12px; line-height: 1.85; color: var(--subtle); min-height: 80px; max-height: 140px; overflow: hidden; }
+      .log .time { color: var(--subtle); margin-right: 8px; }
+      .kbd { font-family: var(--font-mono); font-size: 11px; padding: 1px 5px; border-radius: 4px; background: rgba(255,255,255,.08); color: var(--muted); }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2 class="sr-only">Adaptive circuit breaker with exponential backoff cooldowns and a gradual traffic-ramp recovery.</h2>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
+        <span id="a-state" class="state-badge" style="background:var(--color-background-success);color:var(--success);border-color:var(--color-border-success);"><span class="dot"></span><span id="a-state-text">closed</span></span>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span class="pill" id="ap-closed">closed</span>
+          <i class="ti ti-arrow-right" style="color:var(--subtle)" aria-hidden="true"></i>
+          <span class="pill" id="ap-open">open</span>
+          <i class="ti ti-arrow-right" style="color:var(--subtle)" aria-hidden="true"></i>
+          <span class="pill" id="ap-rec">recovering</span>
+        </div>
+      </div>
+
+      <p id="a-status" style="font-size:14px;color:var(--muted);margin:0 0 1.25rem;line-height:1.6;">Requests flow through. On failure it backs off harder each time, and recovers by easing traffic back gradually.</p>
+
+      <div style="margin-bottom:8px;"><span id="a-cells-label" style="font-size:13px;color:var(--muted);">Recent calls · last 12</span></div>
+      <div id="a-cells" style="display:flex;flex-wrap:wrap;gap:6px;min-height:28px;margin-bottom:18px;"></div>
+
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px;">
+        <span style="font-size:13px;color:var(--muted);">Recovery ramp · share of traffic let through</span>
+        <span id="a-admit" style="font-family:var(--font-mono);font-size:13px;font-weight:500;color:var(--fg);">100% · closed</span>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:18px;">
+        <div class="alv" id="a-lv0">10%</div>
+        <div class="alv" id="a-lv1">25%</div>
+        <div class="alv" id="a-lv2">50%</div>
+        <div class="alv" id="a-lv3">100%</div>
+      </div>
+
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px;">
+        <span style="font-size:13px;color:var(--muted);">Adaptive cooldown · grows with each repeat trip</span>
+        <span id="a-cool-read" style="font-family:var(--font-mono);font-size:13px;font-weight:500;color:var(--fg);">3s · streak 0</span>
+      </div>
+      <div style="position:relative;height:10px;border-radius:99px;background:var(--surface);margin-bottom:18px;border:1px solid var(--border);">
+        <div id="a-cool-bar" style="height:100%;width:0%;border-radius:99px;background:var(--warning);transition:width .12s linear;"></div>
+      </div>
+
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px;">
+        <span style="font-size:13px;color:var(--muted);">Error rate · trips the breaker when closed</span>
+        <span id="a-err-read" style="font-family:var(--font-mono);font-size:13px;font-weight:500;color:var(--fg);">0%</span>
+      </div>
+      <div style="position:relative;height:10px;border-radius:99px;background:var(--surface);margin-bottom:6px;border:1px solid var(--border);">
+        <div id="a-err-bar" style="height:100%;width:0%;border-radius:99px;background:var(--success);transition:width .2s ease;"></div>
+        <div id="a-err-mk" style="position:absolute;top:-4px;bottom:-4px;width:2px;left:50%;background:var(--fg);"></div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-bottom:14px;">
+        <span style="font-size:11px;color:var(--subtle);font-family:var(--font-mono);">trips at <span id="a-th-read">50</span>%</span>
+      </div>
+
+      <p id="a-detail" style="font-size:13px;color:var(--subtle);font-family:var(--font-mono);margin:0 0 1.25rem;min-height:18px;"></p>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+        <button id="a-ok"><i class="ti ti-check" style="color:var(--success)" aria-hidden="true"></i>healthy call</button>
+        <button id="a-fail"><i class="ti ti-x" style="color:var(--danger)" aria-hidden="true"></i>failing call</button>
+        <button id="a-reset" style="margin-left:auto;"><i class="ti ti-refresh" aria-hidden="true"></i>reset</button>
+      </div>
+
+      <div class="control-card">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+          <input type="checkbox" id="a-auto" style="width:auto;flex:0 0 auto;" />
+          <label for="a-auto" style="font-size:14px;font-weight:500;cursor:pointer;">Auto traffic — simulate a real client</label>
+        </div>
+        <div class="field">
+          <label for="a-down">Downstream errors</label>
+          <input type="range" id="a-down" min="0" max="100" step="5" value="60" />
+          <output id="a-down-o">60%</output>
+        </div>
+        <p style="font-size:12px;color:var(--subtle);margin:10px 0 0;line-height:1.5;">Manual clicks always go through as a probe. The downstream-errors dial only drives auto traffic.</p>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px 22px;margin-bottom:1.25rem;">
+        <div class="field"><label for="a-size">Window size</label><input type="range" id="a-size" min="4" max="16" step="1" value="12" /><output id="a-size-o">12</output></div>
+        <div class="field"><label for="a-th">Error threshold</label><input type="range" id="a-th" min="10" max="90" step="5" value="50" /><output id="a-th-o">50%</output></div>
+        <div class="field"><label for="a-base">Base cooldown</label><input type="range" id="a-base" min="1" max="8" step="1" value="3" /><output id="a-base-o">3s</output></div>
+        <div class="field"><label for="a-max">Max cooldown</label><input type="range" id="a-max" min="8" max="60" step="2" value="24" /><output id="a-max-o">24s</output></div>
+        <div class="field"><label for="a-probe">Probes per step</label><input type="range" id="a-probe" min="1" max="6" step="1" value="2" /><output id="a-probe-o">2</output></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:1.25rem;">
+        <div class="stat-card"><div class="stat-label">total</div><div id="as-total" class="stat-value">0</div></div>
+        <div class="stat-card"><div class="stat-label">admitted</div><div id="as-allow" class="stat-value" style="color:var(--success)">0</div></div>
+        <div class="stat-card"><div class="stat-label">held back</div><div id="as-reject" class="stat-value" style="color:var(--danger)">0</div></div>
+        <div class="stat-card"><div class="stat-label">trips</div><div id="as-trip" class="stat-value" style="color:var(--danger)">0</div></div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px;">
+        <span style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;">Event log</span>
+        <span style="font-size:11px;color:var(--subtle);font-family:var(--font-mono);"><span class="kbd">space</span> = healthy &middot; <span class="kbd">x</span> = fail &middot; <span class="kbd">r</span> = reset</span>
+      </div>
+      <div id="a-log" class="log"></div>
+    </div>
+
+    <script>
+      (function () {
+        var ADMIT = [10, 25, 50, 100];
+        var S = { state: 'CLOSED', calls: [], openUntil: 0, cooldownMs: 3000, streak: 0, idx: 0, probeOK: 0,
+          allow: 0, reject: 0, admitted: 0, trip: 0, p: { size: 12, th: 50, base: 3, max: 24, probes: 2, down: 60 }, auto: false, lastAuto: 0, csig: '' };
+        var $ = function (id) { return document.getElementById(id); };
+        function errPct() { if (!S.calls.length) return 0; return Math.round(S.calls.filter(function (c) { return !c.ok; }).length / S.calls.length * 100); }
+
+        function doTrip(reopen) {
+          var now = Date.now(), prev = S.cooldownMs; S.streak++;
+          S.cooldownMs = Math.min(S.p.base * 1000 * Math.pow(2, S.streak - 1), S.p.max * 1000);
+          S.state = 'OPEN'; S.openUntil = now + S.cooldownMs; S.trip++; S.idx = 0; S.probeOK = 0;
+          log(reopen ? ('probe failed → re-OPEN · cooldown ' + (prev / 1000) + 's → ' + (S.cooldownMs / 1000) + 's') : ('error rate over threshold → OPEN · cooldown ' + (S.cooldownMs / 1000) + 's'), 'danger');
+        }
+        function doClose() { S.state = 'CLOSED'; S.calls = []; S.streak = 0; S.cooldownMs = S.p.base * 1000; S.idx = 0; S.probeOK = 0; log('fully recovered → CLOSED · backoff reset', 'success'); }
+        function toRecover() { S.state = 'RECOVERING'; S.idx = 0; S.probeOK = 0; log('cooldown elapsed → RECOVERING at ' + ADMIT[0] + '%', 'warning'); }
+
+        function attempt(ok, forced) {
+          var now = Date.now();
+          if (S.state === 'OPEN') { S.reject++; log('short-circuited · fail fast', 'danger'); render(); return; }
+          if (S.state === 'RECOVERING') {
+            if (forced || Math.random() * 100 < ADMIT[S.idx]) {
+              S.admitted++; S.allow++;
+              if (ok) {
+                S.probeOK++;
+                if (S.probeOK >= S.p.probes) {
+                  if (S.idx < ADMIT.length - 1) { S.idx++; S.probeOK = 0; log('healthy → ramp up to ' + ADMIT[S.idx] + '%', 'success'); }
+                  else doClose();
+                } else log('probe ok (' + S.probeOK + '/' + S.p.probes + ' at ' + ADMIT[S.idx] + '%)', 'success');
+              } else doTrip(true);
+            } else { S.reject++; log('held back · only ' + ADMIT[S.idx] + '% admitted', 'muted'); }
+            render(); return;
+          }
+          S.allow++; S.calls.push({ t: now, ok: ok }); if (S.calls.length > S.p.size) S.calls.shift();
+          log('call ' + (ok ? 'ok' : 'failed'), ok ? 'success' : 'danger');
+          if (S.calls.length >= Math.min(5, S.p.size) && errPct() >= S.p.th) doTrip(false);
+          render();
+        }
+
+        function log(msg, kind) {
+          var c = kind === 'danger' ? 'var(--danger)' : kind === 'success' ? 'var(--success)' : kind === 'warning' ? 'var(--warning)' : 'var(--subtle)';
+          var el = $('a-log'); var d = new Date(); var hh = String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') + ':' + String(d.getSeconds()).padStart(2,'0');
+          el.innerHTML = '<div style="color:' + c + '"><span class="time">' + hh + '</span>' + msg + '</div>' + el.innerHTML;
+          while (el.children.length > 7) el.removeChild(el.children[el.children.length - 1]);
+        }
+
+        function okCell() { return '<div class="acell" style="background:var(--color-background-success);border:1px solid var(--color-border-success)"><i class="ti ti-check" style="color:var(--success)"></i></div>'; }
+        function badCell() { return '<div class="acell" style="background:var(--color-background-danger);border:1px solid var(--color-border-danger)"><i class="ti ti-x" style="color:var(--danger)"></i></div>'; }
+        function emptyCell() { return '<div class="acell"></div>'; }
+
+        function renderCells() {
+          var label, sig, html = '';
+          if (S.state === 'RECOVERING') {
+            label = 'Probes at ' + ADMIT[S.idx] + '% · ' + S.p.probes + ' healthy in a row ramps up';
+            sig = 'R' + S.idx + '|' + S.probeOK + '|' + S.p.probes;
+            for (var k = 0; k < S.p.probes; k++) html += (k < S.probeOK ? okCell() : emptyCell());
+          } else {
+            label = (S.state === 'OPEN' ? 'Calls that tripped it · last ' : 'Recent calls · last ') + S.p.size;
+            sig = S.state + '|' + S.calls.map(function (c) { return c.ok ? '1' : '0'; }).join('');
+            for (var i = 0; i < S.p.size; i++) { var v = S.calls[i]; html += (v === undefined ? emptyCell() : (v.ok ? okCell() : badCell())); }
+          }
+          $('a-cells-label').textContent = label;
+          if (sig !== S.csig) { S.csig = sig; $('a-cells').innerHTML = html; }
+        }
+
+        function render() {
+          var now = Date.now();
+          var stateClass = S.state === 'CLOSED' ? { t: 'closed', bg: '--color-background-success', fg: '--success', bd: '--color-border-success' }
+                          : S.state === 'OPEN' ? { t: 'open', bg: '--color-background-danger', fg: '--danger', bd: '--color-border-danger' }
+                          : { t: 'recovering', bg: '--color-background-warning', fg: '--warning', bd: '--color-border-warning' };
+          var b = $('a-state'); $('a-state-text').textContent = stateClass.t; b.style.background = 'var(' + stateClass.bg + ')'; b.style.color = 'var(' + stateClass.fg + ')'; b.style.borderColor = 'var(' + stateClass.bd + ')';
+          [['ap-closed', 'CLOSED'], ['ap-open', 'OPEN'], ['ap-rec', 'RECOVERING']].forEach(function (p) {
+            var el = $(p[0]), on = S.state === p[1];
+            el.style.background = on ? 'var(' + stateClass.bg + ')' : 'transparent';
+            el.style.color = on ? 'var(' + stateClass.fg + ')' : 'var(--subtle)';
+            el.style.borderColor = on ? 'var(' + stateClass.bd + ')' : 'var(--border)';
+            el.style.fontWeight = on ? '500' : '400';
+          });
+          $('a-status').textContent = { CLOSED: 'Requests flow through. It trips at ' + S.p.th + '% errors — and each repeat failure makes the next cooldown longer.',
+            OPEN: 'Tripped. All calls are short-circuited. The more it has re-tripped, the longer this wait.',
+            RECOVERING: 'Easing back in. Click healthy call to send probes; each healthy batch widens the gap, one failure slams it shut.' }[S.state];
+
+          renderCells();
+
+          for (var i = 0; i < 4; i++) {
+            var c = $('a-lv' + i), fill, fg, bd, fw = '400';
+            if (S.state === 'CLOSED') { fill = '--color-background-success'; fg = '--success'; bd = '--color-border-success'; }
+            else if (S.state === 'OPEN') { fill = 'transparent'; fg = '--subtle'; bd = '--border'; }
+            else {
+              if (i < S.idx) { fill = '--color-background-warning'; fg = '--warning'; bd = '--color-border-warning'; }
+              else if (i === S.idx) { fill = '--color-background-warning'; fg = '--warning'; bd = '--warning'; fw = '600'; }
+              else { fill = 'transparent'; fg = '--subtle'; bd = '--border'; }
+            }
+            c.style.background = fill === 'transparent' ? 'transparent' : 'var(' + fill + ')';
+            c.style.color = 'var(' + fg + ')';
+            c.style.borderColor = 'var(' + bd + ')';
+            c.style.fontWeight = fw;
+          }
+          $('a-admit').textContent = S.state === 'CLOSED' ? '100% · closed' : S.state === 'OPEN' ? '0% · open' : ('admitting ' + ADMIT[S.idx] + '% of traffic');
+
+          $('a-cool-read').textContent = (S.cooldownMs / 1000) + 's · streak ' + S.streak;
+          $('a-cool-bar').style.width = (S.state === 'OPEN' ? Math.max(0, (S.openUntil - now) / S.cooldownMs * 100) : 0) + '%';
+
+          var ep = errPct(), hot = ep >= S.p.th;
+          $('a-err-read').textContent = ep + '%'; $('a-err-bar').style.width = ep + '%';
+          $('a-err-bar').style.background = 'var(' + (hot ? '--danger' : '--success') + ')';
+          $('a-err-mk').style.left = S.p.th + '%'; $('a-th-read').textContent = S.p.th;
+
+          var det;
+          if (S.state === 'OPEN') det = '⏳ easing traffic back in ' + Math.max(0, (S.openUntil - now) / 1000).toFixed(1) + 's';
+          else if (S.state === 'RECOVERING') det = 'probe ' + S.probeOK + ' / ' + S.p.probes + ' healthy at ' + ADMIT[S.idx] + '% — one failure re-opens';
+          else det = S.calls.length < Math.min(5, S.p.size) ? ('warming up · ' + S.calls.length + ' calls') : ('armed — error rate ' + (hot ? 'over' : 'under') + ' ' + S.p.th + '%');
+          $('a-detail').textContent = det;
+
+          $('as-total').textContent = S.allow + S.reject; $('as-allow').textContent = S.admitted; $('as-reject').textContent = S.reject; $('as-trip').textContent = S.trip;
+        }
+
+        $('a-ok').onclick = function () { attempt(true, true); };
+        $('a-fail').onclick = function () { attempt(false, true); };
+        $('a-reset').onclick = function () { S.state = 'CLOSED'; S.calls = []; S.openUntil = 0; S.cooldownMs = S.p.base * 1000; S.streak = 0; S.idx = 0; S.probeOK = 0; S.allow = 0; S.reject = 0; S.admitted = 0; S.trip = 0; S.auto = false; S.csig = ''; $('a-auto').checked = false; $('a-log').innerHTML = ''; render(); };
+        $('a-auto').onchange = function (ev) { S.auto = ev.target.checked; S.lastAuto = 0; };
+        function bind(id, key, suf) { $(id).oninput = function (ev) { S.p[key] = +ev.target.value; $(id + '-o').textContent = ev.target.value + (suf || ''); if (key === 'base' && S.state === 'CLOSED') S.cooldownMs = S.p.base * 1000; if (key === 'size') while (S.calls.length > S.p.size) S.calls.shift(); S.csig = ''; render(); }; }
+        bind('a-down', 'down', '%'); bind('a-size', 'size', ''); bind('a-th', 'th', '%'); bind('a-base', 'base', 's'); bind('a-max', 'max', 's'); bind('a-probe', 'probes', '');
+
+        document.addEventListener('keydown', function (e) {
+          if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON')) return;
+          if (e.key === ' ') { e.preventDefault(); attempt(true, true); }
+          else if (e.key === 'x' || e.key === 'X') { e.preventDefault(); attempt(false, true); }
+          else if (e.key === 'r' || e.key === 'R') { e.preventDefault(); $('a-reset').click(); }
+        });
+
+        setInterval(function () {
+          var now = Date.now();
+          if (S.state === 'OPEN' && now >= S.openUntil) toRecover();
+          if (S.auto && now - S.lastAuto >= 300) { S.lastAuto = now; attempt(Math.random() * 100 >= S.p.down, false); }
+          else render();
+        }, 120);
+
+        render();
+
+        function postHeight() { parent.postMessage({ type: 'prototype:height', height: document.body.scrollHeight }, '*'); }
+        if (typeof ResizeObserver !== 'undefined') new ResizeObserver(postHeight).observe(document.body);
+        postHeight();
+      })();
+    </script>
+  </body>
+</html>
