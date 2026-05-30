@@ -1,0 +1,46 @@
+<svg width="1280" height="320" viewBox="0 0 1280 320" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Subroute">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1280" y2="320" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0B0B0F"/>
+      <stop offset="1" stop-color="#16161D"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#FB923C"/>
+      <stop offset="1" stop-color="#EA580C"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop stop-color="#EA580C" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#EA580C" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="dots" width="32" height="32" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="1.5" fill="#FFFFFF" fill-opacity="0.06"/>
+    </pattern>
+  </defs>
+
+  <rect width="1280" height="320" rx="16" fill="url(#bg)"/>
+  <rect width="1280" height="320" rx="16" fill="url(#dots)"/>
+  <circle cx="1050" cy="80" r="320" fill="url(#glow)"/>
+
+  <!-- Node graph motif -->
+  <g stroke="#EA580C" stroke-opacity="0.5" stroke-width="2">
+    <line x1="980" y1="120" x2="1080" y2="80"/>
+    <line x1="1080" y1="80" x2="1160" y2="150"/>
+    <line x1="980" y1="120" x2="1040" y2="220"/>
+    <line x1="1040" y1="220" x2="1160" y2="150"/>
+    <line x1="1080" y1="80" x2="1040" y2="220"/>
+  </g>
+  <g>
+    <circle cx="980" cy="120" r="10" fill="url(#accent)"/>
+    <circle cx="1080" cy="80" r="14" fill="url(#accent)"/>
+    <circle cx="1160" cy="150" r="10" fill="url(#accent)"/>
+    <circle cx="1040" cy="220" r="12" fill="url(#accent)"/>
+  </g>
+
+  <!-- Wordmark -->
+  <text x="80" y="150" font-family="'Segoe UI', Helvetica, Arial, sans-serif" font-size="84" font-weight="800" fill="#FFFFFF" letter-spacing="-2">Sub<tspan fill="url(#accent)">route</tspan></text>
+  <text x="82" y="200" font-family="'Segoe UI', Helvetica, Arial, sans-serif" font-size="26" font-weight="500" fill="#A1A1AA">Learn by doing — interactive CS &amp; system-design.</text>
+
+  <!-- Kicker -->
+  <rect x="80" y="232" width="240" height="34" rx="17" fill="#EA580C" fill-opacity="0.12" stroke="#EA580C" stroke-opacity="0.4"/>
+  <text x="100" y="254" font-family="'SF Mono', Consolas, monospace" font-size="14" font-weight="600" fill="#FB923C" letter-spacing="2">INTERACTIVE · VISUAL · OPEN</text>
+</svg>

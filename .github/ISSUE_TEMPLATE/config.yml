@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 💬 Questions & Discussions
+    url: https://github.com/Yathiskumar/Subroute/discussions
+    about: Ask questions and discuss ideas with the community.
+  - name: 🌐 Live Demo
+    url: https://subroute-flame.vercel.app
+    about: Try Subroute live before reporting an issue.
