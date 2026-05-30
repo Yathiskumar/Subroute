@@ -25,12 +25,13 @@ export function generateStaticParams() {
   return TOPICS.map((t) => ({ topicSlug: t.slug }));
 }
 
-export function generateMetadata({
+export async function generateMetadata({
   params,
 }: {
-  params: { topicSlug: string };
+  params: Promise<{ topicSlug: string }>;
 }) {
-  const topic = getTopic(params.topicSlug);
+  const { topicSlug } = await params;
+  const topic = getTopic(topicSlug);
   if (!topic) return {};
   return {
     title: topic.title,
@@ -43,12 +44,13 @@ function getIcon(name: string): LucideIcon {
   return Icon ?? Icons.Box;
 }
 
-export default function TopicDetailPage({
+export default async function TopicDetailPage({
   params,
 }: {
-  params: { topicSlug: string };
+  params: Promise<{ topicSlug: string }>;
 }) {
-  const topic = getTopic(params.topicSlug);
+  const { topicSlug } = await params;
+  const topic = getTopic(topicSlug);
   if (!topic) notFound();
 
   const Icon = getIcon(topic.icon);

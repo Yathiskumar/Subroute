@@ -31,12 +31,13 @@ export function generateStaticParams() {
   );
 }
 
-export function generateMetadata({
+export async function generateMetadata({
   params,
 }: {
-  params: { topicSlug: string; conceptSlug: string };
+  params: Promise<{ topicSlug: string; conceptSlug: string }>;
 }) {
-  const data = getConcept(params.topicSlug, params.conceptSlug);
+  const { topicSlug, conceptSlug } = await params;
+  const data = getConcept(topicSlug, conceptSlug);
   if (!data) return {};
   return {
     title: `${data.concept.title} — ${data.topic.title}`,
@@ -54,12 +55,13 @@ const TOC_ITEMS = [
   { id: "quiz", label: "Knowledge check" },
 ];
 
-export default function ConceptDetailPage({
+export default async function ConceptDetailPage({
   params,
 }: {
-  params: { topicSlug: string; conceptSlug: string };
+  params: Promise<{ topicSlug: string; conceptSlug: string }>;
 }) {
-  const data = getConcept(params.topicSlug, params.conceptSlug);
+  const { topicSlug, conceptSlug } = await params;
+  const data = getConcept(topicSlug, conceptSlug);
   if (!data) notFound();
 
   const { topic, concept, prev, next } = data;

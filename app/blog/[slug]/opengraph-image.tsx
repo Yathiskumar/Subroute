@@ -11,12 +11,13 @@ export function generateStaticParams() {
 
 // Branded social card, generated at build time. Colors mirror the dark theme
 // tokens in globals.css (background / foreground / accent).
-export default function OpengraphImage({
+export default async function OpengraphImage({
   params,
 }: {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 }) {
-  const post = getPostBySlug(params.slug);
+  const { slug } = await params;
+  const post = getPostBySlug(slug);
   const title = post?.frontmatter.title ?? "Subroute";
   const readingTime = post?.frontmatter.readingTime;
 
