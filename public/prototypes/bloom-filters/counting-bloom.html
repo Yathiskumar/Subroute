@@ -241,6 +241,11 @@
           var t = (s || '').toLowerCase().trim();
           return [rawHash(t, 7) % M, rawHash(t, 131) % M, rawHash(t, 8191) % M];
         }
+        function esc(s) {
+          return String(s).replace(/[&<>"']/g, function (c) {
+            return c === '&' ? '&amp;' : c === '<' ? '&lt;' : c === '>' ? '&gt;' : c === '"' ? '&quot;' : '&#39;';
+          });
+        }
 
         var bitsEl = document.getElementById('bits');
         var wordRow = document.getElementById('word-row');
@@ -414,7 +419,9 @@
           var hh = String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0') + ':' + String(t.getSeconds()).padStart(2, '0');
           var line = document.createElement('div');
           line.style.color = color || 'var(--subtle)';
-          line.innerHTML = '<span class="t">' + hh + '</span>' + msg;
+          var ts = document.createElement('span'); ts.className = 't'; ts.textContent = hh;
+          line.appendChild(ts);
+          line.appendChild(document.createTextNode(String(msg)));
           logEl.insertBefore(line, logEl.firstChild);
           while (logEl.children.length > 5) logEl.removeChild(logEl.lastChild);
         }
@@ -564,7 +571,11 @@
         }
         function stepPrev() { if (S.stepIdx > 0) applyStep(S.stepIdx - 1); }
         function colorForEvent(k) { return k === 'add' || k === 'del' ? 'var(--info)' : k === 'yes' ? 'var(--warning)' : k === 'no' ? 'var(--danger)' : k === 'warn' ? 'var(--warning)' : 'var(--subtle)'; }
-        function stripTags(html) { return html.replace(/<[^>]+>/g, ''); }
+        function stripTags(html) {
+          var t = document.createElement('template');
+          t.innerHTML = String(html == null ? '' : html);
+          return t.content.textContent || '';
+        }
 
         var playTimer = null;
         function setPlaying(on) {
@@ -610,30 +621,31 @@
             S.lastNarr = '<strong>Type a word first.</strong>';
             render(); return;
           }
+          var ew = esc(w);
           if (kind === 'add') {
             var p = addItem(w);
             var freezeNote = '';
             var anyFrozen = p.some(function (i) { return S.counts[i] === MAX; });
             if (anyFrozen) freezeNote = ' One of those cells just hit the 4-bit cap (15) — further adds to it will be ignored.';
-            S.lastNarr = '<strong>Added <code>' + w + '</code>.</strong> Cells ' + p.join(', ') + ' each went up by 1.' + freezeNote;
+            S.lastNarr = '<strong>Added <code>' + ew + '</code>.</strong> Cells ' + p.join(', ') + ' each went up by 1.' + freezeNote;
             log('add ' + w + ' → cells ' + p.join(','), 'var(--info)');
           } else if (kind === 'remove') {
             var r = removeItem(w);
             if (r.ok) {
-              S.lastNarr = '<strong>Removed <code>' + w + '</code>.</strong> Cells ' + r.p.join(', ') + ' each went down by 1. Shared cells stay &gt; 0.';
+              S.lastNarr = '<strong>Removed <code>' + ew + '</code>.</strong> Cells ' + r.p.join(', ') + ' each went down by 1. Shared cells stay &gt; 0.';
               log('remove ' + w + ' → cells ' + r.p.join(','), 'var(--info)');
             } else {
-              S.lastNarr = '<strong>Cannot remove <code>' + w + '</code>.</strong> At least one of its cells is 0 — it was never added. The filter only removes things it might actually hold.';
+              S.lastNarr = '<strong>Cannot remove <code>' + ew + '</code>.</strong> At least one of its cells is 0 — it was never added. The filter only removes things it might actually hold.';
               log('refuse remove ' + w + ' (not present)', 'var(--warning)');
             }
           } else {
             var r2 = checkItem(w);
             if (r2.allSet) {
-              S.lastNarr = '<strong>"' + w + '" is maybe-yes.</strong> All cells &gt; 0. ' + (r2.known ? 'You really did add it.' : 'False positive — never added, but other items keep these cells &gt; 0.');
+              S.lastNarr = '<strong>"' + ew + '" is maybe-yes.</strong> All cells &gt; 0. ' + (r2.known ? 'You really did add it.' : 'False positive — never added, but other items keep these cells &gt; 0.');
               log('check ' + w + ' → maybe-yes' + (r2.known ? '' : ' (false positive)'), 'var(--warning)');
             } else {
               var zero = r2.p.filter(function (i) { return S.counts[i] === 0; });
-              S.lastNarr = '<strong>"' + w + '" is definitely-no.</strong> Cell ' + zero.join(', ') + ' is 0.';
+              S.lastNarr = '<strong>"' + ew + '" is definitely-no.</strong> Cell ' + zero.join(', ') + ' is 0.';
               log('check ' + w + ' → definitely-no', 'var(--danger)');
             }
           }

@@ -261,6 +261,11 @@
         }
         function indexA(w) { return rawHash((w || '').toLowerCase().trim(), 7) % NB; }
         function altIndex(i, fp) { return (i ^ (rawHash(fp, 7) % NB)) % NB; }
+        function esc(s) {
+          return String(s).replace(/[&<>"']/g, function (c) {
+            return c === '&' ? '&amp;' : c === '<' ? '&lt;' : c === '>' ? '&gt;' : c === '"' ? '&quot;' : '&#39;';
+          });
+        }
 
         var bucketsEl = document.getElementById('buckets');
         var wordRow = document.getElementById('word-row');
@@ -514,7 +519,9 @@
           var hh = String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0') + ':' + String(t.getSeconds()).padStart(2, '0');
           var line = document.createElement('div');
           line.style.color = color || 'var(--subtle)';
-          line.innerHTML = '<span class="t">' + hh + '</span>' + msg;
+          var ts = document.createElement('span'); ts.className = 't'; ts.textContent = hh;
+          line.appendChild(ts);
+          line.appendChild(document.createTextNode(String(msg)));
           logEl.insertBefore(line, logEl.firstChild);
           while (logEl.children.length > 5) logEl.removeChild(logEl.lastChild);
         }
@@ -736,7 +743,11 @@
         }
         function stepPrev() { if (S.stepIdx > 0) applyStep(S.stepIdx - 1); }
         function colorForEvent(k) { return k === 'place' || k === 'del' ? 'var(--info)' : k === 'yes' ? 'var(--warning)' : k === 'no' ? 'var(--danger)' : k === 'kick' ? 'var(--danger)' : k === 'warn' ? 'var(--warning)' : 'var(--subtle)'; }
-        function stripTags(html) { return (html || '').replace(/<[^>]+>/g, ''); }
+        function stripTags(html) {
+          var t = document.createElement('template');
+          t.innerHTML = String(html == null ? '' : html);
+          return t.content.textContent || '';
+        }
 
         var playTimer = null;
         function setPlaying(on) {
@@ -782,39 +793,40 @@
             S.lastNarr = '<strong>Type a word first.</strong>';
             render(); return;
           }
+          var ew = esc(w);
           if (kind === 'add') {
             var r = addItem(w);
             if (r.alreadyIn) {
-              S.lastNarr = '<code>' + w + '</code> is already in the filter.';
+              S.lastNarr = '<code>' + ew + '</code> is already in the filter.';
               log('add ' + w + ' (already in)', 'var(--subtle)');
             } else if (r.ok) {
               if (r.kicks === 0) {
-                S.lastNarr = '<strong>Added <code>' + w + '</code>.</strong> Fingerprint <strong>' + S.curFp + '</strong> went into bucket <strong>' + (r.into === S.candI1 ? S.candI1 + '</strong> (i₁), no kicks' : S.candI2 + '</strong> (i₂, backup), no kicks') + '.';
+                S.lastNarr = '<strong>Added <code>' + ew + '</code>.</strong> Fingerprint <strong>' + S.curFp + '</strong> went into bucket <strong>' + (r.into === S.candI1 ? S.candI1 + '</strong> (i₁), no kicks' : S.candI2 + '</strong> (i₂, backup), no kicks') + '.';
                 log('add ' + w + ' → bucket ' + r.into + ' (0 kicks)', 'var(--info)');
               } else {
-                S.lastNarr = '<strong>Added <code>' + w + '</code> after ' + r.kicks + ' kick' + (r.kicks > 1 ? 's' : '') + '.</strong> Both candidate buckets were full, so existing fingerprints were bumped to their alternate buckets to free a slot.';
+                S.lastNarr = '<strong>Added <code>' + ew + '</code> after ' + r.kicks + ' kick' + (r.kicks > 1 ? 's' : '') + '.</strong> Both candidate buckets were full, so existing fingerprints were bumped to their alternate buckets to free a slot.';
                 log('add ' + w + ' (' + r.kicks + ' kicks)', 'var(--danger)');
               }
             } else {
-              S.lastNarr = '<strong>Filter too full.</strong> The kick chain hit ' + MAXKICK + ' moves without finding a free slot for <code>' + w + '</code>. In real systems this is the cue to resize. Remove some items or Reset.';
+              S.lastNarr = '<strong>Filter too full.</strong> The kick chain hit ' + MAXKICK + ' moves without finding a free slot for <code>' + ew + '</code>. In real systems this is the cue to resize. Remove some items or Reset.';
               log('add ' + w + ' FAILED (too full)', 'var(--danger)');
             }
           } else if (kind === 'remove') {
             var r2 = removeItem(w);
             if (r2.ok) {
-              S.lastNarr = '<strong>Removed <code>' + w + '</code>.</strong> Found fingerprint <strong>' + S.curFp + '</strong> in bucket <strong>' + r2.from + '</strong> and deleted it. Clean removal — no shared counters to worry about.';
+              S.lastNarr = '<strong>Removed <code>' + ew + '</code>.</strong> Found fingerprint <strong>' + S.curFp + '</strong> in bucket <strong>' + r2.from + '</strong> and deleted it. Clean removal — no shared counters to worry about.';
               log('remove ' + w + ' (bucket ' + r2.from + ')', 'var(--info)');
             } else {
-              S.lastNarr = '<strong>Cannot remove <code>' + w + '</code>.</strong> Its fingerprint isn’t in bucket ' + S.candI1 + ' or ' + S.candI2 + ' — it was never added.';
+              S.lastNarr = '<strong>Cannot remove <code>' + ew + '</code>.</strong> Its fingerprint isn’t in bucket ' + S.candI1 + ' or ' + S.candI2 + ' — it was never added.';
               log('refuse remove ' + w + ' (not present)', 'var(--warning)');
             }
           } else {
             var r3 = checkItem(w);
             if (r3.ok) {
-              S.lastNarr = '<strong>"' + w + '" is maybe-yes.</strong> Fingerprint <strong>' + S.curFp + '</strong> found in bucket <strong>' + r3.idx + '</strong>. ' + (r3.known ? 'You really did add it.' : 'False positive — never added, but another item has the same fingerprint in one of these two buckets.');
+              S.lastNarr = '<strong>"' + ew + '" is maybe-yes.</strong> Fingerprint <strong>' + S.curFp + '</strong> found in bucket <strong>' + r3.idx + '</strong>. ' + (r3.known ? 'You really did add it.' : 'False positive — never added, but another item has the same fingerprint in one of these two buckets.');
               log('check ' + w + ' → maybe-yes' + (r3.known ? '' : ' (false positive)'), 'var(--warning)');
             } else {
-              S.lastNarr = '<strong>"' + w + '" is definitely-no.</strong> Fingerprint <strong>' + S.curFp + '</strong> is in neither bucket <strong>' + S.candI1 + '</strong> nor <strong>' + S.candI2 + '</strong>.';
+              S.lastNarr = '<strong>"' + ew + '" is definitely-no.</strong> Fingerprint <strong>' + S.curFp + '</strong> is in neither bucket <strong>' + S.candI1 + '</strong> nor <strong>' + S.candI2 + '</strong>.';
               log('check ' + w + ' → definitely-no', 'var(--danger)');
             }
           }

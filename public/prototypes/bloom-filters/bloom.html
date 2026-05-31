@@ -277,6 +277,12 @@
           var t = (s || '').toLowerCase().trim();
           return [rawHash(t, 7) % M, rawHash(t, 131) % M, rawHash(t, 8191) % M];
         }
+        // HTML-escape user-controlled strings before interpolation into innerHTML.
+        function esc(s) {
+          return String(s).replace(/[&<>"']/g, function (c) {
+            return c === '&' ? '&amp;' : c === '<' ? '&lt;' : c === '>' ? '&gt;' : c === '"' ? '&quot;' : '&#39;';
+          });
+        }
 
         // ── DOM refs ────────────────────────────────────────────────────
         var bitsEl = document.getElementById('bits');
@@ -442,7 +448,9 @@
           var hh = String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0') + ':' + String(t.getSeconds()).padStart(2, '0');
           var line = document.createElement('div');
           line.style.color = color || 'var(--subtle)';
-          line.innerHTML = '<span class="t">' + hh + '</span>' + msg;
+          var ts = document.createElement('span'); ts.className = 't'; ts.textContent = hh;
+          line.appendChild(ts);
+          line.appendChild(document.createTextNode(String(msg)));
           logEl.insertBefore(line, logEl.firstChild);
           while (logEl.children.length > 5) logEl.removeChild(logEl.lastChild);
         }
@@ -562,7 +570,13 @@
         }
         function stepPrev() { if (S.stepIdx > 0) applyStep(S.stepIdx - 1); }
         function colorForEvent(k) { return k === 'add' ? 'var(--info)' : k === 'yes' ? 'var(--warning)' : k === 'no' ? 'var(--danger)' : 'var(--subtle)'; }
-        function stripTags(html) { return html.replace(/<[^>]+>/g, ''); }
+        function stripTags(html) {
+          // Use an inert <template> to parse HTML into a text representation
+          // without executing scripts or attaching to the document.
+          var t = document.createElement('template');
+          t.innerHTML = String(html == null ? '' : html);
+          return t.content.textContent || '';
+        }
 
         var playTimer = null;
         function setPlaying(on) {
@@ -609,19 +623,20 @@
             S.lastNarr = '<strong>Type a word first.</strong> Then press Add or Check.';
             render(); return;
           }
+          var ew = esc(w);
           if (kind === 'add') {
             var p = addWord(w);
-            S.lastNarr = '<strong>Added <code>' + w + '</code>.</strong> Bits ' + p.join(', ') + ' are now set. If a bit was already lit, it stays lit — no record of "who set it".';
+            S.lastNarr = '<strong>Added <code>' + ew + '</code>.</strong> Bits ' + p.join(', ') + ' are now set. If a bit was already lit, it stays lit — no record of "who set it".';
             log('add ' + w + ' → bits ' + p.join(','), 'var(--info)');
           } else {
             var r = checkWord(w);
             if (r.allSet) {
-              S.lastNarr = '<strong>"' + w + '" is maybe-yes.</strong> All three of its bits (' + r.p.join(', ') + ') are set. '
-                + (r.known ? 'You really did add it earlier.' : '<strong>False positive</strong> — you never added <code>' + w + '</code>, but other items happened to light all three of its bits.');
+              S.lastNarr = '<strong>"' + ew + '" is maybe-yes.</strong> All three of its bits (' + r.p.join(', ') + ') are set. '
+                + (r.known ? 'You really did add it earlier.' : '<strong>False positive</strong> — you never added <code>' + ew + '</code>, but other items happened to light all three of its bits.');
               log('check ' + w + ' → maybe-yes' + (r.known ? '' : ' (false positive)'), 'var(--warning)');
             } else {
               var zero = r.p.filter(function (i) { return S.bits[i] === 0; });
-              S.lastNarr = '<strong>"' + w + '" is definitely-no.</strong> Bit ' + zero.join(', ') + ' is still 0, so no one could have added <code>' + w + '</code>. This answer is always 100% correct.';
+              S.lastNarr = '<strong>"' + ew + '" is definitely-no.</strong> Bit ' + zero.join(', ') + ' is still 0, so no one could have added <code>' + ew + '</code>. This answer is always 100% correct.';
               log('check ' + w + ' → definitely-no', 'var(--danger)');
             }
           }
