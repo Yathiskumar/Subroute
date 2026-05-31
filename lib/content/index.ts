@@ -68,6 +68,10 @@ import { timeBased as cbTimeBased } from "./circuit-breaker/time-based";
 import { slowCallRate as cbSlowCallRate } from "./circuit-breaker/slow-call-rate";
 import { errorPercentage as cbErrorPercentage } from "./circuit-breaker/error-percentage";
 import { adaptive as cbAdaptive } from "./circuit-breaker/adaptive";
+import { bloomFiltersTopic } from "./bloom-filters/_topic";
+import { bloom } from "./bloom-filters/bloom";
+import { countingBloom } from "./bloom-filters/counting-bloom";
+import { cuckoo } from "./bloom-filters/cuckoo";
 
 // Indexed by `${topicSlug}/${conceptSlug}`
 const CONCEPT_CONTENT: Record<string, ConceptContent> = {
@@ -131,6 +135,9 @@ const CONCEPT_CONTENT: Record<string, ConceptContent> = {
   "circuit-breaker/slow-call-rate": cbSlowCallRate,
   "circuit-breaker/error-percentage": cbErrorPercentage,
   "circuit-breaker/adaptive": cbAdaptive,
+  "bloom-filters/bloom": bloom,
+  "bloom-filters/counting-bloom": countingBloom,
+  "bloom-filters/cuckoo": cuckoo,
 };
 
 // Indexed by topic slug
@@ -144,6 +151,7 @@ const TOPIC_CONTENT: Record<string, TopicContent> = {
   "consistent-hashing": consistentHashingTopic,
   "page-replacement": pageReplacementTopic,
   "circuit-breaker": circuitBreakerTopic,
+  "bloom-filters": bloomFiltersTopic,
 };
 
 export function getConceptContent(

@@ -658,6 +658,46 @@ export const TOPICS: Topic[] = [
       },
     ],
   },
+  {
+    slug: "bloom-filters",
+    title: "Bloom & Cuckoo Filters",
+    description:
+      "Three probabilistic set-membership structures that answer 'have I seen this before?' in a few bytes per item. From the classic bit-array Bloom filter to the counting variant that can delete, to the cuckoo filter that does it all with a smaller memory footprint.",
+    difficulty: "intermediate",
+    icon: "Filter",
+    tags: ["data-structures", "memory", "probabilistic"],
+    estimatedTime: "35 min",
+    prerequisites: ["Hash functions", "Bit arrays", "Set membership"],
+    concepts: [
+      {
+        slug: "bloom",
+        title: "Bloom Filter",
+        oneLiner:
+          "A bit array plus a few hash functions: definitely-not or maybe-yes membership, in a fraction of the memory a hash set needs.",
+        difficulty: "beginner",
+        estimatedTime: "10 min",
+        prototypePath: "/prototypes/bloom-filters/bloom.html",
+      },
+      {
+        slug: "counting-bloom",
+        title: "Counting Bloom Filter",
+        oneLiner:
+          "Each bit becomes a small counter so items can be removed by decrementing — at roughly 4× the memory of a vanilla Bloom filter.",
+        difficulty: "intermediate",
+        estimatedTime: "10 min",
+        prototypePath: "/prototypes/bloom-filters/counting-bloom.html",
+      },
+      {
+        slug: "cuckoo",
+        title: "Cuckoo Filter",
+        oneLiner:
+          "Store short fingerprints in two candidate buckets and bump existing entries to their other home on collision. Delete-supporting and usually smaller than Bloom.",
+        difficulty: "advanced",
+        estimatedTime: "12 min",
+        prototypePath: "/prototypes/bloom-filters/cuckoo.html",
+      },
+    ],
+  },
 ];
 
 export const ALL_TAGS = Array.from(

@@ -1,0 +1,675 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bloom Filter</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --success-bg: rgba(92,198,111,0.14); --success-bd: rgba(92,198,111,0.45);
+        --danger: #f06868;  --danger-bg: rgba(240,104,104,0.14); --danger-bd: rgba(240,104,104,0.45);
+        --warning: #f0b568; --warning-bg: rgba(240,181,104,0.14); --warning-bd: rgba(240,181,104,0.45);
+        --info: #5e9ff6;    --info-bg:    rgba(94,159,246,0.16); --info-bd:    rgba(94,159,246,0.45);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --radius-lg: 14px; --radius-md: 8px; --radius-sm: 6px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body {
+        padding: 18px 18px 24px;
+        background-image:
+          radial-gradient(1200px 600px at 50% -200px, rgba(251,134,58,0.06), transparent),
+          linear-gradient(to right, rgba(255,255,255,0.020) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.020) 1px, transparent 1px);
+        background-size: auto, 40px 40px, 40px 40px;
+      }
+      .container { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+      input[type="text"] { background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 9px 12px; font: 500 13px var(--mono); flex: 1; min-width: 140px; outline: none; transition: border-color 150ms ease; }
+      input[type="text"]:focus { border-color: var(--accent); }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; padding: 9px 12px; transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); color: var(--fg); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); color: #1a1003; }
+      button.ghost { background: transparent; }
+      button i { font-size: 14px; }
+
+      .tabs { display: flex; gap: 6px; flex-wrap: wrap; padding: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); }
+      .tab { flex: 1; min-width: 130px; padding: 9px 12px; font: 500 12px/1 var(--sans); border-radius: var(--radius-sm); border: 1px solid transparent; background: transparent; color: var(--muted); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: all 150ms ease; }
+      .tab:hover { color: var(--fg); background: rgba(255,255,255,0.03); }
+      .tab.active { background: var(--elevated); color: var(--fg); border-color: var(--border-strong); box-shadow: 0 1px 0 rgba(0,0,0,0.4); }
+      .tab i { font-size: 14px; }
+
+      /* Hero card with bit grid */
+      .hero {
+        background: linear-gradient(180deg, rgba(255,255,255,0.014), transparent), var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: 16px 16px 14px;
+        position: relative;
+        overflow: hidden;
+      }
+      .hero::before {
+        content: ""; position: absolute; inset: 0;
+        background: radial-gradient(420px 240px at 50% 0%, rgba(94,159,246,0.05), transparent 60%);
+        pointer-events: none;
+      }
+      .hero-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; position: relative; z-index: 1; }
+      .hero-head .ttl { font: 600 11.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .hero-head .legend { font-size: 11.5px; color: var(--muted); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      .legend .sw { display: inline-block; width: 11px; height: 11px; border-radius: 3px; vertical-align: -1px; margin-right: 3px; }
+      .sw.set { background: var(--info-bg); border: 1px solid var(--info-bd); }
+      .sw.qry { background: var(--warning-bg); border: 1px solid var(--warning-bd); }
+      .sw.empty { background: transparent; border: 1px dashed var(--border-strong); }
+
+      .bit-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 7px; position: relative; z-index: 1; }
+      .cell { aspect-ratio: 1; border-radius: var(--radius-sm); border: 1px dashed var(--border-strong); background: transparent; display: flex; flex-direction: column; align-items: center; justify-content: center; font: 600 12px var(--mono); color: var(--subtle); transition: all 220ms cubic-bezier(0.4, 0, 0.2, 1); position: relative; }
+      .cell .ix { font: 500 9px var(--mono); opacity: 0.55; margin-bottom: 1px; line-height: 1; }
+      .cell.on { background: var(--info-bg); border: 1px solid var(--info-bd); color: var(--info); }
+      .cell.qry { background: var(--warning-bg); border: 1px solid var(--warning-bd); color: var(--warning); transform: scale(1.10); box-shadow: 0 0 12px rgba(240,181,104,0.35); z-index: 2; }
+      .cell.qry-miss { background: var(--danger-bg); border: 1px solid var(--danger-bd); color: var(--danger); transform: scale(1.10); box-shadow: 0 0 12px rgba(240,104,104,0.35); z-index: 2; }
+      .cell.pop { animation: pop .35s cubic-bezier(0.34, 1.56, 0.64, 1); }
+      @keyframes pop { from { transform: scale(0.5); } 50% { transform: scale(1.18); } to { transform: scale(1); } }
+      .cell.qry.pop, .cell.qry-miss.pop { animation: popHot .35s cubic-bezier(0.34, 1.56, 0.64, 1); }
+      @keyframes popHot { from { transform: scale(0.5); } 50% { transform: scale(1.25); } to { transform: scale(1.10); } }
+
+      /* Word & hashes panel */
+      .word-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--border); position: relative; z-index: 1; }
+      .word-chip { background: var(--elevated); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 5px 10px; font: 500 12px var(--sans); color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
+      .word-chip .lbl { color: var(--subtle); font-size: 11px; }
+      .word-chip .w { color: var(--fg); font-family: var(--mono); font-weight: 600; }
+      .hash-chip { background: var(--elevated); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 5px 10px; font: 500 12px var(--mono); color: var(--info); }
+      .hash-chip .arr { color: var(--subtle); margin: 0 4px; }
+      .hash-chip .v { color: var(--fg); }
+
+      /* Narration */
+      .narration {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: 14px 16px;
+        position: relative;
+        overflow: hidden;
+        transition: border-color 350ms ease;
+      }
+      .narration::before {
+        content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--border-strong); transition: background 350ms ease;
+      }
+      .narration.idle::before { background: var(--border-strong); }
+      .narration.add::before { background: var(--info); }    .narration.add { border-color: rgba(94,159,246,0.25); }
+      .narration.yes::before { background: var(--warning); } .narration.yes { border-color: rgba(240,181,104,0.30); }
+      .narration.no::before  { background: var(--danger); }  .narration.no  { border-color: rgba(240,104,104,0.25); }
+      .narration.fp::before  { background: var(--warning); } .narration.fp  { border-color: rgba(240,181,104,0.45); }
+      .narr-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+      .badge { font: 600 10.5px var(--mono); padding: 4px 9px; border-radius: 999px; letter-spacing: 0.4px; text-transform: uppercase; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); color: var(--muted); background: var(--elevated); }
+      .badge.step { background: var(--elevated); border-color: var(--border-strong); color: var(--fg); }
+      .badge.event { background: transparent; }
+      .badge.event.add { color: var(--info);    border-color: var(--info-bd); }
+      .badge.event.yes { color: var(--warning); border-color: var(--warning-bd); }
+      .badge.event.no  { color: var(--danger);  border-color: var(--danger-bd); }
+      .badge.event.fp  { color: var(--warning); border-color: var(--warning-bd); }
+      .narr-text { margin: 0; font-size: 14px; line-height: 1.6; color: var(--fg); }
+      .narr-text strong { color: var(--fg); font-weight: 600; }
+      .narr-text code { font-family: var(--mono); background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; color: var(--accent); font-size: 12px; }
+
+      /* Step timeline */
+      .timeline-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; }
+      .timeline-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font: 500 11px var(--mono); color: var(--muted); letter-spacing: 0.4px; text-transform: uppercase; }
+      .timeline-head .pos { color: var(--fg); font-weight: 600; text-transform: none; letter-spacing: 0; }
+      .timeline { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+      .tl-dot { flex: 1; min-width: 14px; height: 6px; border-radius: 99px; background: var(--border); transition: all 200ms ease; cursor: pointer; }
+      .tl-dot:hover { background: var(--border-strong); }
+      .tl-dot.done { background: var(--accent); opacity: 0.55; }
+      .tl-dot.now  { background: var(--accent); height: 10px; box-shadow: 0 0 8px rgba(251,134,58,0.5); }
+
+      .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .controls .spacer { flex: 1; }
+      .kbd { font-family: var(--mono); font-size: 10.5px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); color: var(--muted); border: 1px solid var(--border); }
+      .hint { font: 11px var(--mono); color: var(--subtle); display: inline-flex; align-items: center; gap: 5px; }
+
+      /* Free play */
+      .free-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px; }
+      .free-card h3 { margin: 0 0 10px; font: 500 11px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .free-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+
+      /* Stats */
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; }
+      .stat .label { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .stat .value { font: 600 22px var(--mono); margin-top: 4px; line-height: 1; }
+
+      /* Added words */
+      .added-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; }
+      .added-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font: 500 11px var(--mono); color: var(--muted); letter-spacing: 0.4px; text-transform: uppercase; }
+      .added-list { display: flex; gap: 6px; flex-wrap: wrap; min-height: 22px; }
+      .added-list .tag { background: var(--info-bg); border: 1px solid var(--info-bd); color: var(--info); font: 500 12px var(--mono); padding: 3px 9px; border-radius: var(--radius-sm); }
+      .added-list .none { color: var(--subtle); font-size: 12px; }
+
+      /* Log */
+      .log-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; }
+      .log-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font: 500 11px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .log { font-family: var(--mono); font-size: 12px; line-height: 1.85; color: var(--subtle); min-height: 76px; max-height: 140px; overflow: hidden; }
+      .log .t { color: var(--subtle); margin-right: 10px; opacity: 0.7; }
+
+      @media (max-width: 540px) { .bit-grid { grid-template-columns: repeat(8, 1fr); } .stats { grid-template-columns: repeat(2, 1fr); } }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2 class="sr-only">Interactive Bloom filter — add words, watch bits light up, and see why a "yes" is only "maybe" while a "no" is always certain.</h2>
+
+      <div class="tabs" role="tablist" aria-label="Scenario">
+        <button class="tab active" data-scenario="basics" role="tab"><i class="ti ti-bulb" aria-hidden="true"></i>Add &amp; check</button>
+        <button class="tab" data-scenario="fp" role="tab"><i class="ti ti-alert-triangle" aria-hidden="true"></i>False positive</button>
+        <button class="tab" data-scenario="saturation" role="tab"><i class="ti ti-trending-up" aria-hidden="true"></i>Saturation</button>
+        <button class="tab" data-scenario="free" role="tab"><i class="ti ti-hand-finger" aria-hidden="true"></i>Free play</button>
+      </div>
+
+      <!-- Hero: bit grid -->
+      <div class="hero" aria-label="Bloom filter bit array">
+        <div class="hero-head">
+          <span class="ttl">Bit array · m=24 bits · k=3 hashes</span>
+          <span class="legend">
+            <span><span class="sw set"></span>set</span>
+            <span><span class="sw qry"></span>looking</span>
+            <span><span class="sw empty"></span>empty</span>
+          </span>
+        </div>
+        <div id="bits" class="bit-grid"></div>
+        <div class="word-row" id="word-row" style="display:none">
+          <div class="word-chip"><span class="lbl">word</span><span class="w" id="word-cur">—</span></div>
+          <div id="hash-chips" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+        </div>
+      </div>
+
+      <!-- Narration -->
+      <div id="narration" class="narration idle">
+        <div class="narr-meta">
+          <span id="narr-step" class="badge step">Step 0 / 0</span>
+          <span id="narr-event" class="badge event" style="display:none"></span>
+        </div>
+        <p id="narr-text" class="narr-text"><strong>Empty filter.</strong> Press <strong>Next</strong> to start adding words and watch their three bits light up.</p>
+      </div>
+
+      <!-- Step timeline -->
+      <div id="timeline-wrap" class="timeline-wrap">
+        <div class="timeline-head"><span>Scenario timeline</span><span class="pos" id="tl-pos">—</span></div>
+        <div id="timeline" class="timeline"></div>
+      </div>
+
+      <!-- Step controls -->
+      <div id="step-controls" class="controls">
+        <button id="btn-prev"><i class="ti ti-chevron-left" aria-hidden="true"></i>Prev</button>
+        <button id="btn-play" class="primary"><i id="play-icon" class="ti ti-player-play" aria-hidden="true"></i><span id="play-label">Play</span></button>
+        <button id="btn-next"><i class="ti ti-chevron-right" aria-hidden="true"></i>Next</button>
+        <button id="btn-restart" class="ghost"><i class="ti ti-refresh" aria-hidden="true"></i>Restart</button>
+        <span class="spacer"></span>
+        <span class="hint"><span class="kbd">←</span><span class="kbd">→</span><span class="kbd">space</span></span>
+      </div>
+
+      <!-- Free play -->
+      <div id="free-play" class="free-card" style="display:none">
+        <h3>Free play — add and check words yourself</h3>
+        <div class="free-row">
+          <input id="fp-word" type="text" placeholder="e.g. apple" maxlength="20" autocomplete="off" />
+          <button id="fp-add" class="primary"><i class="ti ti-plus" aria-hidden="true"></i>Add</button>
+          <button id="fp-check"><i class="ti ti-search" aria-hidden="true"></i>Check</button>
+          <button id="fp-reset" class="ghost"><i class="ti ti-refresh" aria-hidden="true"></i>Reset</button>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats">
+        <div class="stat"><div class="label">items added</div><div id="s-items" class="value" style="color:var(--info)">0</div></div>
+        <div class="stat"><div class="label">bits set</div><div id="s-bits" class="value">0 / 24</div></div>
+        <div class="stat"><div class="label">estimated fpr</div><div id="s-fpr" class="value" style="color:var(--warning)">0%</div></div>
+        <div class="stat"><div class="label">last answer</div><div id="s-last" class="value" style="font-size:16px;padding-top:4px">—</div></div>
+      </div>
+
+      <!-- Added list -->
+      <div class="added-card">
+        <div class="added-head"><span>Words in the filter</span><span style="color:var(--fg);text-transform:none;letter-spacing:0" id="added-count">0</span></div>
+        <div id="added-list" class="added-list"><span class="none">none yet</span></div>
+      </div>
+
+      <!-- Log -->
+      <div class="log-card">
+        <div class="log-head"><span>Event log</span><span style="text-transform:none;letter-spacing:0;color:var(--subtle)">add ticks 3 bits · check needs all 3 set</span></div>
+        <div id="log" class="log"></div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        // ── Config & state ──────────────────────────────────────────────
+        var M = 24, K = 3;
+        var S = {
+          bits: new Array(M).fill(0),
+          added: [],
+          scenario: 'basics',
+          stepIdx: 0,
+          playing: false,
+          highlight: [],          // indices currently highlighted
+          highlightKind: '',      // '' | 'qry' (all-set) | 'qry-miss' (any zero)
+          curWord: null,
+          curPos: null,
+          eventTag: null,         // { kind, text } or null
+          lastNarr: null,
+          lastAns: '—', lastAnsColor: 'var(--fg)',
+          popIdx: null,           // index to "pop" animate
+        };
+
+        // ── Hashing (3 deterministic, well-spread hashes) ───────────────
+        function rawHash(str, seed) {
+          var h = seed >>> 0;
+          for (var i = 0; i < str.length; i++) { h = (Math.imul(h, 31) + str.charCodeAt(i)) >>> 0; }
+          return h;
+        }
+        function positions(s) {
+          var t = (s || '').toLowerCase().trim();
+          return [rawHash(t, 7) % M, rawHash(t, 131) % M, rawHash(t, 8191) % M];
+        }
+        // HTML-escape user-controlled strings before interpolation into innerHTML.
+        function esc(s) {
+          return String(s).replace(/[&<>"']/g, function (c) {
+            return c === '&' ? '&amp;' : c === '<' ? '&lt;' : c === '>' ? '&gt;' : c === '"' ? '&quot;' : '&#39;';
+          });
+        }
+
+        // ── DOM refs ────────────────────────────────────────────────────
+        var bitsEl = document.getElementById('bits');
+        var wordRow = document.getElementById('word-row');
+        var wordCur = document.getElementById('word-cur');
+        var hashChips = document.getElementById('hash-chips');
+        var narrEl = document.getElementById('narration');
+        var narrTxt = document.getElementById('narr-text');
+        var narrEv = document.getElementById('narr-event');
+        var narrStep = document.getElementById('narr-step');
+        var tlWrap = document.getElementById('timeline-wrap');
+        var tlEl = document.getElementById('timeline');
+        var tlPos = document.getElementById('tl-pos');
+        var sItems = document.getElementById('s-items');
+        var sBits = document.getElementById('s-bits');
+        var sFpr = document.getElementById('s-fpr');
+        var sLast = document.getElementById('s-last');
+        var addedList = document.getElementById('added-list');
+        var addedCount = document.getElementById('added-count');
+        var logEl = document.getElementById('log');
+
+        // ── Filter ops ──────────────────────────────────────────────────
+        function addWord(w) {
+          var p = positions(w);
+          p.forEach(function (i) { S.bits[i] = 1; });
+          if (S.added.indexOf(w) === -1) S.added.push(w);
+          S.curWord = w; S.curPos = p; S.highlight = p; S.highlightKind = 'qry';
+          S.popIdx = p;
+          S.lastAns = 'added'; S.lastAnsColor = 'var(--info)';
+          S.eventTag = { kind: 'add', text: 'add' };
+          return p;
+        }
+        function checkWord(w) {
+          var p = positions(w);
+          var allSet = p.every(function (i) { return S.bits[i] === 1; });
+          S.curWord = w; S.curPos = p; S.highlight = p; S.highlightKind = allSet ? 'qry' : 'qry-miss';
+          S.popIdx = p;
+          if (allSet) {
+            S.lastAns = 'maybe-yes'; S.lastAnsColor = 'var(--warning)';
+            S.eventTag = { kind: 'yes', text: 'maybe-yes' };
+          } else {
+            S.lastAns = 'definitely-no'; S.lastAnsColor = 'var(--danger)';
+            S.eventTag = { kind: 'no', text: 'definitely-no' };
+          }
+          return { p: p, allSet: allSet, known: S.added.indexOf(w) !== -1 };
+        }
+
+        // ── Rendering ───────────────────────────────────────────────────
+        function fpr() {
+          var set = 0;
+          for (var i = 0; i < M; i++) if (S.bits[i]) set++;
+          return Math.pow(set / M, K);
+        }
+        function bitsSet() { var s = 0; for (var i = 0; i < M; i++) if (S.bits[i]) s++; return s; }
+
+        function render() {
+          // Bit grid
+          bitsEl.innerHTML = '';
+          for (var i = 0; i < M; i++) {
+            var d = document.createElement('div');
+            var cls = 'cell';
+            var on = S.bits[i] === 1;
+            var inHi = S.highlight && S.highlight.indexOf(i) !== -1;
+            if (on) cls += ' on';
+            if (inHi) cls += ' ' + S.highlightKind;
+            if (S.popIdx && S.popIdx.indexOf(i) !== -1) cls += ' pop';
+            d.className = cls;
+            var ix = document.createElement('span');
+            ix.className = 'ix';
+            ix.textContent = i;
+            d.appendChild(ix);
+            var v = document.createElement('span');
+            if (on || inHi) v.innerHTML = '<i class="ti ti-check"></i>';
+            d.appendChild(v);
+            bitsEl.appendChild(d);
+          }
+          S.popIdx = null;
+
+          // Word row
+          if (S.curWord) {
+            wordRow.style.display = '';
+            wordCur.textContent = '"' + S.curWord + '"';
+            hashChips.innerHTML = '';
+            S.curPos.forEach(function (idx, i) {
+              var c = document.createElement('div');
+              c.className = 'hash-chip';
+              c.innerHTML = '<span>h<sub>' + (i + 1) + '</sub></span><span class="arr">→</span><span class="v">' + idx + '</span>';
+              hashChips.appendChild(c);
+            });
+          } else {
+            wordRow.style.display = 'none';
+          }
+
+          // Narration
+          var kind = S.eventTag ? S.eventTag.kind : 'idle';
+          narrEl.className = 'narration ' + (S.lastNarr && S.lastNarr.indexOf('false positive') !== -1 ? 'fp' : kind);
+          narrTxt.innerHTML = DOMPurify.sanitize(S.lastNarr || '<strong>Empty filter.</strong> Press <strong>Next</strong> to begin.');
+          if (S.scenario === 'free') {
+            narrStep.textContent = 'Free play';
+          } else {
+            var sc = SCENARIOS[S.scenario];
+            narrStep.textContent = 'Step ' + S.stepIdx + ' / ' + (sc.length - 1);
+          }
+          if (S.eventTag) {
+            narrEv.style.display = '';
+            narrEv.className = 'badge event ' + S.eventTag.kind;
+            narrEv.textContent = S.eventTag.text;
+          } else {
+            narrEv.style.display = 'none';
+          }
+
+          // Timeline
+          if (S.scenario === 'free') {
+            tlWrap.style.display = 'none';
+          } else {
+            tlWrap.style.display = '';
+            var sc = SCENARIOS[S.scenario];
+            tlEl.innerHTML = '';
+            for (var i = 0; i < sc.length; i++) {
+              var d2 = document.createElement('div');
+              var cl = 'tl-dot';
+              if (i < S.stepIdx) cl += ' done';
+              if (i === S.stepIdx) cl += ' now';
+              d2.className = cl;
+              (function (idx) { d2.onclick = function () { applyStep(idx); }; })(i);
+              tlEl.appendChild(d2);
+            }
+            tlPos.textContent = (S.stepIdx + 1) + ' of ' + sc.length;
+          }
+
+          // Stats
+          sItems.textContent = S.added.length;
+          sBits.textContent = bitsSet() + ' / ' + M;
+          var f = fpr();
+          sFpr.textContent = (f * 100).toFixed(f < 0.01 ? 2 : f < 0.1 ? 1 : 0) + '%';
+          sLast.textContent = S.lastAns;
+          sLast.style.color = S.lastAnsColor;
+
+          // Added list
+          addedCount.textContent = S.added.length;
+          if (S.added.length === 0) {
+            addedList.innerHTML = '<span class="none">none yet</span>';
+          } else {
+            addedList.innerHTML = '';
+            S.added.forEach(function (w) {
+              var t = document.createElement('span');
+              t.className = 'tag';
+              t.textContent = w;
+              addedList.appendChild(t);
+            });
+          }
+
+          // Buttons
+          if (S.scenario !== 'free') {
+            var sc = SCENARIOS[S.scenario];
+            document.getElementById('btn-prev').disabled = S.stepIdx <= 0;
+            document.getElementById('btn-next').disabled = S.stepIdx >= sc.length - 1;
+          }
+        }
+
+        function log(msg, color) {
+          var t = new Date();
+          var hh = String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0') + ':' + String(t.getSeconds()).padStart(2, '0');
+          var line = document.createElement('div');
+          line.style.color = color || 'var(--subtle)';
+          var ts = document.createElement('span'); ts.className = 't'; ts.textContent = hh;
+          line.appendChild(ts);
+          line.appendChild(document.createTextNode(String(msg)));
+          logEl.insertBefore(line, logEl.firstChild);
+          while (logEl.children.length > 5) logEl.removeChild(logEl.lastChild);
+        }
+
+        // ── Scenarios ───────────────────────────────────────────────────
+        var SCENARIOS = {};
+
+        SCENARIOS.basics = [
+          { narr: '<strong>Empty filter.</strong> 24 bits, all zero. We will use 3 hash functions per item — each maps the item to one bit.', do: function () {} },
+          { narr: 'Add <code>apple</code>. Its three hashes pick three bits and we flip each from 0 to 1.', ev: 'add', do: function () { addWord('apple'); } },
+          { narr: 'Add <code>mango</code>. Three more bits go on. A bit that was already on stays on — Bloom never tracks "who set me".', ev: 'add', do: function () { addWord('mango'); } },
+          { narr: 'Check <code>apple</code>. We re-hash it to the same three positions. All three are set, so the answer is <strong>maybe-yes</strong>. (It really was added.)', ev: 'yes', do: function () { checkWord('apple'); } },
+          { narr: 'Check <code>banana</code>. At least one of its three bits is still 0, so the answer is <strong>definitely-no</strong>. This direction is exact — no probability involved.', ev: 'no', do: function () { checkWord('banana'); } },
+        ];
+
+        // For False positive: load enough words that a chosen probe collides.
+        // We pre-test the probe list against the post-load state.
+        SCENARIOS.fp = [
+          { narr: '<strong>Empty filter.</strong> To see a false positive, we first fill enough bits that an unrelated word can collide with previously-set ones.', do: function () {} },
+          { narr: 'Add <code>red</code>.',     ev: 'add', do: function () { addWord('red'); } },
+          { narr: 'Add <code>green</code>.',   ev: 'add', do: function () { addWord('green'); } },
+          { narr: 'Add <code>blue</code>.',    ev: 'add', do: function () { addWord('blue'); } },
+          { narr: 'Add <code>orange</code>.',  ev: 'add', do: function () { addWord('orange'); } },
+          { narr: 'Add <code>purple</code>.',  ev: 'add', do: function () { addWord('purple'); } },
+          { narr: 'Add <code>yellow</code>.',  ev: 'add', do: function () { addWord('yellow'); } },
+          { narr: 'Most bits are now set. Check a never-added word.',
+            ev: 'yes',
+            do: function () {
+              var candidates = ['phantom','ghost','zebra','tiger','rocket','knight','crystal','wizard','dragon','silver','marble','planet','sailor','jasper','prism','meteor','vortex','signal'];
+              var fp = null;
+              for (var i = 0; i < candidates.length; i++) {
+                var c = candidates[i];
+                if (S.added.indexOf(c) !== -1) continue;
+                var p = positions(c);
+                if (p.every(function (b) { return S.bits[b] === 1; })) { fp = c; break; }
+              }
+              if (!fp) fp = 'phantom';
+              var r = checkWord(fp);
+              S.lastNarr = 'Check <code>' + fp + '</code>. All three of its bits ('
+                + r.p.join(', ') + ') happen to be lit by other words — so the filter says <strong>maybe-yes</strong>, even though <code>' + fp + '</code> was never added. That is a <strong>false positive</strong>, and it is normal: the higher the fill, the more often it happens.';
+            } },
+        ];
+
+        SCENARIOS.saturation = [
+          { narr: '<strong>Empty filter.</strong> Watch the <em>Estimated FPR</em> climb as we add items past the filter’s comfort zone.', do: function () {} },
+          { narr: 'Add 3 items. Plenty of room — FPR is still tiny.', ev: 'add', do: function () { addWord('one'); addWord('two'); addWord('three'); } },
+          { narr: 'Add 3 more. About a third of the bits are now set; the FPR doubles or triples.', ev: 'add', do: function () { addWord('four'); addWord('five'); addWord('six'); } },
+          { narr: 'Add 3 more. We are above the design load now — every new check has a real chance of false-positive.', ev: 'add', do: function () { addWord('seven'); addWord('eight'); addWord('nine'); } },
+          { narr: 'Add 3 more. Most cells are lit. The filter is effectively useless — almost any check now says <strong>maybe-yes</strong>.', ev: 'add', do: function () { addWord('ten'); addWord('eleven'); addWord('twelve'); } },
+          { narr: 'Try checking <code>nowhere</code>. It was never added, but it almost certainly false-positives at this fill level. The lesson: <strong>size m for your peak n</strong>, and rebuild before saturation.',
+            ev: 'yes', do: function () { checkWord('nowhere'); } },
+        ];
+
+        // ── Engine ──────────────────────────────────────────────────────
+        function resetFilter() {
+          S.bits = new Array(M).fill(0);
+          S.added = [];
+          S.highlight = []; S.highlightKind = '';
+          S.curWord = null; S.curPos = null;
+          S.eventTag = null; S.lastNarr = null;
+          S.lastAns = '—'; S.lastAnsColor = 'var(--fg)';
+          S.popIdx = null;
+        }
+
+        function applyStep(targetIdx) {
+          var sc = SCENARIOS[S.scenario]; if (!sc) return;
+          resetFilter();
+          for (var i = 0; i <= targetIdx; i++) {
+            var st = sc[i];
+            // Each step's do() runs against current state. Step narration set after.
+            S.eventTag = null;
+            st.do();
+            if (i === targetIdx) {
+              // If the step set lastNarr dynamically, keep it; else use static narr.
+              if (S.lastNarr === null || st !== sc[i] /* shouldn't happen */) {
+                S.lastNarr = st.narr;
+              }
+              // Allow dynamic do() to override S.lastNarr; only set static if not set.
+              if (!sc[i]._dynamic && S.lastNarr === null) S.lastNarr = st.narr;
+              if (S.lastNarr === null) S.lastNarr = st.narr;
+              if (st.ev) S.eventTag = S.eventTag || { kind: st.ev, text: st.ev === 'add' ? 'add' : st.ev === 'yes' ? 'maybe-yes' : 'definitely-no' };
+            } else {
+              // Mid-replay: clear lastNarr so final step's lastNarr is fresh
+              S.lastNarr = null;
+              S.eventTag = null;
+            }
+          }
+          S.stepIdx = targetIdx;
+          render();
+        }
+        // Cleaner re-implementation of applyStep:
+        applyStep = function (targetIdx) {
+          var sc = SCENARIOS[S.scenario]; if (!sc) return;
+          resetFilter();
+          for (var i = 0; i <= targetIdx; i++) {
+            var st = sc[i];
+            S.eventTag = null;
+            S.lastNarr = null;
+            st.do();
+            if (i === targetIdx) {
+              if (S.lastNarr === null) S.lastNarr = st.narr;
+              if (st.ev && !S.eventTag) {
+                S.eventTag = { kind: st.ev, text: st.ev === 'add' ? 'add' : st.ev === 'yes' ? 'maybe-yes' : 'definitely-no' };
+              }
+            }
+          }
+          S.stepIdx = targetIdx;
+          render();
+        };
+
+        function stepNext() {
+          var sc = SCENARIOS[S.scenario];
+          if (S.stepIdx < sc.length - 1) {
+            applyStep(S.stepIdx + 1);
+            log(stripTags(sc[S.stepIdx].narr), colorForEvent(S.eventTag && S.eventTag.kind));
+          } else { setPlaying(false); }
+        }
+        function stepPrev() { if (S.stepIdx > 0) applyStep(S.stepIdx - 1); }
+        function colorForEvent(k) { return k === 'add' ? 'var(--info)' : k === 'yes' ? 'var(--warning)' : k === 'no' ? 'var(--danger)' : 'var(--subtle)'; }
+        function stripTags(html) {
+          // DOMPurify with no allowed tags returns the plain text — no
+          // innerHTML sink involved.
+          return DOMPurify.sanitize(String(html == null ? '' : html), { ALLOWED_TAGS: [], KEEP_CONTENT: true });
+        }
+
+        var playTimer = null;
+        function setPlaying(on) {
+          S.playing = on;
+          document.getElementById('play-label').textContent = on ? 'Pause' : 'Play';
+          document.getElementById('play-icon').className = on ? 'ti ti-player-pause' : 'ti ti-player-play';
+          if (playTimer) { clearInterval(playTimer); playTimer = null; }
+          if (on) playTimer = setInterval(function () {
+            var sc = SCENARIOS[S.scenario]; if (!sc) { setPlaying(false); return; }
+            if (S.stepIdx < sc.length - 1) stepNext(); else setPlaying(false);
+          }, 1700);
+        }
+
+        function pickScenario(name) {
+          S.scenario = name;
+          var tabs = document.querySelectorAll('.tab');
+          for (var i = 0; i < tabs.length; i++) tabs[i].classList.toggle('active', tabs[i].dataset.scenario === name);
+          setPlaying(false);
+          var stepCtl = document.getElementById('step-controls');
+          var fp = document.getElementById('free-play');
+          if (name === 'free') {
+            stepCtl.style.display = 'none';
+            fp.style.display = '';
+            resetFilter();
+            S.lastNarr = '<strong>Free play.</strong> Type a word and press <strong>Add</strong> to set its 3 bits, or <strong>Check</strong> to see if it is maybe-yes / definitely-no.';
+            render();
+          } else {
+            stepCtl.style.display = '';
+            fp.style.display = 'none';
+            applyStep(0);
+          }
+        }
+
+        // ── Free play actions ────────────────────────────────────────────
+        function fpDo(kind) {
+          if (kind === 'reset') {
+            resetFilter();
+            S.lastNarr = '<strong>Cleared.</strong> Filter is empty again. Add a word to begin.';
+            render(); return;
+          }
+          var inp = document.getElementById('fp-word');
+          var w = (inp.value || '').toLowerCase().trim();
+          if (!w) {
+            S.lastNarr = '<strong>Type a word first.</strong> Then press Add or Check.';
+            render(); return;
+          }
+          var ew = esc(w);
+          if (kind === 'add') {
+            var p = addWord(w);
+            S.lastNarr = '<strong>Added <code>' + ew + '</code>.</strong> Bits ' + p.join(', ') + ' are now set. If a bit was already lit, it stays lit — no record of "who set it".';
+            log('add ' + w + ' → bits ' + p.join(','), 'var(--info)');
+          } else {
+            var r = checkWord(w);
+            if (r.allSet) {
+              S.lastNarr = '<strong>"' + ew + '" is maybe-yes.</strong> All three of its bits (' + r.p.join(', ') + ') are set. '
+                + (r.known ? 'You really did add it earlier.' : '<strong>False positive</strong> — you never added <code>' + ew + '</code>, but other items happened to light all three of its bits.');
+              log('check ' + w + ' → maybe-yes' + (r.known ? '' : ' (false positive)'), 'var(--warning)');
+            } else {
+              var zero = r.p.filter(function (i) { return S.bits[i] === 0; });
+              S.lastNarr = '<strong>"' + ew + '" is definitely-no.</strong> Bit ' + zero.join(', ') + ' is still 0, so no one could have added <code>' + ew + '</code>. This answer is always 100% correct.';
+              log('check ' + w + ' → definitely-no', 'var(--danger)');
+            }
+          }
+          inp.value = '';
+          render();
+        }
+
+        // ── Wire up ─────────────────────────────────────────────────────
+        var tabs = document.querySelectorAll('.tab');
+        for (var i = 0; i < tabs.length; i++) {
+          (function (t) { t.addEventListener('click', function () { pickScenario(t.dataset.scenario); }); })(tabs[i]);
+        }
+        document.getElementById('btn-prev').addEventListener('click', stepPrev);
+        document.getElementById('btn-next').addEventListener('click', stepNext);
+        document.getElementById('btn-play').addEventListener('click', function () { setPlaying(!S.playing); });
+        document.getElementById('btn-restart').addEventListener('click', function () { setPlaying(false); applyStep(0); });
+        document.getElementById('fp-add').addEventListener('click', function () { fpDo('add'); });
+        document.getElementById('fp-check').addEventListener('click', function () { fpDo('check'); });
+        document.getElementById('fp-reset').addEventListener('click', function () { fpDo('reset'); });
+        document.getElementById('fp-word').addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') fpDo('add');
+        });
+        document.addEventListener('keydown', function (e) {
+          if (S.scenario === 'free') return;
+          if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); stepNext(); }
+          else if (e.key === 'ArrowLeft') { e.preventDefault(); stepPrev(); }
+        });
+
+        pickScenario('basics');
+
+        function postHeight() { parent.postMessage({ type: 'prototype:height', height: document.body.scrollHeight }, '*'); }
+        if (typeof ResizeObserver !== 'undefined') new ResizeObserver(postHeight).observe(document.body);
+        postHeight();
+      })();
+    </script>
+  </body>
+</html>
