@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Cuckoo Filter</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
     <style>
       :root {
         --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
@@ -455,7 +456,7 @@
 
           var kind = S.eventTag ? S.eventTag.kind : '';
           narrEl.className = 'narration ' + kind;
-          narrTxt.innerHTML = S.lastNarr || '<strong>Empty filter.</strong> Press <strong>Next</strong> to begin.';
+          narrTxt.innerHTML = DOMPurify.sanitize(S.lastNarr || '<strong>Empty filter.</strong> Press <strong>Next</strong> to begin.');
           if (S.scenario === 'free') {
             narrStep.textContent = 'Free play';
           } else {
@@ -744,9 +745,7 @@
         function stepPrev() { if (S.stepIdx > 0) applyStep(S.stepIdx - 1); }
         function colorForEvent(k) { return k === 'place' || k === 'del' ? 'var(--info)' : k === 'yes' ? 'var(--warning)' : k === 'no' ? 'var(--danger)' : k === 'kick' ? 'var(--danger)' : k === 'warn' ? 'var(--warning)' : 'var(--subtle)'; }
         function stripTags(html) {
-          var t = document.createElement('template');
-          t.innerHTML = String(html == null ? '' : html);
-          return t.content.textContent || '';
+          return DOMPurify.sanitize(String(html == null ? '' : html), { ALLOWED_TAGS: [], KEEP_CONTENT: true });
         }
 
         var playTimer = null;

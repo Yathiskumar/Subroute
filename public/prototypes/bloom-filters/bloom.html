@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Bloom Filter</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
     <style>
       :root {
         --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
@@ -379,7 +380,7 @@
           // Narration
           var kind = S.eventTag ? S.eventTag.kind : 'idle';
           narrEl.className = 'narration ' + (S.lastNarr && S.lastNarr.indexOf('false positive') !== -1 ? 'fp' : kind);
-          narrTxt.innerHTML = S.lastNarr || '<strong>Empty filter.</strong> Press <strong>Next</strong> to begin.';
+          narrTxt.innerHTML = DOMPurify.sanitize(S.lastNarr || '<strong>Empty filter.</strong> Press <strong>Next</strong> to begin.');
           if (S.scenario === 'free') {
             narrStep.textContent = 'Free play';
           } else {
@@ -571,11 +572,9 @@
         function stepPrev() { if (S.stepIdx > 0) applyStep(S.stepIdx - 1); }
         function colorForEvent(k) { return k === 'add' ? 'var(--info)' : k === 'yes' ? 'var(--warning)' : k === 'no' ? 'var(--danger)' : 'var(--subtle)'; }
         function stripTags(html) {
-          // Use an inert <template> to parse HTML into a text representation
-          // without executing scripts or attaching to the document.
-          var t = document.createElement('template');
-          t.innerHTML = String(html == null ? '' : html);
-          return t.content.textContent || '';
+          // DOMPurify with no allowed tags returns the plain text — no
+          // innerHTML sink involved.
+          return DOMPurify.sanitize(String(html == null ? '' : html), { ALLOWED_TAGS: [], KEEP_CONTENT: true });
         }
 
         var playTimer = null;
