@@ -1,5 +1,33 @@
-import { Mail, Linkedin, ArrowUpRight } from "lucide-react";
+import { Mail, ArrowUpRight } from "lucide-react";
 import { Breadcrumb } from "@/components/shared/Breadcrumb";
+
+function LinkedinIcon({
+  className,
+  strokeWidth,
+}: {
+  className?: string;
+  strokeWidth?: number;
+}) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth ?? 2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z" />
+      <rect width="4" height="12" x="2" y="9" />
+      <circle cx="4" cy="4" r="2" />
+    </svg>
+  );
+}
 
 export const metadata = {
   title: "Contact",
@@ -19,7 +47,7 @@ const CHANNELS = [
     external: false,
   },
   {
-    icon: Linkedin,
+    icon: LinkedinIcon,
     label: "LinkedIn",
     value: "in/yathiskumar-d",
     href: LINKEDIN,
