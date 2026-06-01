@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PBFT — Practical Byzantine Fault Tolerance</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --success-bg: rgba(92,198,111,0.14); --success-bd: rgba(92,198,111,0.45);
+        --danger: #f06868;  --danger-bg: rgba(240,104,104,0.14); --danger-bd: rgba(240,104,104,0.45);
+        --warning: #f0b568; --warning-bg: rgba(240,181,104,0.14); --warning-bd: rgba(240,181,104,0.45);
+        --info: #5e9ff6;    --info-bg:    rgba(94,159,246,0.16); --info-bd:    rgba(94,159,246,0.45);
+        --purple: #a78bfa;  --purple-bg:  rgba(167,139,250,0.16); --purple-bd:  rgba(167,139,250,0.45);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --radius-lg: 14px; --radius-md: 8px; --radius-sm: 6px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body { padding: 18px 18px 24px; background-image: radial-gradient(1200px 600px at 50% -200px, rgba(251,134,58,0.06), transparent), linear-gradient(to right, rgba(255,255,255,0.020) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.020) 1px, transparent 1px); background-size: auto, 40px 40px, 40px 40px; }
+      .container { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; padding: 9px 12px; transition: all 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.08); }
+      button.ghost { background: transparent; }
+      button i { font-size: 14px; }
+      .tabs { display: flex; gap: 6px; flex-wrap: wrap; padding: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); }
+      .tab { flex: 1; min-width: 130px; padding: 9px 12px; font: 500 12px/1 var(--sans); border-radius: var(--radius-sm); border: 1px solid transparent; background: transparent; color: var(--muted); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: all 150ms ease; }
+      .tab:hover { color: var(--fg); background: rgba(255,255,255,0.03); }
+      .tab.active { background: var(--elevated); color: var(--fg); border-color: var(--border-strong); }
+      .tab i { font-size: 14px; }
+      .hero { background: linear-gradient(180deg, rgba(255,255,255,0.014), transparent), var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; position: relative; overflow: hidden; }
+      .hero::before { content: ""; position: absolute; inset: 0; background: radial-gradient(420px 240px at 50% 0%, rgba(94,159,246,0.05), transparent 60%); pointer-events: none; }
+      .hero-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; position: relative; z-index: 1; gap: 10px; flex-wrap: wrap; }
+      .hero-head .ttl { font: 600 11.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .legend { font-size: 11.5px; color: var(--muted); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      .legend .sw { display: inline-block; width: 11px; height: 11px; border-radius: 3px; vertical-align: -1px; margin-right: 3px; }
+      .sw.l { background: var(--info-bg); border: 1px solid var(--info-bd); }
+      .sw.p { background: var(--warning-bg); border: 1px solid var(--warning-bd); }
+      .sw.c { background: var(--success-bg); border: 1px solid var(--success-bd); }
+      .sw.byz { background: var(--danger-bg); border: 1px solid var(--danger-bd); }
+      .top-bar { display: flex; gap: 8px; margin-bottom: 12px; position: relative; z-index: 1; flex-wrap: wrap; align-items: stretch; }
+      .info-pill { flex: 1; min-width: 220px; padding: 9px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--elevated); font-size: 12.5px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; color: var(--fg); }
+      .info-pill b { color: var(--fg); }
+      .info-pill .dim { color: var(--muted); }
+      .view-badge { min-width: 88px; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--elevated); border: 1px solid var(--border); text-align: center; }
+      .view-badge .lbl { font: 500 9.5px var(--mono); color: var(--muted); }
+      .view-badge .val { font: 700 16px var(--mono); color: var(--fg); }
+      .phase-chips { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 12px; position: relative; z-index: 1; }
+      .phase-chip { flex: 1; min-width: 72px; padding: 6px 4px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: transparent; color: var(--subtle); text-align: center; font: 500 10.5px var(--mono); transition: all 200ms ease; }
+      .phase-chip.done { background: var(--surface); color: var(--muted); }
+      .phase-chip.active { background: var(--info-bg); border-color: var(--info-bd); color: var(--info); }
+      .nodes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; position: relative; z-index: 1; }
+      .node { background: var(--elevated); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 8px; text-align: center; transition: all 250ms ease; }
+      .node.primary { border-color: var(--info-bd); background: var(--info-bg); }
+      .node.byz { border-color: var(--danger-bd); background: var(--danger-bg); }
+      .node.prepared { border-color: var(--warning-bd); background: var(--warning-bg); }
+      .node.committed { border-color: var(--success-bd); background: var(--success-bg); }
+      .node .icon { font-size: 22px; line-height: 1; color: var(--muted); }
+      .node.primary .icon { color: var(--info); }
+      .node.byz .icon { color: var(--danger); }
+      .node.prepared .icon { color: var(--warning); }
+      .node.committed .icon { color: var(--success); }
+      .node .nm { font: 600 13px var(--sans); margin-top: 4px; }
+      .node .role { font: 500 9.5px var(--mono); margin-top: 3px; padding: 1px 0; border-radius: var(--radius-sm); background: var(--elevated); color: var(--subtle); }
+      .node.primary .role { background: var(--info-bg); color: var(--info); }
+      .node .st { font: 500 11.5px var(--sans); margin-top: 4px; color: var(--fg); }
+      .pop { animation: pop .35s cubic-bezier(0.34, 1.56, 0.64, 1); }
+      @keyframes pop { from { transform: scale(0.92); } 50% { transform: scale(1.06); } to { transform: scale(1); } }
+      .quorum { display: flex; align-items: center; gap: 8px; position: relative; z-index: 1; margin-top: 12px; }
+      .quorum-label { font: 500 11px var(--mono); color: var(--muted); min-width: 80px; }
+      .quorum-bars { flex: 1; display: flex; gap: 3px; }
+      .qbar { flex: 1; height: 8px; border-radius: 4px; background: var(--elevated); transition: all 250ms ease; }
+      .qbar.on { background: var(--warning); }
+      .qbar.commit { background: var(--success); }
+      .quorum-count { font: 600 11.5px var(--mono); min-width: 60px; text-align: right; color: var(--muted); }
+      .quorum-count.met { color: var(--success); }
+      .narration { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px; position: relative; overflow: hidden; transition: border-color 350ms ease; }
+      .narration::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--border-strong); }
+      .narration.req::before { background: var(--info); } .narration.req { border-color: rgba(94,159,246,0.30); }
+      .narration.pre::before { background: var(--info); } .narration.pre { border-color: rgba(94,159,246,0.30); }
+      .narration.prep::before { background: var(--warning); } .narration.prep { border-color: rgba(240,181,104,0.30); }
+      .narration.commit::before { background: var(--success); } .narration.commit { border-color: rgba(92,198,111,0.30); }
+      .narration.byz::before { background: var(--danger); } .narration.byz { border-color: rgba(240,104,104,0.30); }
+      .narration.view::before { background: var(--purple); } .narration.view { border-color: var(--purple-bd); }
+      .narr-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+      .badge { font: 600 10.5px var(--mono); padding: 4px 9px; border-radius: 999px; letter-spacing: 0.4px; text-transform: uppercase; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); color: var(--muted); background: var(--elevated); }
+      .badge.step { background: var(--elevated); border-color: var(--border-strong); color: var(--fg); }
+      .badge.event { background: transparent; }
+      .badge.event.req, .badge.event.pre { color: var(--info); border-color: var(--info-bd); }
+      .badge.event.prep { color: var(--warning); border-color: var(--warning-bd); }
+      .badge.event.commit { color: var(--success); border-color: var(--success-bd); }
+      .badge.event.byz { color: var(--danger); border-color: var(--danger-bd); }
+      .badge.event.view { color: var(--purple); border-color: var(--purple-bd); }
+      .narr-text { margin: 0; font-size: 14px; line-height: 1.6; color: var(--fg); }
+      .narr-text strong { color: var(--fg); font-weight: 600; }
+      .narr-text code { font-family: var(--mono); background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; color: var(--accent); font-size: 12px; }
+      .timeline-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; }
+      .timeline-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font: 500 11px var(--mono); color: var(--muted); letter-spacing: 0.4px; text-transform: uppercase; }
+      .timeline-head .pos { color: var(--fg); font-weight: 600; text-transform: none; letter-spacing: 0; }
+      .timeline { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+      .tl-dot { flex: 1; min-width: 14px; height: 6px; border-radius: 99px; background: var(--border); transition: all 200ms ease; cursor: pointer; }
+      .tl-dot.done { background: var(--accent); opacity: 0.55; }
+      .tl-dot.now { background: var(--accent); height: 10px; box-shadow: 0 0 8px rgba(251,134,58,0.5); }
+      .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .controls .spacer { flex: 1; }
+      .kbd { font-family: var(--mono); font-size: 10.5px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); color: var(--muted); border: 1px solid var(--border); }
+      .hint { font: 11px var(--mono); color: var(--subtle); display: inline-flex; align-items: center; gap: 5px; }
+      .free-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px; }
+      .free-card h3 { margin: 0 0 10px; font: 500 11px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .fp-row { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+      .byz-toggle { display: inline-flex; align-items: center; gap: 5px; font: 500 12.5px var(--sans); color: var(--fg); cursor: pointer; }
+      .byz-toggle input { accent-color: var(--danger); cursor: pointer; }
+      .fp-hint { font-size: 11.5px; color: var(--muted); margin-bottom: 8px; }
+      .fp-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; }
+      .stat .label { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .stat .value { font: 600 17px var(--mono); margin-top: 4px; line-height: 1; }
+      .log-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; }
+      .log-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font: 500 11px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .log-head .pill { color: var(--subtle); text-transform: none; letter-spacing: 0; font-size: 10.5px; }
+      .log { font-family: var(--mono); font-size: 12px; line-height: 1.85; color: var(--subtle); min-height: 48px; max-height: 56px; overflow: hidden; }
+      .log .t { color: var(--subtle); margin-right: 10px; opacity: 0.7; }
+      @media (max-width: 540px) { .nodes { gap: 5px; } .stats { grid-template-columns: repeat(2, 1fr); } .info-pill { font-size: 11px; } }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2 class="sr-only">Interactive PBFT — four nodes with one primary and three backups, tolerating one Byzantine (lying) node. Pre-Prepare, Prepare, Commit, Reply, plus view change when the primary misbehaves.</h2>
+
+      <div class="tabs" role="tablist" aria-label="Scenario">
+        <button class="tab active" data-scenario="happy" role="tab"><i class="ti ti-circle-check" aria-hidden="true"></i>Happy path</button>
+        <button class="tab" data-scenario="backup-lies" role="tab"><i class="ti ti-mask" aria-hidden="true"></i>A backup lies</button>
+        <button class="tab" data-scenario="primary-lies" role="tab"><i class="ti ti-alert-triangle" aria-hidden="true"></i>Primary lies</button>
+        <button class="tab" data-scenario="free" role="tab"><i class="ti ti-hand-finger" aria-hidden="true"></i>Free play</button>
+      </div>
+
+      <div class="hero" aria-label="PBFT stage">
+        <div class="hero-head">
+          <span class="ttl">n = 4 · f = 1 · quorum = 2f+1 = 3</span>
+          <span class="legend">
+            <span><span class="sw l"></span>primary</span>
+            <span><span class="sw p"></span>prepared</span>
+            <span><span class="sw c"></span>committed</span>
+            <span><span class="sw byz"></span>byzantine</span>
+          </span>
+        </div>
+        <div class="top-bar">
+          <div class="info-pill">
+            <span><b>n=4</b></span>
+            <span class="dim">tolerates</span>
+            <span><b>f=1 liar</b></span>
+            <span class="dim">quorum</span>
+            <span><b>2f+1 = 3</b></span>
+            <span class="dim">client waits f+1 = 2 matching replies</span>
+          </div>
+          <div class="view-badge"><div class="lbl">view</div><div id="viewNum" class="val">0</div></div>
+        </div>
+        <div class="phase-chips">
+          <div class="phase-chip" data-p="1">1 · Request</div>
+          <div class="phase-chip" data-p="2">2 · Pre-Prepare</div>
+          <div class="phase-chip" data-p="3">3 · Prepare</div>
+          <div class="phase-chip" data-p="4">4 · Commit</div>
+          <div class="phase-chip" data-p="5">5 · Reply</div>
+        </div>
+        <div class="nodes" id="nodes"></div>
+        <div class="quorum">
+          <span class="quorum-label">Matching messages</span>
+          <div class="quorum-bars" id="qbars"></div>
+          <span class="quorum-count" id="qtext">0 / 4</span>
+        </div>
+      </div>
+
+      <div id="narration" class="narration">
+        <div class="narr-meta">
+          <span id="narr-step" class="badge step">Step 0 / 0</span>
+          <span id="narr-event" class="badge event" style="display:none"></span>
+        </div>
+        <p id="narr-text" class="narr-text"><strong>Ready.</strong> N0 is primary, N1–N3 are backups. Press <strong>Next</strong> to send a client request.</p>
+      </div>
+
+      <div id="timeline-wrap" class="timeline-wrap">
+        <div class="timeline-head"><span>Scenario timeline</span><span class="pos" id="tl-pos">—</span></div>
+        <div id="timeline" class="timeline"></div>
+      </div>
+
+      <div id="step-controls" class="controls">
+        <button id="btn-prev"><i class="ti ti-chevron-left" aria-hidden="true"></i>Prev</button>
+        <button id="btn-play" class="primary"><i id="play-icon" class="ti ti-player-play" aria-hidden="true"></i><span id="play-label">Play</span></button>
+        <button id="btn-next"><i class="ti ti-chevron-right" aria-hidden="true"></i>Next</button>
+        <button id="btn-restart" class="ghost"><i class="ti ti-refresh" aria-hidden="true"></i>Restart</button>
+        <span class="spacer"></span>
+        <span class="hint"><span class="kbd">←</span><span class="kbd">→</span><span class="kbd">space</span></span>
+      </div>
+
+      <div id="free-play" class="free-card" style="display:none">
+        <h3>Free play — pick a Byzantine node, then step through</h3>
+        <div class="fp-hint">Choose one node to be malicious (it will send wrong / conflicting messages). Making the <strong>primary</strong> lie triggers a view change.</div>
+        <div class="fp-row" id="fp-byz"></div>
+        <div class="fp-actions">
+          <button id="fp-start" class="primary"><i class="ti ti-player-play"></i>Start request</button>
+          <button id="fp-step"><i class="ti ti-chevron-right"></i>Next step</button>
+          <button id="fp-reset" class="ghost"><i class="ti ti-refresh"></i>Reset</button>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="label">phase</div><div id="s-phase" class="value">—</div></div>
+        <div class="stat"><div class="label">view</div><div id="s-view" class="value">0</div></div>
+        <div class="stat"><div class="label">prepared</div><div id="s-prep" class="value" style="color:var(--warning)">0 / 4</div></div>
+        <div class="stat"><div class="label">committed</div><div id="s-comm" class="value" style="color:var(--success)">0 / 4</div></div>
+      </div>
+
+      <div class="log-card">
+        <div class="log-head"><span>Message log</span><span class="pill">last 2 messages</span></div>
+        <div id="log" class="log"></div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        var NAMES = ['N0', 'N1', 'N2', 'N3'];
+        var NN = 4, F = 1, QUORUM = 3;
+        var S = {
+          scenario: 'happy', stepIdx: 0, playing: false,
+          view: 0, primary: 0, byz: -1, // -1 means none
+          status: ['idle', 'idle', 'idle', 'idle'],
+          phaseN: 0, qCount: 0, qKind: '',
+          popNode: -1, eventTag: null, lastNarr: null,
+          phase: '—',
+          fpStarted: false, fpStep: 0, fpByz: -1,
+        };
+
+        var nodesEl = document.getElementById('nodes');
+        var narrEl = document.getElementById('narration');
+        var narrTxt = document.getElementById('narr-text');
+        var narrEv = document.getElementById('narr-event');
+        var narrStep = document.getElementById('narr-step');
+        var tlWrap = document.getElementById('timeline-wrap');
+        var tlEl = document.getElementById('timeline');
+        var tlPos = document.getElementById('tl-pos');
+        var logEl = document.getElementById('log');
+        var qbarsEl = document.getElementById('qbars');
+        var qtextEl = document.getElementById('qtext');
+        var fpByzEl = document.getElementById('fp-byz');
+
+        // Build quorum bars
+        for (var i = 0; i < 4; i++) { var qb = document.createElement('div'); qb.className = 'qbar'; qbarsEl.appendChild(qb); }
+        // Build fp-byz radios
+        var none = document.createElement('label'); none.className = 'byz-toggle';
+        none.innerHTML = '<input type="radio" name="fpbyz" value="-1" checked /><span>none</span>';
+        fpByzEl.appendChild(none);
+        for (var i = 0; i < 4; i++) {
+          (function (idx) {
+            var lab = document.createElement('label'); lab.className = 'byz-toggle';
+            lab.innerHTML = '<input type="radio" name="fpbyz" value="' + idx + '" /><span>' + NAMES[idx] + (idx === 0 ? ' <em style="font-style:normal;color:var(--muted)">(primary!)</em>' : '') + '</span>';
+            fpByzEl.appendChild(lab);
+          })(i);
+        }
+        fpByzEl.querySelectorAll('input').forEach(function (r) { r.addEventListener('change', function () { S.fpByz = parseInt(r.value); }); });
+
+        function renderNodes() {
+          nodesEl.innerHTML = '';
+          document.getElementById('viewNum').textContent = S.view;
+          for (var i = 0; i < 4; i++) {
+            var st = S.status[i];
+            var isPri = i === S.primary;
+            var isByz = i === S.byz;
+            var cls = 'node';
+            if (isByz) cls += ' byz';
+            else if (st === 'committed') cls += ' committed';
+            else if (st === 'prepared' || st === 'preprepared') cls += ' prepared';
+            else if (isPri) cls += ' primary';
+            if (S.popNode === i) cls += ' pop';
+            var icon = isByz ? 'mask' : (isPri ? 'crown' : 'server');
+            var role = isPri ? 'primary' : 'backup';
+            var stLabel = isByz ? 'LYING' : (st === 'committed' ? 'committed' : st === 'prepared' ? 'prepared' : st === 'preprepared' ? 'pre-prepared' : 'idle');
+            var card = document.createElement('div');
+            card.className = cls;
+            card.innerHTML = '<div class="icon"><i class="ti ti-' + icon + '"></i></div><div class="nm">' + NAMES[i] + '</div><div class="role">' + role + '</div><div class="st">' + stLabel + '</div>';
+            nodesEl.appendChild(card);
+          }
+          S.popNode = -1;
+        }
+        function pulseNode(i) { S.popNode = i; }
+
+        function render() {
+          renderNodes();
+          var chips = document.querySelectorAll('.phase-chip');
+          for (var c = 0; c < chips.length; c++) { var p = +chips[c].dataset.p; chips[c].classList.toggle('active', p === S.phaseN); chips[c].classList.toggle('done', p < S.phaseN); }
+          var kind = S.eventTag ? S.eventTag.kind : '';
+          narrEl.className = 'narration' + (kind ? ' ' + kind : '');
+          narrTxt.innerHTML = DOMPurify.sanitize(S.lastNarr || '<strong>Ready.</strong>');
+          if (S.scenario === 'free') narrStep.textContent = 'Free play · step ' + S.fpStep;
+          else { var sc = SCENARIOS[S.scenario]; narrStep.textContent = 'Step ' + S.stepIdx + ' / ' + (sc.length - 1); }
+          if (S.eventTag) { narrEv.style.display = ''; narrEv.className = 'badge event ' + S.eventTag.kind; narrEv.textContent = S.eventTag.text; }
+          else narrEv.style.display = 'none';
+
+          if (S.scenario === 'free') tlWrap.style.display = 'none';
+          else {
+            tlWrap.style.display = '';
+            var sc2 = SCENARIOS[S.scenario];
+            tlEl.innerHTML = '';
+            for (var j = 0; j < sc2.length; j++) {
+              var dd = document.createElement('div');
+              var cl = 'tl-dot'; if (j < S.stepIdx) cl += ' done'; if (j === S.stepIdx) cl += ' now';
+              dd.className = cl;
+              (function (idx) { dd.onclick = function () { applyStep(idx); }; })(j);
+              tlEl.appendChild(dd);
+            }
+            tlPos.textContent = (S.stepIdx + 1) + ' of ' + sc2.length;
+          }
+
+          // Quorum bars
+          var bars = qbarsEl.children;
+          for (var b = 0; b < 4; b++) {
+            var cl2 = 'qbar';
+            if (b < S.qCount) cl2 += S.qKind === 'commit' ? ' commit' : ' on';
+            bars[b].className = cl2;
+          }
+          qtextEl.textContent = S.qCount + ' / 4';
+          qtextEl.className = 'quorum-count' + (S.qCount >= QUORUM ? ' met' : '');
+
+          document.getElementById('s-phase').textContent = S.phase;
+          document.getElementById('s-view').textContent = S.view;
+          var prep = S.status.filter(function (s) { return s === 'prepared' || s === 'committed'; }).length;
+          var comm = S.status.filter(function (s) { return s === 'committed'; }).length;
+          document.getElementById('s-prep').textContent = prep + ' / 4';
+          document.getElementById('s-comm').textContent = comm + ' / 4';
+
+          if (S.scenario !== 'free') {
+            var sc3 = SCENARIOS[S.scenario];
+            document.getElementById('btn-prev').disabled = S.stepIdx <= 0;
+            document.getElementById('btn-next').disabled = S.stepIdx >= sc3.length - 1;
+          }
+        }
+
+        function log(msg, color) {
+          var t = new Date(); var hh = String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0') + ':' + String(t.getSeconds()).padStart(2, '0');
+          var line = document.createElement('div'); line.style.color = color || 'var(--subtle)';
+          var ts = document.createElement('span'); ts.className = 't'; ts.textContent = hh;
+          line.appendChild(ts); line.appendChild(document.createTextNode(String(msg)));
+          logEl.insertBefore(line, logEl.firstChild);
+          while (logEl.children.length > 2) logEl.removeChild(logEl.lastChild);
+        }
+        function stripTags(html) { return DOMPurify.sanitize(String(html == null ? '' : html), { ALLOWED_TAGS: [], KEEP_CONTENT: true }); }
+        function colorForEvent(k) {
+          if (k === 'req' || k === 'pre') return 'var(--info)';
+          if (k === 'prep') return 'var(--warning)';
+          if (k === 'commit') return 'var(--success)';
+          if (k === 'byz') return 'var(--danger)';
+          if (k === 'view') return 'var(--purple)';
+          return 'var(--subtle)';
+        }
+
+        function resetState(opts) {
+          opts = opts || {};
+          S.view = opts.view || 0;
+          S.primary = opts.primary != null ? opts.primary : 0;
+          S.byz = opts.byz != null ? opts.byz : -1;
+          S.status = ['idle', 'idle', 'idle', 'idle'];
+          S.phaseN = 0; S.qCount = 0; S.qKind = '';
+          S.phase = '—'; S.eventTag = null; S.lastNarr = null;
+        }
+
+        function doRequest() { S.phaseN = 1; S.phase = 'Request'; pulseNode(S.primary); }
+        function doPrePrepare() {
+          S.phaseN = 2; S.phase = 'Pre-Prepare';
+          for (var i = 0; i < 4; i++) { if (i !== S.byz) S.status[i] = 'preprepared'; }
+        }
+        function doPrepare() {
+          S.phaseN = 3; S.phase = 'Prepare';
+          var matching = 0;
+          for (var i = 0; i < 4; i++) { if (S.status[i] === 'preprepared') matching++; }
+          S.qCount = matching;
+          if (matching >= QUORUM) {
+            for (var i = 0; i < 4; i++) { if (S.status[i] === 'preprepared') S.status[i] = 'prepared'; }
+            S.qKind = 'on';
+          } else { S.qKind = ''; }
+        }
+        function doCommit() {
+          S.phaseN = 4; S.phase = 'Commit';
+          var matching = 0;
+          for (var i = 0; i < 4; i++) { if (S.status[i] === 'prepared') matching++; }
+          S.qCount = matching;
+          if (matching >= QUORUM) {
+            for (var i = 0; i < 4; i++) { if (S.status[i] === 'prepared') S.status[i] = 'committed'; }
+            S.qKind = 'commit';
+          } else { S.qKind = ''; }
+        }
+        function doReply() { S.phaseN = 5; S.phase = 'Reply'; }
+        function doViewChange() {
+          S.view++;
+          var old = S.primary;
+          S.primary = (S.primary + 1) % NN;
+          while (S.primary === S.byz) S.primary = (S.primary + 1) % NN;
+          for (var i = 0; i < 4; i++) { if (i !== S.byz) S.status[i] = 'idle'; }
+          S.phaseN = 0; S.qCount = 0; S.qKind = '';
+          pulseNode(S.primary);
+        }
+
+        var SCENARIOS = {};
+
+        SCENARIOS.happy = [
+          { narr: '<strong>Ready.</strong> N0 is primary, N1–N3 are backups. No malicious nodes this run. Press <strong>Next</strong> for the client request.', do: function () { resetState(); } },
+          { narr: '<strong>Step 1 — Request.</strong> Client sends its operation to the primary N0. N0 will assign it an order and start the agreement.', ev: 'req', do: function () { resetState(); doRequest(); } },
+          { narr: '<strong>Step 2 — Pre-Prepare.</strong> N0 broadcasts <code>PRE-PREPARE(view=0, seq=1, op)</code>. Backups receive it but don\'t trust it yet — the primary could be lying. They\'ll cross-check.', ev: 'pre', do: function () { resetState(); doRequest(); doPrePrepare(); } },
+          { narr: '<strong>Step 3 — Prepare (all-to-all cross-check).</strong> Each backup broadcasts PREPARE to every other node. With 3 matching messages (the 2f+1 quorum), each is now <strong>prepared</strong> — they\'ve confirmed everyone saw the same Pre-Prepare.', ev: 'prep', do: function () { resetState(); doRequest(); doPrePrepare(); doPrepare(); } },
+          { narr: '<strong>Step 4 — Commit (all-to-all confirmation).</strong> Each prepared node broadcasts COMMIT. Once 3 matching Commits arrive, each commits and executes the operation.', ev: 'commit', do: function () { resetState(); doRequest(); doPrePrepare(); doPrepare(); doCommit(); } },
+          { narr: '<strong>Step 5 — Reply.</strong> Each committed node replies directly to the client. The client waits for f+1 = 2 matching replies — guaranteeing at least one was honest.', ev: 'commit', do: function () { resetState(); doRequest(); doPrePrepare(); doPrepare(); doCommit(); doReply(); } },
+        ];
+
+        SCENARIOS['backup-lies'] = [
+          { narr: '<strong>Setup.</strong> N2 is Byzantine — it will send wrong / conflicting messages. The honest 3 must absorb the liar without disruption.', do: function () { resetState({ byz: 2 }); } },
+          { narr: '<strong>Step 1 — Request</strong> to primary N0.', ev: 'req', do: function () { resetState({ byz: 2 }); doRequest(); } },
+          { narr: '<strong>Step 2 — Pre-Prepare.</strong> N0 broadcasts normally. N1, N3 accept it. N2 marks itself as lying but the others can\'t see it yet.', ev: 'pre', do: function () { resetState({ byz: 2 }); doRequest(); doPrePrepare(); } },
+          { narr: '<strong>Step 3 — Prepare.</strong> N1 and N3 cross-check with each other and the primary. N2 sends a bogus PREPARE that doesn\'t match. <em>The honest 3 (N0, N1, N3) still get 3 matching messages — quorum met.</em>', ev: 'prep', do: function () { resetState({ byz: 2 }); doRequest(); doPrePrepare(); doPrepare(); } },
+          { narr: '<strong>Step 4 — Commit.</strong> The honest 3 broadcast Commits, ignore N2\'s noise, and reach the commit quorum. They execute.', ev: 'commit', do: function () { resetState({ byz: 2 }); doRequest(); doPrePrepare(); doPrepare(); doCommit(); } },
+          { narr: '<strong>Step 5 — Reply.</strong> Client gets at least f+1 = 2 matching replies from honest nodes. N2\'s lying was absorbed with zero disruption — that\'s what Byzantine fault tolerance buys you.', ev: 'commit', do: function () { resetState({ byz: 2 }); doRequest(); doPrePrepare(); doPrepare(); doCommit(); doReply(); } },
+        ];
+
+        SCENARIOS['primary-lies'] = [
+          { narr: '<strong>Setup.</strong> N0 — the primary — is Byzantine. It will send <strong>conflicting</strong> Pre-Prepares to different backups, trying to fork the agreement.', do: function () { resetState({ byz: 0 }); } },
+          { narr: '<strong>Step 1 — Request</strong> goes to N0 (which is malicious).', ev: 'req', do: function () { resetState({ byz: 0 }); doRequest(); } },
+          { narr: '<strong>Step 2 — Faulty Pre-Prepare.</strong> N0 sends <em>different</em> Pre-Prepare orderings to N1, N2, N3. Backups detect the mismatch.', ev: 'byz', do: function () { resetState({ byz: 0 }); doRequest(); } },
+          { narr: '<strong>Backups cannot reach Prepare quorum.</strong> Their Prepares disagree — fewer than 3 matching messages anywhere. <em>Trigger view change.</em>', ev: 'byz', do: function () { resetState({ byz: 0 }); doRequest(); } },
+          { narr: '<strong>View change!</strong> Backups vote to rotate the primary. View advances to 1; the new primary is the next honest node, N1. N0 stays a Byzantine backup.', ev: 'view', do: function () { resetState({ byz: 0 }); doRequest(); doViewChange(); } },
+          { narr: '<strong>Restart under N1.</strong> New honest primary, fresh Pre-Prepare, normal Prepare/Commit. The system healed itself without losing safety.', ev: 'commit', do: function () { resetState({ byz: 0, view: 1, primary: 1 }); doRequest(); doPrePrepare(); doPrepare(); doCommit(); doReply(); } },
+        ];
+
+        function applyStep(targetIdx) {
+          var sc = SCENARIOS[S.scenario]; if (!sc) return;
+          for (var i = 0; i <= targetIdx; i++) {
+            var st = sc[i]; S.eventTag = null; S.lastNarr = null; st.do();
+            if (i === targetIdx) {
+              if (S.lastNarr === null) S.lastNarr = st.narr;
+              if (st.ev && !S.eventTag) S.eventTag = { kind: st.ev, text: evLabel(st.ev) };
+            }
+          }
+          S.stepIdx = targetIdx; render();
+        }
+        function evLabel(k) { if (k === 'req') return 'request'; if (k === 'pre') return 'pre-prepare'; if (k === 'prep') return 'prepare'; if (k === 'commit') return 'commit'; if (k === 'byz') return 'byzantine'; if (k === 'view') return 'view change'; return k; }
+        function stepNext() {
+          var sc = SCENARIOS[S.scenario];
+          if (S.stepIdx < sc.length - 1) { applyStep(S.stepIdx + 1); log(stripTags(sc[S.stepIdx].narr), colorForEvent(S.eventTag && S.eventTag.kind)); }
+          else { setPlaying(false); }
+        }
+        function stepPrev() { if (S.stepIdx > 0) applyStep(S.stepIdx - 1); }
+        var playTimer = null;
+        function setPlaying(on) {
+          S.playing = on;
+          document.getElementById('play-label').textContent = on ? 'Pause' : 'Play';
+          document.getElementById('play-icon').className = on ? 'ti ti-player-pause' : 'ti ti-player-play';
+          if (playTimer) { clearInterval(playTimer); playTimer = null; }
+          if (on) playTimer = setInterval(function () {
+            var sc = SCENARIOS[S.scenario]; if (!sc) { setPlaying(false); return; }
+            if (S.stepIdx < sc.length - 1) stepNext(); else setPlaying(false);
+          }, 1700);
+        }
+
+        function pickScenario(name) {
+          S.scenario = name;
+          var tabs = document.querySelectorAll('.tab');
+          for (var i = 0; i < tabs.length; i++) tabs[i].classList.toggle('active', tabs[i].dataset.scenario === name);
+          setPlaying(false);
+          var stepCtl = document.getElementById('step-controls');
+          var fp = document.getElementById('free-play');
+          if (name === 'free') {
+            stepCtl.style.display = 'none'; fp.style.display = '';
+            resetState(); S.fpStarted = false; S.fpStep = 0;
+            S.lastNarr = '<strong>Free play.</strong> Pick a Byzantine node (or none) and press <strong>Start request</strong>.';
+            render();
+          } else {
+            stepCtl.style.display = ''; fp.style.display = 'none';
+            applyStep(0);
+          }
+        }
+
+        function fpStart() {
+          resetState({ byz: S.fpByz });
+          S.fpStarted = true; S.fpStep = 0; S.phase = 'Begin';
+          S.lastNarr = S.fpByz >= 0
+            ? '<strong>Request begins.</strong> ' + NAMES[S.fpByz] + ' is malicious. Watch how the quorum handles it.'
+            : '<strong>Request begins.</strong> All nodes honest. Press <strong>Next step</strong>.';
+          S.eventTag = null; log('client → primary ' + NAMES[S.primary] + ': REQUEST', 'var(--subtle)'); render();
+        }
+        function fpStepNext() {
+          if (!S.fpStarted) return;
+          if (S.fpStep === 0) {
+            doRequest();
+            S.lastNarr = '<strong>Step 1 — Request</strong> received by primary ' + NAMES[S.primary] + '.';
+            S.eventTag = { kind: 'req', text: 'request' };
+            log('primary received request', 'var(--info)'); S.fpStep = 1;
+          } else if (S.fpStep === 1) {
+            if (S.byz === S.primary) {
+              S.lastNarr = '<strong>Faulty Pre-Prepare!</strong> ' + NAMES[S.primary] + ' (primary) sends conflicting orderings — backups will detect during Prepare.';
+              S.eventTag = { kind: 'byz', text: 'byzantine' };
+              log('✗ primary sent conflicting Pre-Prepares', 'var(--danger)');
+              S.fpStep = 4; // skip to view change
+            } else {
+              doPrePrepare();
+              S.lastNarr = '<strong>Step 2 — Pre-Prepare</strong> broadcast by ' + NAMES[S.primary] + '. Backups receive but don\'t trust yet.';
+              S.eventTag = { kind: 'pre', text: 'pre-prepare' };
+              log(NAMES[S.primary] + ' → all: PRE-PREPARE', 'var(--info)'); S.fpStep = 2;
+            }
+          } else if (S.fpStep === 2) {
+            doPrepare();
+            if (S.qCount >= QUORUM) {
+              S.lastNarr = '<strong>Step 3 — Prepare.</strong> ' + S.qCount + ' matching messages (≥ ' + QUORUM + '). ' + (S.byz >= 0 && S.byz !== S.primary ? NAMES[S.byz] + '\'s bogus PREPARE was ignored. ' : '') + 'Honest nodes are now prepared.';
+              S.eventTag = { kind: 'prep', text: 'prepare quorum' };
+            } else {
+              S.lastNarr = '<strong>Could not reach Prepare quorum.</strong> View change incoming.';
+              S.eventTag = { kind: 'byz', text: 'no quorum' };
+            }
+            log(S.qCount + ' matching PREPAREs', S.qCount >= QUORUM ? 'var(--warning)' : 'var(--danger)');
+            S.fpStep = S.qCount >= QUORUM ? 3 : 4;
+          } else if (S.fpStep === 3) {
+            doCommit();
+            S.lastNarr = '<strong>Step 4 — Commit.</strong> ' + S.qCount + ' matching Commits. Honest nodes commit and execute.';
+            S.eventTag = { kind: 'commit', text: 'committed' };
+            log(S.qCount + ' matching COMMITs', 'var(--success)'); S.fpStep = 5;
+          } else if (S.fpStep === 4) {
+            doViewChange();
+            S.lastNarr = '<strong>View change!</strong> Primary role rotates to ' + NAMES[S.primary] + ' (view ' + S.view + '). Press <strong>Next step</strong> to retry under the new primary.';
+            S.eventTag = { kind: 'view', text: 'view change' };
+            log('view change → ' + NAMES[S.primary] + ' (view ' + S.view + ')', 'var(--purple)'); S.fpStep = 1;
+          } else if (S.fpStep === 5) {
+            doReply();
+            S.lastNarr = '<strong>Step 5 — Reply.</strong> Client gets f+1 = 2 matching replies. ' + (S.byz >= 0 && S.byz !== S.primary ? NAMES[S.byz] + '\'s lying tolerated with zero disruption.' : 'Done.');
+            S.eventTag = { kind: 'commit', text: 'reply' };
+            log('clients accepts ' + (F + 1) + ' matching replies', 'var(--success)'); S.fpStep = 6;
+          } else {
+            S.lastNarr = '<strong>Request complete.</strong> Press <strong>Reset</strong> to try a different Byzantine setup.';
+            S.eventTag = null;
+          }
+          render();
+        }
+        function fpReset() { resetState(); S.fpStarted = false; S.fpStep = 0; S.lastNarr = '<strong>Reset.</strong>'; S.eventTag = null; render(); }
+
+        var tabs = document.querySelectorAll('.tab');
+        for (var i = 0; i < tabs.length; i++) (function (t) { t.addEventListener('click', function () { pickScenario(t.dataset.scenario); }); })(tabs[i]);
+        document.getElementById('btn-prev').addEventListener('click', stepPrev);
+        document.getElementById('btn-next').addEventListener('click', stepNext);
+        document.getElementById('btn-play').addEventListener('click', function () { setPlaying(!S.playing); });
+        document.getElementById('btn-restart').addEventListener('click', function () { setPlaying(false); applyStep(0); });
+        document.getElementById('fp-start').addEventListener('click', fpStart);
+        document.getElementById('fp-step').addEventListener('click', fpStepNext);
+        document.getElementById('fp-reset').addEventListener('click', fpReset);
+        document.addEventListener('keydown', function (e) {
+          if (S.scenario === 'free') return;
+          if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); stepNext(); }
+          else if (e.key === 'ArrowLeft') { e.preventDefault(); stepPrev(); }
+        });
+
+        pickScenario('happy');
+        function postHeight() { parent.postMessage({ type: 'prototype:height', height: document.body.scrollHeight }, '*'); }
+        if (typeof ResizeObserver !== 'undefined') new ResizeObserver(postHeight).observe(document.body);
+        postHeight();
+      })();
+    </script>
+  </body>
+</html>

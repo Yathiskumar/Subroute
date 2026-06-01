@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Three-Phase Commit</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --success-bg: rgba(92,198,111,0.14); --success-bd: rgba(92,198,111,0.45);
+        --danger: #f06868;  --danger-bg: rgba(240,104,104,0.14); --danger-bd: rgba(240,104,104,0.45);
+        --warning: #f0b568; --warning-bg: rgba(240,181,104,0.14); --warning-bd: rgba(240,181,104,0.45);
+        --info: #5e9ff6;    --info-bg:    rgba(94,159,246,0.16); --info-bd:    rgba(94,159,246,0.45);
+        --purple: #a78bfa;  --purple-bg:  rgba(167,139,250,0.16); --purple-bd:  rgba(167,139,250,0.45);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --radius-lg: 14px; --radius-md: 8px; --radius-sm: 6px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body { padding: 18px 18px 24px; background-image: radial-gradient(1200px 600px at 50% -200px, rgba(251,134,58,0.06), transparent), linear-gradient(to right, rgba(255,255,255,0.020) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.020) 1px, transparent 1px); background-size: auto, 40px 40px, 40px 40px; }
+      .container { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; padding: 9px 12px; transition: all 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.08); }
+      button.ghost { background: transparent; }
+      button i { font-size: 14px; }
+      .tabs { display: flex; gap: 6px; flex-wrap: wrap; padding: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); }
+      .tab { flex: 1; min-width: 130px; padding: 9px 12px; font: 500 12px/1 var(--sans); border-radius: var(--radius-sm); border: 1px solid transparent; background: transparent; color: var(--muted); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: all 150ms ease; }
+      .tab:hover { color: var(--fg); background: rgba(255,255,255,0.03); }
+      .tab.active { background: var(--elevated); color: var(--fg); border-color: var(--border-strong); box-shadow: 0 1px 0 rgba(0,0,0,0.4); }
+      .tab i { font-size: 14px; }
+      .hero { background: linear-gradient(180deg, rgba(255,255,255,0.014), transparent), var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; position: relative; overflow: hidden; }
+      .hero::before { content: ""; position: absolute; inset: 0; background: radial-gradient(420px 240px at 50% 0%, rgba(94,159,246,0.05), transparent 60%); pointer-events: none; }
+      .hero-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; position: relative; z-index: 1; gap: 10px; flex-wrap: wrap; }
+      .hero-head .ttl { font: 600 11.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .phase-chips { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 12px; position: relative; z-index: 1; }
+      .phase-chip { flex: 1; min-width: 72px; padding: 6px 4px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: transparent; color: var(--subtle); text-align: center; font: 500 11px var(--mono); transition: all 200ms ease; }
+      .phase-chip.done { background: var(--surface); color: var(--muted); }
+      .phase-chip.active { background: var(--info-bg); border-color: var(--info-bd); color: var(--info); }
+      .legend { font-size: 11.5px; color: var(--muted); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      .legend .sw { display: inline-block; width: 11px; height: 11px; border-radius: 3px; vertical-align: -1px; margin-right: 3px; }
+      .sw.prep { background: var(--warning-bg); border: 1px solid var(--warning-bd); }
+      .sw.pre  { background: var(--info-bg); border: 1px solid var(--info-bd); }
+      .sw.commit { background: var(--success-bg); border: 1px solid var(--success-bd); }
+      .sw.abort { background: var(--danger-bg); border: 1px solid var(--danger-bd); }
+      .coord-row { display: flex; justify-content: center; margin-bottom: 6px; position: relative; z-index: 1; }
+      .coord { background: var(--elevated); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 22px; text-align: center; min-width: 220px; transition: all 250ms ease; }
+      .coord .role { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; display: flex; align-items: center; justify-content: center; gap: 5px; }
+      .coord .state { font: 600 15px var(--sans); margin-top: 4px; color: var(--fg); }
+      .coord.prep { background: var(--warning-bg); border-color: var(--warning-bd); } .coord.prep .state { color: var(--warning); }
+      .coord.pre  { background: var(--info-bg); border-color: var(--info-bd); } .coord.pre .state { color: var(--info); }
+      .coord.commit { background: var(--success-bg); border-color: var(--success-bd); } .coord.commit .state { color: var(--success); }
+      .coord.abort { background: var(--danger-bg); border-color: var(--danger-bd); } .coord.abort .state { color: var(--danger); }
+      .coord.crash { background: rgba(0,0,0,0.3); border-color: var(--border); opacity: 0.55; } .coord.crash .state { color: var(--muted); text-decoration: line-through; }
+      .split { text-align: center; color: var(--subtle); font-size: 22px; margin: 0 0 6px; position: relative; z-index: 1; }
+      .parts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; position: relative; z-index: 1; }
+      .part { background: var(--elevated); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 10px; text-align: center; transition: all 250ms ease; }
+      .part .role { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; display: flex; align-items: center; justify-content: center; gap: 4px; }
+      .part .state { font: 600 13px var(--sans); margin-top: 6px; color: var(--fg); }
+      .part.prep { background: var(--warning-bg); border-color: var(--warning-bd); } .part.prep .state { color: var(--warning); }
+      .part.yes  { background: var(--success-bg); border-color: var(--success-bd); } .part.yes .state { color: var(--success); }
+      .part.no   { background: var(--danger-bg); border-color: var(--danger-bd); } .part.no .state { color: var(--danger); }
+      .part.pre  { background: var(--info-bg); border-color: var(--info-bd); } .part.pre .state { color: var(--info); }
+      .part.commit { background: var(--success-bg); border-color: var(--success-bd); } .part.commit .state { color: var(--success); }
+      .part.abort  { background: var(--danger-bg); border-color: var(--danger-bd); } .part.abort .state { color: var(--danger); }
+      .pop { animation: pop .35s cubic-bezier(0.34, 1.56, 0.64, 1); }
+      @keyframes pop { from { transform: scale(0.92); } 50% { transform: scale(1.04); } to { transform: scale(1); } }
+      .narration { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px; position: relative; overflow: hidden; transition: border-color 350ms ease; }
+      .narration::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--border-strong); transition: background 350ms ease; }
+      .narration.idle::before { background: var(--border-strong); }
+      .narration.prep::before { background: var(--warning); } .narration.prep { border-color: rgba(240,181,104,0.30); }
+      .narration.yes::before { background: var(--success); } .narration.yes { border-color: rgba(92,198,111,0.30); }
+      .narration.no::before { background: var(--danger); } .narration.no { border-color: rgba(240,104,104,0.30); }
+      .narration.pre::before { background: var(--info); } .narration.pre { border-color: rgba(94,159,246,0.30); }
+      .narration.commit::before { background: var(--success); } .narration.commit { border-color: rgba(92,198,111,0.30); }
+      .narration.abort::before { background: var(--danger); } .narration.abort { border-color: rgba(240,104,104,0.30); }
+      .narration.crash::before { background: var(--purple); } .narration.crash { border-color: var(--purple-bd); }
+      .narr-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+      .badge { font: 600 10.5px var(--mono); padding: 4px 9px; border-radius: 999px; letter-spacing: 0.4px; text-transform: uppercase; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); color: var(--muted); background: var(--elevated); }
+      .badge.step { background: var(--elevated); border-color: var(--border-strong); color: var(--fg); }
+      .badge.event { background: transparent; }
+      .badge.event.prep { color: var(--warning); border-color: var(--warning-bd); }
+      .badge.event.yes { color: var(--success); border-color: var(--success-bd); }
+      .badge.event.no { color: var(--danger); border-color: var(--danger-bd); }
+      .badge.event.pre { color: var(--info); border-color: var(--info-bd); }
+      .badge.event.commit { color: var(--success); border-color: var(--success-bd); }
+      .badge.event.abort { color: var(--danger); border-color: var(--danger-bd); }
+      .badge.event.crash { color: var(--purple); border-color: var(--purple-bd); }
+      .narr-text { margin: 0; font-size: 14px; line-height: 1.6; color: var(--fg); }
+      .narr-text strong { color: var(--fg); font-weight: 600; }
+      .narr-text code { font-family: var(--mono); background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; color: var(--accent); font-size: 12px; }
+      .timeline-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; }
+      .timeline-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font: 500 11px var(--mono); color: var(--muted); letter-spacing: 0.4px; text-transform: uppercase; }
+      .timeline-head .pos { color: var(--fg); font-weight: 600; text-transform: none; letter-spacing: 0; }
+      .timeline { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+      .tl-dot { flex: 1; min-width: 14px; height: 6px; border-radius: 99px; background: var(--border); transition: all 200ms ease; cursor: pointer; }
+      .tl-dot.done { background: var(--accent); opacity: 0.55; }
+      .tl-dot.now { background: var(--accent); height: 10px; box-shadow: 0 0 8px rgba(251,134,58,0.5); }
+      .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .controls .spacer { flex: 1; }
+      .kbd { font-family: var(--mono); font-size: 10.5px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); color: var(--muted); border: 1px solid var(--border); }
+      .hint { font: 11px var(--mono); color: var(--subtle); display: inline-flex; align-items: center; gap: 5px; }
+      .free-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px; }
+      .free-card h3 { margin: 0 0 10px; font: 500 11px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .free-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+      .vote-toggle { display: inline-flex; align-items: center; gap: 6px; font: 500 12.5px var(--sans); color: var(--fg); cursor: pointer; }
+      .vote-toggle input { accent-color: var(--accent); cursor: pointer; }
+      .crash-toggle { display: inline-flex; align-items: center; gap: 6px; font: 500 12.5px var(--sans); color: var(--fg); cursor: pointer; padding-top: 6px; border-top: 1px dashed var(--border); }
+      .crash-toggle input { accent-color: var(--purple); cursor: pointer; }
+      .fp-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; }
+      .stat .label { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .stat .value { font: 600 17px var(--mono); margin-top: 4px; line-height: 1; }
+      .log-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; }
+      .log-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font: 500 11px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .log-head .pill { color: var(--subtle); text-transform: none; letter-spacing: 0; font-size: 10.5px; }
+      .log { font-family: var(--mono); font-size: 12px; line-height: 1.85; color: var(--subtle); min-height: 48px; max-height: 56px; overflow: hidden; }
+      .log .t { color: var(--subtle); margin-right: 10px; opacity: 0.7; }
+      @media (max-width: 540px) { .parts { gap: 6px; } .stats { grid-template-columns: repeat(2, 1fr); } .coord { min-width: 180px; } }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2 class="sr-only">Interactive Three-Phase Commit — coordinator + three participants with the new PreCommit phase that lets survivors recover the decision if the coordinator crashes.</h2>
+
+      <div class="tabs" role="tablist" aria-label="Scenario">
+        <button class="tab active" data-scenario="happy" role="tab"><i class="ti ti-circle-check" aria-hidden="true"></i>Happy path</button>
+        <button class="tab" data-scenario="vote-no" role="tab"><i class="ti ti-circle-x" aria-hidden="true"></i>Vote NO</button>
+        <button class="tab" data-scenario="crash" role="tab"><i class="ti ti-plug-connected-x" aria-hidden="true"></i>Crash after PreCommit</button>
+        <button class="tab" data-scenario="free" role="tab"><i class="ti ti-hand-finger" aria-hidden="true"></i>Free play</button>
+      </div>
+
+      <div class="hero" aria-label="3PC stage">
+        <div class="hero-head">
+          <span class="ttl">Coordinator + 3 participants · three phases</span>
+          <span class="legend">
+            <span><span class="sw prep"></span>can-commit</span>
+            <span><span class="sw pre"></span>pre-commit</span>
+            <span><span class="sw commit"></span>committed</span>
+            <span><span class="sw abort"></span>aborted</span>
+          </span>
+        </div>
+        <div class="phase-chips">
+          <div class="phase-chip" data-p="1">1 · CanCommit</div>
+          <div class="phase-chip" data-p="2">2 · Vote</div>
+          <div class="phase-chip" data-p="3">3 · PreCommit</div>
+          <div class="phase-chip" data-p="4">4 · DoCommit</div>
+          <div class="phase-chip" data-p="5">5 · Done</div>
+        </div>
+        <div class="coord-row">
+          <div id="coord" class="coord">
+            <div class="role"><i class="ti ti-server" aria-hidden="true"></i>Coordinator</div>
+            <div id="coord-state" class="state">Idle</div>
+          </div>
+        </div>
+        <div class="split"><i class="ti ti-arrows-split-2" aria-hidden="true"></i></div>
+        <div class="parts" id="parts"></div>
+      </div>
+
+      <div id="narration" class="narration idle">
+        <div class="narr-meta">
+          <span id="narr-step" class="badge step">Step 0 / 0</span>
+          <span id="narr-event" class="badge event" style="display:none"></span>
+        </div>
+        <p id="narr-text" class="narr-text"><strong>Idle.</strong> Press <strong>Next</strong> to begin.</p>
+      </div>
+
+      <div id="timeline-wrap" class="timeline-wrap">
+        <div class="timeline-head"><span>Scenario timeline</span><span class="pos" id="tl-pos">—</span></div>
+        <div id="timeline" class="timeline"></div>
+      </div>
+
+      <div id="step-controls" class="controls">
+        <button id="btn-prev"><i class="ti ti-chevron-left" aria-hidden="true"></i>Prev</button>
+        <button id="btn-play" class="primary"><i id="play-icon" class="ti ti-player-play" aria-hidden="true"></i><span id="play-label">Play</span></button>
+        <button id="btn-next"><i class="ti ti-chevron-right" aria-hidden="true"></i>Next</button>
+        <button id="btn-restart" class="ghost"><i class="ti ti-refresh" aria-hidden="true"></i>Restart</button>
+        <span class="spacer"></span>
+        <span class="hint"><span class="kbd">←</span><span class="kbd">→</span><span class="kbd">space</span></span>
+      </div>
+
+      <div id="free-play" class="free-card" style="display:none">
+        <h3>Free play — set votes and choose a crash point</h3>
+        <div class="free-row" id="fp-votes"></div>
+        <label class="crash-toggle"><input id="fp-crash" type="checkbox" /> Crash coordinator <em style="font-style:normal;color:var(--muted)">after PreCommit</em> (the case 2PC blocks on)</label>
+        <div class="fp-actions" style="margin-top:10px">
+          <button id="fp-start" class="primary"><i class="ti ti-player-play" aria-hidden="true"></i>Start</button>
+          <button id="fp-step"><i class="ti ti-chevron-right" aria-hidden="true"></i>Next step</button>
+          <button id="fp-reset" class="ghost"><i class="ti ti-refresh" aria-hidden="true"></i>Reset</button>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="label">phase</div><div id="s-phase" class="value">—</div></div>
+        <div class="stat"><div class="label">votes YES</div><div id="s-yes" class="value" style="color:var(--success)">0</div></div>
+        <div class="stat"><div class="label">votes NO</div><div id="s-no" class="value" style="color:var(--danger)">0</div></div>
+        <div class="stat"><div class="label">outcome</div><div id="s-outcome" class="value" style="font-size:13px;padding-top:4px">—</div></div>
+      </div>
+
+      <div class="log-card">
+        <div class="log-head"><span>Message log</span><span class="pill">last 2 messages</span></div>
+        <div id="log" class="log"></div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        var NAMES = ['P1', 'P2', 'P3'];
+        var S = {
+          scenario: 'happy', stepIdx: 0, playing: false,
+          coord: 'idle', coordLabel: 'Idle',
+          parts: [{ state: 'idle', label: 'Idle' }, { state: 'idle', label: 'Idle' }, { state: 'idle', label: 'Idle' }],
+          popCoord: false, popParts: [false, false, false],
+          phaseN: 0, eventTag: null, lastNarr: null,
+          phase: '—', outcome: '—', outcomeColor: 'var(--fg)',
+          fpVotes: [true, true, true], fpCrash: false,
+          fpStarted: false, fpStep: 0,
+        };
+
+        var partsEl = document.getElementById('parts');
+        var coordEl = document.getElementById('coord');
+        var coordStateEl = document.getElementById('coord-state');
+        var narrEl = document.getElementById('narration');
+        var narrTxt = document.getElementById('narr-text');
+        var narrEv = document.getElementById('narr-event');
+        var narrStep = document.getElementById('narr-step');
+        var tlWrap = document.getElementById('timeline-wrap');
+        var tlEl = document.getElementById('timeline');
+        var tlPos = document.getElementById('tl-pos');
+        var sPhase = document.getElementById('s-phase');
+        var sYes = document.getElementById('s-yes');
+        var sNo = document.getElementById('s-no');
+        var sOutcome = document.getElementById('s-outcome');
+        var logEl = document.getElementById('log');
+        var fpVotesEl = document.getElementById('fp-votes');
+
+        for (var i = 0; i < 3; i++) { var d = document.createElement('div'); d.className = 'part idle'; partsEl.appendChild(d); }
+
+        for (var i = 0; i < 3; i++) {
+          (function (idx) {
+            var wrap = document.createElement('label'); wrap.className = 'vote-toggle';
+            var cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = true;
+            cb.addEventListener('change', function () { S.fpVotes[idx] = cb.checked; updateVoteLabels(); });
+            wrap.appendChild(cb);
+            var sp = document.createElement('span');
+            sp.innerHTML = '<strong>' + NAMES[idx] + '</strong> votes <em data-vote="' + idx + '" style="color:var(--success);font-style:normal">YES</em>';
+            wrap.appendChild(sp); fpVotesEl.appendChild(wrap);
+          })(i);
+        }
+        function updateVoteLabels() {
+          for (var i = 0; i < 3; i++) {
+            var el = fpVotesEl.querySelector('[data-vote="' + i + '"]');
+            if (S.fpVotes[i]) { el.textContent = 'YES'; el.style.color = 'var(--success)'; }
+            else { el.textContent = 'NO'; el.style.color = 'var(--danger)'; }
+          }
+        }
+        document.getElementById('fp-crash').addEventListener('change', function (e) { S.fpCrash = e.target.checked; });
+
+        function setCoord(state, label) { S.coord = state; S.coordLabel = label; }
+        function setPart(i, state, label) { S.parts[i] = { state: state, label: label }; }
+        function pulseAll() { S.popCoord = true; S.popParts = [true, true, true]; }
+        function pulsePart(i) { S.popParts[i] = true; }
+        function pulseCoord() { S.popCoord = true; }
+
+        function render() {
+          coordEl.className = 'coord ' + S.coord + (S.popCoord ? ' pop' : '');
+          coordStateEl.textContent = S.coordLabel;
+          S.popCoord = false;
+
+          for (var i = 0; i < 3; i++) {
+            var el = partsEl.children[i];
+            el.className = 'part ' + S.parts[i].state + (S.popParts[i] ? ' pop' : '');
+            el.innerHTML = '<div class="role"><i class="ti ti-database" aria-hidden="true"></i>' + NAMES[i] + '</div><div class="state">' + S.parts[i].label + '</div>';
+            S.popParts[i] = false;
+          }
+
+          var chips = document.querySelectorAll('.phase-chip');
+          for (var c = 0; c < chips.length; c++) {
+            var p = +chips[c].dataset.p;
+            chips[c].classList.toggle('active', p === S.phaseN);
+            chips[c].classList.toggle('done', p < S.phaseN);
+          }
+
+          var kind = S.eventTag ? S.eventTag.kind : 'idle';
+          narrEl.className = 'narration ' + kind;
+          narrTxt.innerHTML = DOMPurify.sanitize(S.lastNarr || '<strong>Idle.</strong> Press <strong>Next</strong> to begin.');
+          if (S.scenario === 'free') { narrStep.textContent = 'Free play · step ' + S.fpStep; }
+          else {
+            var sc = SCENARIOS[S.scenario];
+            narrStep.textContent = 'Step ' + S.stepIdx + ' / ' + (sc.length - 1);
+          }
+          if (S.eventTag) { narrEv.style.display = ''; narrEv.className = 'badge event ' + S.eventTag.kind; narrEv.textContent = S.eventTag.text; }
+          else { narrEv.style.display = 'none'; }
+
+          if (S.scenario === 'free') { tlWrap.style.display = 'none'; }
+          else {
+            tlWrap.style.display = '';
+            var sc2 = SCENARIOS[S.scenario];
+            tlEl.innerHTML = '';
+            for (var j = 0; j < sc2.length; j++) {
+              var dd = document.createElement('div');
+              var cl = 'tl-dot';
+              if (j < S.stepIdx) cl += ' done';
+              if (j === S.stepIdx) cl += ' now';
+              dd.className = cl;
+              (function (idx) { dd.onclick = function () { applyStep(idx); }; })(j);
+              tlEl.appendChild(dd);
+            }
+            tlPos.textContent = (S.stepIdx + 1) + ' of ' + sc2.length;
+          }
+
+          sPhase.textContent = S.phase;
+          var yes = S.parts.filter(function (p) { return p.label === 'YES' || p.label === 'PRE-COMMIT' || p.label === 'COMMITTED'; }).length;
+          var no = S.parts.filter(function (p) { return p.label === 'NO'; }).length;
+          sYes.textContent = yes; sNo.textContent = no;
+          sOutcome.textContent = S.outcome; sOutcome.style.color = S.outcomeColor;
+
+          if (S.scenario !== 'free') {
+            var sc3 = SCENARIOS[S.scenario];
+            document.getElementById('btn-prev').disabled = S.stepIdx <= 0;
+            document.getElementById('btn-next').disabled = S.stepIdx >= sc3.length - 1;
+          }
+        }
+
+        function log(msg, color) {
+          var t = new Date();
+          var hh = String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0') + ':' + String(t.getSeconds()).padStart(2, '0');
+          var line = document.createElement('div'); line.style.color = color || 'var(--subtle)';
+          var ts = document.createElement('span'); ts.className = 't'; ts.textContent = hh;
+          line.appendChild(ts); line.appendChild(document.createTextNode(String(msg)));
+          logEl.insertBefore(line, logEl.firstChild);
+          while (logEl.children.length > 2) logEl.removeChild(logEl.lastChild);
+        }
+        function stripTags(html) { return DOMPurify.sanitize(String(html == null ? '' : html), { ALLOWED_TAGS: [], KEEP_CONTENT: true }); }
+        function colorForEvent(k) {
+          if (k === 'prep') return 'var(--warning)';
+          if (k === 'yes') return 'var(--success)';
+          if (k === 'no') return 'var(--danger)';
+          if (k === 'pre') return 'var(--info)';
+          if (k === 'commit') return 'var(--success)';
+          if (k === 'abort') return 'var(--danger)';
+          if (k === 'crash') return 'var(--purple)';
+          return 'var(--subtle)';
+        }
+
+        function resetState() {
+          S.coord = 'idle'; S.coordLabel = 'Idle';
+          S.parts = [{ state: 'idle', label: 'Idle' }, { state: 'idle', label: 'Idle' }, { state: 'idle', label: 'Idle' }];
+          S.popCoord = false; S.popParts = [false, false, false];
+          S.phaseN = 0; S.phase = '—'; S.outcome = '—'; S.outcomeColor = 'var(--fg)';
+          S.eventTag = null; S.lastNarr = null;
+        }
+
+        function doCanCommit(votes) {
+          S.phaseN = 1; S.phase = 'CanCommit'; setCoord('prep', 'Sending CAN-COMMIT?');
+          for (var i = 0; i < 3; i++) { setPart(i, 'prep', votes[i] ? 'Ready' : 'Ready (will NO)'); }
+          pulseAll();
+        }
+        function doVotes(votes) {
+          S.phaseN = 2; S.phase = 'Vote';
+          for (var i = 0; i < 3; i++) { if (votes[i]) setPart(i, 'yes', 'YES'); else setPart(i, 'no', 'NO'); pulsePart(i); }
+          var allYes = votes.every(Boolean);
+          if (allYes) setCoord('prep', 'All YES'); else setCoord('abort', 'Got a NO');
+          pulseCoord();
+        }
+        function doPreCommit() {
+          S.phaseN = 3; S.phase = 'PreCommit'; setCoord('pre', 'Sending PRE-COMMIT');
+          for (var i = 0; i < 3; i++) { setPart(i, 'pre', 'PRE-COMMIT'); pulsePart(i); }
+          pulseCoord();
+        }
+        function doDoCommit() {
+          S.phaseN = 4; S.phase = 'DoCommit'; setCoord('commit', 'Sending DO-COMMIT');
+          for (var i = 0; i < 3; i++) { setPart(i, 'commit', 'COMMITTED'); pulsePart(i); }
+          S.outcome = 'COMMITTED'; S.outcomeColor = 'var(--success)';
+          pulseCoord();
+        }
+        function doAbort() {
+          S.phaseN = 5; S.phase = 'Aborted'; setCoord('abort', 'Sending ABORT');
+          for (var i = 0; i < 3; i++) { setPart(i, 'abort', 'ABORTED'); pulsePart(i); }
+          S.outcome = 'ABORTED'; S.outcomeColor = 'var(--danger)';
+          pulseCoord();
+        }
+        function doCrash() {
+          S.phase = 'Coordinator crashed'; setCoord('crash', 'CRASHED'); pulseCoord();
+        }
+        function doRecover() {
+          S.phaseN = 4; S.phase = 'Recovery'; for (var i = 0; i < 3; i++) { setPart(i, 'commit', 'COMMITTED'); pulsePart(i); }
+          S.outcome = 'COMMITTED (recovered)'; S.outcomeColor = 'var(--success)';
+        }
+
+        var SCENARIOS = {};
+
+        SCENARIOS.happy = [
+          { narr: '<strong>Idle.</strong> Coordinator + three participants, ready for a 3PC transaction.', do: function () { resetState(); } },
+          { narr: '<strong>Phase 1 — CanCommit.</strong> Coordinator asks <code>can you commit?</code>. Each participant does a feasibility check (no heavy work yet) — note this is lighter than 2PC\'s Prepare.', ev: 'prep', do: function () { resetState(); doCanCommit([true, true, true]); } },
+          { narr: '<strong>Votes collected.</strong> All three reply YES.', ev: 'yes', do: function () { resetState(); doCanCommit([true, true, true]); doVotes([true, true, true]); } },
+          { narr: '<strong>Phase 2 — PreCommit (the new phase).</strong> Coordinator writes PRE-COMMIT to its log and broadcasts. Each participant durably prepares and acknowledges. <em>This is the phase that prevents the 2PC blocking case.</em>', ev: 'pre', do: function () { resetState(); doCanCommit([true, true, true]); doVotes([true, true, true]); doPreCommit(); } },
+          { narr: '<strong>Phase 3 — DoCommit.</strong> Coordinator sends the final commit; every participant applies the transaction.', ev: 'commit', do: function () { resetState(); doCanCommit([true, true, true]); doVotes([true, true, true]); doPreCommit(); doDoCommit(); } },
+          { narr: '<strong>Done — committed atomically.</strong> Took three round-trips instead of 2PC\'s two, but the protocol is non-blocking on coordinator failure.', ev: 'commit', do: function () { resetState(); doCanCommit([true, true, true]); doVotes([true, true, true]); doPreCommit(); doDoCommit(); S.phaseN = 5; } },
+        ];
+
+        SCENARIOS['vote-no'] = [
+          { narr: '<strong>Idle.</strong> This time <strong>P2</strong> will refuse during CanCommit.', do: function () { resetState(); } },
+          { narr: '<strong>Phase 1 — CanCommit.</strong> Asking the question.', ev: 'prep', do: function () { resetState(); doCanCommit([true, false, true]); } },
+          { narr: '<strong>P2 votes NO.</strong> One NO is enough — unanimous YES is still required in 3PC.', ev: 'no', do: function () { resetState(); doCanCommit([true, false, true]); doVotes([true, false, true]); } },
+          { narr: '<strong>Phase abort (early).</strong> Coordinator skips PreCommit entirely and broadcasts ABORT. <em>Notice 3PC\'s early-abort path is actually cheaper than 2PC</em>: no participant ever wrote the heavy prepare log.', ev: 'abort', do: function () { resetState(); doCanCommit([true, false, true]); doVotes([true, false, true]); doAbort(); } },
+          { narr: '<strong>Done — aborted atomically.</strong> Nobody committed.', ev: 'abort', do: function () { resetState(); doCanCommit([true, false, true]); doVotes([true, false, true]); doAbort(); } },
+        ];
+
+        SCENARIOS.crash = [
+          { narr: '<strong>Idle.</strong> The famous case: everyone will vote YES, the coordinator will reach PreCommit — then crash. <em>2PC would block here. Watch 3PC recover.</em>', do: function () { resetState(); } },
+          { narr: '<strong>Phase 1 — CanCommit.</strong>', ev: 'prep', do: function () { resetState(); doCanCommit([true, true, true]); } },
+          { narr: '<strong>All voted YES.</strong>', ev: 'yes', do: function () { resetState(); doCanCommit([true, true, true]); doVotes([true, true, true]); } },
+          { narr: '<strong>Phase 2 — PreCommit broadcast.</strong> Every participant durably acknowledges PreCommit.', ev: 'pre', do: function () { resetState(); doCanCommit([true, true, true]); doVotes([true, true, true]); doPreCommit(); } },
+          { narr: '<strong>Coordinator crashes!</strong> Before sending DoCommit, the coordinator dies. Participants notice the timeout.', ev: 'crash', do: function () { resetState(); doCanCommit([true, true, true]); doVotes([true, true, true]); doPreCommit(); doCrash(); } },
+          { narr: '<strong>Survivors recover.</strong> They confer: did anyone reach PreCommit? <em>Everyone did.</em> By the protocol\'s invariant, the only possible decision was COMMIT — so they commit on their own. <strong>No blocking.</strong>', ev: 'commit', do: function () { resetState(); doCanCommit([true, true, true]); doVotes([true, true, true]); doPreCommit(); doCrash(); doRecover(); } },
+        ];
+
+        function applyStep(targetIdx) {
+          var sc = SCENARIOS[S.scenario]; if (!sc) return;
+          for (var i = 0; i <= targetIdx; i++) {
+            var st = sc[i]; S.eventTag = null; S.lastNarr = null; st.do();
+            if (i === targetIdx) {
+              if (S.lastNarr === null) S.lastNarr = st.narr;
+              if (st.ev && !S.eventTag) S.eventTag = { kind: st.ev, text: evLabel(st.ev) };
+            }
+          }
+          S.stepIdx = targetIdx; render();
+        }
+        function evLabel(k) { if (k === 'prep') return 'can-commit'; if (k === 'yes') return 'votes yes'; if (k === 'no') return 'vote no'; if (k === 'pre') return 'pre-commit'; if (k === 'commit') return 'commit'; if (k === 'abort') return 'abort'; if (k === 'crash') return 'crash'; return k; }
+        function stepNext() {
+          var sc = SCENARIOS[S.scenario];
+          if (S.stepIdx < sc.length - 1) { applyStep(S.stepIdx + 1); log(stripTags(sc[S.stepIdx].narr), colorForEvent(S.eventTag && S.eventTag.kind)); }
+          else { setPlaying(false); }
+        }
+        function stepPrev() { if (S.stepIdx > 0) applyStep(S.stepIdx - 1); }
+
+        var playTimer = null;
+        function setPlaying(on) {
+          S.playing = on;
+          document.getElementById('play-label').textContent = on ? 'Pause' : 'Play';
+          document.getElementById('play-icon').className = on ? 'ti ti-player-pause' : 'ti ti-player-play';
+          if (playTimer) { clearInterval(playTimer); playTimer = null; }
+          if (on) playTimer = setInterval(function () {
+            var sc = SCENARIOS[S.scenario]; if (!sc) { setPlaying(false); return; }
+            if (S.stepIdx < sc.length - 1) stepNext(); else setPlaying(false);
+          }, 1700);
+        }
+
+        function pickScenario(name) {
+          S.scenario = name;
+          var tabs = document.querySelectorAll('.tab');
+          for (var i = 0; i < tabs.length; i++) tabs[i].classList.toggle('active', tabs[i].dataset.scenario === name);
+          setPlaying(false);
+          var stepCtl = document.getElementById('step-controls');
+          var fp = document.getElementById('free-play');
+          if (name === 'free') {
+            stepCtl.style.display = 'none'; fp.style.display = '';
+            resetState(); S.fpStarted = false; S.fpStep = 0;
+            S.lastNarr = '<strong>Free play.</strong> Toggle each participant\'s vote and choose whether to crash the coordinator after PreCommit, then press <strong>Start</strong>.';
+            render();
+          } else {
+            stepCtl.style.display = ''; fp.style.display = 'none';
+            applyStep(0);
+          }
+        }
+
+        function fpStart() {
+          resetState(); S.fpStarted = true; S.fpStep = 0; S.phase = 'Begin';
+          S.lastNarr = '<strong>Transaction begins.</strong> Press <strong>Next step</strong> to send CAN-COMMIT.';
+          S.eventTag = null; log('client → coordinator: begin', 'var(--subtle)'); render();
+        }
+        function fpStepNext() {
+          if (!S.fpStarted) return;
+          var votes = S.fpVotes.slice();
+          var allYes = votes.every(Boolean);
+          if (S.fpStep === 0) {
+            doCanCommit(votes);
+            S.lastNarr = '<strong>Phase 1 — CanCommit.</strong> Asking participants if they can commit.';
+            S.eventTag = { kind: 'prep', text: 'can-commit' };
+            log('coordinator → all: CAN-COMMIT?', 'var(--warning)'); S.fpStep = 1;
+          } else if (S.fpStep === 1) {
+            doVotes(votes);
+            S.lastNarr = allYes ? '<strong>All YES.</strong> Coordinator can move to PreCommit.' : '<strong>Got a NO.</strong> Coordinator must abort.';
+            S.eventTag = { kind: allYes ? 'yes' : 'no', text: allYes ? 'votes yes' : 'vote no' };
+            log('participants → coordinator: votes', allYes ? 'var(--success)' : 'var(--danger)'); S.fpStep = 2;
+          } else if (S.fpStep === 2) {
+            if (!allYes) {
+              doAbort();
+              S.lastNarr = '<strong>ABORT broadcast.</strong> Done.';
+              S.eventTag = { kind: 'abort', text: 'abort' };
+              log('coordinator → all: ABORT', 'var(--danger)'); S.fpStep = 4;
+            } else {
+              doPreCommit();
+              S.lastNarr = '<strong>Phase 2 — PreCommit broadcast.</strong> Every participant durably acknowledges.';
+              S.eventTag = { kind: 'pre', text: 'pre-commit' };
+              log('coordinator → all: PRE-COMMIT', 'var(--info)'); S.fpStep = 3;
+            }
+          } else if (S.fpStep === 3) {
+            if (S.fpCrash) {
+              doCrash();
+              S.lastNarr = '<strong>Coordinator crashes.</strong> Participants will recover on their own.';
+              S.eventTag = { kind: 'crash', text: 'crash' };
+              log('✗ coordinator crashed', 'var(--purple)'); S.fpStep = 3.5;
+            } else {
+              doDoCommit();
+              S.lastNarr = '<strong>DoCommit broadcast.</strong> Every participant commits.';
+              S.eventTag = { kind: 'commit', text: 'commit' };
+              log('coordinator → all: DO-COMMIT', 'var(--success)'); S.fpStep = 4;
+            }
+          } else if (S.fpStep === 3.5) {
+            doRecover();
+            S.lastNarr = '<strong>Survivors recover.</strong> Everyone reached PreCommit → commit on their own, no blocking.';
+            S.eventTag = { kind: 'commit', text: 'commit (recovered)' };
+            log('survivors: commit without coordinator', 'var(--success)'); S.fpStep = 4;
+          } else {
+            S.lastNarr = '<strong>Transaction finished.</strong> Press <strong>Reset</strong> to try again.';
+            S.eventTag = null;
+          }
+          render();
+        }
+        function fpReset() {
+          resetState(); S.fpStarted = false; S.fpStep = 0;
+          S.lastNarr = '<strong>Reset.</strong> Configure and press Start.'; S.eventTag = null; render();
+        }
+
+        var tabs = document.querySelectorAll('.tab');
+        for (var i = 0; i < tabs.length; i++) (function (t) { t.addEventListener('click', function () { pickScenario(t.dataset.scenario); }); })(tabs[i]);
+        document.getElementById('btn-prev').addEventListener('click', stepPrev);
+        document.getElementById('btn-next').addEventListener('click', stepNext);
+        document.getElementById('btn-play').addEventListener('click', function () { setPlaying(!S.playing); });
+        document.getElementById('btn-restart').addEventListener('click', function () { setPlaying(false); applyStep(0); });
+        document.getElementById('fp-start').addEventListener('click', fpStart);
+        document.getElementById('fp-step').addEventListener('click', fpStepNext);
+        document.getElementById('fp-reset').addEventListener('click', fpReset);
+        document.addEventListener('keydown', function (e) {
+          if (S.scenario === 'free') return;
+          if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); stepNext(); }
+          else if (e.key === 'ArrowLeft') { e.preventDefault(); stepPrev(); }
+        });
+
+        pickScenario('happy');
+        function postHeight() { parent.postMessage({ type: 'prototype:height', height: document.body.scrollHeight }, '*'); }
+        if (typeof ResizeObserver !== 'undefined') new ResizeObserver(postHeight).observe(document.body);
+        postHeight();
+      })();
+    </script>
+  </body>
+</html>

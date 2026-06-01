@@ -659,6 +659,82 @@ export const TOPICS: Topic[] = [
     ],
   },
   {
+    slug: "consensus",
+    title: "Consensus",
+    description:
+      "How a cluster agrees on a single answer when nodes die, packets drop, and some machines may even lie. Seven algorithms, from the two-phase commit that everyone learns first to the Byzantine-fault-tolerant PBFT.",
+    difficulty: "advanced",
+    icon: "Handshake",
+    tags: ["distributed", "consistency", "patterns"],
+    estimatedTime: "90 min",
+    prerequisites: ["Distributed systems basics", "Replication", "Quorums"],
+    concepts: [
+      {
+        slug: "two-phase-commit",
+        title: "Two-Phase Commit (2PC)",
+        oneLiner:
+          "A coordinator polls everyone, then tells them all the same answer. Atomic — but if the coordinator dies mid-decision, the cluster hangs.",
+        difficulty: "beginner",
+        estimatedTime: "11 min",
+        prototypePath: "/prototypes/consensus/two-phase-commit.html",
+      },
+      {
+        slug: "three-phase-commit",
+        title: "Three-Phase Commit (3PC)",
+        oneLiner:
+          "Slip a pre-commit phase between vote and commit so survivors can recover the decision without the coordinator. Non-blocking — at the cost of an extra round.",
+        difficulty: "intermediate",
+        estimatedTime: "12 min",
+        prototypePath: "/prototypes/consensus/three-phase-commit.html",
+      },
+      {
+        slug: "paxos",
+        title: "Paxos",
+        oneLiner:
+          "Two rounds — Prepare and Accept — driven by ever-increasing proposal numbers, and the impossible-to-contradict invariant they enforce on a quorum.",
+        difficulty: "advanced",
+        estimatedTime: "14 min",
+        prototypePath: "/prototypes/consensus/paxos.html",
+      },
+      {
+        slug: "multi-paxos",
+        title: "Multi-Paxos",
+        oneLiner:
+          "Pay for Prepare once, elect a stable leader, then stream commands with Accept alone. The shape every modern replication protocol ends up copying.",
+        difficulty: "advanced",
+        estimatedTime: "13 min",
+        prototypePath: "/prototypes/consensus/multi-paxos.html",
+      },
+      {
+        slug: "raft",
+        title: "Raft",
+        oneLiner:
+          "Paxos rewritten so humans can implement it: terms, an elected leader, a strictly append-only log, and AppendEntries as the only replication RPC.",
+        difficulty: "advanced",
+        estimatedTime: "14 min",
+        prototypePath: "/prototypes/consensus/raft.html",
+      },
+      {
+        slug: "zab",
+        title: "ZAB — ZooKeeper Atomic Broadcast",
+        oneLiner:
+          "ZooKeeper's variant. Elect by highest zxid, open a new epoch, sync followers up to the leader, then propose/ACK/commit in strict FIFO order.",
+        difficulty: "advanced",
+        estimatedTime: "12 min",
+        prototypePath: "/prototypes/consensus/zab.html",
+      },
+      {
+        slug: "pbft",
+        title: "PBFT — Practical Byzantine Fault Tolerance",
+        oneLiner:
+          "Pre-Prepare, Prepare, Commit — three rounds of cross-checked broadcasts so 3f+1 nodes can agree even when f of them are actively lying.",
+        difficulty: "advanced",
+        estimatedTime: "14 min",
+        prototypePath: "/prototypes/consensus/pbft.html",
+      },
+    ],
+  },
+  {
     slug: "bloom-filters",
     title: "Bloom & Cuckoo Filters",
     description:

@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Paxos</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --success-bg: rgba(92,198,111,0.14); --success-bd: rgba(92,198,111,0.45);
+        --danger: #f06868;  --danger-bg: rgba(240,104,104,0.14); --danger-bd: rgba(240,104,104,0.45);
+        --warning: #f0b568; --warning-bg: rgba(240,181,104,0.14); --warning-bd: rgba(240,181,104,0.45);
+        --info: #5e9ff6;    --info-bg:    rgba(94,159,246,0.16); --info-bd:    rgba(94,159,246,0.45);
+        --purple: #a78bfa;  --purple-bg:  rgba(167,139,250,0.16); --purple-bd:  rgba(167,139,250,0.45);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --radius-lg: 14px; --radius-md: 8px; --radius-sm: 6px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body { padding: 18px 18px 24px; background-image: radial-gradient(1200px 600px at 50% -200px, rgba(251,134,58,0.06), transparent), linear-gradient(to right, rgba(255,255,255,0.020) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.020) 1px, transparent 1px); background-size: auto, 40px 40px, 40px 40px; }
+      .container { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; padding: 9px 12px; transition: all 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.08); }
+      button.ghost { background: transparent; }
+      button i { font-size: 14px; }
+      .tabs { display: flex; gap: 6px; flex-wrap: wrap; padding: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); }
+      .tab { flex: 1; min-width: 130px; padding: 9px 12px; font: 500 12px/1 var(--sans); border-radius: var(--radius-sm); border: 1px solid transparent; background: transparent; color: var(--muted); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: all 150ms ease; }
+      .tab:hover { color: var(--fg); background: rgba(255,255,255,0.03); }
+      .tab.active { background: var(--elevated); color: var(--fg); border-color: var(--border-strong); }
+      .tab i { font-size: 14px; }
+      .hero { background: linear-gradient(180deg, rgba(255,255,255,0.014), transparent), var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; position: relative; overflow: hidden; }
+      .hero::before { content: ""; position: absolute; inset: 0; background: radial-gradient(420px 240px at 50% 0%, rgba(94,159,246,0.05), transparent 60%); pointer-events: none; }
+      .hero-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; position: relative; z-index: 1; gap: 10px; flex-wrap: wrap; }
+      .hero-head .ttl { font: 600 11.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .phase-chips { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 12px; position: relative; z-index: 1; }
+      .phase-chip { flex: 1; min-width: 72px; padding: 6px 4px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: transparent; color: var(--subtle); text-align: center; font: 500 11px var(--mono); transition: all 200ms ease; }
+      .phase-chip.done { background: var(--surface); color: var(--muted); }
+      .phase-chip.active { background: var(--info-bg); border-color: var(--info-bd); color: var(--info); }
+      .legend { font-size: 11.5px; color: var(--muted); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      .legend .sw { display: inline-block; width: 11px; height: 11px; border-radius: 3px; vertical-align: -1px; margin-right: 3px; }
+      .sw.prom { background: var(--warning-bg); border: 1px solid var(--warning-bd); }
+      .sw.acc { background: var(--success-bg); border: 1px solid var(--success-bd); }
+      .sw.chosen { background: var(--success-bg); border: 1px solid var(--success); }
+      .sw.down { background: var(--danger-bg); border: 1px solid var(--danger-bd); }
+      .proposer-row { display: flex; justify-content: center; margin-bottom: 4px; position: relative; z-index: 1; }
+      .proposer { background: var(--elevated); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 11px 22px; text-align: center; min-width: 250px; transition: all 250ms ease; }
+      .proposer .role { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; display: flex; align-items: center; justify-content: center; gap: 5px; }
+      .proposer .state { font: 600 14px var(--mono); margin-top: 4px; color: var(--fg); }
+      .proposer.prom { background: var(--warning-bg); border-color: var(--warning-bd); } .proposer.prom .state { color: var(--warning); }
+      .proposer.acc { background: var(--success-bg); border-color: var(--success-bd); } .proposer.acc .state { color: var(--success); }
+      .proposer.chosen { background: var(--success-bg); border-color: var(--success); box-shadow: 0 0 14px rgba(92,198,111,0.3); } .proposer.chosen .state { color: var(--success); }
+      .proposer.fail { background: var(--danger-bg); border-color: var(--danger-bd); } .proposer.fail .state { color: var(--danger); }
+      .split { text-align: center; color: var(--subtle); font-size: 18px; margin: 0 0 6px; position: relative; z-index: 1; }
+      .acceptors { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; position: relative; z-index: 1; margin-bottom: 12px; }
+      .accept { background: var(--elevated); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 9px 5px; text-align: center; transition: all 250ms ease; min-height: 76px; }
+      .accept .role { font: 500 10.5px var(--mono); color: var(--muted); display: flex; align-items: center; justify-content: center; gap: 3px; }
+      .accept .state { font: 500 11.5px var(--sans); margin-top: 3px; color: var(--fg); }
+      .accept .sub { font: 500 9.5px var(--mono); color: var(--subtle); margin-top: 3px; }
+      .accept.prom { background: var(--warning-bg); border-color: var(--warning-bd); } .accept.prom .state { color: var(--warning); }
+      .accept.acc { background: var(--success-bg); border-color: var(--success-bd); } .accept.acc .state { color: var(--success); }
+      .accept.chosen { background: var(--success-bg); border-color: var(--success); box-shadow: 0 0 10px rgba(92,198,111,0.3); } .accept.chosen .state { color: var(--success); }
+      .accept.down { background: rgba(0,0,0,0.3); border-color: var(--border); opacity: 0.55; } .accept.down .state { color: var(--muted); text-decoration: line-through; }
+      .accept.reject { background: var(--danger-bg); border-color: var(--danger-bd); } .accept.reject .state { color: var(--danger); }
+      .pop { animation: pop .35s cubic-bezier(0.34, 1.56, 0.64, 1); }
+      @keyframes pop { from { transform: scale(0.92); } 50% { transform: scale(1.04); } to { transform: scale(1); } }
+      .quorum { display: flex; align-items: center; gap: 8px; position: relative; z-index: 1; }
+      .quorum-label { font: 500 11px var(--mono); color: var(--muted); min-width: 56px; }
+      .quorum-bars { flex: 1; display: flex; gap: 3px; }
+      .qbar { flex: 1; height: 8px; border-radius: 4px; background: var(--elevated); transition: all 250ms ease; }
+      .qbar.on { background: var(--warning); }
+      .qbar.chosen { background: var(--success); }
+      .quorum-count { font: 600 11.5px var(--mono); min-width: 56px; text-align: right; color: var(--muted); }
+      .quorum-count.met { color: var(--success); }
+      .narration { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px; position: relative; overflow: hidden; transition: border-color 350ms ease; }
+      .narration::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--border-strong); transition: background 350ms ease; }
+      .narration.prom::before { background: var(--warning); } .narration.prom { border-color: rgba(240,181,104,0.30); }
+      .narration.acc::before { background: var(--success); } .narration.acc { border-color: rgba(92,198,111,0.30); }
+      .narration.chosen::before { background: var(--success); } .narration.chosen { border-color: rgba(92,198,111,0.45); }
+      .narration.fail::before { background: var(--danger); } .narration.fail { border-color: rgba(240,104,104,0.30); }
+      .narration.safe::before { background: var(--purple); } .narration.safe { border-color: var(--purple-bd); }
+      .narr-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+      .badge { font: 600 10.5px var(--mono); padding: 4px 9px; border-radius: 999px; letter-spacing: 0.4px; text-transform: uppercase; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); color: var(--muted); background: var(--elevated); }
+      .badge.step { background: var(--elevated); border-color: var(--border-strong); color: var(--fg); }
+      .badge.event { background: transparent; }
+      .badge.event.prom { color: var(--warning); border-color: var(--warning-bd); }
+      .badge.event.acc { color: var(--success); border-color: var(--success-bd); }
+      .badge.event.chosen { color: var(--success); border-color: var(--success-bd); }
+      .badge.event.fail { color: var(--danger); border-color: var(--danger-bd); }
+      .badge.event.safe { color: var(--purple); border-color: var(--purple-bd); }
+      .narr-text { margin: 0; font-size: 14px; line-height: 1.6; color: var(--fg); }
+      .narr-text strong { color: var(--fg); font-weight: 600; }
+      .narr-text code { font-family: var(--mono); background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; color: var(--accent); font-size: 12px; }
+      .timeline-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; }
+      .timeline-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font: 500 11px var(--mono); color: var(--muted); letter-spacing: 0.4px; text-transform: uppercase; }
+      .timeline-head .pos { color: var(--fg); font-weight: 600; text-transform: none; letter-spacing: 0; }
+      .timeline { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+      .tl-dot { flex: 1; min-width: 14px; height: 6px; border-radius: 99px; background: var(--border); transition: all 200ms ease; cursor: pointer; }
+      .tl-dot.done { background: var(--accent); opacity: 0.55; }
+      .tl-dot.now { background: var(--accent); height: 10px; box-shadow: 0 0 8px rgba(251,134,58,0.5); }
+      .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .controls .spacer { flex: 1; }
+      .kbd { font-family: var(--mono); font-size: 10.5px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); color: var(--muted); border: 1px solid var(--border); }
+      .hint { font: 11px var(--mono); color: var(--subtle); display: inline-flex; align-items: center; gap: 5px; }
+      .free-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px; }
+      .free-card h3 { margin: 0 0 10px; font: 500 11px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .free-row { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+      .dead-toggle { display: inline-flex; align-items: center; gap: 5px; font: 500 12px var(--sans); color: var(--fg); cursor: pointer; }
+      .dead-toggle input { accent-color: var(--danger); cursor: pointer; }
+      .fp-inputs { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; font-size: 12.5px; color: var(--muted); }
+      .fp-inputs input { background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 8px; font: 500 12px var(--mono); width: 60px; outline: none; }
+      .fp-inputs input:focus { border-color: var(--accent); }
+      .fp-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; }
+      .stat .label { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .stat .value { font: 600 17px var(--mono); margin-top: 4px; line-height: 1; }
+      .log-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; }
+      .log-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font: 500 11px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .log-head .pill { color: var(--subtle); text-transform: none; letter-spacing: 0; font-size: 10.5px; }
+      .log { font-family: var(--mono); font-size: 12px; line-height: 1.85; color: var(--subtle); min-height: 48px; max-height: 56px; overflow: hidden; }
+      .log .t { color: var(--subtle); margin-right: 10px; opacity: 0.7; }
+      @media (max-width: 540px) { .acceptors { gap: 4px; } .accept { padding: 6px 3px; min-height: 70px; } .stats { grid-template-columns: repeat(2, 1fr); } }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2 class="sr-only">Interactive Basic Paxos — one proposer, five acceptors. Watch Prepare/Promise then Accept/Accepted, see the safety rule force the proposer to honour previously-accepted values, and see what happens with no quorum.</h2>
+
+      <div class="tabs" role="tablist" aria-label="Scenario">
+        <button class="tab active" data-scenario="happy" role="tab"><i class="ti ti-circle-check" aria-hidden="true"></i>Happy path</button>
+        <button class="tab" data-scenario="minority" role="tab"><i class="ti ti-plug-connected-x" aria-hidden="true"></i>Minority down</button>
+        <button class="tab" data-scenario="noquorum" role="tab"><i class="ti ti-alert-triangle" aria-hidden="true"></i>No quorum</button>
+        <button class="tab" data-scenario="compete" role="tab"><i class="ti ti-swords" aria-hidden="true"></i>Competing proposer</button>
+        <button class="tab" data-scenario="free" role="tab"><i class="ti ti-hand-finger" aria-hidden="true"></i>Free play</button>
+      </div>
+
+      <div class="hero" aria-label="Paxos stage">
+        <div class="hero-head">
+          <span class="ttl">1 proposer · 5 acceptors · majority = 3</span>
+          <span class="legend">
+            <span><span class="sw prom"></span>promised</span>
+            <span><span class="sw acc"></span>accepted</span>
+            <span><span class="sw chosen"></span>chosen</span>
+            <span><span class="sw down"></span>down</span>
+          </span>
+        </div>
+        <div class="phase-chips">
+          <div class="phase-chip" data-p="1">1 · Prepare</div>
+          <div class="phase-chip" data-p="2">2 · Promise</div>
+          <div class="phase-chip" data-p="3">3 · Accept</div>
+          <div class="phase-chip" data-p="4">4 · Accepted</div>
+          <div class="phase-chip" data-p="5">5 · Chosen</div>
+        </div>
+        <div class="proposer-row">
+          <div id="proposer" class="proposer">
+            <div class="role"><i class="ti ti-send" aria-hidden="true"></i><span id="propRole">Proposer</span></div>
+            <div id="prop-state" class="state">Waiting</div>
+          </div>
+        </div>
+        <div class="split"><i class="ti ti-chevron-down" aria-hidden="true"></i></div>
+        <div class="acceptors" id="acceptors"></div>
+        <div class="quorum">
+          <span class="quorum-label">Quorum</span>
+          <div class="quorum-bars" id="qbars"></div>
+          <span class="quorum-count" id="qtext">0 / 5</span>
+        </div>
+      </div>
+
+      <div id="narration" class="narration">
+        <div class="narr-meta">
+          <span id="narr-step" class="badge step">Step 0 / 0</span>
+          <span id="narr-event" class="badge event" style="display:none"></span>
+        </div>
+        <p id="narr-text" class="narr-text"><strong>Idle.</strong> Press <strong>Next</strong> to begin.</p>
+      </div>
+
+      <div id="timeline-wrap" class="timeline-wrap">
+        <div class="timeline-head"><span>Scenario timeline</span><span class="pos" id="tl-pos">—</span></div>
+        <div id="timeline" class="timeline"></div>
+      </div>
+
+      <div id="step-controls" class="controls">
+        <button id="btn-prev"><i class="ti ti-chevron-left" aria-hidden="true"></i>Prev</button>
+        <button id="btn-play" class="primary"><i id="play-icon" class="ti ti-player-play" aria-hidden="true"></i><span id="play-label">Play</span></button>
+        <button id="btn-next"><i class="ti ti-chevron-right" aria-hidden="true"></i>Next</button>
+        <button id="btn-restart" class="ghost"><i class="ti ti-refresh" aria-hidden="true"></i>Restart</button>
+        <span class="spacer"></span>
+        <span class="hint"><span class="kbd">←</span><span class="kbd">→</span><span class="kbd">space</span></span>
+      </div>
+
+      <div id="free-play" class="free-card" style="display:none">
+        <h3>Free play — toggle dead acceptors, set n and value</h3>
+        <div class="fp-inputs">
+          <label>Proposal n <input id="fp-n" type="number" value="11" min="1" /></label>
+          <label>Value <input id="fp-v" type="text" value="A" maxlength="6" /></label>
+        </div>
+        <div class="free-row" id="fp-downs"></div>
+        <div class="fp-actions">
+          <button id="fp-start" class="primary"><i class="ti ti-player-play" aria-hidden="true"></i>Start round</button>
+          <button id="fp-step"><i class="ti ti-chevron-right" aria-hidden="true"></i>Next step</button>
+          <button id="fp-reset" class="ghost"><i class="ti ti-refresh" aria-hidden="true"></i>Reset</button>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="label">phase</div><div id="s-phase" class="value">—</div></div>
+        <div class="stat"><div class="label">promises</div><div id="s-prom" class="value" style="color:var(--warning)">0 / 5</div></div>
+        <div class="stat"><div class="label">accepted</div><div id="s-acc" class="value" style="color:var(--success)">0 / 5</div></div>
+        <div class="stat"><div class="label">chosen value</div><div id="s-chosen" class="value" style="font-size:13px;padding-top:4px">—</div></div>
+      </div>
+
+      <div class="log-card">
+        <div class="log-head"><span>Message log</span><span class="pill">last 2 messages</span></div>
+        <div id="log" class="log"></div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        var NAMES = ['A1', 'A2', 'A3', 'A4', 'A5'];
+        var MAJ = 3;
+        var S = {
+          scenario: 'happy', stepIdx: 0, playing: false,
+          prop: { state: 'idle', label: 'Waiting', role: 'Proposer' },
+          accs: NAMES.map(function () { return { state: 'idle', label: 'Idle', sub: '—', down: false, accN: null, accV: null, promN: null }; }),
+          popProp: false, popAccs: [false, false, false, false, false],
+          phaseN: 0, eventTag: null, lastNarr: null,
+          phase: '—', chosen: '—', chosenColor: 'var(--fg)',
+          qCount: 0, qKind: '', // '' | 'on' | 'chosen'
+          fpN: 11, fpV: 'A', fpDown: [false, false, false, false, false],
+          fpStarted: false, fpStep: 0,
+        };
+
+        var accsEl = document.getElementById('acceptors');
+        var propEl = document.getElementById('proposer');
+        var propStateEl = document.getElementById('prop-state');
+        var propRoleEl = document.getElementById('propRole');
+        var narrEl = document.getElementById('narration');
+        var narrTxt = document.getElementById('narr-text');
+        var narrEv = document.getElementById('narr-event');
+        var narrStep = document.getElementById('narr-step');
+        var tlWrap = document.getElementById('timeline-wrap');
+        var tlEl = document.getElementById('timeline');
+        var tlPos = document.getElementById('tl-pos');
+        var sPhase = document.getElementById('s-phase');
+        var sProm = document.getElementById('s-prom');
+        var sAcc = document.getElementById('s-acc');
+        var sChosen = document.getElementById('s-chosen');
+        var logEl = document.getElementById('log');
+        var qbarsEl = document.getElementById('qbars');
+        var qtextEl = document.getElementById('qtext');
+        var fpDownsEl = document.getElementById('fp-downs');
+
+        // Build acceptors and quorum bars
+        for (var i = 0; i < 5; i++) { var d = document.createElement('div'); d.className = 'accept idle'; accsEl.appendChild(d); }
+        for (var i = 0; i < 5; i++) { var qb = document.createElement('div'); qb.className = 'qbar'; qbarsEl.appendChild(qb); }
+        for (var i = 0; i < 5; i++) {
+          (function (idx) {
+            var lab = document.createElement('label'); lab.className = 'dead-toggle';
+            var cb = document.createElement('input'); cb.type = 'checkbox';
+            cb.addEventListener('change', function () { S.fpDown[idx] = cb.checked; });
+            lab.appendChild(cb);
+            var sp = document.createElement('span'); sp.textContent = NAMES[idx] + ' dead';
+            lab.appendChild(sp); fpDownsEl.appendChild(lab);
+          })(i);
+        }
+        document.getElementById('fp-n').addEventListener('input', function (e) { S.fpN = parseInt(e.target.value) || 1; });
+        document.getElementById('fp-v').addEventListener('input', function (e) { S.fpV = e.target.value || 'A'; });
+
+        function render() {
+          propEl.className = 'proposer ' + S.prop.state + (S.popProp ? ' pop' : '');
+          propStateEl.textContent = S.prop.label;
+          propRoleEl.textContent = S.prop.role;
+          S.popProp = false;
+
+          for (var i = 0; i < 5; i++) {
+            var el = accsEl.children[i];
+            var a = S.accs[i];
+            var cls = 'accept ' + (a.down ? 'down' : a.state) + (S.popAccs[i] ? ' pop' : '');
+            el.className = cls;
+            var iconName = a.down ? 'plug-connected-x' : 'database';
+            el.innerHTML = '<div class="role"><i class="ti ti-' + iconName + '" aria-hidden="true"></i>' + NAMES[i] + '</div><div class="state">' + a.label + '</div><div class="sub">' + a.sub + '</div>';
+            S.popAccs[i] = false;
+          }
+
+          var chips = document.querySelectorAll('.phase-chip');
+          for (var c = 0; c < chips.length; c++) {
+            var p = +chips[c].dataset.p;
+            chips[c].classList.toggle('active', p === S.phaseN);
+            chips[c].classList.toggle('done', p < S.phaseN);
+          }
+
+          var kind = S.eventTag ? S.eventTag.kind : '';
+          narrEl.className = 'narration' + (kind ? ' ' + kind : '');
+          narrTxt.innerHTML = DOMPurify.sanitize(S.lastNarr || '<strong>Idle.</strong> Press <strong>Next</strong> to begin.');
+          if (S.scenario === 'free') { narrStep.textContent = 'Free play · step ' + S.fpStep; }
+          else {
+            var sc = SCENARIOS[S.scenario];
+            narrStep.textContent = 'Step ' + S.stepIdx + ' / ' + (sc.length - 1);
+          }
+          if (S.eventTag) { narrEv.style.display = ''; narrEv.className = 'badge event ' + S.eventTag.kind; narrEv.textContent = S.eventTag.text; }
+          else { narrEv.style.display = 'none'; }
+
+          if (S.scenario === 'free') { tlWrap.style.display = 'none'; }
+          else {
+            tlWrap.style.display = '';
+            var sc2 = SCENARIOS[S.scenario];
+            tlEl.innerHTML = '';
+            for (var j = 0; j < sc2.length; j++) {
+              var dd = document.createElement('div');
+              var cl = 'tl-dot'; if (j < S.stepIdx) cl += ' done'; if (j === S.stepIdx) cl += ' now';
+              dd.className = cl;
+              (function (idx) { dd.onclick = function () { applyStep(idx); }; })(j);
+              tlEl.appendChild(dd);
+            }
+            tlPos.textContent = (S.stepIdx + 1) + ' of ' + sc2.length;
+          }
+
+          // Quorum bars
+          var bars = qbarsEl.children;
+          for (var b = 0; b < 5; b++) {
+            var cl2 = 'qbar';
+            if (b < S.qCount) cl2 += (S.qKind === 'chosen') ? ' chosen' : ' on';
+            bars[b].className = cl2;
+          }
+          qtextEl.textContent = S.qCount + ' / 5';
+          qtextEl.className = 'quorum-count' + (S.qCount >= MAJ ? ' met' : '');
+
+          sPhase.textContent = S.phase;
+          var nProm = S.accs.filter(function (a) { return !a.down && (a.state === 'prom' || a.state === 'acc' || a.state === 'chosen'); }).length;
+          var nAcc = S.accs.filter(function (a) { return !a.down && (a.state === 'acc' || a.state === 'chosen'); }).length;
+          sProm.textContent = nProm + ' / 5';
+          sAcc.textContent = nAcc + ' / 5';
+          sChosen.textContent = S.chosen; sChosen.style.color = S.chosenColor;
+
+          if (S.scenario !== 'free') {
+            var sc3 = SCENARIOS[S.scenario];
+            document.getElementById('btn-prev').disabled = S.stepIdx <= 0;
+            document.getElementById('btn-next').disabled = S.stepIdx >= sc3.length - 1;
+          }
+        }
+
+        function log(msg, color) {
+          var t = new Date(); var hh = String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0') + ':' + String(t.getSeconds()).padStart(2, '0');
+          var line = document.createElement('div'); line.style.color = color || 'var(--subtle)';
+          var ts = document.createElement('span'); ts.className = 't'; ts.textContent = hh;
+          line.appendChild(ts); line.appendChild(document.createTextNode(String(msg)));
+          logEl.insertBefore(line, logEl.firstChild);
+          while (logEl.children.length > 2) logEl.removeChild(logEl.lastChild);
+        }
+        function stripTags(html) { return DOMPurify.sanitize(String(html == null ? '' : html), { ALLOWED_TAGS: [], KEEP_CONTENT: true }); }
+        function colorForEvent(k) {
+          if (k === 'prom') return 'var(--warning)';
+          if (k === 'acc' || k === 'chosen') return 'var(--success)';
+          if (k === 'fail') return 'var(--danger)';
+          if (k === 'safe') return 'var(--purple)';
+          return 'var(--subtle)';
+        }
+
+        function resetState(opts) {
+          opts = opts || {};
+          S.prop = { state: 'idle', label: 'Waiting', role: opts.role || 'Proposer' };
+          var preseed = opts.preseed || [];
+          S.accs = NAMES.map(function (_, i) {
+            var pre = preseed[i];
+            if (pre) return { state: 'acc', label: 'Accepted', sub: 'n' + pre.n + '·' + pre.v, down: false, promN: pre.n, accN: pre.n, accV: pre.v };
+            return { state: 'idle', label: 'Idle', sub: '—', down: false, promN: null, accN: null, accV: null };
+          });
+          var down = opts.down || [];
+          for (var i = 0; i < 5; i++) {
+            if (down[i]) { S.accs[i].state = 'down'; S.accs[i].label = 'Dead'; S.accs[i].down = true; }
+          }
+          S.phaseN = 0; S.phase = '—'; S.chosen = '—'; S.chosenColor = 'var(--fg)';
+          S.popProp = false; S.popAccs = [false, false, false, false, false];
+          S.qCount = 0; S.qKind = '';
+          S.eventTag = null; S.lastNarr = null;
+        }
+
+        function doPrepare(n) {
+          S.phaseN = 1; S.phase = 'Prepare';
+          S.prop = { state: 'prom', label: 'Prepare(n=' + n + ')', role: S.prop.role };
+          S.popProp = true;
+          for (var i = 0; i < 5; i++) {
+            if (S.accs[i].down) continue;
+            S.popAccs[i] = true;
+          }
+        }
+        function doPromise(n) {
+          S.phaseN = 2;
+          var count = 0;
+          for (var i = 0; i < 5; i++) {
+            var a = S.accs[i]; if (a.down) continue;
+            if (a.promN == null || n > a.promN) {
+              a.promN = n; a.state = 'prom'; a.label = 'Promised';
+              a.sub = a.accV ? 'n' + n + ' · prior n' + a.accN + '·' + a.accV : 'n' + n;
+              count++;
+            } else { a.state = 'reject'; a.label = 'Rejected'; a.sub = 'min n' + a.promN; }
+            S.popAccs[i] = true;
+          }
+          S.qCount = count; S.qKind = count >= MAJ ? 'on' : '';
+          if (count >= MAJ) S.prop = { state: 'prom', label: count + '/5 promises ✓', role: S.prop.role };
+          else S.prop = { state: 'fail', label: count + '/5 — no quorum', role: S.prop.role };
+        }
+        function chooseValueFromPromises(myV) {
+          var best = null;
+          for (var i = 0; i < 5; i++) {
+            var a = S.accs[i]; if (a.down) continue;
+            if (a.state === 'prom' && a.accV != null) {
+              if (best == null || a.accN > best.n) best = { n: a.accN, v: a.accV };
+            }
+          }
+          return best ? best.v : myV;
+        }
+        function doAccept(n, myV) {
+          S.phaseN = 3; S.phase = 'Accept';
+          var v = chooseValueFromPromises(myV);
+          S.prop = { state: 'prom', label: 'Accept(n=' + n + ', "' + v + '")', role: S.prop.role };
+          S.popProp = true;
+          return v;
+        }
+        function doAccepted(n, v) {
+          S.phaseN = 4;
+          var count = 0;
+          for (var i = 0; i < 5; i++) {
+            var a = S.accs[i]; if (a.down) continue;
+            if (a.promN === n) {
+              a.accN = n; a.accV = v; a.state = 'acc'; a.label = 'Accepted';
+              a.sub = 'n' + n + '·' + v; count++;
+              S.popAccs[i] = true;
+            }
+          }
+          S.qCount = count; S.qKind = count >= MAJ ? 'on' : '';
+          if (count >= MAJ) S.prop = { state: 'acc', label: count + '/5 accepted ✓', role: S.prop.role };
+          else S.prop = { state: 'fail', label: count + '/5 — no quorum', role: S.prop.role };
+        }
+        function doChosen(v) {
+          S.phaseN = 5;
+          for (var i = 0; i < 5; i++) {
+            var a = S.accs[i]; if (a.down) continue;
+            if (a.state === 'acc') { a.state = 'chosen'; a.label = 'Chosen'; S.popAccs[i] = true; }
+          }
+          S.prop = { state: 'chosen', label: '"' + v + '" CHOSEN', role: S.prop.role };
+          S.popProp = true;
+          S.chosen = '"' + v + '"'; S.chosenColor = 'var(--success)';
+          S.qKind = 'chosen';
+        }
+
+        var SCENARIOS = {};
+
+        SCENARIOS.happy = [
+          { narr: '<strong>Idle.</strong> Proposer wants value <code>"A"</code> at proposal number <code>n=11</code>. Five healthy acceptors, majority = 3.', do: function () { resetState(); } },
+          { narr: '<strong>Phase 1a — Prepare.</strong> Proposer sends PREPARE(n=11) to every acceptor.', ev: 'prom', do: function () { resetState(); doPrepare(11); } },
+          { narr: '<strong>Phase 1b — Promise.</strong> All 5 acceptors are willing — they promise not to accept anything below n=11 and report no prior value.', ev: 'prom', do: function () { resetState(); doPrepare(11); doPromise(11); } },
+          { narr: '<strong>Phase 2a — Accept.</strong> No prior value to honour → proposer freely sends ACCEPT(n=11, "A").', ev: 'acc', do: function () { resetState(); doPrepare(11); doPromise(11); doAccept(11, 'A'); } },
+          { narr: '<strong>Phase 2b — Accepted.</strong> All 5 acceptors store (n=11, "A"). Quorum met.', ev: 'acc', do: function () { resetState(); doPrepare(11); doPromise(11); doAccept(11, 'A'); doAccepted(11, 'A'); } },
+          { narr: '<strong>Chosen.</strong> A majority has accepted "A" — the value is permanent. No future round can contradict it.', ev: 'chosen', do: function () { resetState(); doPrepare(11); doPromise(11); doAccept(11, 'A'); doAccepted(11, 'A'); doChosen('A'); } },
+        ];
+
+        SCENARIOS.minority = [
+          { narr: '<strong>Idle.</strong> Two acceptors (A4, A5) are down. The remaining three are exactly the majority.', do: function () { resetState({ down: [false, false, false, true, true] }); } },
+          { narr: '<strong>Prepare.</strong> PREPARE(n=11) goes out; A4/A5 are unreachable.', ev: 'prom', do: function () { resetState({ down: [false, false, false, true, true] }); doPrepare(11); } },
+          { narr: '<strong>3 promises (just enough).</strong> A1, A2, A3 promise. Quorum bar shows 3 of 5 — the cluster can proceed.', ev: 'prom', do: function () { resetState({ down: [false, false, false, true, true] }); doPrepare(11); doPromise(11); } },
+          { narr: '<strong>Accept.</strong> No prior value → proposer sends ACCEPT(n=11, "A") to all (the dead two just ignore it).', ev: 'acc', do: function () { resetState({ down: [false, false, false, true, true] }); doPrepare(11); doPromise(11); doAccept(11, 'A'); } },
+          { narr: '<strong>Accepted by 3 of 5.</strong> Exactly the majority. The value is chosen.', ev: 'chosen', do: function () { resetState({ down: [false, false, false, true, true] }); doPrepare(11); doPromise(11); doAccept(11, 'A'); doAccepted(11, 'A'); doChosen('A'); } },
+        ];
+
+        SCENARIOS.noquorum = [
+          { narr: '<strong>Idle.</strong> Three acceptors (A3, A4, A5) are down — only 2 alive, below majority of 3.', do: function () { resetState({ down: [false, false, true, true, true] }); } },
+          { narr: '<strong>Prepare.</strong> PREPARE(n=11) goes out to whoever can hear it.', ev: 'prom', do: function () { resetState({ down: [false, false, true, true, true] }); doPrepare(11); } },
+          { narr: '<strong>Only 2 promises.</strong> Below majority. The round abandons safely — no value chosen, no value miscommitted.', ev: 'fail', do: function () { resetState({ down: [false, false, true, true, true] }); doPrepare(11); doPromise(11); } },
+          { narr: '<strong>Round failed.</strong> Paxos refused to proceed without a quorum — that\'s the safety guarantee. A future round (more live acceptors) can try again.', ev: 'fail', do: function () { resetState({ down: [false, false, true, true, true] }); doPrepare(11); doPromise(11); } },
+        ];
+
+        SCENARIOS.compete = [
+          { narr: '<strong>Setup.</strong> An earlier proposer already got A1 and A2 to accept (n=5, "A"). Now <em>Proposer #2</em> arrives wanting (n=12, "B"). Watch the safety rule.', do: function () { resetState({ role: 'Proposer #2', preseed: [{ n: 5, v: 'A' }, { n: 5, v: 'A' }, null, null, null] }); } },
+          { narr: '<strong>Prepare(n=12).</strong> Proposer #2 sends PREPARE(n=12). A1 and A2 will report their prior (n=5, "A").', ev: 'prom', do: function () { resetState({ role: 'Proposer #2', preseed: [{ n: 5, v: 'A' }, { n: 5, v: 'A' }, null, null, null] }); doPrepare(12); } },
+          { narr: '<strong>Promises returned with prior value.</strong> A1, A2, A3 promise. A1 and A2 report "n5·A" in their promises. Proposer #2 cannot ignore this — by the <strong>safety rule</strong>, it MUST use "A" instead of its own "B".', ev: 'safe', do: function () { resetState({ role: 'Proposer #2', preseed: [{ n: 5, v: 'A' }, { n: 5, v: 'A' }, null, null, null] }); doPrepare(12); doPromise(12); } },
+          { narr: '<strong>Accept(n=12, "A").</strong> Proposer #2 is forced to send "A", not "B". This is what makes Paxos contradict-proof: once a majority might have agreed on "A", no future proposer can choose a different value.', ev: 'safe', do: function () { resetState({ role: 'Proposer #2', preseed: [{ n: 5, v: 'A' }, { n: 5, v: 'A' }, null, null, null] }); doPrepare(12); doPromise(12); doAccept(12, 'B'); } },
+          { narr: '<strong>Accepted by majority.</strong> All 5 store (n=12, "A"). Quorum met.', ev: 'acc', do: function () { resetState({ role: 'Proposer #2', preseed: [{ n: 5, v: 'A' }, { n: 5, v: 'A' }, null, null, null] }); doPrepare(12); doPromise(12); doAccept(12, 'B'); doAccepted(12, 'A'); } },
+          { narr: '<strong>Chosen — "A", not "B".</strong> Proposer #2 ended up cementing the earlier proposer\'s choice. That\'s the whole point of Paxos: no contradiction possible.', ev: 'chosen', do: function () { resetState({ role: 'Proposer #2', preseed: [{ n: 5, v: 'A' }, { n: 5, v: 'A' }, null, null, null] }); doPrepare(12); doPromise(12); doAccept(12, 'B'); doAccepted(12, 'A'); doChosen('A'); } },
+        ];
+
+        function applyStep(targetIdx) {
+          var sc = SCENARIOS[S.scenario]; if (!sc) return;
+          for (var i = 0; i <= targetIdx; i++) {
+            var st = sc[i]; S.eventTag = null; S.lastNarr = null; st.do();
+            if (i === targetIdx) {
+              if (S.lastNarr === null) S.lastNarr = st.narr;
+              if (st.ev && !S.eventTag) S.eventTag = { kind: st.ev, text: evLabel(st.ev) };
+            }
+          }
+          S.stepIdx = targetIdx; render();
+        }
+        function evLabel(k) {
+          if (k === 'prom') return 'promise';
+          if (k === 'acc') return 'accept';
+          if (k === 'chosen') return 'chosen';
+          if (k === 'fail') return 'no quorum';
+          if (k === 'safe') return 'safety rule';
+          return k;
+        }
+        function stepNext() {
+          var sc = SCENARIOS[S.scenario];
+          if (S.stepIdx < sc.length - 1) { applyStep(S.stepIdx + 1); log(stripTags(sc[S.stepIdx].narr), colorForEvent(S.eventTag && S.eventTag.kind)); }
+          else { setPlaying(false); }
+        }
+        function stepPrev() { if (S.stepIdx > 0) applyStep(S.stepIdx - 1); }
+
+        var playTimer = null;
+        function setPlaying(on) {
+          S.playing = on;
+          document.getElementById('play-label').textContent = on ? 'Pause' : 'Play';
+          document.getElementById('play-icon').className = on ? 'ti ti-player-pause' : 'ti ti-player-play';
+          if (playTimer) { clearInterval(playTimer); playTimer = null; }
+          if (on) playTimer = setInterval(function () {
+            var sc = SCENARIOS[S.scenario]; if (!sc) { setPlaying(false); return; }
+            if (S.stepIdx < sc.length - 1) stepNext(); else setPlaying(false);
+          }, 1700);
+        }
+
+        function pickScenario(name) {
+          S.scenario = name;
+          var tabs = document.querySelectorAll('.tab');
+          for (var i = 0; i < tabs.length; i++) tabs[i].classList.toggle('active', tabs[i].dataset.scenario === name);
+          setPlaying(false);
+          var stepCtl = document.getElementById('step-controls');
+          var fp = document.getElementById('free-play');
+          if (name === 'free') {
+            stepCtl.style.display = 'none'; fp.style.display = '';
+            resetState({ down: S.fpDown.slice() }); S.fpStarted = false; S.fpStep = 0;
+            S.lastNarr = '<strong>Free play.</strong> Set n and value, optionally kill some acceptors, then press <strong>Start round</strong>.';
+            render();
+          } else {
+            stepCtl.style.display = ''; fp.style.display = 'none';
+            applyStep(0);
+          }
+        }
+
+        function fpStart() {
+          resetState({ down: S.fpDown.slice() });
+          S.fpStarted = true; S.fpStep = 0;
+          S.lastNarr = '<strong>Round started.</strong> n = ' + S.fpN + ', value = "' + S.fpV + '". Press <strong>Next step</strong>.';
+          S.eventTag = null; render();
+        }
+        function fpStepNext() {
+          if (!S.fpStarted) return;
+          if (S.fpStep === 0) {
+            doPrepare(S.fpN);
+            S.lastNarr = '<strong>Prepare(n=' + S.fpN + ').</strong>';
+            S.eventTag = { kind: 'prom', text: 'prepare' };
+            log('proposer → all: PREPARE(n=' + S.fpN + ')', 'var(--warning)'); S.fpStep = 1;
+          } else if (S.fpStep === 1) {
+            doPromise(S.fpN);
+            if (S.qCount >= MAJ) { S.lastNarr = '<strong>' + S.qCount + ' promises ✓.</strong> Quorum met.'; S.eventTag = { kind: 'prom', text: 'quorum' }; }
+            else { S.lastNarr = '<strong>Only ' + S.qCount + ' promises.</strong> No quorum — round abandons.'; S.eventTag = { kind: 'fail', text: 'no quorum' }; }
+            log(S.qCount + ' promises', S.qCount >= MAJ ? 'var(--warning)' : 'var(--danger)');
+            S.fpStep = S.qCount >= MAJ ? 2 : 9;
+          } else if (S.fpStep === 2) {
+            var v = doAccept(S.fpN, S.fpV);
+            if (v !== S.fpV) { S.lastNarr = '<strong>Safety rule kicks in.</strong> A promise carried prior value "' + v + '" → proposer must use it instead of "' + S.fpV + '".'; S.eventTag = { kind: 'safe', text: 'safety rule' }; }
+            else { S.lastNarr = '<strong>Accept(n=' + S.fpN + ', "' + v + '").</strong>'; S.eventTag = { kind: 'acc', text: 'accept' }; }
+            log('proposer → all: ACCEPT(n=' + S.fpN + ', "' + v + '")', v !== S.fpV ? 'var(--purple)' : 'var(--success)');
+            S._chosenV = v; S.fpStep = 3;
+          } else if (S.fpStep === 3) {
+            doAccepted(S.fpN, S._chosenV);
+            if (S.qCount >= MAJ) { S.lastNarr = '<strong>' + S.qCount + ' accepted ✓.</strong> Quorum met.'; S.eventTag = { kind: 'acc', text: 'quorum' }; }
+            else { S.lastNarr = '<strong>Only ' + S.qCount + ' accepted.</strong> Value not chosen.'; S.eventTag = { kind: 'fail', text: 'no quorum' }; }
+            log(S.qCount + ' accepted', S.qCount >= MAJ ? 'var(--success)' : 'var(--danger)');
+            S.fpStep = S.qCount >= MAJ ? 4 : 9;
+          } else if (S.fpStep === 4) {
+            doChosen(S._chosenV);
+            S.lastNarr = '<strong>"' + S._chosenV + '" CHOSEN.</strong> Permanent. No future round can contradict.';
+            S.eventTag = { kind: 'chosen', text: 'chosen' };
+            log('✓ chosen: "' + S._chosenV + '"', 'var(--success)');
+            S.fpStep = 9;
+          } else {
+            S.lastNarr = '<strong>Round complete.</strong> Press <strong>Reset</strong> to try again.';
+            S.eventTag = null;
+          }
+          render();
+        }
+        function fpReset() {
+          resetState({ down: S.fpDown.slice() });
+          S.fpStarted = false; S.fpStep = 0;
+          S.lastNarr = '<strong>Reset.</strong> Configure and press Start.'; S.eventTag = null; render();
+        }
+
+        var tabs = document.querySelectorAll('.tab');
+        for (var i = 0; i < tabs.length; i++) (function (t) { t.addEventListener('click', function () { pickScenario(t.dataset.scenario); }); })(tabs[i]);
+        document.getElementById('btn-prev').addEventListener('click', stepPrev);
+        document.getElementById('btn-next').addEventListener('click', stepNext);
+        document.getElementById('btn-play').addEventListener('click', function () { setPlaying(!S.playing); });
+        document.getElementById('btn-restart').addEventListener('click', function () { setPlaying(false); applyStep(0); });
+        document.getElementById('fp-start').addEventListener('click', fpStart);
+        document.getElementById('fp-step').addEventListener('click', fpStepNext);
+        document.getElementById('fp-reset').addEventListener('click', fpReset);
+        document.addEventListener('keydown', function (e) {
+          if (S.scenario === 'free') return;
+          if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); stepNext(); }
+          else if (e.key === 'ArrowLeft') { e.preventDefault(); stepPrev(); }
+        });
+
+        pickScenario('happy');
+        function postHeight() { parent.postMessage({ type: 'prototype:height', height: document.body.scrollHeight }, '*'); }
+        if (typeof ResizeObserver !== 'undefined') new ResizeObserver(postHeight).observe(document.body);
+        postHeight();
+      })();
+    </script>
+  </body>
+</html>
