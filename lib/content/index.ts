@@ -72,6 +72,14 @@ import { bloomFiltersTopic } from "./bloom-filters/_topic";
 import { bloom } from "./bloom-filters/bloom";
 import { countingBloom } from "./bloom-filters/counting-bloom";
 import { cuckoo } from "./bloom-filters/cuckoo";
+import { consensusTopic } from "./consensus/_topic";
+import { twoPhaseCommit } from "./consensus/two-phase-commit";
+import { threePhaseCommit } from "./consensus/three-phase-commit";
+import { paxos } from "./consensus/paxos";
+import { multiPaxos } from "./consensus/multi-paxos";
+import { raft } from "./consensus/raft";
+import { zab } from "./consensus/zab";
+import { pbft } from "./consensus/pbft";
 
 // Indexed by `${topicSlug}/${conceptSlug}`
 const CONCEPT_CONTENT: Record<string, ConceptContent> = {
@@ -138,6 +146,13 @@ const CONCEPT_CONTENT: Record<string, ConceptContent> = {
   "bloom-filters/bloom": bloom,
   "bloom-filters/counting-bloom": countingBloom,
   "bloom-filters/cuckoo": cuckoo,
+  "consensus/two-phase-commit": twoPhaseCommit,
+  "consensus/three-phase-commit": threePhaseCommit,
+  "consensus/paxos": paxos,
+  "consensus/multi-paxos": multiPaxos,
+  "consensus/raft": raft,
+  "consensus/zab": zab,
+  "consensus/pbft": pbft,
 };
 
 // Indexed by topic slug
@@ -152,6 +167,7 @@ const TOPIC_CONTENT: Record<string, TopicContent> = {
   "page-replacement": pageReplacementTopic,
   "circuit-breaker": circuitBreakerTopic,
   "bloom-filters": bloomFiltersTopic,
+  "consensus": consensusTopic,
 };
 
 export function getConceptContent(

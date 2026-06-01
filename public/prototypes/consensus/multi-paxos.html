@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Multi-Paxos</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --success-bg: rgba(92,198,111,0.14); --success-bd: rgba(92,198,111,0.45);
+        --danger: #f06868;  --danger-bg: rgba(240,104,104,0.14); --danger-bd: rgba(240,104,104,0.45);
+        --warning: #f0b568; --warning-bg: rgba(240,181,104,0.14); --warning-bd: rgba(240,181,104,0.45);
+        --info: #5e9ff6;    --info-bg:    rgba(94,159,246,0.16); --info-bd:    rgba(94,159,246,0.45);
+        --purple: #a78bfa;  --purple-bg:  rgba(167,139,250,0.16); --purple-bd:  rgba(167,139,250,0.45);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --radius-lg: 14px; --radius-md: 8px; --radius-sm: 6px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body { padding: 18px 18px 24px; background-image: radial-gradient(1200px 600px at 50% -200px, rgba(251,134,58,0.06), transparent), linear-gradient(to right, rgba(255,255,255,0.020) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.020) 1px, transparent 1px); background-size: auto, 40px 40px, 40px 40px; }
+      .container { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; padding: 9px 12px; transition: all 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.08); }
+      button.ghost { background: transparent; }
+      button i { font-size: 14px; }
+      .tabs { display: flex; gap: 6px; flex-wrap: wrap; padding: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); }
+      .tab { flex: 1; min-width: 130px; padding: 9px 12px; font: 500 12px/1 var(--sans); border-radius: var(--radius-sm); border: 1px solid transparent; background: transparent; color: var(--muted); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: all 150ms ease; }
+      .tab:hover { color: var(--fg); background: rgba(255,255,255,0.03); }
+      .tab.active { background: var(--elevated); color: var(--fg); border-color: var(--border-strong); }
+      .tab i { font-size: 14px; }
+      .hero { background: linear-gradient(180deg, rgba(255,255,255,0.014), transparent), var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; position: relative; overflow: hidden; }
+      .hero::before { content: ""; position: absolute; inset: 0; background: radial-gradient(420px 240px at 50% 0%, rgba(94,159,246,0.05), transparent 60%); pointer-events: none; }
+      .hero-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; position: relative; z-index: 1; gap: 10px; flex-wrap: wrap; }
+      .hero-head .ttl { font: 600 11.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .legend { font-size: 11.5px; color: var(--muted); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      .legend .sw { display: inline-block; width: 11px; height: 11px; border-radius: 3px; vertical-align: -1px; margin-right: 3px; }
+      .sw.l { background: var(--info-bg); border: 1px solid var(--info-bd); }
+      .sw.t { background: var(--warning-bg); border: 1px solid var(--warning-bd); }
+      .sw.c { background: var(--success-bg); border: 1px solid var(--success-bd); }
+      .sw.d { background: var(--danger-bg); border: 1px solid var(--danger-bd); }
+      .mode-bar { display: flex; gap: 6px; margin-bottom: 12px; position: relative; z-index: 1; }
+      .mode { flex: 1; padding: 8px 6px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: transparent; color: var(--subtle); text-align: center; font: 500 11.5px var(--sans); transition: all 200ms ease; }
+      .mode i { margin-right: 5px; font-size: 12px; }
+      .mode .sub { display: block; font-size: 10px; color: var(--subtle); margin-top: 2px; font-family: var(--mono); }
+      .mode.on { background: var(--info-bg); border-color: var(--info-bd); color: var(--info); }
+      .phase-chips { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 12px; position: relative; z-index: 1; }
+      .phase-chip { flex: 1; min-width: 72px; padding: 6px 4px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: transparent; color: var(--subtle); text-align: center; font: 500 10.5px var(--mono); transition: all 200ms ease; }
+      .phase-chip.done { background: var(--surface); color: var(--muted); }
+      .phase-chip.active { background: var(--info-bg); border-color: var(--info-bd); color: var(--info); }
+      .nodes { display: flex; flex-direction: column; gap: 6px; position: relative; z-index: 1; }
+      .node { background: var(--elevated); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 9px 10px; display: grid; grid-template-columns: 116px 1fr; gap: 10px; align-items: center; transition: all 250ms ease; }
+      .node.leader { border-color: var(--info-bd); background: var(--info-bg); }
+      .node.dead { opacity: 0.6; background: rgba(0,0,0,0.3); }
+      .node-head { display: flex; align-items: center; gap: 9px; }
+      .node-head .icon { font-size: 20px; line-height: 1; color: var(--muted); }
+      .node.leader .node-head .icon { color: var(--info); }
+      .node.dead .node-head .icon { color: var(--danger); }
+      .node-head .nm-block { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+      .node-head .nm { font: 600 13px var(--sans); color: var(--fg); line-height: 1; }
+      .node-head .tag { font: 500 10px var(--mono); padding: 1px 6px; border-radius: var(--radius-sm); background: rgba(255,255,255,0.04); color: var(--subtle); align-self: flex-start; line-height: 1.4; }
+      .node.leader .node-head .tag { background: var(--info-bg); color: var(--info); }
+      .node.dead .node-head .tag { background: var(--danger-bg); color: var(--danger); }
+      .slots { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+      .slot { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 5px 4px; min-height: 36px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; overflow: hidden; transition: all 200ms ease; }
+      .slot .slot-n { font: 500 9px var(--mono); color: var(--subtle); line-height: 1; opacity: 0.7; }
+      .slot .slot-c { font: 500 11.5px var(--sans); color: var(--subtle); line-height: 1.1; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .slot.tent { background: var(--warning-bg); border-color: var(--warning-bd); }
+      .slot.tent .slot-n { color: var(--warning); opacity: 0.9; }
+      .slot.tent .slot-c { color: var(--warning); }
+      .slot.commit { background: var(--success-bg); border-color: var(--success-bd); }
+      .slot.commit .slot-n { color: var(--success); opacity: 0.9; }
+      .slot.commit .slot-c { color: var(--success); }
+      .pop { animation: pop .35s cubic-bezier(0.34, 1.56, 0.64, 1); }
+      @keyframes pop { from { transform: scale(0.92); } 50% { transform: scale(1.04); } to { transform: scale(1); } }
+      .narration { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px; position: relative; overflow: hidden; transition: border-color 350ms ease; }
+      .narration::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--border-strong); }
+      .narration.elect::before { background: var(--info); } .narration.elect { border-color: rgba(94,159,246,0.30); }
+      .narration.tent::before { background: var(--warning); } .narration.tent { border-color: rgba(240,181,104,0.30); }
+      .narration.commit::before { background: var(--success); } .narration.commit { border-color: rgba(92,198,111,0.30); }
+      .narration.crash::before { background: var(--danger); } .narration.crash { border-color: rgba(240,104,104,0.30); }
+      .narr-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+      .badge { font: 600 10.5px var(--mono); padding: 4px 9px; border-radius: 999px; letter-spacing: 0.4px; text-transform: uppercase; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); color: var(--muted); background: var(--elevated); }
+      .badge.step { background: var(--elevated); border-color: var(--border-strong); color: var(--fg); }
+      .badge.event { background: transparent; }
+      .badge.event.elect { color: var(--info); border-color: var(--info-bd); }
+      .badge.event.tent { color: var(--warning); border-color: var(--warning-bd); }
+      .badge.event.commit { color: var(--success); border-color: var(--success-bd); }
+      .badge.event.crash { color: var(--danger); border-color: var(--danger-bd); }
+      .narr-text { margin: 0; font-size: 14px; line-height: 1.6; color: var(--fg); }
+      .narr-text strong { color: var(--fg); font-weight: 600; }
+      .narr-text code { font-family: var(--mono); background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; color: var(--accent); font-size: 12px; }
+      .timeline-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; }
+      .timeline-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font: 500 11px var(--mono); color: var(--muted); letter-spacing: 0.4px; text-transform: uppercase; }
+      .timeline-head .pos { color: var(--fg); font-weight: 600; text-transform: none; letter-spacing: 0; }
+      .timeline { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+      .tl-dot { flex: 1; min-width: 14px; height: 6px; border-radius: 99px; background: var(--border); transition: all 200ms ease; cursor: pointer; }
+      .tl-dot.done { background: var(--accent); opacity: 0.55; }
+      .tl-dot.now { background: var(--accent); height: 10px; box-shadow: 0 0 8px rgba(251,134,58,0.5); }
+      .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .controls .spacer { flex: 1; }
+      .kbd { font-family: var(--mono); font-size: 10.5px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); color: var(--muted); border: 1px solid var(--border); }
+      .hint { font: 11px var(--mono); color: var(--subtle); display: inline-flex; align-items: center; gap: 5px; }
+      .free-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px; }
+      .free-card h3 { margin: 0 0 10px; font: 500 11px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .fp-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+      .cmd-btn { background: var(--elevated); border: 1px solid var(--border); color: var(--fg); font: 500 12px var(--mono); padding: 7px 10px; border-radius: var(--radius-sm); cursor: pointer; }
+      .cmd-btn:hover:not(:disabled) { background: var(--surface); border-color: var(--border-strong); }
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; }
+      .stat .label { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .stat .value { font: 600 17px var(--mono); margin-top: 4px; line-height: 1; }
+      .log-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; }
+      .log-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font: 500 11px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .log-head .pill { color: var(--subtle); text-transform: none; letter-spacing: 0; font-size: 10.5px; }
+      .log { font-family: var(--mono); font-size: 12px; line-height: 1.85; color: var(--subtle); min-height: 48px; max-height: 56px; overflow: hidden; }
+      .log .t { color: var(--subtle); margin-right: 10px; opacity: 0.7; }
+      @media (max-width: 540px) { .node { grid-template-columns: 96px 1fr; padding: 7px 8px; gap: 6px; } .slots { gap: 3px; } .slot { min-height: 32px; padding: 4px 2px; } .slot .slot-c { font-size: 10.5px; } .stats { grid-template-columns: repeat(2, 1fr); } }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2 class="sr-only">Interactive Multi-Paxos — one-time leader election with Prepare/Promise, then steady-state single-RTT command streaming via Accept-only. Crash the leader to see re-election kick in.</h2>
+
+      <div class="tabs" role="tablist" aria-label="Scenario">
+        <button class="tab active" data-scenario="elect" role="tab"><i class="ti ti-crown" aria-hidden="true"></i>Elect a leader</button>
+        <button class="tab" data-scenario="stream" role="tab"><i class="ti ti-stack-2" aria-hidden="true"></i>Stream commands</button>
+        <button class="tab" data-scenario="crash" role="tab"><i class="ti ti-bolt" aria-hidden="true"></i>Crash the leader</button>
+        <button class="tab" data-scenario="free" role="tab"><i class="ti ti-hand-finger" aria-hidden="true"></i>Free play</button>
+      </div>
+
+      <div class="hero" aria-label="Multi-Paxos stage">
+        <div class="hero-head">
+          <span class="ttl">5 nodes · 5 slots · majority = 3</span>
+          <span class="legend">
+            <span><span class="sw l"></span>leader</span>
+            <span><span class="sw t"></span>tentative</span>
+            <span><span class="sw c"></span>committed</span>
+            <span><span class="sw d"></span>crashed</span>
+          </span>
+        </div>
+        <div class="mode-bar">
+          <div id="mode-elect" class="mode on"><i class="ti ti-crown"></i>Phase 1 · Elect leader<span class="sub">rare · 2 RTTs</span></div>
+          <div id="mode-steady" class="mode"><i class="ti ti-stack-2"></i>Phase 2 only · Stream<span class="sub">common · 1 RTT</span></div>
+        </div>
+        <div class="phase-chips">
+          <div class="phase-chip" data-p="1">1 · Prepare</div>
+          <div class="phase-chip" data-p="2">2 · Promise</div>
+          <div class="phase-chip" data-p="3">3 · Leader set</div>
+          <div class="phase-chip" data-p="4">4 · Accept</div>
+          <div class="phase-chip" data-p="5">5 · Committed</div>
+        </div>
+        <div class="nodes" id="nodes"></div>
+      </div>
+
+      <div id="narration" class="narration">
+        <div class="narr-meta">
+          <span id="narr-step" class="badge step">Step 0 / 0</span>
+          <span id="narr-event" class="badge event" style="display:none"></span>
+        </div>
+        <p id="narr-text" class="narr-text"><strong>Ready.</strong> 5 servers, no leader. Press <strong>Next</strong> to elect one.</p>
+      </div>
+
+      <div id="timeline-wrap" class="timeline-wrap">
+        <div class="timeline-head"><span>Scenario timeline</span><span class="pos" id="tl-pos">—</span></div>
+        <div id="timeline" class="timeline"></div>
+      </div>
+
+      <div id="step-controls" class="controls">
+        <button id="btn-prev"><i class="ti ti-chevron-left" aria-hidden="true"></i>Prev</button>
+        <button id="btn-play" class="primary"><i id="play-icon" class="ti ti-player-play" aria-hidden="true"></i><span id="play-label">Play</span></button>
+        <button id="btn-next"><i class="ti ti-chevron-right" aria-hidden="true"></i>Next</button>
+        <button id="btn-restart" class="ghost"><i class="ti ti-refresh" aria-hidden="true"></i>Restart</button>
+        <span class="spacer"></span>
+        <span class="hint"><span class="kbd">←</span><span class="kbd">→</span><span class="kbd">space</span></span>
+      </div>
+
+      <div id="free-play" class="free-card" style="display:none">
+        <h3>Free play — elect, then stream and crash</h3>
+        <div class="fp-row">
+          <button id="fp-elect" class="primary"><i class="ti ti-crown"></i>Elect leader</button>
+          <button id="fp-crash" disabled><i class="ti ti-bolt"></i>Crash leader</button>
+          <button id="fp-reset" class="ghost"><i class="ti ti-refresh"></i>Reset</button>
+        </div>
+        <div class="fp-row">
+          <span style="font-size:11.5px;color:var(--muted)">Append:</span>
+          <button class="cmd-btn" data-cmd="SET x=1" disabled>SET x=1</button>
+          <button class="cmd-btn" data-cmd="SET y=7" disabled>SET y=7</button>
+          <button class="cmd-btn" data-cmd="DEL z" disabled>DEL z</button>
+          <button class="cmd-btn" data-cmd="INC x" disabled>INC x</button>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="label">leader</div><div id="s-leader" class="value">—</div></div>
+        <div class="stat"><div class="label">ballot</div><div id="s-ballot" class="value">—</div></div>
+        <div class="stat"><div class="label">log slots filled</div><div id="s-slots" class="value">0 / 5</div></div>
+        <div class="stat"><div class="label">committed</div><div id="s-committed" class="value" style="color:var(--success)">0</div></div>
+      </div>
+
+      <div class="log-card">
+        <div class="log-head"><span>Message log</span><span class="pill">last 2 messages</span></div>
+        <div id="log" class="log"></div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        var NAMES = ['N1', 'N2', 'N3', 'N4', 'N5'];
+        var MAJ = 3, SLOTS = 5;
+        var S = {
+          scenario: 'elect', stepIdx: 0, playing: false,
+          alive: [true, true, true, true, true],
+          leader: -1, ballot: null, mode: 'elect',
+          logData: NAMES.map(function () { var a = []; for (var i = 0; i < SLOTS; i++) a.push(null); return a; }),
+          phaseN: 0, popNode: -1, popSlot: -1,
+          eventTag: null, lastNarr: null,
+          fpStep: 0, fpSlot: 0, fpPending: null,
+          fpCommands: ['SET x=1', 'SET y=7', 'DEL z', 'INC x'],
+          fpAutoSlot: 0,
+        };
+
+        var nodesEl = document.getElementById('nodes');
+        var narrEl = document.getElementById('narration');
+        var narrTxt = document.getElementById('narr-text');
+        var narrEv = document.getElementById('narr-event');
+        var narrStep = document.getElementById('narr-step');
+        var tlWrap = document.getElementById('timeline-wrap');
+        var tlEl = document.getElementById('timeline');
+        var tlPos = document.getElementById('tl-pos');
+        var logEl = document.getElementById('log');
+        var modeElect = document.getElementById('mode-elect');
+        var modeSteady = document.getElementById('mode-steady');
+
+        function setMode(m) {
+          S.mode = m;
+          modeElect.classList.toggle('on', m === 'elect');
+          modeSteady.classList.toggle('on', m === 'steady');
+        }
+
+        function renderNodes() {
+          nodesEl.innerHTML = '';
+          for (var i = 0; i < 5; i++) {
+            var dead = !S.alive[i];
+            var isLeader = S.leader === i;
+            var cls = 'node' + (isLeader ? ' leader' : '') + (dead ? ' dead' : '') + (S.popNode === i && S.popSlot === -1 ? ' pop' : '');
+            var iconName = dead ? 'plug-connected-x' : (isLeader ? 'crown' : 'server');
+            var tag = dead ? 'crashed' : (isLeader ? 'leader' : 'follower');
+            var slotsHTML = '';
+            for (var sI = 0; sI < SLOTS; sI++) {
+              var cell = S.logData[i][sI];
+              var slotCls = 'slot';
+              var slotInner = '<span class="slot-n">' + (sI + 1) + '</span><span class="slot-c">—</span>';
+              if (cell) {
+                slotInner = '<span class="slot-n">' + (sI + 1) + '</span><span class="slot-c">' + cell.cmd + '</span>';
+                if (cell.state === 'commit') slotCls += ' commit'; else slotCls += ' tent';
+              }
+              if (S.popNode === i && S.popSlot === sI && cell) slotCls += ' pop';
+              slotsHTML += '<div class="' + slotCls + '" title="' + (cell ? cell.cmd : 'slot ' + (sI + 1) + ' empty') + '">' + slotInner + '</div>';
+            }
+            var card = document.createElement('div');
+            card.className = cls;
+            card.innerHTML =
+              '<div class="node-head">' +
+                '<div class="icon"><i class="ti ti-' + iconName + '"></i></div>' +
+                '<div class="nm-block"><div class="nm">' + NAMES[i] + '</div><div class="tag">' + tag + '</div></div>' +
+              '</div>' +
+              '<div class="slots">' + slotsHTML + '</div>';
+            nodesEl.appendChild(card);
+          }
+          S.popNode = -1; S.popSlot = -1;
+        }
+        function pulseNode(i) { S.popNode = i; S.popSlot = -1; }
+        function pulseSlot(i, s) { S.popNode = i; S.popSlot = s; }
+
+        function render() {
+          renderNodes();
+          var chips = document.querySelectorAll('.phase-chip');
+          for (var c = 0; c < chips.length; c++) {
+            var p = +chips[c].dataset.p;
+            chips[c].classList.toggle('active', p === S.phaseN);
+            chips[c].classList.toggle('done', p < S.phaseN);
+          }
+          var kind = S.eventTag ? S.eventTag.kind : '';
+          narrEl.className = 'narration' + (kind ? ' ' + kind : '');
+          narrTxt.innerHTML = DOMPurify.sanitize(S.lastNarr || '<strong>Ready.</strong>');
+          if (S.scenario === 'free') { narrStep.textContent = 'Free play'; }
+          else {
+            var sc = SCENARIOS[S.scenario];
+            narrStep.textContent = 'Step ' + S.stepIdx + ' / ' + (sc.length - 1);
+          }
+          if (S.eventTag) { narrEv.style.display = ''; narrEv.className = 'badge event ' + S.eventTag.kind; narrEv.textContent = S.eventTag.text; }
+          else { narrEv.style.display = 'none'; }
+
+          if (S.scenario === 'free') { tlWrap.style.display = 'none'; }
+          else {
+            tlWrap.style.display = '';
+            var sc2 = SCENARIOS[S.scenario];
+            tlEl.innerHTML = '';
+            for (var j = 0; j < sc2.length; j++) {
+              var dd = document.createElement('div');
+              var cl = 'tl-dot'; if (j < S.stepIdx) cl += ' done'; if (j === S.stepIdx) cl += ' now';
+              dd.className = cl;
+              (function (idx) { dd.onclick = function () { applyStep(idx); }; })(j);
+              tlEl.appendChild(dd);
+            }
+            tlPos.textContent = (S.stepIdx + 1) + ' of ' + sc2.length;
+          }
+
+          document.getElementById('s-leader').textContent = S.leader === -1 ? '—' : NAMES[S.leader];
+          document.getElementById('s-ballot').textContent = S.ballot == null ? '—' : S.ballot;
+          var filled = 0, committed = 0;
+          if (S.leader >= 0) {
+            for (var sI = 0; sI < SLOTS; sI++) {
+              var cell = S.logData[S.leader][sI];
+              if (cell) { filled++; if (cell.state === 'commit') committed++; }
+            }
+          }
+          document.getElementById('s-slots').textContent = filled + ' / ' + SLOTS;
+          document.getElementById('s-committed').textContent = committed;
+
+          if (S.scenario !== 'free') {
+            var sc3 = SCENARIOS[S.scenario];
+            document.getElementById('btn-prev').disabled = S.stepIdx <= 0;
+            document.getElementById('btn-next').disabled = S.stepIdx >= sc3.length - 1;
+          }
+        }
+
+        function log(msg, color) {
+          var t = new Date(); var hh = String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0') + ':' + String(t.getSeconds()).padStart(2, '0');
+          var line = document.createElement('div'); line.style.color = color || 'var(--subtle)';
+          var ts = document.createElement('span'); ts.className = 't'; ts.textContent = hh;
+          line.appendChild(ts); line.appendChild(document.createTextNode(String(msg)));
+          logEl.insertBefore(line, logEl.firstChild);
+          while (logEl.children.length > 2) logEl.removeChild(logEl.lastChild);
+        }
+        function stripTags(html) { return DOMPurify.sanitize(String(html == null ? '' : html), { ALLOWED_TAGS: [], KEEP_CONTENT: true }); }
+        function colorForEvent(k) {
+          if (k === 'elect') return 'var(--info)';
+          if (k === 'tent') return 'var(--warning)';
+          if (k === 'commit') return 'var(--success)';
+          if (k === 'crash') return 'var(--danger)';
+          return 'var(--subtle)';
+        }
+
+        function resetState() {
+          S.alive = [true, true, true, true, true];
+          S.leader = -1; S.ballot = null; S.phaseN = 0;
+          S.logData = NAMES.map(function () { var a = []; for (var i = 0; i < SLOTS; i++) a.push(null); return a; });
+          S.fpAutoSlot = 0; S.fpStep = 0; S.fpPending = null;
+          S.eventTag = null; S.lastNarr = null;
+          setMode('elect');
+        }
+
+        function doPrepare(b) { S.phaseN = 1; S.ballot = b; S.leader = 0; pulseNode(0); }
+        function doPromise() { S.phaseN = 2; for (var i = 0; i < 5; i++) if (S.alive[i]) pulseNode(i); }
+        function doLeaderSet() { S.phaseN = 3; setMode('steady'); pulseNode(S.leader); }
+        function doAccept(slot, cmd) {
+          S.phaseN = 4;
+          S.logData[S.leader][slot] = { cmd: cmd, state: 'tent' };
+          pulseSlot(S.leader, slot);
+        }
+        function doCommit(slot, cmd) {
+          S.phaseN = 5;
+          for (var i = 0; i < 5; i++) {
+            if (S.alive[i]) S.logData[i][slot] = { cmd: cmd, state: 'commit' };
+          }
+          pulseSlot(S.leader, slot);
+        }
+        function doCrashLeader() {
+          if (S.leader === -1) return;
+          S.alive[S.leader] = false;
+          var old = S.leader; S.leader = -1; S.phaseN = 0;
+          setMode('elect');
+          pulseNode(old);
+        }
+        function doReElect(nextIdx, newBallot) {
+          S.phaseN = 3; S.ballot = newBallot; S.leader = nextIdx;
+          // copy committed entries forward from the now-dead leader's log (using any alive replica's committed entries)
+          // For demo simplicity, committed entries are already in every alive node's log.
+          setMode('steady');
+          pulseNode(nextIdx);
+        }
+
+        var SCENARIOS = {};
+
+        SCENARIOS.elect = [
+          { narr: '<strong>Ready.</strong> 5 servers (N1–N5) with no leader. Multi-Paxos starts with Phase 1: pick a leader.', do: function () { resetState(); } },
+          { narr: '<strong>Phase 1a — Prepare.</strong> N1 picks ballot 11 and sends PREPARE(11) <em>once</em>, covering every future slot.', ev: 'elect', do: function () { resetState(); doPrepare(11); } },
+          { narr: '<strong>Phase 1b — Promise.</strong> All 5 nodes promise. N1 now holds promises for <strong>all future slots</strong> — that\'s the one-time cost.', ev: 'elect', do: function () { resetState(); doPrepare(11); doPromise(); } },
+          { narr: '<strong>Leader set.</strong> N1 is the stable leader. From here on, every command will skip Phase 1 entirely.', ev: 'elect', do: function () { resetState(); doPrepare(11); doPromise(); doLeaderSet(); } },
+        ];
+
+        SCENARIOS.stream = [
+          { narr: '<strong>Leader already elected.</strong> N1 holds ballot 11 across all slots.', do: function () { resetState(); doPrepare(11); doPromise(); doLeaderSet(); } },
+          { narr: '<strong>Phase 2a — Accept.</strong> Client sends <code>SET x=1</code>. N1 appends to slot 1 (tentative, amber) and broadcasts ACCEPT. <em>No Prepare needed.</em>', ev: 'tent', do: function () { resetState(); doPrepare(11); doPromise(); doLeaderSet(); doAccept(0, 'SET x=1'); } },
+          { narr: '<strong>Phase 2b — Committed.</strong> 5/5 acknowledged. Slot 1 is permanent (green) on every server. One round-trip — that\'s the Multi-Paxos hot path.', ev: 'commit', do: function () { resetState(); doPrepare(11); doPromise(); doLeaderSet(); doAccept(0, 'SET x=1'); doCommit(0, 'SET x=1'); } },
+          { narr: '<strong>Append <code>SET y=7</code>.</strong> Another one-RTT Accept → Committed.', ev: 'commit', do: function () { resetState(); doPrepare(11); doPromise(); doLeaderSet(); doAccept(0, 'SET x=1'); doCommit(0, 'SET x=1'); doAccept(1, 'SET y=7'); doCommit(1, 'SET y=7'); } },
+          { narr: '<strong>Append <code>DEL z</code>.</strong> Same pattern, no extra round-trips. The cluster is replicating a log at one RTT per command.', ev: 'commit', do: function () { resetState(); doPrepare(11); doPromise(); doLeaderSet(); doAccept(0, 'SET x=1'); doCommit(0, 'SET x=1'); doAccept(1, 'SET y=7'); doCommit(1, 'SET y=7'); doAccept(2, 'DEL z'); doCommit(2, 'DEL z'); } },
+        ];
+
+        SCENARIOS.crash = [
+          { narr: '<strong>Steady state.</strong> N1 leads ballot 11. Slots 1 and 2 already committed.', do: function () { resetState(); doPrepare(11); doPromise(); doLeaderSet(); doAccept(0, 'SET x=1'); doCommit(0, 'SET x=1'); doAccept(1, 'SET y=7'); doCommit(1, 'SET y=7'); } },
+          { narr: '<strong>Leader N1 crashes!</strong> No new writes can proceed until a new leader takes over. Committed entries are safe — every alive node still has them.', ev: 'crash', do: function () { resetState(); doPrepare(11); doPromise(); doLeaderSet(); doAccept(0, 'SET x=1'); doCommit(0, 'SET x=1'); doAccept(1, 'SET y=7'); doCommit(1, 'SET y=7'); doCrashLeader(); } },
+          { narr: '<strong>Survivor N2 starts a new election.</strong> It picks ballot 21 (higher than 11) and runs Phase 1 again.', ev: 'elect', do: function () { resetState(); doPrepare(11); doPromise(); doLeaderSet(); doAccept(0, 'SET x=1'); doCommit(0, 'SET x=1'); doAccept(1, 'SET y=7'); doCommit(1, 'SET y=7'); doCrashLeader(); doReElect(1, 21); } },
+          { narr: '<strong>Stream resumes.</strong> N2 appends <code>DEL z</code> to slot 3 with Phase 2 only — same hot path. Notice slot 3 is still amber on the dead N1 (it crashed before learning about it).', ev: 'tent', do: function () { resetState(); doPrepare(11); doPromise(); doLeaderSet(); doAccept(0, 'SET x=1'); doCommit(0, 'SET x=1'); doAccept(1, 'SET y=7'); doCommit(1, 'SET y=7'); doCrashLeader(); doReElect(1, 21); doAccept(2, 'DEL z'); } },
+          { narr: '<strong>Committed.</strong> Slot 3 is permanent. The cluster recovered without losing any earlier committed write.', ev: 'commit', do: function () { resetState(); doPrepare(11); doPromise(); doLeaderSet(); doAccept(0, 'SET x=1'); doCommit(0, 'SET x=1'); doAccept(1, 'SET y=7'); doCommit(1, 'SET y=7'); doCrashLeader(); doReElect(1, 21); doAccept(2, 'DEL z'); doCommit(2, 'DEL z'); } },
+        ];
+
+        function applyStep(targetIdx) {
+          var sc = SCENARIOS[S.scenario]; if (!sc) return;
+          for (var i = 0; i <= targetIdx; i++) {
+            var st = sc[i]; S.eventTag = null; S.lastNarr = null; st.do();
+            if (i === targetIdx) {
+              if (S.lastNarr === null) S.lastNarr = st.narr;
+              if (st.ev && !S.eventTag) S.eventTag = { kind: st.ev, text: evLabel(st.ev) };
+            }
+          }
+          S.stepIdx = targetIdx; render();
+        }
+        function evLabel(k) { if (k === 'elect') return 'elect'; if (k === 'tent') return 'tentative'; if (k === 'commit') return 'commit'; if (k === 'crash') return 'crash'; return k; }
+        function stepNext() {
+          var sc = SCENARIOS[S.scenario];
+          if (S.stepIdx < sc.length - 1) { applyStep(S.stepIdx + 1); log(stripTags(sc[S.stepIdx].narr), colorForEvent(S.eventTag && S.eventTag.kind)); }
+          else { setPlaying(false); }
+        }
+        function stepPrev() { if (S.stepIdx > 0) applyStep(S.stepIdx - 1); }
+        var playTimer = null;
+        function setPlaying(on) {
+          S.playing = on;
+          document.getElementById('play-label').textContent = on ? 'Pause' : 'Play';
+          document.getElementById('play-icon').className = on ? 'ti ti-player-pause' : 'ti ti-player-play';
+          if (playTimer) { clearInterval(playTimer); playTimer = null; }
+          if (on) playTimer = setInterval(function () {
+            var sc = SCENARIOS[S.scenario]; if (!sc) { setPlaying(false); return; }
+            if (S.stepIdx < sc.length - 1) stepNext(); else setPlaying(false);
+          }, 1700);
+        }
+
+        function pickScenario(name) {
+          S.scenario = name;
+          var tabs = document.querySelectorAll('.tab');
+          for (var i = 0; i < tabs.length; i++) tabs[i].classList.toggle('active', tabs[i].dataset.scenario === name);
+          setPlaying(false);
+          var stepCtl = document.getElementById('step-controls');
+          var fp = document.getElementById('free-play');
+          if (name === 'free') {
+            stepCtl.style.display = 'none'; fp.style.display = '';
+            resetState();
+            S.lastNarr = '<strong>Free play.</strong> Press <strong>Elect leader</strong>, then append commands or crash the leader.';
+            updateFpButtons(); render();
+          } else {
+            stepCtl.style.display = ''; fp.style.display = 'none';
+            applyStep(0);
+          }
+        }
+
+        function updateFpButtons() {
+          var hasLeader = S.leader !== -1;
+          document.querySelectorAll('.cmd-btn').forEach(function (b) { b.disabled = !hasLeader; });
+          document.getElementById('fp-crash').disabled = !hasLeader;
+        }
+
+        function fpElect() {
+          if (S.leader === -1 && S.alive.some(function (a) { return a; })) {
+            var first = S.alive.findIndex(function (a) { return a; });
+            S.ballot = S.ballot == null ? 11 : S.ballot + 10;
+            S.leader = first;
+            setMode('steady');
+            S.lastNarr = '<strong>' + NAMES[first] + ' elected as leader</strong> (ballot ' + S.ballot + '). Phase 1 done — append commands using one RTT each.';
+            S.eventTag = { kind: 'elect', text: 'elect' };
+            log(NAMES[first] + ' → all: PROMISE quorum, becomes leader', 'var(--info)');
+            updateFpButtons(); render();
+          }
+        }
+        function fpCmd(cmd) {
+          if (S.leader === -1 || S.fpAutoSlot >= SLOTS) return;
+          var slot = S.fpAutoSlot;
+          doAccept(slot, cmd);
+          for (var i = 0; i < 5; i++) { if (S.alive[i]) S.logData[i][slot] = { cmd: cmd, state: 'commit' }; }
+          S.fpAutoSlot++;
+          S.lastNarr = '<strong>"' + cmd + "\" → slot " + (slot + 1) + '.</strong> Accept → quorum ACK → Committed. One round-trip.';
+          S.eventTag = { kind: 'commit', text: 'commit' };
+          log(NAMES[S.leader] + ' → ACCEPT slot ' + (slot + 1) + ': ' + cmd, 'var(--success)');
+          render();
+        }
+        function fpCrashLeader() {
+          if (S.leader === -1) return;
+          var old = S.leader;
+          doCrashLeader();
+          S.lastNarr = '<strong>' + NAMES[old] + ' (leader) crashed.</strong> Press <strong>Elect leader</strong> to recover — the new leader inherits the committed log automatically.';
+          S.eventTag = { kind: 'crash', text: 'crash' };
+          log('✗ ' + NAMES[old] + ' crashed', 'var(--danger)');
+          updateFpButtons(); render();
+        }
+        function fpReset() { resetState(); S.lastNarr = '<strong>Reset.</strong> Press <strong>Elect leader</strong> to begin.'; S.eventTag = null; updateFpButtons(); render(); }
+
+        var tabs = document.querySelectorAll('.tab');
+        for (var i = 0; i < tabs.length; i++) (function (t) { t.addEventListener('click', function () { pickScenario(t.dataset.scenario); }); })(tabs[i]);
+        document.getElementById('btn-prev').addEventListener('click', stepPrev);
+        document.getElementById('btn-next').addEventListener('click', stepNext);
+        document.getElementById('btn-play').addEventListener('click', function () { setPlaying(!S.playing); });
+        document.getElementById('btn-restart').addEventListener('click', function () { setPlaying(false); applyStep(0); });
+        document.getElementById('fp-elect').addEventListener('click', fpElect);
+        document.getElementById('fp-crash').addEventListener('click', fpCrashLeader);
+        document.getElementById('fp-reset').addEventListener('click', fpReset);
+        document.querySelectorAll('.cmd-btn').forEach(function (b) { b.addEventListener('click', function () { fpCmd(b.dataset.cmd); }); });
+        document.addEventListener('keydown', function (e) {
+          if (S.scenario === 'free') return;
+          if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); stepNext(); }
+          else if (e.key === 'ArrowLeft') { e.preventDefault(); stepPrev(); }
+        });
+
+        pickScenario('elect');
+        function postHeight() { parent.postMessage({ type: 'prototype:height', height: document.body.scrollHeight }, '*'); }
+        if (typeof ResizeObserver !== 'undefined') new ResizeObserver(postHeight).observe(document.body);
+        postHeight();
+      })();
+    </script>
+  </body>
+</html>
