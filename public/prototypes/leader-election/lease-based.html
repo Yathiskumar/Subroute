@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lease-Based Election</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>i.ti{visibility:hidden}html.fonts-ready i.ti{visibility:visible}</style>
+    <script>(function(){var d=document.documentElement;function ok(){d.classList.add('fonts-ready');}if(document.fonts&&document.fonts.ready){document.fonts.ready.then(ok);}setTimeout(ok,2500);})();</script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --success-bg: rgba(92,198,111,0.14); --success-bd: rgba(92,198,111,0.45);
+        --danger: #f06868;  --danger-bg: rgba(240,104,104,0.14); --danger-bd: rgba(240,104,104,0.45);
+        --warning: #f0b568; --warning-bg: rgba(240,181,104,0.14); --warning-bd: rgba(240,181,104,0.45);
+        --info: #5e9ff6;    --info-bg:    rgba(94,159,246,0.16); --info-bd:    rgba(94,159,246,0.45);
+        --purple: #a78bfa;  --purple-bg:  rgba(167,139,250,0.16); --purple-bd:  rgba(167,139,250,0.45);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --radius-lg: 14px; --radius-md: 8px; --radius-sm: 6px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body { padding: 18px 18px 24px; background-image: radial-gradient(1200px 600px at 50% -200px, rgba(251,134,58,0.06), transparent), linear-gradient(to right, rgba(255,255,255,0.020) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.020) 1px, transparent 1px); background-size: auto, 40px 40px, 40px 40px; }
+      .container { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; padding: 9px 12px; transition: all 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.08); }
+      button.ghost { background: transparent; }
+      button i { font-size: 14px; }
+      .tabs { display: flex; gap: 6px; flex-wrap: wrap; padding: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); }
+      .tab { flex: 1; min-width: 130px; padding: 9px 12px; font: 500 12px/1 var(--sans); border-radius: var(--radius-sm); border: 1px solid transparent; background: transparent; color: var(--muted); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: all 150ms ease; }
+      .tab:hover { color: var(--fg); background: rgba(255,255,255,0.03); }
+      .tab.active { background: var(--elevated); color: var(--fg); border-color: var(--border-strong); }
+      .tab i { font-size: 14px; }
+      .hero { background: linear-gradient(180deg, rgba(255,255,255,0.014), transparent), var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; position: relative; overflow: hidden; }
+      .hero::before { content: ""; position: absolute; inset: 0; background: radial-gradient(420px 240px at 50% 0%, rgba(94,159,246,0.05), transparent 60%); pointer-events: none; }
+      .hero-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; position: relative; z-index: 1; gap: 10px; flex-wrap: wrap; }
+      .hero-head .ttl { font: 600 11.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .legend { font-size: 11.5px; color: var(--muted); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      .legend .sw { display: inline-block; width: 11px; height: 11px; border-radius: 3px; vertical-align: -1px; margin-right: 3px; }
+      .sw.l { background: var(--success-bg); border: 1px solid var(--success-bd); }
+      .sw.f { background: var(--info-bg); border: 1px solid var(--info-bd); }
+      .sw.t { background: var(--warning-bg); border: 1px solid var(--warning-bd); }
+      .sw.d { background: var(--danger-bg); border: 1px solid var(--danger-bd); }
+      .store-card { background: linear-gradient(180deg, rgba(167,139,250,0.06), transparent), var(--elevated); border: 1.5px solid var(--purple-bd); border-radius: var(--radius-lg); padding: 12px 14px; margin-bottom: 12px; position: relative; z-index: 1; }
+      .store-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font: 500 10.5px var(--mono); color: var(--purple); text-transform: uppercase; letter-spacing: 0.4px; }
+      .store-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; align-items: end; }
+      .store-cell .label { font: 500 9.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.3px; }
+      .store-cell .val { font: 700 18px var(--mono); color: var(--fg); margin-top: 2px; line-height: 1.1; }
+      .store-cell .val.free { color: var(--subtle); font-style: italic; }
+      .ttl-wrap { margin-top: 10px; }
+      .ttl-head { display: flex; justify-content: space-between; font: 500 10px var(--mono); color: var(--muted); margin-bottom: 4px; }
+      .ttl-track { height: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 99px; overflow: hidden; }
+      .ttl-fill { height: 100%; background: var(--success); transition: width 200ms linear, background 250ms; }
+      .ttl-fill.warn { background: var(--warning); }
+      .ttl-fill.danger { background: var(--danger); }
+      .ttl-fill.expired { width: 0; }
+      .nodes-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; position: relative; z-index: 1; }
+      .node { background: var(--elevated); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 11px 6px 10px; display: flex; flex-direction: column; align-items: center; gap: 4px; position: relative; transition: all 250ms ease; }
+      .node .pid { font: 700 14px var(--mono); color: var(--fg); }
+      .node .tag { font: 500 9px var(--mono); padding: 2px 6px; border-radius: var(--radius-sm); background: rgba(255,255,255,0.04); color: var(--subtle); text-transform: uppercase; letter-spacing: 0.3px; margin-top: 2px; }
+      .node.leader { border-color: var(--success-bd); background: var(--success-bg); }
+      .node.leader .pid { color: var(--success); }
+      .node.leader .tag { background: var(--success-bg); color: var(--success); border: 1px solid var(--success-bd); }
+      .node.follower { border-color: var(--info-bd); }
+      .node.follower .tag { background: var(--info-bg); color: var(--info); border: 1px solid var(--info-bd); }
+      .node.trying { border-color: var(--warning-bd); background: var(--warning-bg); }
+      .node.trying .tag { background: var(--warning-bg); color: var(--warning); border: 1px solid var(--warning-bd); }
+      .node.paused { border-color: var(--purple-bd); background: var(--purple-bg); }
+      .node.paused .tag { background: var(--purple-bg); color: var(--purple); border: 1px solid var(--purple-bd); }
+      .node.dead { opacity: 0.45; border-style: dashed; border-color: var(--danger-bd); }
+      .node.dead .pid { color: var(--danger); text-decoration: line-through; }
+      .node.dead .tag { background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger-bd); }
+      .node .epoch { font: 500 9px var(--mono); color: var(--muted); margin-top: 1px; }
+      .node.leader .epoch { color: var(--success); }
+      .pop { animation: pop .35s cubic-bezier(0.34, 1.56, 0.64, 1); }
+      @keyframes pop { from { transform: scale(0.95); } 50% { transform: scale(1.03); } to { transform: scale(1); } }
+      .phase-chips { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 12px; position: relative; z-index: 1; }
+      .phase-chip { flex: 1; min-width: 70px; padding: 6px 4px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: transparent; color: var(--subtle); text-align: center; font: 500 10.5px var(--mono); transition: all 200ms ease; }
+      .phase-chip.done { background: var(--surface); color: var(--muted); }
+      .phase-chip.active { background: var(--info-bg); border-color: var(--info-bd); color: var(--info); }
+      .narration { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px; position: relative; overflow: hidden; transition: border-color 350ms ease; }
+      .narration::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--border-strong); }
+      .narration.acq::before { background: var(--info); } .narration.acq { border-color: rgba(94,159,246,0.30); }
+      .narration.renew::before { background: var(--success); } .narration.renew { border-color: rgba(92,198,111,0.30); }
+      .narration.expire::before { background: var(--warning); } .narration.expire { border-color: rgba(240,181,104,0.30); }
+      .narration.fence::before { background: var(--purple); } .narration.fence { border-color: rgba(167,139,250,0.30); }
+      .narration.crash::before { background: var(--danger); } .narration.crash { border-color: rgba(240,104,104,0.30); }
+      .narr-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+      .badge { font: 600 10.5px var(--mono); padding: 4px 9px; border-radius: 999px; letter-spacing: 0.4px; text-transform: uppercase; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); color: var(--muted); background: var(--elevated); }
+      .badge.step { background: var(--elevated); border-color: var(--border-strong); color: var(--fg); }
+      .badge.event { background: transparent; }
+      .badge.event.acq { color: var(--info); border-color: var(--info-bd); }
+      .badge.event.renew { color: var(--success); border-color: var(--success-bd); }
+      .badge.event.expire { color: var(--warning); border-color: var(--warning-bd); }
+      .badge.event.fence { color: var(--purple); border-color: var(--purple-bd); }
+      .badge.event.crash { color: var(--danger); border-color: var(--danger-bd); }
+      .narr-text { margin: 0; font-size: 14px; line-height: 1.6; color: var(--fg); }
+      .narr-text strong { color: var(--fg); font-weight: 600; }
+      .narr-text code { font-family: var(--mono); background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; color: var(--accent); font-size: 12px; }
+      .timeline-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; }
+      .timeline-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font: 500 11px var(--mono); color: var(--muted); letter-spacing: 0.4px; text-transform: uppercase; }
+      .timeline-head .pos { color: var(--fg); font-weight: 600; text-transform: none; letter-spacing: 0; }
+      .timeline { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+      .tl-dot { flex: 1; min-width: 14px; height: 6px; border-radius: 99px; background: var(--border); transition: all 200ms ease; cursor: pointer; }
+      .tl-dot.done { background: var(--accent); opacity: 0.55; }
+      .tl-dot.now { background: var(--accent); height: 10px; box-shadow: 0 0 8px rgba(251,134,58,0.5); }
+      .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .controls .spacer { flex: 1; }
+      .kbd { font-family: var(--mono); font-size: 10.5px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); color: var(--muted); border: 1px solid var(--border); }
+      .hint { font: 11px var(--mono); color: var(--subtle); display: inline-flex; align-items: center; gap: 5px; }
+      .free-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px; }
+      .free-card h3 { margin: 0 0 10px; font: 500 11px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .fp-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+      .cmd-btn { background: var(--elevated); border: 1px solid var(--border); color: var(--fg); font: 500 12px var(--mono); padding: 7px 10px; border-radius: var(--radius-sm); cursor: pointer; }
+      .cmd-btn:hover:not(:disabled) { background: var(--surface); border-color: var(--border-strong); }
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; }
+      .stat .label { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .stat .value { font: 600 17px var(--mono); margin-top: 4px; line-height: 1; }
+      .log-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; }
+      .log-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font: 500 11px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .log-head .pill { color: var(--subtle); text-transform: none; letter-spacing: 0; font-size: 10.5px; }
+      .log { font-family: var(--mono); font-size: 12px; line-height: 1.85; color: var(--subtle); min-height: 48px; max-height: 56px; overflow: hidden; }
+      .log .t { color: var(--subtle); margin-right: 10px; opacity: 0.7; }
+      @media (max-width: 540px) { .stats { grid-template-columns: repeat(2, 1fr); } .store-row { grid-template-columns: 1fr 1fr; } }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2 class="sr-only">Interactive lease-based leader election — five processes contending for a TTL-bounded lock in a shared store. Step through three scenarios or take over in free play.</h2>
+
+      <div class="tabs" role="tablist" aria-label="Scenario">
+        <button class="tab active" data-scenario="renew" role="tab"><i class="ti ti-refresh" aria-hidden="true"></i>Acquire &amp; renew</button>
+        <button class="tab" data-scenario="crash" role="tab"><i class="ti ti-bolt" aria-hidden="true"></i>Leader crash</button>
+        <button class="tab" data-scenario="fence" role="tab"><i class="ti ti-shield-lock" aria-hidden="true"></i>GC pause &amp; fence</button>
+        <button class="tab" data-scenario="free" role="tab"><i class="ti ti-hand-finger" aria-hidden="true"></i>Free play</button>
+      </div>
+
+      <div class="hero" aria-label="Lease stage">
+        <div class="hero-head">
+          <span class="ttl">5 processes · TTL = 15 s · renew at 5 s</span>
+          <span class="legend">
+            <span><span class="sw l"></span>leader</span>
+            <span><span class="sw f"></span>follower</span>
+            <span><span class="sw t"></span>acquiring</span>
+            <span><span class="sw d"></span>crashed</span>
+          </span>
+        </div>
+        <div class="store-card">
+          <div class="store-head"><span>Shared store · /leader</span><span id="store-revision">rev 1</span></div>
+          <div class="store-row">
+            <div class="store-cell"><div class="label">holder</div><div id="store-holder" class="val">P1</div></div>
+            <div class="store-cell"><div class="label">epoch</div><div id="store-epoch" class="val">1</div></div>
+            <div class="store-cell"><div class="label">expires in</div><div id="store-expires" class="val">15.0 s</div></div>
+          </div>
+          <div class="ttl-wrap">
+            <div class="ttl-head"><span>TTL</span><span id="ttl-pct">100%</span></div>
+            <div class="ttl-track"><div id="ttl-fill" class="ttl-fill" style="width:100%"></div></div>
+          </div>
+        </div>
+        <div class="phase-chips">
+          <div class="phase-chip" data-p="1">1 · Acquire</div>
+          <div class="phase-chip" data-p="2">2 · Renew</div>
+          <div class="phase-chip" data-p="3">3 · Expire</div>
+          <div class="phase-chip" data-p="4">4 · Re-acquire</div>
+          <div class="phase-chip" data-p="5">5 · Fence</div>
+        </div>
+        <div class="nodes-row" id="nodes"></div>
+      </div>
+
+      <div id="narration" class="narration">
+        <div class="narr-meta">
+          <span id="narr-step" class="badge step">Step 0 / 0</span>
+          <span id="narr-event" class="badge event" style="display:none"></span>
+        </div>
+        <p id="narr-text" class="narr-text"><strong>Ready.</strong> P1 holds the lease at epoch 1.</p>
+      </div>
+
+      <div id="timeline-wrap" class="timeline-wrap">
+        <div class="timeline-head"><span>Scenario timeline</span><span class="pos" id="tl-pos">—</span></div>
+        <div id="timeline" class="timeline"></div>
+      </div>
+
+      <div id="step-controls" class="controls">
+        <button id="btn-prev"><i class="ti ti-chevron-left" aria-hidden="true"></i>Prev</button>
+        <button id="btn-play" class="primary"><i id="play-icon" class="ti ti-player-play" aria-hidden="true"></i><span id="play-label">Play</span></button>
+        <button id="btn-next"><i class="ti ti-chevron-right" aria-hidden="true"></i>Next</button>
+        <button id="btn-restart" class="ghost"><i class="ti ti-refresh" aria-hidden="true"></i>Restart</button>
+        <span class="spacer"></span>
+        <span class="hint"><span class="kbd">←</span><span class="kbd">→</span><span class="kbd">space</span></span>
+      </div>
+
+      <div id="free-play" class="free-card" style="display:none">
+        <h3>Free play — crash, release, fence</h3>
+        <div class="fp-row">
+          <button class="cmd-btn" data-act="crash-1">Crash P1</button>
+          <button class="cmd-btn" data-act="crash-2">Crash P2</button>
+          <button class="cmd-btn" data-act="crash-3">Crash P3</button>
+          <button class="cmd-btn" data-act="crash-4">Crash P4</button>
+          <button class="cmd-btn" data-act="crash-5">Crash P5</button>
+        </div>
+        <div class="fp-row">
+          <span style="font-size:11.5px;color:var(--muted)">Lease:</span>
+          <button class="cmd-btn" data-act="expire">Expire now</button>
+          <button class="cmd-btn" data-act="release">Leader releases</button>
+          <button class="cmd-btn" data-act="acquire">Next survivor acquires</button>
+          <button class="cmd-btn" data-act="revive">Revive all</button>
+          <button id="fp-reset" class="ghost"><i class="ti ti-refresh"></i>Reset</button>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="label">leader</div><div id="s-leader" class="value">P1</div></div>
+        <div class="stat"><div class="label">epoch</div><div id="s-epoch" class="value">1</div></div>
+        <div class="stat"><div class="label">ttl</div><div id="s-ttl" class="value">100%</div></div>
+        <div class="stat"><div class="label">acquires</div><div id="s-acquires" class="value">1</div></div>
+      </div>
+
+      <div class="log-card">
+        <div class="log-head"><span>Message log</span><span class="pill">last 2 messages</span></div>
+        <div id="log" class="log"></div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        var NAMES = ['P1', 'P2', 'P3', 'P4', 'P5'];
+        var S = {
+          scenario: 'renew', stepIdx: 0, playing: false,
+          alive: [true, true, true, true, true],
+          role: ['leader', 'follower', 'follower', 'follower', 'follower'],
+          holder: 0, // index, -1 = free
+          epoch: 1,
+          ttlPct: 100,
+          acquires: 1,
+          phaseN: 1, eventTag: null, lastNarr: null,
+        };
+
+        var nodesEl = document.getElementById('nodes');
+        var narrEl = document.getElementById('narration');
+        var narrTxt = document.getElementById('narr-text');
+        var narrEv = document.getElementById('narr-event');
+        var narrStep = document.getElementById('narr-step');
+        var tlWrap = document.getElementById('timeline-wrap');
+        var tlEl = document.getElementById('timeline');
+        var tlPos = document.getElementById('tl-pos');
+        var logEl = document.getElementById('log');
+
+        function renderNodes() {
+          nodesEl.innerHTML = '';
+          for (var i = 0; i < 5; i++) {
+            var dead = !S.alive[i];
+            var r = S.role[i];
+            var cls = 'node ' + (dead ? 'dead' : r);
+            var tag = dead ? 'DOWN' : r === 'leader' ? 'LEADER' : r === 'trying' ? 'ACQUIRE' : r === 'paused' ? 'PAUSED' : 'idle';
+            var epochLine = (r === 'leader' || r === 'paused') ? ('epoch ' + S.epoch) : '';
+            if (r === 'paused') epochLine = 'epoch 1 (stale)';
+            var card = document.createElement('div');
+            card.className = cls;
+            card.innerHTML =
+              '<span class="pid">' + NAMES[i] + '</span>' +
+              '<span class="tag">' + tag + '</span>' +
+              (epochLine ? '<span class="epoch">' + epochLine + '</span>' : '');
+            nodesEl.appendChild(card);
+          }
+        }
+
+        function renderStore() {
+          var holderTxt = S.holder === -1 ? 'FREE' : NAMES[S.holder];
+          var hEl = document.getElementById('store-holder');
+          hEl.textContent = holderTxt;
+          hEl.className = 'val' + (S.holder === -1 ? ' free' : '');
+          document.getElementById('store-epoch').textContent = String(S.epoch);
+          document.getElementById('store-revision').textContent = 'rev ' + S.epoch;
+          var pct = Math.max(0, Math.min(100, S.ttlPct));
+          document.getElementById('ttl-fill').style.width = pct + '%';
+          var fill = document.getElementById('ttl-fill');
+          fill.classList.remove('warn', 'danger');
+          if (S.holder !== -1) {
+            if (pct < 30) fill.classList.add('danger');
+            else if (pct < 60) fill.classList.add('warn');
+          }
+          document.getElementById('ttl-pct').textContent = pct.toFixed(0) + '%';
+          document.getElementById('store-expires').textContent =
+            S.holder === -1 ? '— (free)' : ((pct / 100 * 15).toFixed(1) + ' s');
+        }
+
+        function render() {
+          renderNodes();
+          renderStore();
+          var chips = document.querySelectorAll('.phase-chip');
+          for (var c = 0; c < chips.length; c++) {
+            var p = +chips[c].dataset.p;
+            chips[c].classList.toggle('active', p === S.phaseN);
+            chips[c].classList.toggle('done', p < S.phaseN);
+          }
+          var kind = S.eventTag ? S.eventTag.kind : '';
+          narrEl.className = 'narration' + (kind ? ' ' + kind : '');
+          narrTxt.innerHTML = DOMPurify.sanitize(S.lastNarr || '<strong>Ready.</strong>');
+          if (S.scenario === 'free') { narrStep.textContent = 'Free play'; }
+          else { var sc = SCENARIOS[S.scenario]; narrStep.textContent = 'Step ' + S.stepIdx + ' / ' + (sc.length - 1); }
+          if (S.eventTag) { narrEv.style.display = ''; narrEv.className = 'badge event ' + S.eventTag.kind; narrEv.textContent = S.eventTag.text; }
+          else { narrEv.style.display = 'none'; }
+
+          if (S.scenario === 'free') { tlWrap.style.display = 'none'; }
+          else {
+            tlWrap.style.display = '';
+            var sc2 = SCENARIOS[S.scenario];
+            tlEl.innerHTML = '';
+            for (var j = 0; j < sc2.length; j++) {
+              var dd = document.createElement('div');
+              var cl = 'tl-dot'; if (j < S.stepIdx) cl += ' done'; if (j === S.stepIdx) cl += ' now';
+              dd.className = cl;
+              (function (idx) { dd.onclick = function () { applyStep(idx); }; })(j);
+              tlEl.appendChild(dd);
+            }
+            tlPos.textContent = (S.stepIdx + 1) + ' of ' + sc2.length;
+          }
+          document.getElementById('s-leader').textContent = S.holder === -1 ? '—' : NAMES[S.holder];
+          document.getElementById('s-epoch').textContent = S.epoch;
+          document.getElementById('s-ttl').textContent = Math.max(0, Math.min(100, S.ttlPct)).toFixed(0) + '%';
+          document.getElementById('s-acquires').textContent = S.acquires;
+
+          if (S.scenario !== 'free') {
+            var sc3 = SCENARIOS[S.scenario];
+            document.getElementById('btn-prev').disabled = S.stepIdx <= 0;
+            document.getElementById('btn-next').disabled = S.stepIdx >= sc3.length - 1;
+          }
+        }
+
+        function log(msg, color) {
+          var t = new Date(); var hh = String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0') + ':' + String(t.getSeconds()).padStart(2, '0');
+          var line = document.createElement('div'); line.style.color = color || 'var(--subtle)';
+          var ts = document.createElement('span'); ts.className = 't'; ts.textContent = hh;
+          line.appendChild(ts); line.appendChild(document.createTextNode(String(msg)));
+          logEl.insertBefore(line, logEl.firstChild);
+          while (logEl.children.length > 2) logEl.removeChild(logEl.lastChild);
+        }
+        function stripTags(html) { return DOMPurify.sanitize(String(html == null ? '' : html), { ALLOWED_TAGS: [], KEEP_CONTENT: true }); }
+        function colorForEvent(k) {
+          if (k === 'acq') return 'var(--info)';
+          if (k === 'renew') return 'var(--success)';
+          if (k === 'expire') return 'var(--warning)';
+          if (k === 'fence') return 'var(--purple)';
+          if (k === 'crash') return 'var(--danger)';
+          return 'var(--subtle)';
+        }
+
+        function resetState() {
+          S.alive = [true, true, true, true, true];
+          S.role = ['leader', 'follower', 'follower', 'follower', 'follower'];
+          S.holder = 0; S.epoch = 1; S.ttlPct = 100; S.acquires = 1;
+          S.phaseN = 1; S.eventTag = null; S.lastNarr = null;
+        }
+
+        function doRenew() {
+          S.ttlPct = 100; S.phaseN = 2;
+        }
+        function doDrain(pct) {
+          S.ttlPct = pct; S.phaseN = (pct < 100 && pct > 0) ? 2 : 3;
+        }
+        function doCrashLeader() {
+          if (S.holder === -1) return;
+          S.alive[S.holder] = false; S.role[S.holder] = 'follower';
+          // lease still technically held; ttl drains
+          S.phaseN = 3;
+        }
+        function doExpireLease() {
+          S.holder = -1; S.ttlPct = 0; S.phaseN = 3;
+          // demote roles: nobody is leader now
+          for (var i = 0; i < 5; i++) if (S.alive[i] && S.role[i] === 'leader') S.role[i] = 'follower';
+        }
+        function doAcquire(idx) {
+          if (!S.alive[idx]) return;
+          if (S.holder !== -1 && S.ttlPct > 0) return; // can't, still held
+          S.role[idx] = 'trying';
+          S.holder = idx; S.epoch++; S.ttlPct = 100; S.acquires++;
+          for (var i = 0; i < 5; i++) if (S.alive[i] && i !== idx) S.role[i] = 'follower';
+          S.role[idx] = 'leader';
+          S.phaseN = 4;
+        }
+        function doPauseLeader() {
+          // The leader's process pauses (GC); not dead, but unresponsive
+          if (S.holder === -1) return;
+          S.role[S.holder] = 'paused';
+          S.phaseN = 3;
+        }
+        function doResumePausedFenced(prevIdx) {
+          // The paused leader tries to write with its stale epoch; the store rejects.
+          S.role[prevIdx] = 'follower';
+          S.phaseN = 5;
+        }
+        function doRelease() {
+          if (S.holder === -1) return;
+          S.role[S.holder] = 'follower';
+          S.holder = -1; S.ttlPct = 0; S.phaseN = 3;
+        }
+        function doRevive() { S.alive = [true, true, true, true, true]; }
+
+        var SCENARIOS = {};
+
+        SCENARIOS.renew = [
+          { narr: '<strong>Ready.</strong> P1 holds the lease at <code>epoch 1</code>; TTL = 15 s.', do: function () { resetState(); } },
+          { narr: '<strong>Step 1 — TTL drains to ~70%.</strong> P1 is the leader; followers idle.', do: function () { resetState(); doDrain(70); } },
+          { narr: '<strong>Step 2 — TTL drops to ~40%.</strong> P1 will renew before it gets dangerous (renew interval is TTL/3 = 5 s).', do: function () { resetState(); doDrain(40); } },
+          { narr: '<strong>Step 3 — P1 sends <code>renew</code>.</strong> Store extends <code>expiresAt</code> by another 15 s; bar refills to 100%.', ev: 'renew', do: function () { resetState(); doDrain(40); doRenew(); } },
+          { narr: '<strong>Step 4 — Steady state.</strong> Every 5 s, P1 pings; followers never see the lease as expired. As long as P1 is healthy, no election happens.', ev: 'renew', do: function () { resetState(); doRenew(); } },
+        ];
+
+        SCENARIOS.crash = [
+          { narr: '<strong>Ready.</strong> P1 holds the lease at <code>epoch 1</code>.', do: function () { resetState(); } },
+          { narr: '<strong>Step 1 — P1 crashes.</strong> Renewals stop. The store still records P1 as holder; the TTL begins draining unattended.', ev: 'crash', do: function () { resetState(); doCrashLeader(); doDrain(85); } },
+          { narr: '<strong>Step 2 — TTL drains to ~30%.</strong> Followers see the store says "held by P1", so they wait. No one acts until the TTL hits zero.', do: function () { resetState(); doCrashLeader(); doDrain(30); } },
+          { narr: '<strong>Step 3 — TTL reaches zero. Lease <strong>expires</strong>.</strong> The store now reports holder = FREE.', ev: 'expire', do: function () { resetState(); doCrashLeader(); doExpireLease(); } },
+          { narr: '<strong>Step 4 — P3 wins the next CAS.</strong> It acquires with <code>epoch 2</code> and starts the renew loop. Failover took up to one full TTL.', ev: 'acq', do: function () { resetState(); doCrashLeader(); doExpireLease(); doAcquire(2); } },
+        ];
+
+        SCENARIOS.fence = [
+          { narr: '<strong>Ready.</strong> P1 holds the lease at <code>epoch 1</code>.', do: function () { resetState(); } },
+          { narr: '<strong>Step 1 — P1\'s process pauses</strong> (long GC or VM stall). P1 is alive but not renewing.', ev: 'crash', do: function () { resetState(); doPauseLeader(); doDrain(20); } },
+          { narr: '<strong>Step 2 — TTL expires</strong> with P1 still paused. The store frees the lease.', ev: 'expire', do: function () { resetState(); doPauseLeader(); doExpireLease(); } },
+          { narr: '<strong>Step 3 — P3 acquires with <code>epoch 2</code>.</strong> It starts writing to the data store, carrying epoch 2 on each write.', ev: 'acq', do: function () { resetState(); doPauseLeader(); doExpireLease(); doAcquire(2); } },
+          { narr: '<strong>Step 4 — P1 unfreezes.</strong> It still thinks it\'s leader and tries to write — <strong>with stale epoch 1</strong>.', ev: 'fence', do: function () { resetState(); doPauseLeader(); doExpireLease(); doAcquire(2); } },
+          { narr: '<strong>Step 5 — Data store rejects.</strong> Highest seen epoch is 2; write with epoch 1 fails. P1 sees the error and steps down. The <strong>fence token</strong> is the entire safety story.', ev: 'fence', do: function () { resetState(); doPauseLeader(); doExpireLease(); doAcquire(2); doResumePausedFenced(0); } },
+        ];
+
+        function applyStep(targetIdx) {
+          var sc = SCENARIOS[S.scenario]; if (!sc) return;
+          for (var i = 0; i <= targetIdx; i++) {
+            var st = sc[i]; S.eventTag = null; S.lastNarr = null; st.do();
+            if (i === targetIdx) {
+              if (S.lastNarr === null) S.lastNarr = st.narr;
+              if (st.ev && !S.eventTag) S.eventTag = { kind: st.ev, text: evLabel(st.ev) };
+            }
+          }
+          S.stepIdx = targetIdx; render();
+        }
+        function evLabel(k) { if (k === 'acq') return 'acquire'; if (k === 'renew') return 'renew'; if (k === 'expire') return 'expired'; if (k === 'fence') return 'fenced'; if (k === 'crash') return 'crash'; return k; }
+        function stepNext() {
+          var sc = SCENARIOS[S.scenario];
+          if (S.stepIdx < sc.length - 1) { applyStep(S.stepIdx + 1); log(stripTags(sc[S.stepIdx].narr), colorForEvent(S.eventTag && S.eventTag.kind)); }
+          else { setPlaying(false); }
+        }
+        function stepPrev() { if (S.stepIdx > 0) applyStep(S.stepIdx - 1); }
+        var playTimer = null;
+        function setPlaying(on) {
+          S.playing = on;
+          document.getElementById('play-label').textContent = on ? 'Pause' : 'Play';
+          document.getElementById('play-icon').className = on ? 'ti ti-player-pause' : 'ti ti-player-play';
+          if (playTimer) { clearInterval(playTimer); playTimer = null; }
+          if (on) playTimer = setInterval(function () {
+            var sc = SCENARIOS[S.scenario]; if (!sc) { setPlaying(false); return; }
+            if (S.stepIdx < sc.length - 1) stepNext(); else setPlaying(false);
+          }, 1700);
+        }
+
+        function pickScenario(name) {
+          S.scenario = name;
+          var tabs = document.querySelectorAll('.tab');
+          for (var i = 0; i < tabs.length; i++) tabs[i].classList.toggle('active', tabs[i].dataset.scenario === name);
+          setPlaying(false);
+          var stepCtl = document.getElementById('step-controls');
+          var fp = document.getElementById('free-play');
+          if (name === 'free') {
+            stepCtl.style.display = 'none'; fp.style.display = '';
+            resetState(); S.lastNarr = '<strong>Free play.</strong> Crash any process, expire the lease, force a re-acquire. The epoch monotonically increases.'; render();
+          } else {
+            stepCtl.style.display = ''; fp.style.display = 'none';
+            applyStep(0);
+          }
+        }
+
+        function fpCrash(i) {
+          if (!S.alive[i]) return;
+          var wasHolder = S.holder === i;
+          S.alive[i] = false; S.role[i] = 'follower';
+          if (wasHolder) S.lastNarr = '<strong>' + NAMES[i] + ' (the leader) crashed.</strong> TTL will drain. Click "Expire now" to fast-forward.';
+          else S.lastNarr = '<strong>' + NAMES[i] + ' crashed.</strong> Not the leader — cluster keeps running, lease unaffected.';
+          S.eventTag = { kind: 'crash', text: 'crash' };
+          log(NAMES[i] + ' crashed', 'var(--danger)');
+          render();
+        }
+        function fpExpire() {
+          doExpireLease();
+          S.lastNarr = '<strong>Lease expired.</strong> Holder = FREE. Click "Next survivor acquires" to elect.';
+          S.eventTag = { kind: 'expire', text: 'expired' };
+          log('lease expired', 'var(--warning)');
+          render();
+        }
+        function fpRelease() {
+          if (S.holder === -1) return;
+          var idx = S.holder;
+          doRelease();
+          S.lastNarr = '<strong>' + NAMES[idx] + ' voluntarily released.</strong> Lease is free; instant handoff possible.';
+          S.eventTag = { kind: 'expire', text: 'released' };
+          log(NAMES[idx] + ' released lease', 'var(--warning)');
+          render();
+        }
+        function fpAcquire() {
+          if (S.holder !== -1 && S.ttlPct > 0) {
+            S.lastNarr = '<strong>Cannot acquire</strong> — lease still valid (epoch ' + S.epoch + ', holder ' + NAMES[S.holder] + '). Expire or release first.';
+            S.eventTag = null; render(); return;
+          }
+          var next = -1;
+          for (var i = 0; i < 5; i++) if (S.alive[i]) { next = i; break; }
+          if (next === -1) { S.lastNarr = '<strong>No survivors.</strong> Revive a process first.'; render(); return; }
+          doAcquire(next);
+          S.lastNarr = '<strong>' + NAMES[next] + ' acquired the lease</strong> at epoch ' + S.epoch + '. Renew loop begins.';
+          S.eventTag = { kind: 'acq', text: 'acquire' };
+          log(NAMES[next] + ' acquired @ epoch ' + S.epoch, 'var(--info)');
+          render();
+        }
+        function fpRevive() { doRevive(); S.lastNarr = '<strong>All processes revived.</strong>'; S.eventTag = null; log('all processes revived', 'var(--success)'); render(); }
+        function fpReset() { resetState(); S.lastNarr = '<strong>Reset.</strong>'; S.eventTag = null; render(); }
+
+        var tabs = document.querySelectorAll('.tab');
+        for (var i = 0; i < tabs.length; i++) (function (t) { t.addEventListener('click', function () { pickScenario(t.dataset.scenario); }); })(tabs[i]);
+        document.getElementById('btn-prev').addEventListener('click', stepPrev);
+        document.getElementById('btn-next').addEventListener('click', stepNext);
+        document.getElementById('btn-play').addEventListener('click', function () { setPlaying(!S.playing); });
+        document.getElementById('btn-restart').addEventListener('click', function () { setPlaying(false); applyStep(0); });
+        document.getElementById('fp-reset').addEventListener('click', fpReset);
+        document.querySelectorAll('.cmd-btn').forEach(function (b) {
+          b.addEventListener('click', function () {
+            var act = b.dataset.act;
+            if (act.indexOf('crash-') === 0) fpCrash(+act.slice(6) - 1);
+            else if (act === 'expire') fpExpire();
+            else if (act === 'release') fpRelease();
+            else if (act === 'acquire') fpAcquire();
+            else if (act === 'revive') fpRevive();
+          });
+        });
+        document.addEventListener('keydown', function (e) {
+          if (S.scenario === 'free') return;
+          if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); stepNext(); }
+          else if (e.key === 'ArrowLeft') { e.preventDefault(); stepPrev(); }
+        });
+
+        pickScenario('renew');
+        function postHeight() { parent.postMessage({ type: 'prototype:height', height: document.body.scrollHeight }, '*'); }
+        if (typeof ResizeObserver !== 'undefined') new ResizeObserver(postHeight).observe(document.body);
+        postHeight();
+      })();
+    </script>
+  </body>
+</html>

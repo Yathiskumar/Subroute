@@ -80,6 +80,12 @@ import { multiPaxos } from "./consensus/multi-paxos";
 import { raft } from "./consensus/raft";
 import { zab } from "./consensus/zab";
 import { pbft } from "./consensus/pbft";
+import { leaderElectionTopic } from "./leader-election/_topic";
+import { bully } from "./leader-election/bully";
+import { ring as leRing } from "./leader-election/ring";
+import { raftElection } from "./leader-election/raft-election";
+import { leaseBased } from "./leader-election/lease-based";
+import { zookeeper as leZookeeper } from "./leader-election/zookeeper";
 
 // Indexed by `${topicSlug}/${conceptSlug}`
 const CONCEPT_CONTENT: Record<string, ConceptContent> = {
@@ -153,6 +159,11 @@ const CONCEPT_CONTENT: Record<string, ConceptContent> = {
   "consensus/raft": raft,
   "consensus/zab": zab,
   "consensus/pbft": pbft,
+  "leader-election/bully": bully,
+  "leader-election/ring": leRing,
+  "leader-election/raft-election": raftElection,
+  "leader-election/lease-based": leaseBased,
+  "leader-election/zookeeper": leZookeeper,
 };
 
 // Indexed by topic slug
@@ -168,6 +179,7 @@ const TOPIC_CONTENT: Record<string, TopicContent> = {
   "circuit-breaker": circuitBreakerTopic,
   "bloom-filters": bloomFiltersTopic,
   "consensus": consensusTopic,
+  "leader-election": leaderElectionTopic,
 };
 
 export function getConceptContent(

@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ZooKeeper Election</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>i.ti{visibility:hidden}html.fonts-ready i.ti{visibility:visible}</style>
+    <script>(function(){var d=document.documentElement;function ok(){d.classList.add('fonts-ready');}if(document.fonts&&document.fonts.ready){document.fonts.ready.then(ok);}setTimeout(ok,2500);})();</script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --success-bg: rgba(92,198,111,0.14); --success-bd: rgba(92,198,111,0.45);
+        --danger: #f06868;  --danger-bg: rgba(240,104,104,0.14); --danger-bd: rgba(240,104,104,0.45);
+        --warning: #f0b568; --warning-bg: rgba(240,181,104,0.14); --warning-bd: rgba(240,181,104,0.45);
+        --info: #5e9ff6;    --info-bg:    rgba(94,159,246,0.16); --info-bd:    rgba(94,159,246,0.45);
+        --purple: #a78bfa;  --purple-bg:  rgba(167,139,250,0.16); --purple-bd:  rgba(167,139,250,0.45);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --radius-lg: 14px; --radius-md: 8px; --radius-sm: 6px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body { padding: 18px 18px 24px; background-image: radial-gradient(1200px 600px at 50% -200px, rgba(251,134,58,0.06), transparent), linear-gradient(to right, rgba(255,255,255,0.020) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.020) 1px, transparent 1px); background-size: auto, 40px 40px, 40px 40px; }
+      .container { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; padding: 9px 12px; transition: all 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.08); }
+      button.ghost { background: transparent; }
+      button i { font-size: 14px; }
+      .tabs { display: flex; gap: 6px; flex-wrap: wrap; padding: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); }
+      .tab { flex: 1; min-width: 130px; padding: 9px 12px; font: 500 12px/1 var(--sans); border-radius: var(--radius-sm); border: 1px solid transparent; background: transparent; color: var(--muted); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: all 150ms ease; }
+      .tab:hover { color: var(--fg); background: rgba(255,255,255,0.03); }
+      .tab.active { background: var(--elevated); color: var(--fg); border-color: var(--border-strong); }
+      .tab i { font-size: 14px; }
+      .hero { background: linear-gradient(180deg, rgba(255,255,255,0.014), transparent), var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; position: relative; overflow: hidden; }
+      .hero::before { content: ""; position: absolute; inset: 0; background: radial-gradient(420px 240px at 50% 0%, rgba(94,159,246,0.05), transparent 60%); pointer-events: none; }
+      .hero-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; position: relative; z-index: 1; gap: 10px; flex-wrap: wrap; }
+      .hero-head .ttl { font: 600 11.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .legend { font-size: 11.5px; color: var(--muted); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      .legend .sw { display: inline-block; width: 11px; height: 11px; border-radius: 3px; vertical-align: -1px; margin-right: 3px; }
+      .sw.l { background: var(--success-bg); border: 1px solid var(--success-bd); }
+      .sw.f { background: var(--info-bg); border: 1px solid var(--info-bd); }
+      .sw.n { background: var(--warning-bg); border: 1px solid var(--warning-bd); }
+      .sw.d { background: var(--danger-bg); border: 1px solid var(--danger-bd); }
+      .columns { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; position: relative; z-index: 1; }
+      @media (max-width: 580px) { .columns { grid-template-columns: 1fr; } }
+      .col-h { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+      .zk-panel { background: linear-gradient(180deg, rgba(167,139,250,0.05), transparent), var(--elevated); border: 1.5px solid var(--purple-bd); border-radius: var(--radius-md); padding: 12px; }
+      .zk-root { font: 600 12px var(--mono); color: var(--purple); margin-bottom: 8px; display: flex; align-items: center; gap: 4px; }
+      .zk-empty { font: 12px var(--mono); color: var(--subtle); padding: 6px 0; font-style: italic; }
+      .znode { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px 9px; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; font: 500 12px var(--mono); transition: all 250ms ease; }
+      .znode .seq { color: var(--muted); }
+      .znode .owner { margin-left: auto; font: 500 10px var(--mono); color: var(--subtle); }
+      .znode .tag { font: 600 9px var(--mono); padding: 2px 6px; border-radius: var(--radius-sm); background: var(--purple-bg); color: var(--purple); border: 1px solid var(--purple-bd); }
+      .znode.smallest { border-color: var(--success-bd); background: var(--success-bg); }
+      .znode.smallest .seq { color: var(--success); }
+      .znode.smallest .owner { color: var(--success); }
+      .znode.smallest .tag { background: var(--success-bg); color: var(--success); border-color: var(--success-bd); }
+      .procs-panel { background: var(--elevated); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px; }
+      .procs { display: flex; flex-direction: column; gap: 5px; }
+      .proc { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 10px; display: grid; grid-template-columns: 32px 1fr 70px; gap: 8px; align-items: center; transition: all 250ms ease; }
+      .proc.leader { border-color: var(--success-bd); background: var(--success-bg); }
+      .proc.follower { border-color: var(--info-bd); }
+      .proc.notified { border-color: var(--warning-bd); background: var(--warning-bg); }
+      .proc.dead { opacity: 0.5; border-style: dashed; border-color: var(--danger-bd); }
+      .proc .badge-id { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font: 700 12px var(--mono); background: rgba(255,255,255,0.05); color: var(--fg); border: 1px solid var(--border); }
+      .proc.leader .badge-id { background: var(--success-bg); color: var(--success); border-color: var(--success-bd); }
+      .proc.notified .badge-id { background: var(--warning-bg); color: var(--warning); border-color: var(--warning-bd); }
+      .proc.dead .badge-id { background: var(--danger-bg); color: var(--danger); border-color: var(--danger-bd); }
+      .proc .info { display: flex; flex-direction: column; min-width: 0; }
+      .proc .pname { font: 600 12px var(--mono); }
+      .proc .watch { font: 500 10px var(--mono); color: var(--muted); margin-top: 1px; }
+      .proc .stag { font: 500 9.5px var(--mono); padding: 2px 6px; border-radius: var(--radius-sm); background: rgba(255,255,255,0.04); color: var(--subtle); text-align: center; text-transform: uppercase; letter-spacing: 0.3px; }
+      .proc.leader .stag { background: var(--success-bg); color: var(--success); border: 1px solid var(--success-bd); }
+      .proc.notified .stag { background: var(--warning-bg); color: var(--warning); border: 1px solid var(--warning-bd); }
+      .proc.dead .stag { background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger-bd); }
+      .pop { animation: pop .35s cubic-bezier(0.34, 1.56, 0.64, 1); }
+      @keyframes pop { from { transform: scale(0.95); } 50% { transform: scale(1.03); } to { transform: scale(1); } }
+      .phase-chips { display: flex; gap: 4px; flex-wrap: wrap; margin: 12px 0 0; position: relative; z-index: 1; }
+      .phase-chip { flex: 1; min-width: 70px; padding: 6px 4px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: transparent; color: var(--subtle); text-align: center; font: 500 10.5px var(--mono); transition: all 200ms ease; }
+      .phase-chip.done { background: var(--surface); color: var(--muted); }
+      .phase-chip.active { background: var(--info-bg); border-color: var(--info-bd); color: var(--info); }
+      .narration { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px; position: relative; overflow: hidden; transition: border-color 350ms ease; }
+      .narration::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--border-strong); }
+      .narration.create::before { background: var(--info); } .narration.create { border-color: rgba(94,159,246,0.30); }
+      .narration.watch::before { background: var(--purple); } .narration.watch { border-color: rgba(167,139,250,0.30); }
+      .narration.notify::before { background: var(--warning); } .narration.notify { border-color: rgba(240,181,104,0.30); }
+      .narration.elect::before { background: var(--success); } .narration.elect { border-color: rgba(92,198,111,0.30); }
+      .narration.crash::before { background: var(--danger); } .narration.crash { border-color: rgba(240,104,104,0.30); }
+      .narr-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+      .badge { font: 600 10.5px var(--mono); padding: 4px 9px; border-radius: 999px; letter-spacing: 0.4px; text-transform: uppercase; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); color: var(--muted); background: var(--elevated); }
+      .badge.step { background: var(--elevated); border-color: var(--border-strong); color: var(--fg); }
+      .badge.event { background: transparent; }
+      .badge.event.create { color: var(--info); border-color: var(--info-bd); }
+      .badge.event.watch { color: var(--purple); border-color: var(--purple-bd); }
+      .badge.event.notify { color: var(--warning); border-color: var(--warning-bd); }
+      .badge.event.elect { color: var(--success); border-color: var(--success-bd); }
+      .badge.event.crash { color: var(--danger); border-color: var(--danger-bd); }
+      .narr-text { margin: 0; font-size: 14px; line-height: 1.6; color: var(--fg); }
+      .narr-text strong { color: var(--fg); font-weight: 600; }
+      .narr-text code { font-family: var(--mono); background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; color: var(--accent); font-size: 12px; }
+      .timeline-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; }
+      .timeline-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font: 500 11px var(--mono); color: var(--muted); letter-spacing: 0.4px; text-transform: uppercase; }
+      .timeline-head .pos { color: var(--fg); font-weight: 600; text-transform: none; letter-spacing: 0; }
+      .timeline { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+      .tl-dot { flex: 1; min-width: 14px; height: 6px; border-radius: 99px; background: var(--border); transition: all 200ms ease; cursor: pointer; }
+      .tl-dot.done { background: var(--accent); opacity: 0.55; }
+      .tl-dot.now { background: var(--accent); height: 10px; box-shadow: 0 0 8px rgba(251,134,58,0.5); }
+      .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .controls .spacer { flex: 1; }
+      .kbd { font-family: var(--mono); font-size: 10.5px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); color: var(--muted); border: 1px solid var(--border); }
+      .hint { font: 11px var(--mono); color: var(--subtle); display: inline-flex; align-items: center; gap: 5px; }
+      .free-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px; }
+      .free-card h3 { margin: 0 0 10px; font: 500 11px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .fp-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+      .cmd-btn { background: var(--elevated); border: 1px solid var(--border); color: var(--fg); font: 500 12px var(--mono); padding: 7px 10px; border-radius: var(--radius-sm); cursor: pointer; }
+      .cmd-btn:hover:not(:disabled) { background: var(--surface); border-color: var(--border-strong); }
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; }
+      .stat .label { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .stat .value { font: 600 17px var(--mono); margin-top: 4px; line-height: 1; }
+      .log-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; }
+      .log-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font: 500 11px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .log-head .pill { color: var(--subtle); text-transform: none; letter-spacing: 0; font-size: 10.5px; }
+      .log { font-family: var(--mono); font-size: 12px; line-height: 1.85; color: var(--subtle); min-height: 48px; max-height: 56px; overflow: hidden; }
+      .log .t { color: var(--subtle); margin-right: 10px; opacity: 0.7; }
+      @media (max-width: 540px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2 class="sr-only">Interactive ZooKeeper leader election — five processes creating ephemeral sequential znodes under /election. Smallest wins; each follower watches only its predecessor. Step through three scenarios or take over in free play.</h2>
+
+      <div class="tabs" role="tablist" aria-label="Scenario">
+        <button class="tab active" data-scenario="join" role="tab"><i class="ti ti-plus" aria-hidden="true"></i>Join &amp; elect</button>
+        <button class="tab" data-scenario="dies" role="tab"><i class="ti ti-bolt" aria-hidden="true"></i>Leader dies, no herd</button>
+        <button class="tab" data-scenario="midchain" role="tab"><i class="ti ti-link" aria-hidden="true"></i>Mid-chain death</button>
+        <button class="tab" data-scenario="free" role="tab"><i class="ti ti-hand-finger" aria-hidden="true"></i>Free play</button>
+      </div>
+
+      <div class="hero" aria-label="ZooKeeper stage">
+        <div class="hero-head">
+          <span class="ttl">5 processes · ephemeral sequential · smallest wins</span>
+          <span class="legend">
+            <span><span class="sw l"></span>leader</span>
+            <span><span class="sw f"></span>follower</span>
+            <span><span class="sw n"></span>notified</span>
+            <span><span class="sw d"></span>down</span>
+          </span>
+        </div>
+        <div class="columns">
+          <div>
+            <div class="col-h"><i class="ti ti-folder"></i>ZooKeeper · /election</div>
+            <div class="zk-panel">
+              <div class="zk-root"><i class="ti ti-folder-filled"></i>/election</div>
+              <div id="ztree"></div>
+            </div>
+          </div>
+          <div>
+            <div class="col-h"><i class="ti ti-server"></i>Processes (watch chain)</div>
+            <div class="procs-panel">
+              <div class="procs" id="procs"></div>
+            </div>
+          </div>
+        </div>
+        <div class="phase-chips">
+          <div class="phase-chip" data-p="1">1 · Create</div>
+          <div class="phase-chip" data-p="2">2 · Watch</div>
+          <div class="phase-chip" data-p="3">3 · Death</div>
+          <div class="phase-chip" data-p="4">4 · Notify</div>
+          <div class="phase-chip" data-p="5">5 · Re-elect</div>
+        </div>
+      </div>
+
+      <div id="narration" class="narration">
+        <div class="narr-meta">
+          <span id="narr-step" class="badge step">Step 0 / 0</span>
+          <span id="narr-event" class="badge event" style="display:none"></span>
+        </div>
+        <p id="narr-text" class="narr-text"><strong>Ready.</strong> Five processes will create znodes under /election.</p>
+      </div>
+
+      <div id="timeline-wrap" class="timeline-wrap">
+        <div class="timeline-head"><span>Scenario timeline</span><span class="pos" id="tl-pos">—</span></div>
+        <div id="timeline" class="timeline"></div>
+      </div>
+
+      <div id="step-controls" class="controls">
+        <button id="btn-prev"><i class="ti ti-chevron-left" aria-hidden="true"></i>Prev</button>
+        <button id="btn-play" class="primary"><i id="play-icon" class="ti ti-player-play" aria-hidden="true"></i><span id="play-label">Play</span></button>
+        <button id="btn-next"><i class="ti ti-chevron-right" aria-hidden="true"></i>Next</button>
+        <button id="btn-restart" class="ghost"><i class="ti ti-refresh" aria-hidden="true"></i>Restart</button>
+        <span class="spacer"></span>
+        <span class="hint"><span class="kbd">←</span><span class="kbd">→</span><span class="kbd">space</span></span>
+      </div>
+
+      <div id="free-play" class="free-card" style="display:none">
+        <h3>Free play — end any session</h3>
+        <div class="fp-row">
+          <button class="cmd-btn" data-act="kill-1">End P1 session</button>
+          <button class="cmd-btn" data-act="kill-2">End P2 session</button>
+          <button class="cmd-btn" data-act="kill-3">End P3 session</button>
+          <button class="cmd-btn" data-act="kill-4">End P4 session</button>
+          <button class="cmd-btn" data-act="kill-5">End P5 session</button>
+        </div>
+        <div class="fp-row">
+          <button class="cmd-btn" data-act="rejoin">Rejoin all</button>
+          <button id="fp-reset" class="ghost"><i class="ti ti-refresh"></i>Reset</button>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="label">leader</div><div id="s-leader" class="value">—</div></div>
+        <div class="stat"><div class="label">smallest seq</div><div id="s-seq" class="value">—</div></div>
+        <div class="stat"><div class="label">alive</div><div id="s-alive" class="value">0 / 5</div></div>
+        <div class="stat"><div class="label">notifications</div><div id="s-notifs" class="value">0</div></div>
+      </div>
+
+      <div class="log-card">
+        <div class="log-head"><span>Message log</span><span class="pill">last 2 messages</span></div>
+        <div id="log" class="log"></div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        var NAMES = ['P1', 'P2', 'P3', 'P4', 'P5'];
+        var S = {
+          scenario: 'join', stepIdx: 0, playing: false,
+          // each proc: {seq: number|null, alive: bool, notified: bool}
+          procs: [],
+          phaseN: 0, eventTag: null, lastNarr: null,
+          notifs: 0, nextSeq: 1,
+        };
+
+        var zlist = document.getElementById('ztree');
+        var procsEl = document.getElementById('procs');
+        var narrEl = document.getElementById('narration');
+        var narrTxt = document.getElementById('narr-text');
+        var narrEv = document.getElementById('narr-event');
+        var narrStep = document.getElementById('narr-step');
+        var tlWrap = document.getElementById('timeline-wrap');
+        var tlEl = document.getElementById('timeline');
+        var tlPos = document.getElementById('tl-pos');
+        var logEl = document.getElementById('log');
+
+        function seqStr(n) { return 'node-' + String(n).padStart(4, '0'); }
+        function aliveSorted() {
+          return S.procs.map(function (p, i) { return { i: i, p: p }; })
+            .filter(function (x) { return x.p.alive && x.p.seq !== null; })
+            .sort(function (a, b) { return a.p.seq - b.p.seq; });
+        }
+        function leaderIdx() {
+          var s = aliveSorted();
+          return s.length ? s[0].i : -1;
+        }
+        function predecessorOf(i) {
+          var s = aliveSorted();
+          var myPos = s.findIndex(function (x) { return x.i === i; });
+          if (myPos <= 0) return -1;
+          return s[myPos - 1].i;
+        }
+
+        function renderZ() {
+          var s = aliveSorted();
+          if (!s.length) { zlist.innerHTML = '<div class="zk-empty">(no znodes)</div>'; return; }
+          var html = '';
+          s.forEach(function (x, i) {
+            var cls = 'znode' + (i === 0 ? ' smallest' : '');
+            html += '<div class="' + cls + '">' +
+              '<span class="seq">' + seqStr(x.p.seq) + '</span>' +
+              (i === 0 ? '<span class="tag">smallest → leader</span>' : '') +
+              '<span class="owner">' + NAMES[x.i] + '</span>' +
+              '</div>';
+          });
+          zlist.innerHTML = html;
+        }
+        function renderProcs() {
+          procsEl.innerHTML = '';
+          var lead = leaderIdx();
+          for (var i = 0; i < 5; i++) {
+            var p = S.procs[i];
+            var dead = !p.alive || p.seq === null;
+            var isLeader = !dead && i === lead;
+            var cls = 'proc';
+            if (dead) cls += ' dead';
+            else if (isLeader) cls += ' leader';
+            else if (p.notified) cls += ' notified';
+            else cls += ' follower';
+            var stag = dead ? 'down' : isLeader ? 'LEADER' : p.notified ? 'NOTIFIED' : 'follower';
+            var watchTxt;
+            if (dead) watchTxt = '— znode deleted';
+            else if (isLeader) watchTxt = 'watches nobody (smallest)';
+            else {
+              var pred = predecessorOf(i);
+              watchTxt = pred === -1 ? '— watching nothing yet' : ('watches ' + seqStr(S.procs[pred].seq));
+            }
+            var seqLine = p.seq !== null ? seqStr(p.seq) : '(no znode)';
+            procsEl.innerHTML += '<div class="' + cls + '">' +
+              '<div class="badge-id">' + NAMES[i] + '</div>' +
+              '<div class="info"><span class="pname">' + seqLine + '</span><span class="watch">' + watchTxt + '</span></div>' +
+              '<div class="stag">' + stag + '</div>' +
+              '</div>';
+          }
+        }
+
+        function render() {
+          renderZ();
+          renderProcs();
+          var chips = document.querySelectorAll('.phase-chip');
+          for (var c = 0; c < chips.length; c++) {
+            var p = +chips[c].dataset.p;
+            chips[c].classList.toggle('active', p === S.phaseN);
+            chips[c].classList.toggle('done', p < S.phaseN);
+          }
+          var kind = S.eventTag ? S.eventTag.kind : '';
+          narrEl.className = 'narration' + (kind ? ' ' + kind : '');
+          narrTxt.innerHTML = DOMPurify.sanitize(S.lastNarr || '<strong>Ready.</strong>');
+          if (S.scenario === 'free') { narrStep.textContent = 'Free play'; }
+          else { var sc = SCENARIOS[S.scenario]; narrStep.textContent = 'Step ' + S.stepIdx + ' / ' + (sc.length - 1); }
+          if (S.eventTag) { narrEv.style.display = ''; narrEv.className = 'badge event ' + S.eventTag.kind; narrEv.textContent = S.eventTag.text; }
+          else { narrEv.style.display = 'none'; }
+
+          if (S.scenario === 'free') { tlWrap.style.display = 'none'; }
+          else {
+            tlWrap.style.display = '';
+            var sc2 = SCENARIOS[S.scenario];
+            tlEl.innerHTML = '';
+            for (var j = 0; j < sc2.length; j++) {
+              var dd = document.createElement('div');
+              var cl = 'tl-dot'; if (j < S.stepIdx) cl += ' done'; if (j === S.stepIdx) cl += ' now';
+              dd.className = cl;
+              (function (idx) { dd.onclick = function () { applyStep(idx); }; })(j);
+              tlEl.appendChild(dd);
+            }
+            tlPos.textContent = (S.stepIdx + 1) + ' of ' + sc2.length;
+          }
+          var lead = leaderIdx();
+          document.getElementById('s-leader').textContent = lead === -1 ? '—' : NAMES[lead];
+          document.getElementById('s-seq').textContent = lead === -1 ? '—' : seqStr(S.procs[lead].seq);
+          var alive = S.procs.filter(function (p) { return p.alive; }).length;
+          document.getElementById('s-alive').textContent = alive + ' / 5';
+          document.getElementById('s-notifs').textContent = S.notifs;
+
+          if (S.scenario !== 'free') {
+            var sc3 = SCENARIOS[S.scenario];
+            document.getElementById('btn-prev').disabled = S.stepIdx <= 0;
+            document.getElementById('btn-next').disabled = S.stepIdx >= sc3.length - 1;
+          }
+        }
+
+        function log(msg, color) {
+          var t = new Date(); var hh = String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0') + ':' + String(t.getSeconds()).padStart(2, '0');
+          var line = document.createElement('div'); line.style.color = color || 'var(--subtle)';
+          var ts = document.createElement('span'); ts.className = 't'; ts.textContent = hh;
+          line.appendChild(ts); line.appendChild(document.createTextNode(String(msg)));
+          logEl.insertBefore(line, logEl.firstChild);
+          while (logEl.children.length > 2) logEl.removeChild(logEl.lastChild);
+        }
+        function stripTags(html) { return DOMPurify.sanitize(String(html == null ? '' : html), { ALLOWED_TAGS: [], KEEP_CONTENT: true }); }
+        function colorForEvent(k) {
+          if (k === 'create') return 'var(--info)';
+          if (k === 'watch') return 'var(--purple)';
+          if (k === 'notify') return 'var(--warning)';
+          if (k === 'elect') return 'var(--success)';
+          if (k === 'crash') return 'var(--danger)';
+          return 'var(--subtle)';
+        }
+
+        function emptyState() {
+          S.procs = NAMES.map(function () { return { seq: null, alive: true, notified: false }; });
+          S.nextSeq = 1; S.notifs = 0; S.phaseN = 0;
+          S.eventTag = null; S.lastNarr = null;
+        }
+        function fullState() {
+          emptyState();
+          for (var i = 0; i < 5; i++) S.procs[i].seq = i + 1;
+          S.nextSeq = 6;
+        }
+        function clearNotified() { S.procs.forEach(function (p) { p.notified = false; }); }
+
+        function doJoin(idx) {
+          if (!S.procs[idx].alive || S.procs[idx].seq !== null) return;
+          S.procs[idx].seq = S.nextSeq++;
+          S.phaseN = 1;
+        }
+        function doEndSession(idx) {
+          S.procs[idx].alive = false; S.procs[idx].seq = null;
+          // notify the (former) successor: find the proc whose previous predecessor was idx
+          // because S.procs[idx].seq is now null, we need to compute who was just after idx before
+          // We approximate by: after deletion, the successor is the next-larger-seq alive proc.
+          S.phaseN = 3;
+        }
+        function doNotifySuccessor() {
+          // find the smallest-seq alive proc that has now changed predecessor; mark notified
+          // simpler: mark notified the proc whose new predecessor *changed*
+          clearNotified();
+          var s = aliveSorted();
+          // We don't track previous predecessors deterministically; choose the proc that is now leader (if leader changed) or the next watcher.
+          // Heuristic that matches the storytelling: the proc that is *next* in the chain after the gap is notified.
+          // For scripted scenarios we'll override directly.
+          S.phaseN = 4;
+        }
+        function doMarkNotified(idx) {
+          clearNotified();
+          if (idx >= 0 && S.procs[idx].alive) { S.procs[idx].notified = true; S.notifs++; }
+          S.phaseN = 4;
+        }
+        function doFinalize() {
+          clearNotified();
+          S.phaseN = 5;
+        }
+
+        var SCENARIOS = {};
+
+        SCENARIOS.join = [
+          { narr: '<strong>Ready.</strong> /election is empty.', do: function () { emptyState(); } },
+          { narr: '<strong>Step 1 — P1 creates <code>node-0001</code>.</strong> It\'s the smallest (and only) znode → P1 is leader.', ev: 'create', do: function () { emptyState(); doJoin(0); } },
+          { narr: '<strong>Step 2 — P2 creates <code>node-0002</code>.</strong> Lists children, sees a smaller znode → not leader. Sets a watch on <code>node-0001</code>.', ev: 'watch', do: function () { emptyState(); doJoin(0); doJoin(1); } },
+          { narr: '<strong>Step 3 — P3 creates <code>node-0003</code>.</strong> Lists children, watches <code>node-0002</code> (just its predecessor — not the leader).', ev: 'watch', do: function () { emptyState(); doJoin(0); doJoin(1); doJoin(2); } },
+          { narr: '<strong>Step 4 — P4 creates <code>node-0004</code>.</strong> Watches <code>node-0003</code>. Chain forming: P2→P1, P3→P2, P4→P3.', ev: 'watch', do: function () { emptyState(); doJoin(0); doJoin(1); doJoin(2); doJoin(3); } },
+          { narr: '<strong>Step 5 — P5 creates <code>node-0005</code>.</strong> Watches <code>node-0004</code>. One leader, four watchers, every watch points at exactly one other znode.', ev: 'watch', do: function () { emptyState(); doJoin(0); doJoin(1); doJoin(2); doJoin(3); doJoin(4); } },
+        ];
+
+        SCENARIOS.dies = [
+          { narr: '<strong>Ready.</strong> Five processes, P1 is leader. Watch chain: P2→P1, P3→P2, P4→P3, P5→P4.', do: function () { fullState(); } },
+          { narr: '<strong>Step 1 — P1\'s session ends.</strong> ZooKeeper auto-deletes <code>node-0001</code>. Only one watcher was set on it: P2.', ev: 'crash', do: function () { fullState(); doEndSession(0); } },
+          { narr: '<strong>Step 2 — Only P2 is notified.</strong> P3, P4, P5 are entirely unbothered — they were watching different znodes. This is the herd-free guarantee.', ev: 'notify', do: function () { fullState(); doEndSession(0); doMarkNotified(1); } },
+          { narr: '<strong>Step 3 — P2 re-lists /election.</strong> No smaller znode exists → P2 becomes the new leader. The election cost: one watch fire, one read.', ev: 'elect', do: function () { fullState(); doEndSession(0); doMarkNotified(1); doFinalize(); } },
+        ];
+
+        SCENARIOS.midchain = [
+          { narr: '<strong>Ready.</strong> P1 is leader. Watch chain intact.', do: function () { fullState(); } },
+          { narr: '<strong>Step 1 — P3 (a follower) dies.</strong> ZooKeeper deletes <code>node-0003</code>. Only the one watcher on it (P4) is notified.', ev: 'crash', do: function () { fullState(); doEndSession(2); } },
+          { narr: '<strong>Step 2 — Only P4 is notified.</strong> P1, P2, P5 don\'t even wake up.', ev: 'notify', do: function () { fullState(); doEndSession(2); doMarkNotified(3); } },
+          { narr: '<strong>Step 3 — P4 re-lists.</strong> Still sees <code>node-0001</code> (P1) and <code>node-0002</code> (P2) ahead → not leader. It re-watches its new predecessor <code>node-0002</code> and sleeps.', ev: 'watch', do: function () { fullState(); doEndSession(2); doMarkNotified(3); doFinalize(); } },
+          { narr: '<strong>Step 4 — No election ran.</strong> The leader is still P1; the cluster healed itself in one round-trip. This is the cheap-failure mode the recipe was designed for.', ev: 'elect', do: function () { fullState(); doEndSession(2); doFinalize(); } },
+        ];
+
+        function applyStep(targetIdx) {
+          var sc = SCENARIOS[S.scenario]; if (!sc) return;
+          for (var i = 0; i <= targetIdx; i++) {
+            var st = sc[i]; S.eventTag = null; S.lastNarr = null; st.do();
+            if (i === targetIdx) {
+              if (S.lastNarr === null) S.lastNarr = st.narr;
+              if (st.ev && !S.eventTag) S.eventTag = { kind: st.ev, text: evLabel(st.ev) };
+            }
+          }
+          S.stepIdx = targetIdx; render();
+        }
+        function evLabel(k) { if (k === 'create') return 'create'; if (k === 'watch') return 'watch set'; if (k === 'notify') return 'notify'; if (k === 'elect') return 'elected'; if (k === 'crash') return 'session lost'; return k; }
+        function stepNext() {
+          var sc = SCENARIOS[S.scenario];
+          if (S.stepIdx < sc.length - 1) { applyStep(S.stepIdx + 1); log(stripTags(sc[S.stepIdx].narr), colorForEvent(S.eventTag && S.eventTag.kind)); }
+          else { setPlaying(false); }
+        }
+        function stepPrev() { if (S.stepIdx > 0) applyStep(S.stepIdx - 1); }
+        var playTimer = null;
+        function setPlaying(on) {
+          S.playing = on;
+          document.getElementById('play-label').textContent = on ? 'Pause' : 'Play';
+          document.getElementById('play-icon').className = on ? 'ti ti-player-pause' : 'ti ti-player-play';
+          if (playTimer) { clearInterval(playTimer); playTimer = null; }
+          if (on) playTimer = setInterval(function () {
+            var sc = SCENARIOS[S.scenario]; if (!sc) { setPlaying(false); return; }
+            if (S.stepIdx < sc.length - 1) stepNext(); else setPlaying(false);
+          }, 1700);
+        }
+
+        function pickScenario(name) {
+          S.scenario = name;
+          var tabs = document.querySelectorAll('.tab');
+          for (var i = 0; i < tabs.length; i++) tabs[i].classList.toggle('active', tabs[i].dataset.scenario === name);
+          setPlaying(false);
+          var stepCtl = document.getElementById('step-controls');
+          var fp = document.getElementById('free-play');
+          if (name === 'free') {
+            stepCtl.style.display = 'none'; fp.style.display = '';
+            fullState();
+            S.lastNarr = '<strong>Free play.</strong> End any process\'s session. Only its single watcher gets notified — the chain heals lazily.'; render();
+          } else {
+            stepCtl.style.display = ''; fp.style.display = 'none';
+            applyStep(0);
+          }
+        }
+
+        function fpKill(i) {
+          if (!S.procs[i].alive) return;
+          var wasLeader = i === leaderIdx();
+          // find watcher = the proc whose new predecessor changes (the next-after-i alive)
+          var s = aliveSorted();
+          var myPos = s.findIndex(function (x) { return x.i === i; });
+          var watcher = (myPos >= 0 && myPos < s.length - 1) ? s[myPos + 1].i : -1;
+          doEndSession(i);
+          if (watcher !== -1) { doMarkNotified(watcher); }
+          S.lastNarr = '<strong>' + NAMES[i] + ' session ended; znode deleted.</strong>' +
+            (watcher === -1 ? ' No one was watching it (tail of chain) — cluster unaffected.' :
+              (wasLeader ? ' <strong>' + NAMES[watcher] + '</strong> notified → becomes new leader (smallest znode).' :
+                ' <strong>' + NAMES[watcher] + '</strong> notified → re-watches its new predecessor, stays a follower.'));
+          S.eventTag = { kind: watcher === -1 ? 'crash' : 'notify', text: watcher === -1 ? 'no watcher' : 'notify' };
+          log(NAMES[i] + ' session ended' + (watcher === -1 ? ' (no watcher)' : (' → ' + NAMES[watcher] + ' notified')),
+            colorForEvent(S.eventTag.kind));
+          render();
+        }
+        function fpRejoin() {
+          for (var i = 0; i < 5; i++) {
+            if (!S.procs[i].alive) {
+              S.procs[i].alive = true;
+              S.procs[i].seq = S.nextSeq++;
+            }
+          }
+          clearNotified();
+          S.lastNarr = '<strong>All processes rejoined.</strong> Newcomers get the next sequence numbers and watch their new predecessors.';
+          S.eventTag = { kind: 'create', text: 'rejoin' };
+          log('all processes rejoined', 'var(--info)');
+          render();
+        }
+        function fpReset() { fullState(); S.lastNarr = '<strong>Reset.</strong>'; S.eventTag = null; render(); }
+
+        var tabs = document.querySelectorAll('.tab');
+        for (var i = 0; i < tabs.length; i++) (function (t) { t.addEventListener('click', function () { pickScenario(t.dataset.scenario); }); })(tabs[i]);
+        document.getElementById('btn-prev').addEventListener('click', stepPrev);
+        document.getElementById('btn-next').addEventListener('click', stepNext);
+        document.getElementById('btn-play').addEventListener('click', function () { setPlaying(!S.playing); });
+        document.getElementById('btn-restart').addEventListener('click', function () { setPlaying(false); applyStep(0); });
+        document.getElementById('fp-reset').addEventListener('click', fpReset);
+        document.querySelectorAll('.cmd-btn').forEach(function (b) {
+          b.addEventListener('click', function () {
+            var act = b.dataset.act;
+            if (act.indexOf('kill-') === 0) fpKill(+act.slice(5) - 1);
+            else if (act === 'rejoin') fpRejoin();
+          });
+        });
+        document.addEventListener('keydown', function (e) {
+          if (S.scenario === 'free') return;
+          if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); stepNext(); }
+          else if (e.key === 'ArrowLeft') { e.preventDefault(); stepPrev(); }
+        });
+
+        pickScenario('join');
+        function postHeight() { parent.postMessage({ type: 'prototype:height', height: document.body.scrollHeight }, '*'); }
+        if (typeof ResizeObserver !== 'undefined') new ResizeObserver(postHeight).observe(document.body);
+        postHeight();
+      })();
+    </script>
+  </body>
+</html>

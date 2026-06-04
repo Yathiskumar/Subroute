@@ -735,6 +735,64 @@ export const TOPICS: Topic[] = [
     ],
   },
   {
+    slug: "leader-election",
+    title: "Leader Election",
+    description:
+      "How a cluster picks one node to be in charge — and how it picks again when that node falls over. Five algorithms, from the textbook ID-based shouting matches to the lease-and-watcher schemes real coordination services ship.",
+    difficulty: "intermediate",
+    icon: "Crown",
+    tags: ["distributed", "coordination", "patterns"],
+    estimatedTime: "60 min",
+    prerequisites: ["Distributed systems basics", "Timeouts & heartbeats", "Quorums"],
+    concepts: [
+      {
+        slug: "bully",
+        title: "Bully Algorithm",
+        oneLiner:
+          "Whoever has the highest ID wins. When the leader dies, anyone can call an election — and higher IDs bully lower IDs out of contention.",
+        difficulty: "beginner",
+        estimatedTime: "10 min",
+        prototypePath: "/prototypes/leader-election/bully.html",
+      },
+      {
+        slug: "ring",
+        title: "Ring (Chang–Roberts)",
+        oneLiner:
+          "Pass a token clockwise around a ring, each node appending its ID. Whoever's ID is highest when the token returns is the leader.",
+        difficulty: "beginner",
+        estimatedTime: "10 min",
+        prototypePath: "/prototypes/leader-election/ring.html",
+      },
+      {
+        slug: "raft-election",
+        title: "Raft-Style Election",
+        oneLiner:
+          "Random election timers + per-term majority votes. The first follower to time out runs for election; whoever gets a quorum leads the term.",
+        difficulty: "intermediate",
+        estimatedTime: "12 min",
+        prototypePath: "/prototypes/leader-election/raft-election.html",
+      },
+      {
+        slug: "lease-based",
+        title: "Lease-Based Election",
+        oneLiner:
+          "A single TTL-bounded lock in a shared store. Hold it and you're leader; stop renewing and someone else takes over when it expires.",
+        difficulty: "intermediate",
+        estimatedTime: "11 min",
+        prototypePath: "/prototypes/leader-election/lease-based.html",
+      },
+      {
+        slug: "zookeeper",
+        title: "ZooKeeper Election",
+        oneLiner:
+          "Every node creates an ephemeral sequential znode; the smallest sequence is leader. Each follower watches only its predecessor — no herd effect.",
+        difficulty: "advanced",
+        estimatedTime: "12 min",
+        prototypePath: "/prototypes/leader-election/zookeeper.html",
+      },
+    ],
+  },
+  {
     slug: "bloom-filters",
     title: "Bloom & Cuckoo Filters",
     description:
