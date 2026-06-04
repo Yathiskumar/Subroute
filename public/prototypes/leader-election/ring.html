@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ring (Chang–Roberts)</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>i.ti{visibility:hidden}html.fonts-ready i.ti{visibility:visible}</style>
+    <script>(function(){var d=document.documentElement;function ok(){d.classList.add('fonts-ready');}if(document.fonts&&document.fonts.ready){document.fonts.ready.then(ok);}setTimeout(ok,2500);})();</script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --success-bg: rgba(92,198,111,0.14); --success-bd: rgba(92,198,111,0.45);
+        --danger: #f06868;  --danger-bg: rgba(240,104,104,0.14); --danger-bd: rgba(240,104,104,0.45);
+        --warning: #f0b568; --warning-bg: rgba(240,181,104,0.14); --warning-bd: rgba(240,181,104,0.45);
+        --info: #5e9ff6;    --info-bg:    rgba(94,159,246,0.16); --info-bd:    rgba(94,159,246,0.45);
+        --purple: #a78bfa;  --purple-bg:  rgba(167,139,250,0.16); --purple-bd:  rgba(167,139,250,0.45);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --radius-lg: 14px; --radius-md: 8px; --radius-sm: 6px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body { padding: 18px 18px 24px; background-image: radial-gradient(1200px 600px at 50% -200px, rgba(251,134,58,0.06), transparent), linear-gradient(to right, rgba(255,255,255,0.020) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.020) 1px, transparent 1px); background-size: auto, 40px 40px, 40px 40px; }
+      .container { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; padding: 9px 12px; transition: all 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.08); }
+      button.ghost { background: transparent; }
+      button i { font-size: 14px; }
+      .tabs { display: flex; gap: 6px; flex-wrap: wrap; padding: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); }
+      .tab { flex: 1; min-width: 130px; padding: 9px 12px; font: 500 12px/1 var(--sans); border-radius: var(--radius-sm); border: 1px solid transparent; background: transparent; color: var(--muted); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: all 150ms ease; }
+      .tab:hover { color: var(--fg); background: rgba(255,255,255,0.03); }
+      .tab.active { background: var(--elevated); color: var(--fg); border-color: var(--border-strong); }
+      .tab i { font-size: 14px; }
+      .hero { background: linear-gradient(180deg, rgba(255,255,255,0.014), transparent), var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; position: relative; overflow: hidden; }
+      .hero::before { content: ""; position: absolute; inset: 0; background: radial-gradient(420px 240px at 50% 0%, rgba(94,159,246,0.05), transparent 60%); pointer-events: none; }
+      .hero-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; position: relative; z-index: 1; gap: 10px; flex-wrap: wrap; }
+      .hero-head .ttl { font: 600 11.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .legend { font-size: 11.5px; color: var(--muted); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      .legend .sw { display: inline-block; width: 11px; height: 11px; border-radius: 3px; vertical-align: -1px; margin-right: 3px; }
+      .sw.l { background: var(--success-bg); border: 1px solid var(--success-bd); }
+      .sw.p { background: var(--info-bg); border: 1px solid var(--info-bd); }
+      .sw.t { background: var(--warning-bg); border: 1px solid var(--warning-bd); }
+      .sw.d { background: var(--danger-bg); border: 1px solid var(--danger-bd); }
+      .ring-svg { display: block; width: 100%; height: 320px; position: relative; z-index: 1; }
+      .ring-edge { stroke: var(--border-strong); stroke-width: 1.6; fill: none; opacity: 0.7; }
+      .ring-edge.skip { stroke-dasharray: 4 4; opacity: 0.4; }
+      .arrow { fill: var(--border-strong); }
+      .nlabel { fill: var(--muted); font: 500 10px var(--mono); }
+      .token-fly { transition: cx 750ms ease, cy 750ms ease, opacity 200ms ease; }
+      .token-fly-bg { fill: var(--warning-bg); stroke: var(--warning-bd); stroke-width: 1.5; }
+      .token-fly-fg { fill: var(--warning); font: 700 14px var(--mono); }
+      .token-fly.coord .token-fly-bg { fill: var(--success-bg); stroke: var(--success-bd); }
+      .token-fly.coord .token-fly-fg { fill: var(--success); }
+      .ncircle { fill: var(--elevated); stroke: var(--border); stroke-width: 1.4; transition: fill 250ms, stroke 250ms; }
+      .ncircle.leader { fill: var(--success-bg); stroke: var(--success-bd); }
+      .ncircle.participant { fill: var(--info-bg); stroke: var(--info-bd); }
+      .ncircle.dead { fill: rgba(0,0,0,0.4); stroke: var(--danger-bd); stroke-dasharray: 3 3; }
+      .nid { font: 700 18px var(--mono); fill: var(--fg); transition: fill 250ms; }
+      .ncircle.leader + .nid, g.leader .nid { fill: var(--success); }
+      .ncircle.participant + .nid, g.participant .nid { fill: var(--info); }
+      .ncircle.dead + .nid, g.dead .nid { fill: var(--danger); }
+      .npid { font: 500 9px var(--mono); fill: var(--muted); }
+      .ncrown { fill: var(--accent); opacity: 0; transition: opacity .3s; font-size: 14px; }
+      g.leader .ncrown { opacity: 1; }
+      .phase-chips { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 12px; position: relative; z-index: 1; }
+      .phase-chip { flex: 1; min-width: 70px; padding: 6px 4px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: transparent; color: var(--subtle); text-align: center; font: 500 10.5px var(--mono); transition: all 200ms ease; }
+      .phase-chip.done { background: var(--surface); color: var(--muted); }
+      .phase-chip.active { background: var(--info-bg); border-color: var(--info-bd); color: var(--info); }
+      .narration { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px; position: relative; overflow: hidden; transition: border-color 350ms ease; }
+      .narration::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--border-strong); }
+      .narration.elect::before { background: var(--info); } .narration.elect { border-color: rgba(94,159,246,0.30); }
+      .narration.bump::before { background: var(--warning); } .narration.bump { border-color: rgba(240,181,104,0.30); }
+      .narration.discard::before { background: var(--purple); } .narration.discard { border-color: rgba(167,139,250,0.30); }
+      .narration.coord::before { background: var(--success); } .narration.coord { border-color: rgba(92,198,111,0.30); }
+      .narration.crash::before { background: var(--danger); } .narration.crash { border-color: rgba(240,104,104,0.30); }
+      .narr-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+      .badge { font: 600 10.5px var(--mono); padding: 4px 9px; border-radius: 999px; letter-spacing: 0.4px; text-transform: uppercase; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); color: var(--muted); background: var(--elevated); }
+      .badge.step { background: var(--elevated); border-color: var(--border-strong); color: var(--fg); }
+      .badge.event { background: transparent; }
+      .badge.event.elect { color: var(--info); border-color: var(--info-bd); }
+      .badge.event.bump { color: var(--warning); border-color: var(--warning-bd); }
+      .badge.event.discard { color: var(--purple); border-color: var(--purple-bd); }
+      .badge.event.coord { color: var(--success); border-color: var(--success-bd); }
+      .badge.event.crash { color: var(--danger); border-color: var(--danger-bd); }
+      .narr-text { margin: 0; font-size: 14px; line-height: 1.6; color: var(--fg); }
+      .narr-text strong { color: var(--fg); font-weight: 600; }
+      .narr-text code { font-family: var(--mono); background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; color: var(--accent); font-size: 12px; }
+      .timeline-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; }
+      .timeline-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font: 500 11px var(--mono); color: var(--muted); letter-spacing: 0.4px; text-transform: uppercase; }
+      .timeline-head .pos { color: var(--fg); font-weight: 600; text-transform: none; letter-spacing: 0; }
+      .timeline { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+      .tl-dot { flex: 1; min-width: 14px; height: 6px; border-radius: 99px; background: var(--border); transition: all 200ms ease; cursor: pointer; }
+      .tl-dot.done { background: var(--accent); opacity: 0.55; }
+      .tl-dot.now { background: var(--accent); height: 10px; box-shadow: 0 0 8px rgba(251,134,58,0.5); }
+      .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .controls .spacer { flex: 1; }
+      .kbd { font-family: var(--mono); font-size: 10.5px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); color: var(--muted); border: 1px solid var(--border); }
+      .hint { font: 11px var(--mono); color: var(--subtle); display: inline-flex; align-items: center; gap: 5px; }
+      .free-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px; }
+      .free-card h3 { margin: 0 0 10px; font: 500 11px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .fp-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+      .cmd-btn { background: var(--elevated); border: 1px solid var(--border); color: var(--fg); font: 500 12px var(--mono); padding: 7px 10px; border-radius: var(--radius-sm); cursor: pointer; }
+      .cmd-btn:hover:not(:disabled) { background: var(--surface); border-color: var(--border-strong); }
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; }
+      .stat .label { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .stat .value { font: 600 17px var(--mono); margin-top: 4px; line-height: 1; }
+      .log-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; }
+      .log-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font: 500 11px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .log-head .pill { color: var(--subtle); text-transform: none; letter-spacing: 0; font-size: 10.5px; }
+      .log { font-family: var(--mono); font-size: 12px; line-height: 1.85; color: var(--subtle); min-height: 48px; max-height: 56px; overflow: hidden; }
+      .log .t { color: var(--subtle); margin-right: 10px; opacity: 0.7; }
+      @media (max-width: 540px) { .ring-svg { height: 260px; } .stats { grid-template-columns: repeat(2, 1fr); } }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2 class="sr-only">Interactive Ring (Chang–Roberts) leader election — five processes in a clockwise ring; each forwards only IDs greater than its own. Step through three failure scenarios or take over in free play.</h2>
+
+      <div class="tabs" role="tablist" aria-label="Scenario">
+        <button class="tab active" data-scenario="dies" role="tab"><i class="ti ti-bolt" aria-hidden="true"></i>Leader dies</button>
+        <button class="tab" data-scenario="concurrent" role="tab"><i class="ti ti-arrows-shuffle" aria-hidden="true"></i>Concurrent starts</button>
+        <button class="tab" data-scenario="midring" role="tab"><i class="ti ti-circle-dashed" aria-hidden="true"></i>Mid-ring failure</button>
+        <button class="tab" data-scenario="free" role="tab"><i class="ti ti-hand-finger" aria-hidden="true"></i>Free play</button>
+      </div>
+
+      <div class="hero" aria-label="Ring stage">
+        <div class="hero-head">
+          <span class="ttl">5 nodes · clockwise · highest ID wins</span>
+          <span class="legend">
+            <span><span class="sw l"></span>leader</span>
+            <span><span class="sw p"></span>participant</span>
+            <span><span class="sw t"></span>token here</span>
+            <span><span class="sw d"></span>crashed</span>
+          </span>
+        </div>
+        <div class="phase-chips">
+          <div class="phase-chip" data-p="1">1 · Failure noted</div>
+          <div class="phase-chip" data-p="2">2 · Bid travels</div>
+          <div class="phase-chip" data-p="3">3 · Bid grows</div>
+          <div class="phase-chip" data-p="4">4 · Bid returns</div>
+          <div class="phase-chip" data-p="5">5 · Coordinator</div>
+        </div>
+        <svg class="ring-svg" id="ring" viewBox="0 0 760 320" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+
+      <div id="narration" class="narration">
+        <div class="narr-meta">
+          <span id="narr-step" class="badge step">Step 0 / 0</span>
+          <span id="narr-event" class="badge event" style="display:none"></span>
+        </div>
+        <p id="narr-text" class="narr-text"><strong>Ready.</strong> Five nodes in a ring. P5 is leader.</p>
+      </div>
+
+      <div id="timeline-wrap" class="timeline-wrap">
+        <div class="timeline-head"><span>Scenario timeline</span><span class="pos" id="tl-pos">—</span></div>
+        <div id="timeline" class="timeline"></div>
+      </div>
+
+      <div id="step-controls" class="controls">
+        <button id="btn-prev"><i class="ti ti-chevron-left" aria-hidden="true"></i>Prev</button>
+        <button id="btn-play" class="primary"><i id="play-icon" class="ti ti-player-play" aria-hidden="true"></i><span id="play-label">Play</span></button>
+        <button id="btn-next"><i class="ti ti-chevron-right" aria-hidden="true"></i>Next</button>
+        <button id="btn-restart" class="ghost"><i class="ti ti-refresh" aria-hidden="true"></i>Restart</button>
+        <span class="spacer"></span>
+        <span class="hint"><span class="kbd">←</span><span class="kbd">→</span><span class="kbd">space</span></span>
+      </div>
+
+      <div id="free-play" class="free-card" style="display:none">
+        <h3>Free play — crash any node, seed any bid</h3>
+        <div class="fp-row">
+          <button class="cmd-btn" data-act="crash-1">Crash P1</button>
+          <button class="cmd-btn" data-act="crash-2">Crash P2</button>
+          <button class="cmd-btn" data-act="crash-3">Crash P3</button>
+          <button class="cmd-btn" data-act="crash-4">Crash P4</button>
+          <button class="cmd-btn" data-act="crash-5">Crash P5</button>
+        </div>
+        <div class="fp-row">
+          <span style="font-size:11.5px;color:var(--muted)">Start ELECTION from:</span>
+          <button class="cmd-btn" data-act="elect-1">P1</button>
+          <button class="cmd-btn" data-act="elect-2">P2</button>
+          <button class="cmd-btn" data-act="elect-3">P3</button>
+          <button class="cmd-btn" data-act="elect-4">P4</button>
+          <button class="cmd-btn" data-act="revive">Revive all</button>
+          <button id="fp-reset" class="ghost"><i class="ti ti-refresh"></i>Reset</button>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="label">leader</div><div id="s-leader" class="value">P5</div></div>
+        <div class="stat"><div class="label">alive</div><div id="s-alive" class="value">5 / 5</div></div>
+        <div class="stat"><div class="label">token at</div><div id="s-token" class="value">—</div></div>
+        <div class="stat"><div class="label">hops</div><div id="s-hops" class="value">0</div></div>
+      </div>
+
+      <div class="log-card">
+        <div class="log-head"><span>Message log</span><span class="pill">last 2 messages</span></div>
+        <div id="log" class="log"></div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        var IDS = [1, 2, 3, 4, 5];
+        var W = 760, H = 320, CX = W / 2, CY = H / 2, R = 110;
+        // ring positions: P1 at top, clockwise
+        var POS = IDS.map(function (_, i) {
+          var a = (-90 + i * 360 / 5) * Math.PI / 180;
+          return { x: CX + R * Math.cos(a), y: CY + R * Math.sin(a) };
+        });
+
+        var S = {
+          scenario: 'dies', stepIdx: 0, playing: false,
+          alive: [true, true, true, true, true],
+          leader: 5, participant: [false, false, false, false, false],
+          // tokens: array of {id (bid value), at (node index), kind: 'election'|'coord'}
+          tokens: [],
+          phaseN: 0, eventTag: null, lastNarr: null,
+          hops: 0,
+        };
+
+        var ringEl = document.getElementById('ring');
+        var narrEl = document.getElementById('narration');
+        var narrTxt = document.getElementById('narr-text');
+        var narrEv = document.getElementById('narr-event');
+        var narrStep = document.getElementById('narr-step');
+        var tlWrap = document.getElementById('timeline-wrap');
+        var tlEl = document.getElementById('timeline');
+        var tlPos = document.getElementById('tl-pos');
+        var logEl = document.getElementById('log');
+
+        function nextAlive(idx) {
+          for (var k = 1; k <= 5; k++) {
+            var j = (idx + k) % 5;
+            if (S.alive[j]) return j;
+          }
+          return -1;
+        }
+
+        function renderRing() {
+          var svg = '';
+          // edges (clockwise), with dashed for dead-skip
+          for (var i = 0; i < 5; i++) {
+            var aIdx = i, bIdx = (i + 1) % 5;
+            var dead = !S.alive[aIdx] || !S.alive[bIdx];
+            var a = POS[aIdx], b = POS[bIdx];
+            // curve outward
+            var mx = (a.x + b.x) / 2 + (a.y - b.y) * 0.16;
+            var my = (a.y + b.y) / 2 + (b.x - a.x) * 0.16;
+            svg += '<path class="ring-edge' + (dead ? ' skip' : '') + '" d="M ' + a.x.toFixed(1) + ' ' + a.y.toFixed(1) + ' Q ' + mx.toFixed(1) + ' ' + my.toFixed(1) + ' ' + b.x.toFixed(1) + ' ' + b.y.toFixed(1) + '"/>';
+          }
+          // nodes
+          for (var i = 0; i < 5; i++) {
+            var p = POS[i], id = IDS[i];
+            var dead = !S.alive[i];
+            var isLeader = !dead && S.leader === id;
+            var isPart = !dead && S.participant[i];
+            var cls = 'ncircle';
+            var gcls = '';
+            if (dead) { cls += ' dead'; gcls = 'dead'; }
+            else if (isLeader) { cls += ' leader'; gcls = 'leader'; }
+            else if (isPart) { cls += ' participant'; gcls = 'participant'; }
+            svg += '<g class="' + gcls + '">';
+            svg += '<circle class="' + cls + '" cx="' + p.x + '" cy="' + p.y + '" r="28"/>';
+            svg += '<text class="ncrown" x="' + (p.x + 18) + '" y="' + (p.y - 24) + '">♛</text>';
+            svg += '<text class="nid" x="' + p.x + '" y="' + (p.y + 4) + '" text-anchor="middle">' + id + '</text>';
+            svg += '<text class="npid" x="' + p.x + '" y="' + (p.y + 18) + '" text-anchor="middle">P' + id + '</text>';
+            svg += '</g>';
+          }
+          // tokens
+          S.tokens.forEach(function (tk) {
+            if (tk.at < 0 || tk.at >= 5) return;
+            var p = POS[tk.at];
+            var ox = p.x > CX ? 42 : (p.x < CX ? -42 : 0);
+            var oy = p.y < CY ? -36 : (p.y > CY ? 36 : 0);
+            var tx = p.x + ox, ty = p.y + oy;
+            var cls = 'token-fly' + (tk.kind === 'coord' ? ' coord' : '');
+            var label = tk.kind === 'coord' ? ('LEADER=' + tk.id) : ('[' + tk.id + ']');
+            var w = Math.max(40, 11 * label.length);
+            svg += '<g class="' + cls + '">';
+            svg += '<rect class="token-fly-bg" x="' + (tx - w / 2) + '" y="' + (ty - 11) + '" width="' + w + '" height="22" rx="11"/>';
+            svg += '<text class="token-fly-fg" x="' + tx + '" y="' + (ty + 4) + '" text-anchor="middle">' + label + '</text>';
+            svg += '</g>';
+          });
+          ringEl.innerHTML = svg;
+        }
+
+        function render() {
+          renderRing();
+          var chips = document.querySelectorAll('.phase-chip');
+          for (var c = 0; c < chips.length; c++) {
+            var p = +chips[c].dataset.p;
+            chips[c].classList.toggle('active', p === S.phaseN);
+            chips[c].classList.toggle('done', p < S.phaseN);
+          }
+          var kind = S.eventTag ? S.eventTag.kind : '';
+          narrEl.className = 'narration' + (kind ? ' ' + kind : '');
+          narrTxt.innerHTML = DOMPurify.sanitize(S.lastNarr || '<strong>Ready.</strong>');
+          if (S.scenario === 'free') { narrStep.textContent = 'Free play'; }
+          else { var sc = SCENARIOS[S.scenario]; narrStep.textContent = 'Step ' + S.stepIdx + ' / ' + (sc.length - 1); }
+          if (S.eventTag) { narrEv.style.display = ''; narrEv.className = 'badge event ' + S.eventTag.kind; narrEv.textContent = S.eventTag.text; }
+          else { narrEv.style.display = 'none'; }
+
+          if (S.scenario === 'free') { tlWrap.style.display = 'none'; }
+          else {
+            tlWrap.style.display = '';
+            var sc2 = SCENARIOS[S.scenario];
+            tlEl.innerHTML = '';
+            for (var j = 0; j < sc2.length; j++) {
+              var dd = document.createElement('div');
+              var cl = 'tl-dot'; if (j < S.stepIdx) cl += ' done'; if (j === S.stepIdx) cl += ' now';
+              dd.className = cl;
+              (function (idx) { dd.onclick = function () { applyStep(idx); }; })(j);
+              tlEl.appendChild(dd);
+            }
+            tlPos.textContent = (S.stepIdx + 1) + ' of ' + sc2.length;
+          }
+          document.getElementById('s-leader').textContent = S.leader === -1 ? '—' : ('P' + S.leader);
+          var alive = S.alive.filter(Boolean).length;
+          document.getElementById('s-alive').textContent = alive + ' / 5';
+          var tokAt = S.tokens.length ? ('P' + IDS[S.tokens[0].at]) : '—';
+          document.getElementById('s-token').textContent = tokAt;
+          document.getElementById('s-hops').textContent = S.hops;
+
+          if (S.scenario !== 'free') {
+            var sc3 = SCENARIOS[S.scenario];
+            document.getElementById('btn-prev').disabled = S.stepIdx <= 0;
+            document.getElementById('btn-next').disabled = S.stepIdx >= sc3.length - 1;
+          }
+        }
+
+        function log(msg, color) {
+          var t = new Date(); var hh = String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0') + ':' + String(t.getSeconds()).padStart(2, '0');
+          var line = document.createElement('div'); line.style.color = color || 'var(--subtle)';
+          var ts = document.createElement('span'); ts.className = 't'; ts.textContent = hh;
+          line.appendChild(ts); line.appendChild(document.createTextNode(String(msg)));
+          logEl.insertBefore(line, logEl.firstChild);
+          while (logEl.children.length > 2) logEl.removeChild(logEl.lastChild);
+        }
+        function stripTags(html) { return DOMPurify.sanitize(String(html == null ? '' : html), { ALLOWED_TAGS: [], KEEP_CONTENT: true }); }
+        function colorForEvent(k) {
+          if (k === 'elect') return 'var(--info)';
+          if (k === 'bump') return 'var(--warning)';
+          if (k === 'discard') return 'var(--purple)';
+          if (k === 'coord') return 'var(--success)';
+          if (k === 'crash') return 'var(--danger)';
+          return 'var(--subtle)';
+        }
+
+        function resetState() {
+          S.alive = [true, true, true, true, true];
+          S.leader = 5; S.participant = [false, false, false, false, false];
+          S.tokens = []; S.phaseN = 0; S.hops = 0;
+          S.eventTag = null; S.lastNarr = null;
+        }
+        function idxOf(id) { return IDS.indexOf(id); }
+
+        function doKill(id) {
+          var i = idxOf(id); if (i === -1) return;
+          var wasLeader = S.leader === id;
+          S.alive[i] = false;
+          if (wasLeader) { S.leader = -1; S.phaseN = 1; }
+        }
+        function doSeed(id, bid) {
+          var i = idxOf(id); if (i === -1 || !S.alive[i]) return;
+          S.participant[i] = true;
+          S.tokens.push({ id: bid, at: i, kind: 'election' });
+          S.phaseN = 2; S.hops++;
+        }
+        function doForwardOnce(tokIdx) {
+          var tk = S.tokens[tokIdx]; if (!tk) return;
+          var nxt = nextAlive(tk.at);
+          if (nxt === -1) return;
+          tk.at = nxt; S.hops++;
+          var receiverId = IDS[nxt];
+          // Chang-Roberts rules
+          if (tk.kind === 'election') {
+            if (tk.id > receiverId) {
+              S.participant[nxt] = true;
+              S.phaseN = 2;
+            } else if (tk.id < receiverId && !S.participant[nxt]) {
+              tk.id = receiverId; S.participant[nxt] = true;
+              S.phaseN = 3;
+            } else if (tk.id < receiverId && S.participant[nxt]) {
+              S.tokens.splice(tokIdx, 1); // discard
+              S.phaseN = 3;
+            } else { // tk.id === receiverId
+              S.leader = receiverId;
+              S.tokens.splice(tokIdx, 1);
+              for (var k = 0; k < 5; k++) S.participant[k] = false;
+              S.tokens.push({ id: receiverId, at: nxt, kind: 'coord' });
+              S.phaseN = 4;
+            }
+          } else if (tk.kind === 'coord') {
+            // forward until back to leader
+            if (receiverId === tk.id) { S.tokens.splice(tokIdx, 1); S.phaseN = 5; }
+          }
+        }
+        function doForwardTimes(times) {
+          for (var t = 0; t < times; t++) {
+            if (S.tokens.length === 0) return;
+            doForwardOnce(0);
+          }
+        }
+        function doRevive() {
+          S.alive = [true, true, true, true, true];
+        }
+
+        var SCENARIOS = {};
+
+        SCENARIOS.dies = [
+          { narr: '<strong>Ready.</strong> Ring P1→P2→P3→P4→P5→P1. P5 is leader.', do: function () { resetState(); } },
+          { narr: '<strong>Step 1 — P5 crashes.</strong> The leader is gone. P1, the leader\'s successor (clockwise), will notice first.', ev: 'crash', do: function () { resetState(); doKill(5); } },
+          { narr: '<strong>Step 2 — P1 seeds <code>ELECTION(1)</code>.</strong> The bid begins its clockwise journey.', ev: 'elect', do: function () { resetState(); doKill(5); doSeed(1, 1); } },
+          { narr: '<strong>Step 3 — P2 receives <code>[1]</code>.</strong> <code>1 &lt; 2</code> and P2 is not a participant → it bumps the bid to <code>[2]</code> and forwards.', ev: 'bump', do: function () { resetState(); doKill(5); doSeed(1, 1); doForwardTimes(1); } },
+          { narr: '<strong>Step 4 — P3 sees <code>[2]</code>.</strong> <code>2 &lt; 3</code>, not a participant → bumps to <code>[3]</code>. Then P4 bumps to <code>[4]</code>.', ev: 'bump', do: function () { resetState(); doKill(5); doSeed(1, 1); doForwardTimes(3); } },
+          { narr: '<strong>Step 5 — Bid skips dead P5</strong> and returns to P1. P1 is a participant, <code>4 &gt; 1</code> → forwards <code>[4]</code> unchanged.', ev: 'elect', do: function () { resetState(); doKill(5); doSeed(1, 1); doForwardTimes(5); } },
+          { narr: '<strong>Step 6 — Bid travels P1 → P2 → P3 → P4.</strong> Each forwards <code>[4]</code> (no bump, no discard — they\'re participants with smaller IDs).', ev: 'elect', do: function () { resetState(); doKill(5); doSeed(1, 1); doForwardTimes(8); } },
+          { narr: '<strong>Step 7 — Bid reaches P4 = its own ID.</strong> P4 wins; it emits <code>COORDINATOR(P4)</code> clockwise.', ev: 'coord', do: function () { resetState(); doKill(5); doSeed(1, 1); doForwardTimes(9); } },
+          { narr: '<strong>Step 8 — <code>COORDINATOR</code> makes one lap.</strong> P1, P2, P3 update their leader to P4. Election done.', ev: 'coord', do: function () { resetState(); doKill(5); doSeed(1, 1); doForwardTimes(13); } },
+        ];
+
+        SCENARIOS.concurrent = [
+          { narr: '<strong>Ready.</strong> Ring with P5 as leader.', do: function () { resetState(); } },
+          { narr: '<strong>Step 1 — P5 dies; P2 and P4 both notice at the same time</strong> and seed competing bids.', ev: 'crash', do: function () { resetState(); doKill(5); } },
+          { narr: '<strong>Step 2 — P2 seeds <code>[2]</code>, P4 seeds <code>[4]</code>.</strong> Two bids in flight, one clockwise hop apart.', ev: 'elect', do: function () { resetState(); doKill(5); doSeed(2, 2); doSeed(4, 4); } },
+          { narr: '<strong>Step 3 — Bid <code>[2]</code> reaches P3.</strong> <code>2 &lt; 3</code>, not a participant → bumps to <code>[3]</code>.', ev: 'bump', do: function () { resetState(); doKill(5); doSeed(2, 2); doSeed(4, 4); doForwardOnce(0); } },
+          { narr: '<strong>Step 4 — Bid <code>[3]</code> reaches participant P4.</strong> <code>3 &lt; 4</code> and P4 is already a participant → <strong>discard</strong>. One bid eliminated.', ev: 'discard', do: function () { resetState(); doKill(5); doSeed(2, 2); doSeed(4, 4); doForwardOnce(0); doForwardOnce(0); } },
+          { narr: '<strong>Step 5 — Only <code>[4]</code> remains.</strong> It travels around the ring, skipping dead P5, returning to P4.', ev: 'elect', do: function () { resetState(); doKill(5); doSeed(2, 2); doSeed(4, 4); doForwardOnce(0); doForwardOnce(0); doForwardTimes(5); } },
+          { narr: '<strong>Step 6 — P4 wins; broadcasts <code>COORDINATOR(P4)</code>.</strong> Chang–Roberts guarantees a single winner even with concurrent starts.', ev: 'coord', do: function () { resetState(); doKill(5); doSeed(2, 2); doSeed(4, 4); doForwardOnce(0); doForwardOnce(0); doForwardTimes(10); } },
+        ];
+
+        SCENARIOS.midring = [
+          { narr: '<strong>Ready.</strong> P5 is leader.', do: function () { resetState(); } },
+          { narr: '<strong>Step 1 — P3 (a follower, not the leader) dies.</strong> The ring now has a gap.', ev: 'crash', do: function () { resetState(); doKill(3); } },
+          { narr: '<strong>Step 2 — Successor pointers heal.</strong> The ring becomes P1 → P2 → P4 → P5 → P1; messages skip the gap automatically.', do: function () { resetState(); doKill(3); } },
+          { narr: '<strong>Step 3 — No election runs.</strong> The leader P5 is alive, so the cluster keeps working. Failover only happens when the *leader* dies.', do: function () { resetState(); doKill(3); } },
+        ];
+
+        function applyStep(targetIdx) {
+          var sc = SCENARIOS[S.scenario]; if (!sc) return;
+          for (var i = 0; i <= targetIdx; i++) {
+            var st = sc[i]; S.eventTag = null; S.lastNarr = null; st.do();
+            if (i === targetIdx) {
+              if (S.lastNarr === null) S.lastNarr = st.narr;
+              if (st.ev && !S.eventTag) S.eventTag = { kind: st.ev, text: evLabel(st.ev) };
+            }
+          }
+          S.stepIdx = targetIdx; render();
+        }
+        function evLabel(k) { if (k === 'elect') return 'election'; if (k === 'bump') return 'bump'; if (k === 'discard') return 'discard'; if (k === 'coord') return 'coordinator'; if (k === 'crash') return 'crash'; return k; }
+        function stepNext() {
+          var sc = SCENARIOS[S.scenario];
+          if (S.stepIdx < sc.length - 1) { applyStep(S.stepIdx + 1); log(stripTags(sc[S.stepIdx].narr), colorForEvent(S.eventTag && S.eventTag.kind)); }
+          else { setPlaying(false); }
+        }
+        function stepPrev() { if (S.stepIdx > 0) applyStep(S.stepIdx - 1); }
+        var playTimer = null;
+        function setPlaying(on) {
+          S.playing = on;
+          document.getElementById('play-label').textContent = on ? 'Pause' : 'Play';
+          document.getElementById('play-icon').className = on ? 'ti ti-player-pause' : 'ti ti-player-play';
+          if (playTimer) { clearInterval(playTimer); playTimer = null; }
+          if (on) playTimer = setInterval(function () {
+            var sc = SCENARIOS[S.scenario]; if (!sc) { setPlaying(false); return; }
+            if (S.stepIdx < sc.length - 1) stepNext(); else setPlaying(false);
+          }, 1700);
+        }
+
+        function pickScenario(name) {
+          S.scenario = name;
+          var tabs = document.querySelectorAll('.tab');
+          for (var i = 0; i < tabs.length; i++) tabs[i].classList.toggle('active', tabs[i].dataset.scenario === name);
+          setPlaying(false);
+          var stepCtl = document.getElementById('step-controls');
+          var fp = document.getElementById('free-play');
+          if (name === 'free') {
+            stepCtl.style.display = 'none'; fp.style.display = '';
+            resetState(); S.lastNarr = '<strong>Free play.</strong> Crash any node, then seed an ELECTION from any survivor. The higher bid always wins.'; render();
+          } else {
+            stepCtl.style.display = ''; fp.style.display = 'none';
+            applyStep(0);
+          }
+        }
+
+        function fpCrash(id) {
+          var i = idxOf(id); if (i === -1 || !S.alive[i]) return;
+          var wasLeader = S.leader === id;
+          doKill(id);
+          S.lastNarr = '<strong>P' + id + ' crashed.</strong>' + (wasLeader ? ' Successor will start an ELECTION.' : ' Not the leader — ring routes around it.');
+          S.eventTag = { kind: 'crash', text: 'crash' };
+          log('P' + id + ' crashed', 'var(--danger)');
+          render();
+        }
+        function fpRevive() {
+          doRevive();
+          S.lastNarr = '<strong>All processes revived.</strong>';
+          S.eventTag = null; log('all processes revived', 'var(--success)');
+          render();
+        }
+        function fpElect(id) {
+          var i = idxOf(id); if (i === -1 || !S.alive[i]) return;
+          // Find highest alive; simulate the full Chang-Roberts outcome.
+          var top = -1;
+          for (var k = 0; k < 5; k++) if (S.alive[k] && IDS[k] > top) top = IDS[k];
+          S.leader = top;
+          for (var k = 0; k < 5; k++) S.participant[k] = false;
+          S.tokens = []; S.hops += 5; // approximate
+          S.lastNarr = '<strong>ELECTION seeded from P' + id + ' → P' + top + ' wins.</strong> The bid grows monotonically as it travels; smaller bids are discarded at participants.';
+          S.eventTag = { kind: 'coord', text: 'coordinator' };
+          log('ELECTION seeded by P' + id + ' → P' + top + ' wins', 'var(--success)');
+          render();
+        }
+        function fpReset() { resetState(); S.lastNarr = '<strong>Reset.</strong>'; S.eventTag = null; render(); }
+
+        var tabs = document.querySelectorAll('.tab');
+        for (var i = 0; i < tabs.length; i++) (function (t) { t.addEventListener('click', function () { pickScenario(t.dataset.scenario); }); })(tabs[i]);
+        document.getElementById('btn-prev').addEventListener('click', stepPrev);
+        document.getElementById('btn-next').addEventListener('click', stepNext);
+        document.getElementById('btn-play').addEventListener('click', function () { setPlaying(!S.playing); });
+        document.getElementById('btn-restart').addEventListener('click', function () { setPlaying(false); applyStep(0); });
+        document.getElementById('fp-reset').addEventListener('click', fpReset);
+        document.querySelectorAll('.cmd-btn').forEach(function (b) {
+          b.addEventListener('click', function () {
+            var act = b.dataset.act;
+            if (act.indexOf('crash-') === 0) fpCrash(+act.slice(6));
+            else if (act.indexOf('elect-') === 0) fpElect(+act.slice(6));
+            else if (act === 'revive') fpRevive();
+          });
+        });
+        document.addEventListener('keydown', function (e) {
+          if (S.scenario === 'free') return;
+          if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); stepNext(); }
+          else if (e.key === 'ArrowLeft') { e.preventDefault(); stepPrev(); }
+        });
+
+        pickScenario('dies');
+        function postHeight() { parent.postMessage({ type: 'prototype:height', height: document.body.scrollHeight }, '*'); }
+        if (typeof ResizeObserver !== 'undefined') new ResizeObserver(postHeight).observe(document.body);
+        postHeight();
+      })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bully Algorithm</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>i.ti{visibility:hidden}html.fonts-ready i.ti{visibility:visible}</style>
+    <script>(function(){var d=document.documentElement;function ok(){d.classList.add('fonts-ready');}if(document.fonts&&document.fonts.ready){document.fonts.ready.then(ok);}setTimeout(ok,2500);})();</script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --success-bg: rgba(92,198,111,0.14); --success-bd: rgba(92,198,111,0.45);
+        --danger: #f06868;  --danger-bg: rgba(240,104,104,0.14); --danger-bd: rgba(240,104,104,0.45);
+        --warning: #f0b568; --warning-bg: rgba(240,181,104,0.14); --warning-bd: rgba(240,181,104,0.45);
+        --info: #5e9ff6;    --info-bg:    rgba(94,159,246,0.16); --info-bd:    rgba(94,159,246,0.45);
+        --purple: #a78bfa;  --purple-bg:  rgba(167,139,250,0.16); --purple-bd:  rgba(167,139,250,0.45);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --radius-lg: 14px; --radius-md: 8px; --radius-sm: 6px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body { padding: 18px 18px 24px; background-image: radial-gradient(1200px 600px at 50% -200px, rgba(251,134,58,0.06), transparent), linear-gradient(to right, rgba(255,255,255,0.020) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.020) 1px, transparent 1px); background-size: auto, 40px 40px, 40px 40px; }
+      .container { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; padding: 9px 12px; transition: all 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.08); }
+      button.ghost { background: transparent; }
+      button i { font-size: 14px; }
+      .tabs { display: flex; gap: 6px; flex-wrap: wrap; padding: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); }
+      .tab { flex: 1; min-width: 130px; padding: 9px 12px; font: 500 12px/1 var(--sans); border-radius: var(--radius-sm); border: 1px solid transparent; background: transparent; color: var(--muted); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: all 150ms ease; }
+      .tab:hover { color: var(--fg); background: rgba(255,255,255,0.03); }
+      .tab.active { background: var(--elevated); color: var(--fg); border-color: var(--border-strong); }
+      .tab i { font-size: 14px; }
+      .hero { background: linear-gradient(180deg, rgba(255,255,255,0.014), transparent), var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; position: relative; overflow: hidden; }
+      .hero::before { content: ""; position: absolute; inset: 0; background: radial-gradient(420px 240px at 50% 0%, rgba(94,159,246,0.05), transparent 60%); pointer-events: none; }
+      .hero-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; position: relative; z-index: 1; gap: 10px; flex-wrap: wrap; }
+      .hero-head .ttl { font: 600 11.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .legend { font-size: 11.5px; color: var(--muted); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      .legend .sw { display: inline-block; width: 11px; height: 11px; border-radius: 3px; vertical-align: -1px; margin-right: 3px; }
+      .sw.l { background: var(--success-bg); border: 1px solid var(--success-bd); }
+      .sw.c { background: var(--info-bg); border: 1px solid var(--info-bd); }
+      .sw.h { background: var(--warning-bg); border: 1px solid var(--warning-bd); }
+      .sw.d { background: var(--danger-bg); border: 1px solid var(--danger-bd); }
+      .phase-chips { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 12px; position: relative; z-index: 1; }
+      .phase-chip { flex: 1; min-width: 70px; padding: 6px 4px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: transparent; color: var(--subtle); text-align: center; font: 500 10.5px var(--mono); transition: all 200ms ease; }
+      .phase-chip.done { background: var(--surface); color: var(--muted); }
+      .phase-chip.active { background: var(--info-bg); border-color: var(--info-bd); color: var(--info); }
+      .nodes-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; position: relative; z-index: 1; }
+      .node { background: var(--elevated); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 6px 10px; display: flex; flex-direction: column; align-items: center; gap: 4px; position: relative; transition: all 250ms ease; }
+      .node .pid { font: 500 10px var(--mono); color: var(--muted); }
+      .node .idnum { font: 700 22px var(--mono); color: var(--fg); line-height: 1; }
+      .node .tag { font: 500 9px var(--mono); padding: 2px 6px; border-radius: var(--radius-sm); background: rgba(255,255,255,0.04); color: var(--subtle); margin-top: 2px; line-height: 1.2; }
+      .node.leader { border-color: var(--success-bd); background: var(--success-bg); }
+      .node.leader .idnum { color: var(--success); }
+      .node.leader .tag { background: var(--success-bg); color: var(--success); border: 1px solid var(--success-bd); }
+      .node.candidate { border-color: var(--info-bd); background: var(--info-bg); }
+      .node.candidate .idnum { color: var(--info); }
+      .node.candidate .tag { background: var(--info-bg); color: var(--info); border: 1px solid var(--info-bd); }
+      .node.higher { border-color: var(--warning-bd); background: var(--warning-bg); }
+      .node.higher .idnum { color: var(--warning); }
+      .node.higher .tag { background: var(--warning-bg); color: var(--warning); border: 1px solid var(--warning-bd); }
+      .node.dead { opacity: 0.45; border-style: dashed; }
+      .node.dead .idnum { color: var(--danger); text-decoration: line-through; }
+      .node.dead .tag { background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger-bd); }
+      .node .crown { position: absolute; top: -10px; right: 6px; font-size: 14px; color: var(--accent); opacity: 0; transition: opacity .25s; }
+      .node.leader .crown { opacity: 1; }
+      .pop { animation: pop .35s cubic-bezier(0.34, 1.56, 0.64, 1); }
+      @keyframes pop { from { transform: scale(0.92); } 50% { transform: scale(1.04); } to { transform: scale(1); } }
+      .narration { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px; position: relative; overflow: hidden; transition: border-color 350ms ease; }
+      .narration::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--border-strong); }
+      .narration.elect::before { background: var(--info); } .narration.elect { border-color: rgba(94,159,246,0.30); }
+      .narration.ok::before { background: var(--warning); } .narration.ok { border-color: rgba(240,181,104,0.30); }
+      .narration.coord::before { background: var(--success); } .narration.coord { border-color: rgba(92,198,111,0.30); }
+      .narration.crash::before { background: var(--danger); } .narration.crash { border-color: rgba(240,104,104,0.30); }
+      .narr-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+      .badge { font: 600 10.5px var(--mono); padding: 4px 9px; border-radius: 999px; letter-spacing: 0.4px; text-transform: uppercase; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); color: var(--muted); background: var(--elevated); }
+      .badge.step { background: var(--elevated); border-color: var(--border-strong); color: var(--fg); }
+      .badge.event { background: transparent; }
+      .badge.event.elect { color: var(--info); border-color: var(--info-bd); }
+      .badge.event.ok { color: var(--warning); border-color: var(--warning-bd); }
+      .badge.event.coord { color: var(--success); border-color: var(--success-bd); }
+      .badge.event.crash { color: var(--danger); border-color: var(--danger-bd); }
+      .narr-text { margin: 0; font-size: 14px; line-height: 1.6; color: var(--fg); }
+      .narr-text strong { color: var(--fg); font-weight: 600; }
+      .narr-text code { font-family: var(--mono); background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; color: var(--accent); font-size: 12px; }
+      .timeline-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; }
+      .timeline-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font: 500 11px var(--mono); color: var(--muted); letter-spacing: 0.4px; text-transform: uppercase; }
+      .timeline-head .pos { color: var(--fg); font-weight: 600; text-transform: none; letter-spacing: 0; }
+      .timeline { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+      .tl-dot { flex: 1; min-width: 14px; height: 6px; border-radius: 99px; background: var(--border); transition: all 200ms ease; cursor: pointer; }
+      .tl-dot.done { background: var(--accent); opacity: 0.55; }
+      .tl-dot.now { background: var(--accent); height: 10px; box-shadow: 0 0 8px rgba(251,134,58,0.5); }
+      .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .controls .spacer { flex: 1; }
+      .kbd { font-family: var(--mono); font-size: 10.5px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); color: var(--muted); border: 1px solid var(--border); }
+      .hint { font: 11px var(--mono); color: var(--subtle); display: inline-flex; align-items: center; gap: 5px; }
+      .free-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px; }
+      .free-card h3 { margin: 0 0 10px; font: 500 11px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .fp-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+      .cmd-btn { background: var(--elevated); border: 1px solid var(--border); color: var(--fg); font: 500 12px var(--mono); padding: 7px 10px; border-radius: var(--radius-sm); cursor: pointer; }
+      .cmd-btn:hover:not(:disabled) { background: var(--surface); border-color: var(--border-strong); }
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; }
+      .stat .label { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .stat .value { font: 600 17px var(--mono); margin-top: 4px; line-height: 1; }
+      .log-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; }
+      .log-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font: 500 11px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .log-head .pill { color: var(--subtle); text-transform: none; letter-spacing: 0; font-size: 10.5px; }
+      .log { font-family: var(--mono); font-size: 12px; line-height: 1.85; color: var(--subtle); min-height: 48px; max-height: 56px; overflow: hidden; }
+      .log .t { color: var(--subtle); margin-right: 10px; opacity: 0.7; }
+      @media (max-width: 540px) { .nodes-row { grid-template-columns: repeat(5, 1fr); gap: 4px; } .node { padding: 9px 3px 8px; } .node .idnum { font-size: 18px; } .stats { grid-template-columns: repeat(2, 1fr); } }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2 class="sr-only">Interactive Bully algorithm — five processes with IDs P1..P5; the highest alive ID is always leader. Step through three failure scenarios or take over in free play.</h2>
+
+      <div class="tabs" role="tablist" aria-label="Scenario">
+        <button class="tab active" data-scenario="dies" role="tab"><i class="ti ti-bolt" aria-hidden="true"></i>Leader dies</button>
+        <button class="tab" data-scenario="cascade" role="tab"><i class="ti ti-stack-2" aria-hidden="true"></i>Cascade failure</button>
+        <button class="tab" data-scenario="return" role="tab"><i class="ti ti-arrow-back-up" aria-hidden="true"></i>Old leader returns</button>
+        <button class="tab" data-scenario="free" role="tab"><i class="ti ti-hand-finger" aria-hidden="true"></i>Free play</button>
+      </div>
+
+      <div class="hero" aria-label="Bully stage">
+        <div class="hero-head">
+          <span class="ttl">5 processes · highest ID wins</span>
+          <span class="legend">
+            <span><span class="sw l"></span>leader</span>
+            <span><span class="sw c"></span>candidate</span>
+            <span><span class="sw h"></span>higher-ID OK</span>
+            <span><span class="sw d"></span>crashed</span>
+          </span>
+        </div>
+        <div class="phase-chips">
+          <div class="phase-chip" data-p="1">1 · Detect failure</div>
+          <div class="phase-chip" data-p="2">2 · Election sent</div>
+          <div class="phase-chip" data-p="3">3 · Higher OKs</div>
+          <div class="phase-chip" data-p="4">4 · Top elected</div>
+          <div class="phase-chip" data-p="5">5 · Coordinator</div>
+        </div>
+        <div class="nodes-row" id="nodes"></div>
+      </div>
+
+      <div id="narration" class="narration">
+        <div class="narr-meta">
+          <span id="narr-step" class="badge step">Step 0 / 0</span>
+          <span id="narr-event" class="badge event" style="display:none"></span>
+        </div>
+        <p id="narr-text" class="narr-text"><strong>Ready.</strong> Five processes alive. P5 (highest ID) is leader.</p>
+      </div>
+
+      <div id="timeline-wrap" class="timeline-wrap">
+        <div class="timeline-head"><span>Scenario timeline</span><span class="pos" id="tl-pos">—</span></div>
+        <div id="timeline" class="timeline"></div>
+      </div>
+
+      <div id="step-controls" class="controls">
+        <button id="btn-prev"><i class="ti ti-chevron-left" aria-hidden="true"></i>Prev</button>
+        <button id="btn-play" class="primary"><i id="play-icon" class="ti ti-player-play" aria-hidden="true"></i><span id="play-label">Play</span></button>
+        <button id="btn-next"><i class="ti ti-chevron-right" aria-hidden="true"></i>Next</button>
+        <button id="btn-restart" class="ghost"><i class="ti ti-refresh" aria-hidden="true"></i>Restart</button>
+        <span class="spacer"></span>
+        <span class="hint"><span class="kbd">←</span><span class="kbd">→</span><span class="kbd">space</span></span>
+      </div>
+
+      <div id="free-play" class="free-card" style="display:none">
+        <h3>Free play — crash any node, start any election</h3>
+        <div class="fp-row">
+          <button class="cmd-btn" data-act="crash-1">Crash P1</button>
+          <button class="cmd-btn" data-act="crash-2">Crash P2</button>
+          <button class="cmd-btn" data-act="crash-3">Crash P3</button>
+          <button class="cmd-btn" data-act="crash-4">Crash P4</button>
+          <button class="cmd-btn" data-act="crash-5">Crash P5</button>
+        </div>
+        <div class="fp-row">
+          <span style="font-size:11.5px;color:var(--muted)">Election from:</span>
+          <button class="cmd-btn" data-act="elect-1">P1</button>
+          <button class="cmd-btn" data-act="elect-2">P2</button>
+          <button class="cmd-btn" data-act="elect-3">P3</button>
+          <button class="cmd-btn" data-act="elect-4">P4</button>
+          <button class="cmd-btn" data-act="revive">Revive all</button>
+          <button id="fp-reset" class="ghost"><i class="ti ti-refresh"></i>Reset</button>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="label">leader</div><div id="s-leader" class="value">P5</div></div>
+        <div class="stat"><div class="label">alive</div><div id="s-alive" class="value">5 / 5</div></div>
+        <div class="stat"><div class="label">elections</div><div id="s-elections" class="value">0</div></div>
+        <div class="stat"><div class="label">messages</div><div id="s-msgs" class="value">0</div></div>
+      </div>
+
+      <div class="log-card">
+        <div class="log-head"><span>Message log</span><span class="pill">last 2 messages</span></div>
+        <div id="log" class="log"></div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        var IDS = [1, 2, 3, 4, 5];
+        var S = {
+          scenario: 'dies', stepIdx: 0, playing: false,
+          alive: [true, true, true, true, true],
+          leader: 5, candidate: -1,
+          higherOks: [],
+          phaseN: 0, popNode: -1,
+          eventTag: null, lastNarr: null,
+          elections: 0, msgs: 0,
+        };
+
+        var nodesEl = document.getElementById('nodes');
+        var narrEl = document.getElementById('narration');
+        var narrTxt = document.getElementById('narr-text');
+        var narrEv = document.getElementById('narr-event');
+        var narrStep = document.getElementById('narr-step');
+        var tlWrap = document.getElementById('timeline-wrap');
+        var tlEl = document.getElementById('timeline');
+        var tlPos = document.getElementById('tl-pos');
+        var logEl = document.getElementById('log');
+
+        function renderNodes() {
+          nodesEl.innerHTML = '';
+          for (var i = 0; i < 5; i++) {
+            var id = IDS[i];
+            var dead = !S.alive[i];
+            var isLeader = !dead && S.leader === id;
+            var isCand = !dead && S.candidate === id;
+            var isHigher = !dead && S.higherOks.indexOf(id) !== -1;
+            var cls = 'node';
+            if (dead) cls += ' dead';
+            else if (isLeader) cls += ' leader';
+            else if (isCand) cls += ' candidate';
+            else if (isHigher) cls += ' higher';
+            if (S.popNode === i) cls += ' pop';
+            var tag = dead ? 'DOWN' : isLeader ? 'LEADER' : isCand ? 'CAND' : isHigher ? 'OK' : 'idle';
+            var card = document.createElement('div');
+            card.className = cls;
+            card.innerHTML =
+              '<span class="crown"><i class="ti ti-crown-filled"></i></span>' +
+              '<span class="pid">P' + id + '</span>' +
+              '<span class="idnum">' + id + '</span>' +
+              '<span class="tag">' + tag + '</span>';
+            nodesEl.appendChild(card);
+          }
+          S.popNode = -1;
+        }
+        function pulseNode(idx) { S.popNode = idx; }
+
+        function render() {
+          renderNodes();
+          var chips = document.querySelectorAll('.phase-chip');
+          for (var c = 0; c < chips.length; c++) {
+            var p = +chips[c].dataset.p;
+            chips[c].classList.toggle('active', p === S.phaseN);
+            chips[c].classList.toggle('done', p < S.phaseN);
+          }
+          var kind = S.eventTag ? S.eventTag.kind : '';
+          narrEl.className = 'narration' + (kind ? ' ' + kind : '');
+          narrTxt.innerHTML = DOMPurify.sanitize(S.lastNarr || '<strong>Ready.</strong>');
+          if (S.scenario === 'free') { narrStep.textContent = 'Free play'; }
+          else { var sc = SCENARIOS[S.scenario]; narrStep.textContent = 'Step ' + S.stepIdx + ' / ' + (sc.length - 1); }
+          if (S.eventTag) { narrEv.style.display = ''; narrEv.className = 'badge event ' + S.eventTag.kind; narrEv.textContent = S.eventTag.text; }
+          else { narrEv.style.display = 'none'; }
+
+          if (S.scenario === 'free') { tlWrap.style.display = 'none'; }
+          else {
+            tlWrap.style.display = '';
+            var sc2 = SCENARIOS[S.scenario];
+            tlEl.innerHTML = '';
+            for (var j = 0; j < sc2.length; j++) {
+              var dd = document.createElement('div');
+              var cl = 'tl-dot'; if (j < S.stepIdx) cl += ' done'; if (j === S.stepIdx) cl += ' now';
+              dd.className = cl;
+              (function (idx) { dd.onclick = function () { applyStep(idx); }; })(j);
+              tlEl.appendChild(dd);
+            }
+            tlPos.textContent = (S.stepIdx + 1) + ' of ' + sc2.length;
+          }
+
+          document.getElementById('s-leader').textContent = S.leader === -1 ? '—' : ('P' + S.leader);
+          var alive = S.alive.filter(Boolean).length;
+          document.getElementById('s-alive').textContent = alive + ' / 5';
+          document.getElementById('s-elections').textContent = S.elections;
+          document.getElementById('s-msgs').textContent = S.msgs;
+
+          if (S.scenario !== 'free') {
+            var sc3 = SCENARIOS[S.scenario];
+            document.getElementById('btn-prev').disabled = S.stepIdx <= 0;
+            document.getElementById('btn-next').disabled = S.stepIdx >= sc3.length - 1;
+          }
+        }
+
+        function log(msg, color) {
+          var t = new Date(); var hh = String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0') + ':' + String(t.getSeconds()).padStart(2, '0');
+          var line = document.createElement('div'); line.style.color = color || 'var(--subtle)';
+          var ts = document.createElement('span'); ts.className = 't'; ts.textContent = hh;
+          line.appendChild(ts); line.appendChild(document.createTextNode(String(msg)));
+          logEl.insertBefore(line, logEl.firstChild);
+          while (logEl.children.length > 2) logEl.removeChild(logEl.lastChild);
+        }
+        function stripTags(html) { return DOMPurify.sanitize(String(html == null ? '' : html), { ALLOWED_TAGS: [], KEEP_CONTENT: true }); }
+        function colorForEvent(k) {
+          if (k === 'elect') return 'var(--info)';
+          if (k === 'ok') return 'var(--warning)';
+          if (k === 'coord') return 'var(--success)';
+          if (k === 'crash') return 'var(--danger)';
+          return 'var(--subtle)';
+        }
+
+        function resetState() {
+          S.alive = [true, true, true, true, true];
+          S.leader = 5; S.candidate = -1; S.higherOks = [];
+          S.phaseN = 0; S.elections = 0; S.msgs = 0;
+          S.eventTag = null; S.lastNarr = null;
+        }
+        function idxOf(id) { return IDS.indexOf(id); }
+
+        function doKill(id) {
+          var i = idxOf(id); if (i === -1) return;
+          var wasLeader = S.leader === id;
+          S.alive[i] = false;
+          if (wasLeader) { S.leader = -1; S.phaseN = 1; }
+          pulseNode(i);
+        }
+        function doStartElection(initiatorId) {
+          var i = idxOf(initiatorId); if (i === -1 || !S.alive[i]) return;
+          S.candidate = initiatorId; S.elections++;
+          S.higherOks = [];
+          S.phaseN = 2;
+          // count messages sent to higher
+          var higher = 0;
+          for (var k = 0; k < 5; k++) if (S.alive[k] && IDS[k] > initiatorId) higher++;
+          S.msgs += higher;
+          pulseNode(i);
+        }
+        function doHigherOks() {
+          if (S.candidate === -1) return;
+          S.higherOks = [];
+          for (var k = 0; k < 5; k++) {
+            if (S.alive[k] && IDS[k] > S.candidate) {
+              S.higherOks.push(IDS[k]);
+              S.msgs++; // OK reply
+            }
+          }
+          S.phaseN = 3;
+        }
+        function doTopWins(topId) {
+          var i = idxOf(topId); if (i === -1) return;
+          S.candidate = topId; S.higherOks = [];
+          S.phaseN = 4;
+          pulseNode(i);
+        }
+        function doCoordinator(leaderId) {
+          var i = idxOf(leaderId); if (i === -1) return;
+          S.leader = leaderId; S.candidate = -1; S.higherOks = [];
+          // COORDINATOR sent to all alive others
+          var others = 0;
+          for (var k = 0; k < 5; k++) if (S.alive[k] && IDS[k] !== leaderId) others++;
+          S.msgs += others;
+          S.phaseN = 5;
+          pulseNode(i);
+        }
+        function doRevive() {
+          S.alive = [true, true, true, true, true];
+        }
+
+        var SCENARIOS = {};
+
+        SCENARIOS.dies = [
+          { narr: '<strong>Ready.</strong> P1..P5 alive. P5 has the highest ID, so P5 is leader.', do: function () { resetState(); } },
+          { narr: '<strong>Step 1 — P5 crashes.</strong> The leader is gone; other processes will eventually notice the missing heartbeats.', ev: 'crash', do: function () { resetState(); doKill(5); } },
+          { narr: '<strong>Step 2 — P3 notices and starts an election.</strong> It sends <code>ELECTION</code> to every higher-ID process: P4 and (dead) P5.', ev: 'elect', do: function () { resetState(); doKill(5); doStartElection(3); } },
+          { narr: '<strong>Step 3 — P4 replies <code>OK</code>.</strong> P3 is bullied out (a higher ID is alive); P4 will take over the election.', ev: 'ok', do: function () { resetState(); doKill(5); doStartElection(3); doHigherOks(); } },
+          { narr: '<strong>Step 4 — P4 runs its own election.</strong> It messages only P5 (higher), which is dead → no one bullies P4. P4 wins by default.', ev: 'elect', do: function () { resetState(); doKill(5); doStartElection(3); doHigherOks(); doStartElection(4); doTopWins(4); } },
+          { narr: '<strong>Step 5 — P4 broadcasts <code>COORDINATOR</code>.</strong> P1, P2, P3 update their leader to P4. Election over.', ev: 'coord', do: function () { resetState(); doKill(5); doStartElection(3); doHigherOks(); doStartElection(4); doTopWins(4); doCoordinator(4); } },
+        ];
+
+        SCENARIOS.cascade = [
+          { narr: '<strong>Ready.</strong> P5 is leader. Two failures are about to happen back-to-back.', do: function () { resetState(); } },
+          { narr: '<strong>Step 1 — P5 crashes, then P4 crashes.</strong> The two highest IDs are gone; P1, P2, P3 are alive.', ev: 'crash', do: function () { resetState(); doKill(5); doKill(4); } },
+          { narr: '<strong>Step 2 — P1 notices and starts an election.</strong> It messages every higher ID: P2, P3, P4 (dead), P5 (dead).', ev: 'elect', do: function () { resetState(); doKill(5); doKill(4); doStartElection(1); } },
+          { narr: '<strong>Step 3 — P2 and P3 both reply <code>OK</code>.</strong> P1 backs off; the higher-ID responders will fight it out themselves.', ev: 'ok', do: function () { resetState(); doKill(5); doKill(4); doStartElection(1); doHigherOks(); } },
+          { narr: '<strong>Step 4 — P3 runs an election.</strong> It messages P4 and P5 — both dead. No higher ID is alive; P3 wins.', ev: 'elect', do: function () { resetState(); doKill(5); doKill(4); doStartElection(1); doHigherOks(); doStartElection(3); doTopWins(3); } },
+          { narr: '<strong>Step 5 — P3 broadcasts <code>COORDINATOR</code>.</strong> P1 and P2 update. The highest *alive* ID always wins, no matter how many died.', ev: 'coord', do: function () { resetState(); doKill(5); doKill(4); doStartElection(1); doHigherOks(); doStartElection(3); doTopWins(3); doCoordinator(3); } },
+        ];
+
+        SCENARIOS.return = [
+          { narr: '<strong>Ready.</strong> P5 is leader.', do: function () { resetState(); } },
+          { narr: '<strong>Step 1 — P5 crashes and P4 is elected leader.</strong> The election ran; P4 is now in charge.', ev: 'coord', do: function () { resetState(); doKill(5); doStartElection(3); doHigherOks(); doStartElection(4); doTopWins(4); doCoordinator(4); } },
+          { narr: '<strong>Step 2 — P5 restarts.</strong> The old top-ID is back online. It will not silently accept P4 as leader — it knows it has a higher ID.', ev: 'crash', do: function () { resetState(); doKill(5); doStartElection(3); doHigherOks(); doStartElection(4); doTopWins(4); doCoordinator(4); doRevive(); } },
+          { narr: '<strong>Step 3 — P5 immediately starts an election.</strong> The rule is "highest ID is always leader," so P5 asserts itself.', ev: 'elect', do: function () { resetState(); doKill(5); doStartElection(3); doHigherOks(); doStartElection(4); doTopWins(4); doCoordinator(4); doRevive(); doStartElection(5); } },
+          { narr: '<strong>Step 4 — Nobody is higher than P5.</strong> No <code>OK</code> arrives, so P5 wins by default and re-takes the crown.', ev: 'elect', do: function () { resetState(); doKill(5); doStartElection(3); doHigherOks(); doStartElection(4); doTopWins(4); doCoordinator(4); doRevive(); doStartElection(5); doTopWins(5); } },
+          { narr: '<strong>Step 5 — P5 broadcasts <code>COORDINATOR</code>.</strong> P4 steps down; P5 is leader again. The "bully" name is earned: just by returning, the top ID disrupts a working cluster.', ev: 'coord', do: function () { resetState(); doKill(5); doStartElection(3); doHigherOks(); doStartElection(4); doTopWins(4); doCoordinator(4); doRevive(); doStartElection(5); doTopWins(5); doCoordinator(5); } },
+        ];
+
+        function applyStep(targetIdx) {
+          var sc = SCENARIOS[S.scenario]; if (!sc) return;
+          for (var i = 0; i <= targetIdx; i++) {
+            var st = sc[i]; S.eventTag = null; S.lastNarr = null; st.do();
+            if (i === targetIdx) {
+              if (S.lastNarr === null) S.lastNarr = st.narr;
+              if (st.ev && !S.eventTag) S.eventTag = { kind: st.ev, text: evLabel(st.ev) };
+            }
+          }
+          S.stepIdx = targetIdx; render();
+        }
+        function evLabel(k) { if (k === 'elect') return 'election'; if (k === 'ok') return 'ok'; if (k === 'coord') return 'coordinator'; if (k === 'crash') return 'crash'; return k; }
+        function stepNext() {
+          var sc = SCENARIOS[S.scenario];
+          if (S.stepIdx < sc.length - 1) { applyStep(S.stepIdx + 1); log(stripTags(sc[S.stepIdx].narr), colorForEvent(S.eventTag && S.eventTag.kind)); }
+          else { setPlaying(false); }
+        }
+        function stepPrev() { if (S.stepIdx > 0) applyStep(S.stepIdx - 1); }
+        var playTimer = null;
+        function setPlaying(on) {
+          S.playing = on;
+          document.getElementById('play-label').textContent = on ? 'Pause' : 'Play';
+          document.getElementById('play-icon').className = on ? 'ti ti-player-pause' : 'ti ti-player-play';
+          if (playTimer) { clearInterval(playTimer); playTimer = null; }
+          if (on) playTimer = setInterval(function () {
+            var sc = SCENARIOS[S.scenario]; if (!sc) { setPlaying(false); return; }
+            if (S.stepIdx < sc.length - 1) stepNext(); else setPlaying(false);
+          }, 1700);
+        }
+
+        function pickScenario(name) {
+          S.scenario = name;
+          var tabs = document.querySelectorAll('.tab');
+          for (var i = 0; i < tabs.length; i++) tabs[i].classList.toggle('active', tabs[i].dataset.scenario === name);
+          setPlaying(false);
+          var stepCtl = document.getElementById('step-controls');
+          var fp = document.getElementById('free-play');
+          if (name === 'free') {
+            stepCtl.style.display = 'none'; fp.style.display = '';
+            resetState(); S.lastNarr = '<strong>Free play.</strong> Crash any node, then start an election from anyone you like. Watch the algorithm converge on the highest alive ID.'; render();
+          } else {
+            stepCtl.style.display = ''; fp.style.display = 'none';
+            applyStep(0);
+          }
+        }
+
+        function fpCrash(id) {
+          var i = idxOf(id); if (i === -1 || !S.alive[i]) return;
+          var wasLeader = S.leader === id;
+          doKill(id);
+          S.lastNarr = '<strong>P' + id + ' crashed.</strong>' + (wasLeader ? ' The leader is gone — start an election to pick a successor.' : ' Not the leader, so nothing else has to happen.');
+          S.eventTag = { kind: 'crash', text: 'crash' };
+          log('P' + id + ' crashed', 'var(--danger)');
+          render();
+        }
+        function fpRevive() {
+          doRevive();
+          S.lastNarr = '<strong>All processes revived.</strong> The leader is still ' + (S.leader === -1 ? 'unset' : 'P' + S.leader) + '. Start an election to see Bully reassert highest-ID-wins.';
+          S.eventTag = null;
+          log('all processes revived', 'var(--success)');
+          render();
+        }
+        function fpElect(id) {
+          var i = idxOf(id); if (i === -1 || !S.alive[i]) return;
+          // Find highest alive
+          var top = -1;
+          for (var k = 0; k < 5; k++) if (S.alive[k] && IDS[k] > top) top = IDS[k];
+          // Bookkeeping: count messages similar to scripted
+          doStartElection(id); doHigherOks();
+          if (top !== id) { doStartElection(top); doTopWins(top); }
+          else { doTopWins(top); }
+          doCoordinator(top);
+          S.lastNarr = '<strong>Election from P' + id + ' → P' + top + ' wins.</strong> No matter where the election starts, Bully converges on the highest alive ID (now P' + top + ').';
+          S.eventTag = { kind: 'coord', text: 'coordinator' };
+          log('P' + id + ' started election → P' + top + ' is leader', 'var(--success)');
+          render();
+        }
+        function fpReset() { resetState(); S.lastNarr = '<strong>Reset.</strong>'; S.eventTag = null; render(); }
+
+        var tabs = document.querySelectorAll('.tab');
+        for (var i = 0; i < tabs.length; i++) (function (t) { t.addEventListener('click', function () { pickScenario(t.dataset.scenario); }); })(tabs[i]);
+        document.getElementById('btn-prev').addEventListener('click', stepPrev);
+        document.getElementById('btn-next').addEventListener('click', stepNext);
+        document.getElementById('btn-play').addEventListener('click', function () { setPlaying(!S.playing); });
+        document.getElementById('btn-restart').addEventListener('click', function () { setPlaying(false); applyStep(0); });
+        document.getElementById('fp-reset').addEventListener('click', fpReset);
+        document.querySelectorAll('.cmd-btn').forEach(function (b) {
+          b.addEventListener('click', function () {
+            var act = b.dataset.act;
+            if (act.indexOf('crash-') === 0) fpCrash(+act.slice(6));
+            else if (act.indexOf('elect-') === 0) fpElect(+act.slice(6));
+            else if (act === 'revive') fpRevive();
+          });
+        });
+        document.addEventListener('keydown', function (e) {
+          if (S.scenario === 'free') return;
+          if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); stepNext(); }
+          else if (e.key === 'ArrowLeft') { e.preventDefault(); stepPrev(); }
+        });
+
+        pickScenario('dies');
+        function postHeight() { parent.postMessage({ type: 'prototype:height', height: document.body.scrollHeight }, '*'); }
+        if (typeof ResizeObserver !== 'undefined') new ResizeObserver(postHeight).observe(document.body);
+        postHeight();
+      })();
+    </script>
+  </body>
+</html>
