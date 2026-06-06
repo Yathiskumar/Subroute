@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Timsort</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root{--bg:#0c0d10;--surface:#14161a;--elevated:#1a1d22;--border:#232830;--border-strong:#2d333d;--fg:#e8e4dc;--muted:#9099a8;--subtle:#6b7280;--accent:#fb863a;--success:#5cc66f;--success-bg:rgba(92,198,111,0.14);--success-bd:rgba(92,198,111,0.45);--danger:#f06868;--danger-bg:rgba(240,104,104,0.14);--danger-bd:rgba(240,104,104,0.45);--warning:#f0b568;--warning-bg:rgba(240,181,104,0.14);--warning-bd:rgba(240,181,104,0.45);--info:#5e9ff6;--info-bg:rgba(94,159,246,0.16);--info-bd:rgba(94,159,246,0.45);--purple:#a78bfa;--purple-bg:rgba(167,139,250,0.16);--purple-bd:rgba(167,139,250,0.45);--mono:ui-monospace,"JetBrains Mono","SF Mono",Menlo,monospace;--sans:-apple-system,BlinkMacSystemFont,"Inter",system-ui,sans-serif;--radius-lg:14px;--radius-md:8px;--radius-sm:6px;}
+      *{box-sizing:border-box;}html,body{margin:0;padding:0;min-height:100%;background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:13px;}
+      body{padding:18px 18px 24px;background-image:radial-gradient(1200px 600px at 50% -200px,rgba(251,134,58,0.06),transparent),linear-gradient(to right,rgba(255,255,255,0.020) 1px,transparent 1px),linear-gradient(to bottom,rgba(255,255,255,0.020) 1px,transparent 1px);background-size:auto,40px 40px,40px 40px;}
+      .container{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:14px;}.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);}
+      button{background:var(--elevated);color:var(--fg);font:500 12px/1 var(--sans);border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;padding:9px 12px;transition:filter 150ms ease,transform 100ms ease,background 150ms ease,border-color 150ms ease;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;}
+      button:hover:not(:disabled){border-color:var(--border-strong);background:var(--surface);}button:active:not(:disabled){transform:scale(0.97);}button.primary{background:var(--accent);color:#1a1003;border-color:transparent;font-weight:600;}button.primary:hover:not(:disabled){filter:brightness(1.08);}button.ghost{background:transparent;}button i{font-size:14px;}input[type="range"]{accent-color:var(--accent);}
+      .hero{background:linear-gradient(180deg,rgba(255,255,255,0.014),transparent),var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px 12px;position:relative;overflow:hidden;}
+      .hero::before{content:"";position:absolute;inset:0;background:radial-gradient(420px 240px at 50% 0%,rgba(94,159,246,0.05),transparent 60%);pointer-events:none;}
+      .hero-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;position:relative;z-index:1;flex-wrap:wrap;gap:6px;}
+      .ttl{font:600 11.5px var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:0.4px;}
+      .legend{font-size:11px;color:var(--muted);display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+      .legend .sw{display:inline-block;width:10px;height:10px;border-radius:3px;vertical-align:-1px;margin-right:4px;}
+      .sw.detect{background:var(--warning-bg);border:1px solid var(--warning-bd);}.sw.extend{background:var(--purple-bg);border:1px solid var(--purple-bd);}.sw.merge{background:var(--danger-bg);border:1px solid var(--danger-bd);}.sw.run{background:var(--info-bg);border:1px solid var(--info-bd);}.sw.sorted{background:var(--success-bg);border:1px solid var(--success-bd);}
+      .runline{font:500 11px var(--mono);color:var(--subtle);min-height:18px;margin-bottom:4px;position:relative;z-index:1;}
+      .bars{display:flex;align-items:flex-end;justify-content:center;gap:6px;height:200px;padding:0 4px;position:relative;z-index:1;}
+      .bar{border-radius:6px 6px 0 0;display:flex;align-items:flex-start;justify-content:center;padding-top:4px;font:600 11px var(--mono);transition:height 240ms cubic-bezier(0.4,0,0.2,1),background 200ms ease,border-color 200ms ease,color 200ms ease;border:1px solid;}
+      .bar.run0{background:var(--info-bg);border-color:var(--info-bd);color:var(--info);}
+      .bar.run1{background:rgba(92,198,111,0.10);border-color:rgba(92,198,111,0.35);color:var(--success);}
+      .bar.run2{background:rgba(167,139,250,0.10);border-color:rgba(167,139,250,0.35);color:var(--purple);}
+      .bar.run3{background:rgba(240,181,104,0.10);border-color:rgba(240,181,104,0.35);color:var(--warning);}
+      .bar.run4{background:rgba(240,104,104,0.10);border-color:rgba(240,104,104,0.35);color:var(--danger);}
+      .bar.idle{background:rgba(255,255,255,0.02);border-color:var(--border);color:var(--subtle);}
+      .bar.detect{background:var(--warning-bg);border-color:var(--warning-bd);color:var(--warning);}
+      .bar.extend{background:var(--purple-bg);border-color:var(--purple-bd);color:var(--purple);}
+      .bar.merge{background:var(--danger-bg);border-color:var(--danger-bd);color:var(--danger);}
+      .bar.sorted{background:var(--success-bg);border-color:var(--success-bd);color:var(--success);}
+      .ruler{display:flex;justify-content:center;gap:6px;padding:6px 4px 0;font:500 10.5px var(--mono);color:var(--subtle);position:relative;z-index:1;}.ruler .r{text-align:center;}
+      .narration{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 14px;position:relative;overflow:hidden;transition:border-color 350ms ease;}
+      .narration::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--border-strong);transition:background 350ms ease;}
+      .narration.detect::before{background:var(--warning);}.narration.extend::before{background:var(--purple);}.narration.merge::before{background:var(--danger);}.narration.sorted::before{background:var(--success);}
+      .narr-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;}
+      .badge{font:600 10.5px var(--mono);padding:4px 9px;border-radius:999px;letter-spacing:0.4px;text-transform:uppercase;display:inline-flex;align-items:center;gap:5px;border:1px solid var(--border);color:var(--muted);background:var(--elevated);}
+      .badge.step{color:var(--fg);border-color:var(--border-strong);}
+      .badge.phase{color:var(--accent);border-color:rgba(251,134,58,0.4);background:transparent;}
+      .narr-text{margin:0;font-size:14px;line-height:1.55;color:var(--fg);}.narr-text code{font-family:var(--mono);background:rgba(255,255,255,0.06);padding:1px 6px;border-radius:4px;color:var(--accent);font-size:12px;}.narr-text strong{color:var(--fg);font-weight:600;}
+      .controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);}.controls .spacer{flex:1;}.speed-wrap{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font:500 11px var(--mono);}.speed-wrap input[type="range"]{width:90px;}.kbd{font-family:var(--mono);font-size:10.5px;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,0.06);color:var(--muted);border:1px solid var(--border);}.hint{font:11px var(--mono);color:var(--subtle);display:inline-flex;align-items:center;gap:5px;}
+      .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:10px 12px;}.stat .label{font:500 10.5px var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:0.4px;}.stat .value{font:600 22px var(--mono);margin-top:4px;line-height:1;}
+      .pseudo-row{display:grid;grid-template-columns:1.2fr 1fr;gap:10px;}
+      .pseudo{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 14px;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--muted);}.pseudo .pl{border-radius:5px;padding:1px 6px;transition:background 200ms ease,color 200ms ease;}.pseudo .pl.active{background:var(--info-bg);color:var(--info);}
+      .progress-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 14px;display:flex;flex-direction:column;gap:8px;}.progress-card .row{display:flex;justify-content:space-between;align-items:center;}.progress-card .lbl{font:500 10.5px var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:0.4px;}.progress-card .val{font:600 14px var(--mono);color:var(--fg);}
+      .progress-bar{height:6px;background:var(--elevated);border-radius:99px;overflow:hidden;}.progress-bar .fill{height:100%;background:var(--accent);border-radius:99px;transition:width 240ms ease;}
+      @media (max-width:540px){.stats{grid-template-columns:repeat(2,1fr);}.pseudo-row{grid-template-columns:1fr;}.bars{height:160px;}}
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2 class="sr-only">Interactive Timsort. Detect runs already in order, extend short ones with insertion, then merge runs.</h2>
+      <div class="hero" aria-label="Timsort bars">
+        <div class="hero-head">
+          <span class="ttl">Array · n=12 · minrun=4</span>
+          <span class="legend">
+            <span><span class="sw run"></span>run (colored)</span>
+            <span><span class="sw detect"></span>detecting</span>
+            <span><span class="sw extend"></span>extending</span>
+            <span><span class="sw merge"></span>merging</span>
+            <span><span class="sw sorted"></span>done</span>
+          </span>
+        </div>
+        <div id="runline" class="runline"></div>
+        <div id="bars" class="bars"></div>
+        <div id="ruler" class="ruler"></div>
+      </div>
+      <div id="narration" class="narration">
+        <div class="narr-meta"><span id="narr-step" class="badge step">Step 0 / 0</span><span id="narr-phase" class="badge phase">Find runs</span></div>
+        <p id="narr-text" class="narr-text"><strong>Press Play.</strong> Timsort finds ascending runs, extends short ones, then merges. Already-sorted runs are free.</p>
+      </div>
+      <div class="controls">
+        <button id="btn-prev"><i class="ti ti-chevron-left"></i>Back</button>
+        <button id="btn-play" class="primary"><i id="play-icon" class="ti ti-player-play"></i><span id="play-label">Play</span></button>
+        <button id="btn-next"><i class="ti ti-chevron-right"></i>Step</button>
+        <button id="btn-shuffle" class="ghost"><i class="ti ti-refresh"></i>Shuffle</button>
+        <button id="btn-runs" class="ghost"><i class="ti ti-stairs"></i>Runny data</button>
+        <span class="spacer"></span>
+        <span class="speed-wrap"><span>Speed</span><input id="speed" type="range" min="1" max="10" step="1" value="5" /></span>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="label">runs found</div><div id="s-runs" class="value" style="color:var(--info)">0</div></div>
+        <div class="stat"><div class="label">merges done</div><div id="s-merge" class="value" style="color:var(--danger)">0</div></div>
+        <div class="stat"><div class="label">phase</div><div id="s-phase" class="value" style="font-size:14px;padding-top:4px">Find runs</div></div>
+        <div class="stat"><div class="label">progress</div><div id="s-prog" class="value" style="color:var(--accent)">0%</div></div>
+      </div>
+      <div class="pseudo-row">
+        <div class="pseudo">
+          <div id="pl-0" class="pl">scan for natural runs (ascending)</div>
+          <div id="pl-1" class="pl" style="padding-left:14px">if a run is too short</div>
+          <div id="pl-2" class="pl" style="padding-left:28px">extend it with insertion sort</div>
+          <div id="pl-3" class="pl">while more than one run remains:</div>
+          <div id="pl-4" class="pl" style="padding-left:14px">merge two adjacent runs</div>
+          <div id="pl-5" class="pl">one sorted run left → done</div>
+        </div>
+        <div class="progress-card">
+          <div class="row"><span class="lbl">timeline</span><span class="val" id="tl-pos">0 / 0</span></div>
+          <div class="progress-bar"><div id="prog-fill" class="fill" style="width:0%"></div></div>
+          <div class="hint"><span class="kbd">←</span><span class="kbd">→</span><span class="kbd">space</span> &nbsp;walk steps</div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      (function(){
+        var barsEl=document.getElementById('bars'),rulerEl=document.getElementById('ruler'),runlineEl=document.getElementById('runline');
+        var narrEl=document.getElementById('narration'),narrText=document.getElementById('narr-text'),narrStep=document.getElementById('narr-step'),narrPhase=document.getElementById('narr-phase');
+        var sRuns=document.getElementById('s-runs'),sMerge=document.getElementById('s-merge'),sPhase=document.getElementById('s-phase'),sProg=document.getElementById('s-prog');
+        var tlPos=document.getElementById('tl-pos'),progFill=document.getElementById('prog-fill');
+        var plines=[0,1,2,3,4,5].map(function(i){return document.getElementById('pl-'+i);});
+        var btnPrev=document.getElementById('btn-prev'),btnPlay=document.getElementById('btn-play'),btnNext=document.getElementById('btn-next');
+        var btnShuffle=document.getElementById('btn-shuffle'),btnRuns=document.getElementById('btn-runs');
+        var playIcon=document.getElementById('play-icon'),playLabel=document.getElementById('play-label'),speedEl=document.getElementById('speed');
+
+        var arr=[],steps=[],idx=0,playing=false,timer=null,maxVal=100,N=12,MINRUN=4;
+        function randArr(){ var a=[]; for(var i=0;i<N;i++) a.push(Math.floor(Math.random()*85)+15); return a; }
+        function runnyArr(){ return [22,38,55, 18,29,41,60, 25,33, 70,82,95].slice(0,N); }
+
+        function buildSteps(a){
+          var s=[],data=a.slice(),n=data.length,runsFound=0,mergesDone=0;
+          var runs=[];
+          function snap(o){
+            o.arr=data.slice(); o.runs=runs.map(function(r){return {s:r.s,e:r.e};});
+            o.runsFound=runsFound; o.mergesDone=mergesDone;
+            if(o.detect===undefined) o.detect=[]; if(o.extend===undefined) o.extend=[];
+            if(o.mergeRange===undefined) o.mergeRange=null; if(o.line===undefined) o.line=-1; if(o.kind===undefined) o.kind='';
+            if(o.sortedSpans===undefined) o.sortedSpans=runs.map(function(r){return {s:r.s,e:r.e};});
+            s.push(o);
+          }
+          function rangeArr(a2,b2){ var r=[]; for(var k=a2;k<=b2;k++) r.push(k); return r; }
+          function insertionSort(d,lo,hi){ for(var x=lo+1;x<=hi;x++){ var key=d[x],y=x-1; while(y>=lo && d[y]>key){ d[y+1]=d[y]; y--; } d[y+1]=key; } }
+          function merge(d,lo,mid,hi){ var L=d.slice(lo,mid+1),R=d.slice(mid+1,hi+1); var p=0,q=0,k=lo; while(p<L.length&&q<R.length){ if(L[p]<=R[q]) d[k++]=L[p++]; else d[k++]=R[q++]; } while(p<L.length) d[k++]=L[p++]; while(q<R.length) d[k++]=R[q++]; }
+          snap({phase:'Find runs',line:0,kind:'',msg:'Scan for ascending runs — stretches already in order.'});
+          var i=0;
+          while(i<n){
+            var start=i, j=i+1;
+            while(j<n && data[j]>=data[j-1]) j++;
+            var end=j-1;
+            runs.push({s:start,e:end}); runsFound++;
+            snap({phase:'Find runs',detect:rangeArr(start,end),line:0,kind:'detect',msg:'Found ascending run at positions <code>'+start+'–'+end+'</code>: ['+data.slice(start,end+1).join(', ')+'].'});
+            var len=end-start+1;
+            if(len<MINRUN && end<n-1){
+              var newEnd=Math.min(start+MINRUN-1,n-1);
+              snap({phase:'Extend',extend:rangeArr(start,newEnd),line:1,kind:'extend',msg:'Run length <code>'+len+'</code> &lt; minrun <code>'+MINRUN+'</code> → extend with insertion sort.'});
+              insertionSort(data,start,newEnd);
+              runs[runs.length-1].e=newEnd;
+              snap({phase:'Extend',extend:rangeArr(start,newEnd),line:2,kind:'extend',msg:'Extended run sorted: ['+data.slice(start,newEnd+1).join(', ')+'].'});
+              i=newEnd+1;
+            } else { i=end+1; }
+          }
+          snap({phase:'Merge',line:3,kind:'',msg:'<code>'+runs.length+'</code> sorted runs found — now merge them.'});
+          while(runs.length>1){
+            var L=runs[0],R=runs[1];
+            snap({phase:'Merge',mergeRange:{s:L.s,e:R.e},line:4,kind:'merge',msg:'Merge runs ['+data.slice(L.s,L.e+1).join(',')+'] and ['+data.slice(R.s,R.e+1).join(',')+'].'});
+            merge(data,L.s,L.e,R.e); mergesDone++;
+            runs.splice(0,2,{s:L.s,e:R.e});
+            snap({phase:'Merge',sortedSpans:runs.map(function(r){return {s:r.s,e:r.e};}),line:4,kind:'merge',msg:'Merged into one sorted run: ['+data.slice(L.s,R.e+1).join(', ')+'].'});
+          }
+          snap({phase:'Done',line:5,kind:'sorted',done:true,msg:'<strong>Sorted.</strong> One run remains — the array is fully sorted.'});
+          return s;
+        }
+
+        function barMetrics(){ var n=arr.length,avail=barsEl.clientWidth||720,w=Math.floor((avail-(n-1)*6)/n); if(!w||w<10) w=42; return {w:w,gap:6}; }
+        function runIndexOf(i,spans){ for(var r=0;r<spans.length;r++){ if(i>=spans[r].s && i<=spans[r].e) return r; } return -1; }
+
+        function render(st){
+          barsEl.innerHTML=''; rulerEl.innerHTML='';
+          var n=st.arr.length,m=barMetrics();
+          var spans=st.sortedSpans||st.runs;
+          for(var i=0;i<n;i++){
+            var role='idle';
+            var ri=runIndexOf(i,spans);
+            if(st.done) role='sorted';
+            else if(st.mergeRange && i>=st.mergeRange.s && i<=st.mergeRange.e) role='merge';
+            else if(st.extend.indexOf(i)>=0) role='extend';
+            else if(st.detect.indexOf(i)>=0) role='detect';
+            else if(ri>=0) role='run'+(ri%5);
+            var h=Math.round((st.arr[i]/maxVal)*162)+22;
+            var bar=document.createElement('div');
+            bar.className='bar '+role;
+            bar.style.cssText='width:'+m.w+'px;height:'+h+'px;';
+            bar.textContent=st.arr[i];
+            barsEl.appendChild(bar);
+            var r=document.createElement('div'); r.className='r'; r.style.width=m.w+'px'; r.textContent=i; rulerEl.appendChild(r);
+          }
+          var spanCount=spans.length;
+          runlineEl.textContent = (st.phase==='Find runs'||st.phase==='Extend') ? 'Each color band is one detected run' : (spanCount>1 ? spanCount+' runs remaining to merge' : (st.done?'One sorted run — done':''));
+          narrText.innerHTML=st.msg;
+          narrStep.textContent='Step '+idx+' / '+(steps.length-1);
+          narrPhase.textContent=st.phase;
+          narrEl.classList.remove('detect','extend','merge','sorted');
+          if(st.kind) narrEl.classList.add(st.kind);
+          plines.forEach(function(p,k){ p.classList.toggle('active', k===st.line); });
+          sPhase.textContent=st.phase; sRuns.textContent=st.runsFound; sMerge.textContent=st.mergesDone;
+          var pct=steps.length>1?Math.round((idx/(steps.length-1))*100):0;
+          sProg.textContent=pct+'%'; progFill.style.width=pct+'%'; tlPos.textContent=idx+' / '+(steps.length-1);
+        }
+
+        function reset(a){ arr=a; maxVal=Math.max.apply(null,arr); steps=buildSteps(arr); idx=0; stop(); render(steps[0]); }
+        function next(){ if(idx>=steps.length-1){stop();return false;} idx++; render(steps[idx]); if(idx>=steps.length-1) stop(); return true; }
+        function prev(){ if(idx<=0) return; idx--; render(steps[idx]); }
+        function delay(){ return 1100-(parseInt(speedEl.value,10)*95); }
+        function play(){ if(idx>=steps.length-1) reset(arr.length?arr.slice():randArr()); playing=true; playLabel.textContent='Pause'; playIcon.className='ti ti-player-pause'; loop(); }
+        function loop(){ if(!playing) return; if(!next()){ stop(); return; } timer=setTimeout(loop,delay()); }
+        function stop(){ playing=false; if(timer){clearTimeout(timer); timer=null;} playLabel.textContent='Play'; playIcon.className='ti ti-player-play'; }
+
+        btnPlay.addEventListener('click',function(){ playing?stop():play(); });
+        btnNext.addEventListener('click',function(){ stop(); next(); });
+        btnPrev.addEventListener('click',function(){ stop(); prev(); });
+        btnShuffle.addEventListener('click',function(){ reset(randArr()); });
+        btnRuns.addEventListener('click',function(){ reset(runnyArr()); });
+        window.addEventListener('keydown',function(e){ if(e.key==='ArrowLeft'){stop();prev();} else if(e.key==='ArrowRight'){stop();next();} else if(e.key===' '){e.preventDefault(); playing?stop():play();} });
+        window.addEventListener('resize',function(){ render(steps[idx]); });
+        reset(randArr());
+
+        function postHeight(){ try{ parent.postMessage({type:'prototype:height',height:document.body.scrollHeight},'*'); }catch(e){} }
+        new ResizeObserver(postHeight).observe(document.body); postHeight();
+      })();
+    </script>
+  </body>
+</html>

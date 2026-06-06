@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Heap Sort</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root{--bg:#0c0d10;--surface:#14161a;--elevated:#1a1d22;--border:#232830;--border-strong:#2d333d;--fg:#e8e4dc;--muted:#9099a8;--subtle:#6b7280;--accent:#fb863a;--success:#5cc66f;--success-bg:rgba(92,198,111,0.14);--success-bd:rgba(92,198,111,0.45);--danger:#f06868;--danger-bg:rgba(240,104,104,0.14);--danger-bd:rgba(240,104,104,0.45);--warning:#f0b568;--warning-bg:rgba(240,181,104,0.14);--warning-bd:rgba(240,181,104,0.45);--info:#5e9ff6;--info-bg:rgba(94,159,246,0.16);--info-bd:rgba(94,159,246,0.45);--purple:#a78bfa;--purple-bg:rgba(167,139,250,0.16);--purple-bd:rgba(167,139,250,0.45);--mono:ui-monospace,"JetBrains Mono","SF Mono",Menlo,monospace;--sans:-apple-system,BlinkMacSystemFont,"Inter",system-ui,sans-serif;--radius-lg:14px;--radius-md:8px;--radius-sm:6px;}
+      *{box-sizing:border-box;}html,body{margin:0;padding:0;min-height:100%;background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:13px;}
+      body{padding:18px 18px 24px;background-image:radial-gradient(1200px 600px at 50% -200px,rgba(251,134,58,0.06),transparent),linear-gradient(to right,rgba(255,255,255,0.020) 1px,transparent 1px),linear-gradient(to bottom,rgba(255,255,255,0.020) 1px,transparent 1px);background-size:auto,40px 40px,40px 40px;}
+      .container{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:14px;}.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);}
+      button{background:var(--elevated);color:var(--fg);font:500 12px/1 var(--sans);border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;padding:9px 12px;transition:filter 150ms ease,transform 100ms ease,background 150ms ease,border-color 150ms ease;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;}
+      button:hover:not(:disabled){border-color:var(--border-strong);background:var(--surface);}button:active:not(:disabled){transform:scale(0.97);}button.primary{background:var(--accent);color:#1a1003;border-color:transparent;font-weight:600;}button.primary:hover:not(:disabled){filter:brightness(1.08);}button.ghost{background:transparent;}button i{font-size:14px;}input[type="range"]{accent-color:var(--accent);}
+      .hero{background:linear-gradient(180deg,rgba(255,255,255,0.014),transparent),var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px 14px;position:relative;overflow:hidden;}
+      .hero::before{content:"";position:absolute;inset:0;background:radial-gradient(420px 240px at 50% 0%,rgba(94,159,246,0.05),transparent 60%);pointer-events:none;}
+      .hero-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;position:relative;z-index:1;}
+      .ttl{font:600 11.5px var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:0.4px;}
+      .legend{font-size:11px;color:var(--muted);display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+      .legend .sw{display:inline-block;width:10px;height:10px;border-radius:3px;vertical-align:-1px;margin-right:4px;}
+      .sw.heap{background:var(--info-bg);border:1px solid var(--info-bd);}.sw.focus{background:var(--purple-bg);border:1px solid var(--purple-bd);}.sw.cmp{background:var(--warning-bg);border:1px solid var(--warning-bd);}.sw.swap{background:var(--danger-bg);border:1px solid var(--danger-bd);}.sw.sorted{background:var(--success-bg);border:1px solid var(--success-bd);}
+      .tree-wrap{position:relative;z-index:1;}
+      .tree-wrap svg{display:block;width:100%;height:auto;}
+      .bars{display:flex;align-items:flex-end;justify-content:center;gap:7px;height:140px;padding:0 4px;margin-top:6px;position:relative;z-index:1;}
+      .bar{border-radius:6px 6px 0 0;display:flex;align-items:flex-start;justify-content:center;padding-top:5px;font:600 12px var(--mono);transition:height 240ms cubic-bezier(0.4,0,0.2,1),background 200ms ease,border-color 200ms ease,color 200ms ease;border:1px solid;}
+      .bar.heap{background:var(--info-bg);border-color:var(--info-bd);color:var(--info);}
+      .bar.focus{background:var(--purple-bg);border-color:var(--purple-bd);color:var(--purple);}
+      .bar.cmp{background:var(--warning-bg);border-color:var(--warning-bd);color:var(--warning);}
+      .bar.swap{background:var(--danger-bg);border-color:var(--danger-bd);color:var(--danger);animation:pop 0.32s cubic-bezier(0.34,1.56,0.64,1);}
+      .bar.sorted{background:var(--success-bg);border-color:var(--success-bd);color:var(--success);}
+      .bar.outside{background:rgba(255,255,255,0.02);border-color:var(--border);color:var(--subtle);opacity:0.4;}
+      @keyframes pop{from{transform:scale(0.92);}50%{transform:scale(1.08);}to{transform:scale(1);}}
+      .ruler{display:flex;justify-content:center;gap:7px;padding:6px 4px 0;font:500 10.5px var(--mono);color:var(--subtle);position:relative;z-index:1;}.ruler .r{text-align:center;}
+      .narration{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 14px;position:relative;overflow:hidden;transition:border-color 350ms ease;}
+      .narration::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--border-strong);transition:background 350ms ease;}
+      .narration.cmp::before{background:var(--warning);}.narration.focus::before{background:var(--purple);}.narration.swap::before{background:var(--danger);}.narration.lock::before,.narration.sorted::before{background:var(--success);}
+      .narr-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;}
+      .badge{font:600 10.5px var(--mono);padding:4px 9px;border-radius:999px;letter-spacing:0.4px;text-transform:uppercase;display:inline-flex;align-items:center;gap:5px;border:1px solid var(--border);color:var(--muted);background:var(--elevated);}
+      .badge.step{color:var(--fg);border-color:var(--border-strong);}
+      .badge.event.cmp{color:var(--warning);border-color:var(--warning-bd);background:transparent;}.badge.event.focus{color:var(--purple);border-color:var(--purple-bd);background:transparent;}.badge.event.swap{color:var(--danger);border-color:var(--danger-bd);background:transparent;}.badge.event.lock{color:var(--success);border-color:var(--success-bd);background:transparent;}
+      .badge.phase{color:var(--accent);border-color:rgba(251,134,58,0.4);background:transparent;}
+      .narr-text{margin:0;font-size:14px;line-height:1.55;color:var(--fg);}.narr-text code{font-family:var(--mono);background:rgba(255,255,255,0.06);padding:1px 6px;border-radius:4px;color:var(--accent);font-size:12px;}.narr-text strong{color:var(--fg);font-weight:600;}
+      .controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);}.controls .spacer{flex:1;}.speed-wrap{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font:500 11px var(--mono);}.speed-wrap input[type="range"]{width:90px;}.kbd{font-family:var(--mono);font-size:10.5px;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,0.06);color:var(--muted);border:1px solid var(--border);}.hint{font:11px var(--mono);color:var(--subtle);display:inline-flex;align-items:center;gap:5px;}
+      .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:10px 12px;}.stat .label{font:500 10.5px var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:0.4px;}.stat .value{font:600 22px var(--mono);margin-top:4px;line-height:1;}
+      .pseudo-row{display:grid;grid-template-columns:1.2fr 1fr;gap:10px;}
+      .pseudo{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 14px;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--muted);}.pseudo .pl{border-radius:5px;padding:1px 6px;transition:background 200ms ease,color 200ms ease;}.pseudo .pl.active{background:var(--info-bg);color:var(--info);}
+      .progress-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 14px;display:flex;flex-direction:column;gap:8px;}.progress-card .row{display:flex;justify-content:space-between;align-items:center;}.progress-card .lbl{font:500 10.5px var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:0.4px;}.progress-card .val{font:600 14px var(--mono);color:var(--fg);}
+      .progress-bar{height:6px;background:var(--elevated);border-radius:99px;overflow:hidden;}.progress-bar .fill{height:100%;background:var(--accent);border-radius:99px;transition:width 240ms ease;}
+      @media (max-width:540px){.stats{grid-template-columns:repeat(2,1fr);}.pseudo-row{grid-template-columns:1fr;}.bars{height:110px;}}
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2 class="sr-only">Interactive heap sort. Build a max-heap, then repeatedly swap the root (max) to the end and sift the new root down.</h2>
+      <div class="hero" aria-label="Heap sort tree and bars">
+        <div class="hero-head">
+          <span class="ttl">Heap tree · array view</span>
+          <span class="legend">
+            <span><span class="sw heap"></span>in heap</span>
+            <span><span class="sw focus"></span>focus</span>
+            <span><span class="sw cmp"></span>compare child</span>
+            <span><span class="sw swap"></span>swap</span>
+            <span><span class="sw sorted"></span>locked</span>
+          </span>
+        </div>
+        <div class="tree-wrap"><svg id="tree" viewBox="0 0 720 260" aria-hidden="true"></svg></div>
+        <div id="bars" class="bars"></div>
+        <div id="ruler" class="ruler"></div>
+      </div>
+      <div id="narration" class="narration">
+        <div class="narr-meta"><span id="narr-step" class="badge step">Step 0 / 0</span><span id="narr-phase" class="badge phase">Build</span><span id="narr-event" class="badge event" style="display:none"></span></div>
+        <p id="narr-text" class="narr-text"><strong>Press Play.</strong> First build a max-heap (parent ≥ children), then pull the max off the top n−1 times.</p>
+      </div>
+      <div class="controls">
+        <button id="btn-prev"><i class="ti ti-chevron-left"></i>Back</button>
+        <button id="btn-play" class="primary"><i id="play-icon" class="ti ti-player-play"></i><span id="play-label">Play</span></button>
+        <button id="btn-next"><i class="ti ti-chevron-right"></i>Step</button>
+        <button id="btn-shuffle" class="ghost"><i class="ti ti-refresh"></i>Shuffle</button>
+        <span class="spacer"></span>
+        <span class="speed-wrap"><span>Speed</span><input id="speed" type="range" min="1" max="10" step="1" value="5" /></span>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="label">comparisons</div><div id="s-cmp" class="value" style="color:var(--warning)">0</div></div>
+        <div class="stat"><div class="label">swaps</div><div id="s-swap" class="value" style="color:var(--danger)">0</div></div>
+        <div class="stat"><div class="label">phase</div><div id="s-phase" class="value" style="font-size:14px;padding-top:4px">Build</div></div>
+        <div class="stat"><div class="label">progress</div><div id="s-prog" class="value" style="color:var(--accent)">0%</div></div>
+      </div>
+      <div class="pseudo-row">
+        <div class="pseudo">
+          <div id="pl-0" class="pl">build max-heap (bottom-up)</div>
+          <div id="pl-1" class="pl" style="padding-left:14px">heapify each non-leaf down</div>
+          <div id="pl-2" class="pl">repeat n-1 times:</div>
+          <div id="pl-3" class="pl" style="padding-left:14px">swap root (max) to the end</div>
+          <div id="pl-4" class="pl" style="padding-left:14px">shrink heap by one</div>
+          <div id="pl-5" class="pl" style="padding-left:14px">sift-down the new root</div>
+        </div>
+        <div class="progress-card">
+          <div class="row"><span class="lbl">timeline</span><span class="val" id="tl-pos">0 / 0</span></div>
+          <div class="progress-bar"><div id="prog-fill" class="fill" style="width:0%"></div></div>
+          <div class="hint"><span class="kbd">←</span><span class="kbd">→</span><span class="kbd">space</span> &nbsp;walk steps</div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      (function(){
+        var barsEl=document.getElementById('bars'),rulerEl=document.getElementById('ruler'),treeEl=document.getElementById('tree');
+        var narrEl=document.getElementById('narration'),narrText=document.getElementById('narr-text'),narrStep=document.getElementById('narr-step'),narrEvent=document.getElementById('narr-event'),narrPhase=document.getElementById('narr-phase');
+        var sCmp=document.getElementById('s-cmp'),sSwap=document.getElementById('s-swap'),sPhase=document.getElementById('s-phase'),sProg=document.getElementById('s-prog');
+        var tlPos=document.getElementById('tl-pos'),progFill=document.getElementById('prog-fill');
+        var plines=[0,1,2,3,4,5].map(function(i){return document.getElementById('pl-'+i);});
+        var btnPrev=document.getElementById('btn-prev'),btnPlay=document.getElementById('btn-play'),btnNext=document.getElementById('btn-next'),btnShuffle=document.getElementById('btn-shuffle');
+        var playIcon=document.getElementById('play-icon'),playLabel=document.getElementById('play-label'),speedEl=document.getElementById('speed');
+
+        var arr=[],steps=[],idx=0,playing=false,timer=null,maxVal=100,N=7;
+        var POS=[{x:360,y:36},{x:200,y:114},{x:520,y:114},{x:120,y:192},{x:280,y:192},{x:440,y:192},{x:600,y:192}];
+
+        function randArr(){ var a=[]; for(var i=0;i<N;i++) a.push(Math.floor(Math.random()*86)+14); return a; }
+
+        function buildSteps(a){
+          var s=[],data=a.slice(),n=data.length,sorted=[];
+          function snap(o){
+            o.arr=data.slice(); o.sorted=sorted.slice();
+            if(o.cmp===undefined) o.cmp=[]; if(o.swap===undefined) o.swap=[];
+            if(o.focus===undefined) o.focus=-1; if(o.heapSize===undefined) o.heapSize=n;
+            if(o.kind===undefined) o.kind='';
+            s.push(o);
+          }
+          function heapify(size,i,phase){
+            while(true){
+              var l=2*i+1,r=2*i+2,largest=i;
+              snap({focus:i,heapSize:size,line:(phase==='Build'?1:5),phase:phase,kind:'focus',msg:'Fix node <code>'+data[i]+'</code>: compare with its children.'});
+              var comp=[];
+              if(l<size) comp.push(l);
+              if(r<size) comp.push(r);
+              if(comp.length){
+                snap({focus:i,cmp:comp,heapSize:size,line:(phase==='Build'?1:5),phase:phase,kind:'cmp',msg:'Which is biggest among <code>'+data[i]+'</code>'+(l<size?', <code>'+data[l]+'</code>':'')+(r<size?', <code>'+data[r]+'</code>':'')+'?'});
+              }
+              if(l<size && data[l]>data[largest]) largest=l;
+              if(r<size && data[r]>data[largest]) largest=r;
+              if(largest!==i){
+                snap({focus:i,swap:[i,largest],heapSize:size,line:(phase==='Build'?1:5),phase:phase,kind:'swap',msg:'Child <code>'+data[largest]+'</code> is bigger → swap it up; keep sifting.'});
+                var t=data[i]; data[i]=data[largest]; data[largest]=t;
+                i=largest;
+              } else {
+                snap({focus:i,heapSize:size,line:(phase==='Build'?1:5),phase:phase,kind:'lock',msg:'<code>'+data[i]+'</code> is ≥ its children — settled.'});
+                break;
+              }
+            }
+          }
+          snap({line:0,phase:'Build',kind:'',msg:'Turn the array into a <strong>max-heap</strong> (every parent ≥ its children).'});
+          for(var i=Math.floor(n/2)-1;i>=0;i--){ heapify(n,i,'Build'); }
+          snap({line:0,phase:'Build',kind:'lock',msg:'Max-heap ready — the biggest value sits at the root.'});
+          for(var e=n-1;e>0;e--){
+            snap({focus:0,swap:[0,e],heapSize:e+1,line:3,phase:'Sort',kind:'swap',msg:'Root <code>'+data[0]+'</code> is the max → swap it to position <code>'+e+'</code>.'});
+            var t2=data[0]; data[0]=data[e]; data[e]=t2;
+            sorted.unshift(e);
+            snap({heapSize:e,line:4,phase:'Sort',kind:'lock',msg:'<code>'+data[e]+'</code> is locked. Heap shrinks to size <code>'+e+'</code>.'});
+            heapify(e,0,'Sort');
+          }
+          sorted.unshift(0);
+          var all=[]; for(var m=0;m<n;m++) all.push(m);
+          snap({line:-1,phase:'Done',kind:'sorted',msg:'<strong>Sorted.</strong> O(n log n) on every input, in-place, no recursion.'});
+          s[s.length-1].sorted=all; s[s.length-1].done=true;
+          return s;
+        }
+
+        function roleFor(i,st){
+          if(st.sorted.indexOf(i)>=0) return 'sorted';
+          if(st.swap.indexOf(i)>=0) return 'swap';
+          if(i===st.focus) return 'focus';
+          if(st.cmp.indexOf(i)>=0) return 'cmp';
+          if(i<st.heapSize) return 'heap';
+          return 'outside';
+        }
+
+        function renderTree(st){
+          var ns='http://www.w3.org/2000/svg'; treeEl.innerHTML='';
+          var n=st.arr.length;
+          for(var i=0;i<n;i++){
+            var l=2*i+1,r=2*i+2;
+            [l,r].forEach(function(c){
+              if(c<n){
+                var ln=document.createElementNS(ns,'line');
+                ln.setAttribute('x1',POS[i].x); ln.setAttribute('y1',POS[i].y);
+                ln.setAttribute('x2',POS[c].x); ln.setAttribute('y2',POS[c].y);
+                var dim=(i>=st.heapSize || c>=st.heapSize);
+                ln.setAttribute('stroke', dim?'rgba(255,255,255,0.07)':'rgba(255,255,255,0.18)');
+                ln.setAttribute('stroke-width','1.4');
+                treeEl.appendChild(ln);
+              }
+            });
+          }
+          for(var i=0;i<n;i++){
+            var role=roleFor(i,st);
+            var fill='var(--info-bg)', stroke='var(--info-bd)', text='var(--info)';
+            if(role==='focus'){ fill='var(--purple-bg)'; stroke='var(--purple-bd)'; text='var(--purple)'; }
+            else if(role==='cmp'){ fill='var(--warning-bg)'; stroke='var(--warning-bd)'; text='var(--warning)'; }
+            else if(role==='swap'){ fill='var(--danger-bg)'; stroke='var(--danger-bd)'; text='var(--danger)'; }
+            else if(role==='sorted'){ fill='var(--success-bg)'; stroke='var(--success-bd)'; text='var(--success)'; }
+            else if(role==='outside'){ fill='rgba(255,255,255,0.03)'; stroke='var(--border)'; text='var(--subtle)'; }
+            var g=document.createElementNS(ns,'g');
+            var circ=document.createElementNS(ns,'circle');
+            circ.setAttribute('cx',POS[i].x); circ.setAttribute('cy',POS[i].y); circ.setAttribute('r','22');
+            circ.setAttribute('fill',fill); circ.setAttribute('stroke',stroke); circ.setAttribute('stroke-width','1.4');
+            g.appendChild(circ);
+            var tx=document.createElementNS(ns,'text');
+            tx.setAttribute('x',POS[i].x); tx.setAttribute('y',POS[i].y); tx.setAttribute('text-anchor','middle');
+            tx.setAttribute('dominant-baseline','central'); tx.setAttribute('font-size','13'); tx.setAttribute('font-weight','600');
+            tx.setAttribute('fill',text); tx.setAttribute('font-family','ui-monospace, monospace');
+            tx.textContent=st.arr[i];
+            g.appendChild(tx);
+            treeEl.appendChild(g);
+          }
+        }
+
+        function barMetrics(){ var n=arr.length,avail=barsEl.clientWidth||720,w=Math.floor((avail-(n-1)*7)/n); if(!w||w<12) w=70; return {w:w,gap:7}; }
+
+        function render(st){
+          renderTree(st);
+          barsEl.innerHTML=''; rulerEl.innerHTML='';
+          var n=st.arr.length,m=barMetrics();
+          for(var i=0;i<n;i++){
+            var role=roleFor(i,st);
+            var h=Math.round((st.arr[i]/maxVal)*108)+22;
+            var bar=document.createElement('div');
+            bar.className='bar '+role;
+            bar.style.cssText='width:'+m.w+'px;height:'+h+'px;';
+            bar.textContent=st.arr[i];
+            barsEl.appendChild(bar);
+            var r=document.createElement('div'); r.className='r'; r.style.width=m.w+'px'; r.textContent=i; rulerEl.appendChild(r);
+          }
+          narrText.innerHTML=st.msg;
+          narrStep.textContent='Step '+idx+' / '+(steps.length-1);
+          narrPhase.textContent=st.phase;
+          narrEl.classList.remove('cmp','focus','swap','lock','sorted');
+          if(st.kind) narrEl.classList.add(st.kind);
+          if(st.kind && st.kind!==''){ narrEvent.style.display=''; narrEvent.textContent=st.kind; narrEvent.className='badge event '+st.kind; } else narrEvent.style.display='none';
+          plines.forEach(function(p,k){ p.classList.toggle('active', k===st.line); });
+          sPhase.textContent=st.phase;
+          var pct=steps.length>1?Math.round((idx/(steps.length-1))*100):0;
+          sProg.textContent=pct+'%'; progFill.style.width=pct+'%'; tlPos.textContent=idx+' / '+(steps.length-1);
+        }
+
+        function recount(){ var c=0,sw=0; for(var k=1;k<=idx;k++){ if(steps[k].cmp.length) c++; if(steps[k].swap.length) sw++; } sCmp.textContent=c; sSwap.textContent=sw; }
+        function reset(a){ arr=a; maxVal=Math.max.apply(null,arr); steps=buildSteps(arr); idx=0; stop(); sCmp.textContent='0'; sSwap.textContent='0'; render(steps[0]); }
+        function next(){ if(idx>=steps.length-1){stop();return false;} idx++; recount(); render(steps[idx]); if(idx>=steps.length-1) stop(); return true; }
+        function prev(){ if(idx<=0) return; idx--; recount(); render(steps[idx]); }
+        function delay(){ return 1100-(parseInt(speedEl.value,10)*95); }
+        function play(){ if(idx>=steps.length-1) reset(arr.length?arr.slice():randArr()); playing=true; playLabel.textContent='Pause'; playIcon.className='ti ti-player-pause'; loop(); }
+        function loop(){ if(!playing) return; if(!next()){ stop(); return; } timer=setTimeout(loop,delay()); }
+        function stop(){ playing=false; if(timer){clearTimeout(timer); timer=null;} playLabel.textContent='Play'; playIcon.className='ti ti-player-play'; }
+
+        btnPlay.addEventListener('click',function(){ playing?stop():play(); });
+        btnNext.addEventListener('click',function(){ stop(); next(); });
+        btnPrev.addEventListener('click',function(){ stop(); prev(); });
+        btnShuffle.addEventListener('click',function(){ reset(randArr()); });
+        window.addEventListener('keydown',function(e){ if(e.key==='ArrowLeft'){stop();prev();} else if(e.key==='ArrowRight'){stop();next();} else if(e.key===' '){e.preventDefault(); playing?stop():play();} });
+        window.addEventListener('resize',function(){ render(steps[idx]); });
+        reset(randArr());
+
+        function postHeight(){ try{ parent.postMessage({type:'prototype:height',height:document.body.scrollHeight},'*'); }catch(e){} }
+        new ResizeObserver(postHeight).observe(document.body); postHeight();
+      })();
+    </script>
+  </body>
+</html>

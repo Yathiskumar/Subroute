@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Radix Sort</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root{--bg:#0c0d10;--surface:#14161a;--elevated:#1a1d22;--border:#232830;--border-strong:#2d333d;--fg:#e8e4dc;--muted:#9099a8;--subtle:#6b7280;--accent:#fb863a;--success:#5cc66f;--success-bg:rgba(92,198,111,0.14);--success-bd:rgba(92,198,111,0.45);--danger:#f06868;--danger-bg:rgba(240,104,104,0.14);--danger-bd:rgba(240,104,104,0.45);--warning:#f0b568;--warning-bg:rgba(240,181,104,0.14);--warning-bd:rgba(240,181,104,0.45);--info:#5e9ff6;--info-bg:rgba(94,159,246,0.16);--info-bd:rgba(94,159,246,0.45);--purple:#a78bfa;--purple-bg:rgba(167,139,250,0.16);--purple-bd:rgba(167,139,250,0.45);--mono:ui-monospace,"JetBrains Mono","SF Mono",Menlo,monospace;--sans:-apple-system,BlinkMacSystemFont,"Inter",system-ui,sans-serif;--radius-lg:14px;--radius-md:8px;--radius-sm:6px;}
+      *{box-sizing:border-box;}html,body{margin:0;padding:0;min-height:100%;background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:13px;}
+      body{padding:18px 18px 24px;background-image:radial-gradient(1200px 600px at 50% -200px,rgba(251,134,58,0.06),transparent),linear-gradient(to right,rgba(255,255,255,0.020) 1px,transparent 1px),linear-gradient(to bottom,rgba(255,255,255,0.020) 1px,transparent 1px);background-size:auto,40px 40px,40px 40px;}
+      .container{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:14px;}.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);}
+      button{background:var(--elevated);color:var(--fg);font:500 12px/1 var(--sans);border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;padding:9px 12px;transition:filter 150ms ease,transform 100ms ease,background 150ms ease,border-color 150ms ease;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;}
+      button:hover:not(:disabled){border-color:var(--border-strong);background:var(--surface);}button:active:not(:disabled){transform:scale(0.97);}button.primary{background:var(--accent);color:#1a1003;border-color:transparent;font-weight:600;}button.primary:hover:not(:disabled){filter:brightness(1.08);}button.ghost{background:transparent;}button i{font-size:14px;}input[type="range"]{accent-color:var(--accent);}
+      .hero{background:linear-gradient(180deg,rgba(255,255,255,0.014),transparent),var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px 14px;position:relative;overflow:hidden;}
+      .hero::before{content:"";position:absolute;inset:0;background:radial-gradient(420px 240px at 50% 0%,rgba(94,159,246,0.05),transparent 60%);pointer-events:none;}
+      .hero-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;position:relative;z-index:1;}
+      .ttl{font:600 11.5px var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:0.4px;}
+      .legend{font-size:11px;color:var(--muted);display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+      .legend .sw{display:inline-block;width:10px;height:10px;border-radius:3px;vertical-align:-1px;margin-right:4px;}
+      .sw.wait{background:var(--info-bg);border:1px solid var(--info-bd);}.sw.read{background:var(--warning-bg);border:1px solid var(--warning-bd);}.sw.bucket{background:var(--purple-bg);border:1px solid var(--purple-bd);}.sw.sorted{background:var(--success-bg);border:1px solid var(--success-bd);}
+      .section-label{font:500 11px var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:0.4px;margin-top:6px;position:relative;z-index:1;}
+      .section-label .meta{color:var(--info);text-transform:none;letter-spacing:0;margin-left:6px;font-weight:600;}
+      .chip-row{display:flex;flex-wrap:wrap;gap:5px;padding:8px;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:var(--radius-md);min-height:44px;margin-top:6px;position:relative;z-index:1;}
+      .chip{min-width:36px;height:32px;padding:0 7px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font:600 12px var(--mono);transition:background 200ms ease,color 200ms ease,transform 200ms ease,border-color 200ms ease;border:1px solid;}
+      .chip.wait{background:var(--info-bg);border-color:var(--info-bd);color:var(--info);}
+      .chip.read{background:var(--warning-bg);border-color:var(--warning-bd);color:var(--warning);animation:pop 0.32s cubic-bezier(0.34,1.56,0.64,1);}
+      .chip.sorted{background:var(--success-bg);border-color:var(--success-bd);color:var(--success);}
+      .chip .hi{text-decoration:underline;text-underline-offset:3px;text-decoration-color:currentColor;font-weight:700;}
+      .buckets{display:grid;grid-template-columns:repeat(10,1fr);gap:4px;margin-top:6px;position:relative;z-index:1;}
+      .buckets .bucket{min-height:78px;border:1px dashed var(--border-strong);border-radius:8px;padding:4px;display:flex;flex-direction:column;gap:3px;align-items:center;}
+      .bnum{font:500 10px var(--mono);color:var(--subtle);margin-bottom:2px;}
+      .bchip{width:100%;height:22px;border-radius:4px;display:flex;align-items:center;justify-content:center;font:600 10.5px var(--mono);background:var(--purple-bg);border:1px solid var(--purple-bd);color:var(--purple);}
+      @keyframes pop{from{transform:scale(0.92);}50%{transform:scale(1.1);}to{transform:scale(1);}}
+      .narration{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 14px;position:relative;overflow:hidden;transition:border-color 350ms ease;}
+      .narration::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--border-strong);transition:background 350ms ease;}
+      .narration.read::before{background:var(--warning);}.narration.bucket::before{background:var(--purple);}.narration.collect::before,.narration.sorted::before{background:var(--success);}
+      .narr-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;}
+      .badge{font:600 10.5px var(--mono);padding:4px 9px;border-radius:999px;letter-spacing:0.4px;text-transform:uppercase;display:inline-flex;align-items:center;gap:5px;border:1px solid var(--border);color:var(--muted);background:var(--elevated);}
+      .badge.step{color:var(--fg);border-color:var(--border-strong);}
+      .badge.phase{color:var(--accent);border-color:rgba(251,134,58,0.4);background:transparent;}
+      .narr-text{margin:0;font-size:14px;line-height:1.55;color:var(--fg);}.narr-text code{font-family:var(--mono);background:rgba(255,255,255,0.06);padding:1px 6px;border-radius:4px;color:var(--accent);font-size:12px;}.narr-text strong{color:var(--fg);font-weight:600;}
+      .controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);}.controls .spacer{flex:1;}.speed-wrap{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font:500 11px var(--mono);}.speed-wrap input[type="range"]{width:90px;}.kbd{font-family:var(--mono);font-size:10.5px;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,0.06);color:var(--muted);border:1px solid var(--border);}.hint{font:11px var(--mono);color:var(--subtle);display:inline-flex;align-items:center;gap:5px;}
+      .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:10px 12px;}.stat .label{font:500 10.5px var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:0.4px;}.stat .value{font:600 22px var(--mono);margin-top:4px;line-height:1;}
+      .pseudo-row{display:grid;grid-template-columns:1.2fr 1fr;gap:10px;}
+      .pseudo{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 14px;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--muted);}.pseudo .pl{border-radius:5px;padding:1px 6px;transition:background 200ms ease,color 200ms ease;}.pseudo .pl.active{background:var(--info-bg);color:var(--info);}
+      .progress-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 14px;display:flex;flex-direction:column;gap:8px;}.progress-card .row{display:flex;justify-content:space-between;align-items:center;}.progress-card .lbl{font:500 10.5px var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:0.4px;}.progress-card .val{font:600 14px var(--mono);color:var(--fg);}
+      .progress-bar{height:6px;background:var(--elevated);border-radius:99px;overflow:hidden;}.progress-bar .fill{height:100%;background:var(--accent);border-radius:99px;transition:width 240ms ease;}
+      @media (max-width:540px){.stats{grid-template-columns:repeat(2,1fr);}.pseudo-row{grid-template-columns:1fr;}.buckets{grid-template-columns:repeat(5,1fr);}}
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2 class="sr-only">Interactive radix sort. Sort by ones digit, then tens, then hundreds — each pass uses ten buckets and a stable collect.</h2>
+      <div class="hero" aria-label="Radix sort stage">
+        <div class="hero-head">
+          <span class="ttl">LSD radix sort · base 10</span>
+          <span class="legend">
+            <span><span class="sw wait"></span>waiting</span>
+            <span><span class="sw read"></span>reading digit</span>
+            <span><span class="sw bucket"></span>in bucket</span>
+            <span><span class="sw sorted"></span>fully sorted</span>
+          </span>
+        </div>
+        <div class="section-label">Current list <span class="meta" id="digit-tag"></span></div>
+        <div id="list" class="chip-row"></div>
+        <div class="section-label">Buckets</div>
+        <div id="buckets" class="buckets"></div>
+      </div>
+      <div id="narration" class="narration">
+        <div class="narr-meta"><span id="narr-step" class="badge step">Step 0 / 0</span><span id="narr-phase" class="badge phase">Start</span></div>
+        <p id="narr-text" class="narr-text"><strong>Press Play.</strong> Sort by each digit, low to high. After the highest digit, the list is fully sorted.</p>
+      </div>
+      <div class="controls">
+        <button id="btn-prev"><i class="ti ti-chevron-left"></i>Back</button>
+        <button id="btn-play" class="primary"><i id="play-icon" class="ti ti-player-play"></i><span id="play-label">Play</span></button>
+        <button id="btn-next"><i class="ti ti-chevron-right"></i>Step</button>
+        <button id="btn-shuffle" class="ghost"><i class="ti ti-refresh"></i>Shuffle</button>
+        <span class="spacer"></span>
+        <span class="speed-wrap"><span>Speed</span><input id="speed" type="range" min="1" max="10" step="1" value="5" /></span>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="label">placements</div><div id="s-ops" class="value" style="color:var(--purple)">0</div></div>
+        <div class="stat"><div class="label">digit pass</div><div id="s-pass" class="value">0</div></div>
+        <div class="stat"><div class="label">sorting by</div><div id="s-phase" class="value" style="font-size:14px;padding-top:4px">Start</div></div>
+        <div class="stat"><div class="label">progress</div><div id="s-prog" class="value" style="color:var(--accent)">0%</div></div>
+      </div>
+      <div class="pseudo-row">
+        <div class="pseudo">
+          <div id="pl-0" class="pl">for each digit (ones, tens, …):</div>
+          <div id="pl-1" class="pl" style="padding-left:14px">empty the 10 buckets</div>
+          <div id="pl-2" class="pl" style="padding-left:14px">for each number in list:</div>
+          <div id="pl-3" class="pl" style="padding-left:28px">drop into bucket[digit]</div>
+          <div id="pl-4" class="pl" style="padding-left:14px">collect buckets 0 → 9 in order</div>
+          <div id="pl-5" class="pl" style="padding-left:14px">that becomes the new list</div>
+        </div>
+        <div class="progress-card">
+          <div class="row"><span class="lbl">timeline</span><span class="val" id="tl-pos">0 / 0</span></div>
+          <div class="progress-bar"><div id="prog-fill" class="fill" style="width:0%"></div></div>
+          <div class="hint"><span class="kbd">←</span><span class="kbd">→</span><span class="kbd">space</span> &nbsp;walk steps</div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      (function(){
+        var listEl=document.getElementById('list'),bucketsEl=document.getElementById('buckets'),digitTag=document.getElementById('digit-tag');
+        var narrEl=document.getElementById('narration'),narrText=document.getElementById('narr-text'),narrStep=document.getElementById('narr-step'),narrPhase=document.getElementById('narr-phase');
+        var sOps=document.getElementById('s-ops'),sPass=document.getElementById('s-pass'),sPhase=document.getElementById('s-phase'),sProg=document.getElementById('s-prog');
+        var tlPos=document.getElementById('tl-pos'),progFill=document.getElementById('prog-fill');
+        var plines=[0,1,2,3,4,5].map(function(i){return document.getElementById('pl-'+i);});
+        var btnPrev=document.getElementById('btn-prev'),btnPlay=document.getElementById('btn-play'),btnNext=document.getElementById('btn-next'),btnShuffle=document.getElementById('btn-shuffle');
+        var playIcon=document.getElementById('play-icon'),playLabel=document.getElementById('play-label'),speedEl=document.getElementById('speed');
+
+        var DIGITNAMES=['Ones','Tens','Hundreds'];
+        var arr=[], steps=[], idx=0, playing=false, timer=null;
+
+        function randArr(){ var a=[]; for(var i=0;i<8;i++) a.push(Math.floor(Math.random()*899)+1); return a; }
+        function digitOf(num,place){ return Math.floor(num/Math.pow(10,place))%10; }
+
+        function buildSteps(a){
+          var s=[],data=a.slice(),n=data.length,placements=0;
+          var maxNum=Math.max.apply(null,data); var passes=String(maxNum).length;
+          function emptyBuckets(){ var b=[]; for(var i=0;i<10;i++) b.push([]); return b; }
+          function snap(o){
+            o.list=o.list?o.list.slice():data.slice(); o.placements=placements;
+            if(o.buckets) o.buckets=o.buckets.map(function(x){return x.slice();});
+            if(o.readIdx===undefined) o.readIdx=-1; if(o.line===undefined) o.line=-1; if(o.kind===undefined) o.kind='';
+            s.push(o);
+          }
+          snap({list:data.slice(),place:-1,phase:'Start',pass:0,line:0,kind:'',msg:'Sort by each digit, starting from the <strong>ones</strong>.'});
+          for(var p=0;p<passes;p++){
+            var buckets=emptyBuckets();
+            snap({list:data.slice(),buckets:buckets,place:p,phase:DIGITNAMES[p],pass:p+1,line:1,kind:'',msg:'New pass: sort by the <strong>'+DIGITNAMES[p].toLowerCase()+'</strong> digit. Empty all 10 buckets.'});
+            for(var i=0;i<n;i++){
+              var d=digitOf(data[i],p);
+              snap({list:data.slice(),buckets:buckets,place:p,readIdx:i,phase:DIGITNAMES[p],pass:p+1,line:3,kind:'read',msg:'Read <code>'+data[i]+'</code> → '+DIGITNAMES[p].toLowerCase()+' digit is <code>'+d+'</code>.'});
+              buckets[d].push(data[i]); placements++;
+              snap({list:data.slice(),buckets:buckets,place:p,readIdx:-1,phase:DIGITNAMES[p],pass:p+1,line:3,kind:'bucket',msg:'Drop <code>'+data[i]+'</code> into bucket <code>'+d+'</code>.'});
+            }
+            snap({list:data.slice(),buckets:buckets,place:p,phase:DIGITNAMES[p],pass:p+1,line:4,kind:'collect',msg:'Collect buckets <code>0 → 9</code> top to bottom — the new list.'});
+            var collected=[]; for(var b=0;b<10;b++){ for(var k=0;k<buckets[b].length;k++) collected.push(buckets[b][k]); }
+            data=collected;
+            var isLast=(p===passes-1);
+            snap({list:data.slice(),place:p,phase:DIGITNAMES[p],pass:p+1,line:5,kind:isLast?'sorted':'collect',sorted:isLast,msg:isLast?'After the highest digit, the list is <strong>fully sorted</strong>.':'New order after the '+DIGITNAMES[p].toLowerCase()+' pass — feed it into the next digit.'});
+          }
+          s[s.length-1].done=true;
+          return s;
+        }
+
+        function chipHTML(num,place,highlight){
+          var str=String(num);
+          if(!(place>=0 && highlight)) return str;
+          var di=str.length-1-place;
+          var html='';
+          for(var c=0;c<str.length;c++){ html += (c===di) ? '<span class="hi">'+str[c]+'</span>' : str[c]; }
+          return html;
+        }
+
+        function render(st){
+          listEl.innerHTML='';
+          digitTag.textContent = st.place>=0 ? '(reading the '+st.phase.toLowerCase()+' digit)' : '';
+          st.list.forEach(function(v,i){
+            var c=document.createElement('div');
+            var role='wait';
+            if(st.sorted){ role='sorted'; }
+            else if(i===st.readIdx){ role='read'; }
+            c.className='chip '+role;
+            c.innerHTML = (i===st.readIdx) ? chipHTML(v,st.place,true) : v;
+            listEl.appendChild(c);
+          });
+          bucketsEl.innerHTML='';
+          var buckets = st.buckets || (function(){var b=[];for(var i=0;i<10;i++)b.push([]);return b;})();
+          for(var b=0;b<10;b++){
+            var col=document.createElement('div'); col.className='bucket';
+            var lab=document.createElement('div'); lab.className='bnum'; lab.textContent=b; col.appendChild(lab);
+            buckets[b].forEach(function(v){ var bc=document.createElement('div'); bc.className='bchip'; bc.textContent=v; col.appendChild(bc); });
+            bucketsEl.appendChild(col);
+          }
+          narrText.innerHTML=st.msg;
+          narrStep.textContent='Step '+idx+' / '+(steps.length-1);
+          narrPhase.textContent=st.phase;
+          narrEl.classList.remove('read','bucket','collect','sorted');
+          if(st.kind) narrEl.classList.add(st.kind);
+          plines.forEach(function(p,k){ p.classList.toggle('active', k===st.line); });
+          sPass.textContent=st.pass; sPhase.textContent=st.phase; sOps.textContent=st.placements;
+          var pct=steps.length>1?Math.round((idx/(steps.length-1))*100):0;
+          sProg.textContent=pct+'%'; progFill.style.width=pct+'%'; tlPos.textContent=idx+' / '+(steps.length-1);
+        }
+
+        function reset(a){ arr=a; steps=buildSteps(arr); idx=0; stop(); render(steps[0]); }
+        function next(){ if(idx>=steps.length-1){stop();return false;} idx++; render(steps[idx]); if(idx>=steps.length-1) stop(); return true; }
+        function prev(){ if(idx<=0) return; idx--; render(steps[idx]); }
+        function delay(){ return 1100-(parseInt(speedEl.value,10)*95); }
+        function play(){ if(idx>=steps.length-1) reset(randArr()); playing=true; playLabel.textContent='Pause'; playIcon.className='ti ti-player-pause'; loop(); }
+        function loop(){ if(!playing) return; if(!next()){ stop(); return; } timer=setTimeout(loop,delay()); }
+        function stop(){ playing=false; if(timer){clearTimeout(timer); timer=null;} playLabel.textContent='Play'; playIcon.className='ti ti-player-play'; }
+
+        btnPlay.addEventListener('click',function(){ playing?stop():play(); });
+        btnNext.addEventListener('click',function(){ stop(); next(); });
+        btnPrev.addEventListener('click',function(){ stop(); prev(); });
+        btnShuffle.addEventListener('click',function(){ reset(randArr()); });
+        window.addEventListener('keydown',function(e){ if(e.key==='ArrowLeft'){stop();prev();} else if(e.key==='ArrowRight'){stop();next();} else if(e.key===' '){e.preventDefault(); playing?stop():play();} });
+        reset(randArr());
+
+        function postHeight(){ try{ parent.postMessage({type:'prototype:height',height:document.body.scrollHeight},'*'); }catch(e){} }
+        new ResizeObserver(postHeight).observe(document.body); postHeight();
+      })();
+    </script>
+  </body>
+</html>

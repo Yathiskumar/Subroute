@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Quick Sort</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root{--bg:#0c0d10;--surface:#14161a;--elevated:#1a1d22;--border:#232830;--border-strong:#2d333d;--fg:#e8e4dc;--muted:#9099a8;--subtle:#6b7280;--accent:#fb863a;--success:#5cc66f;--success-bg:rgba(92,198,111,0.14);--success-bd:rgba(92,198,111,0.45);--danger:#f06868;--danger-bg:rgba(240,104,104,0.14);--danger-bd:rgba(240,104,104,0.45);--warning:#f0b568;--warning-bg:rgba(240,181,104,0.14);--warning-bd:rgba(240,181,104,0.45);--info:#5e9ff6;--info-bg:rgba(94,159,246,0.16);--info-bd:rgba(94,159,246,0.45);--purple:#a78bfa;--purple-bg:rgba(167,139,250,0.16);--purple-bd:rgba(167,139,250,0.45);--mono:ui-monospace,"JetBrains Mono","SF Mono",Menlo,monospace;--sans:-apple-system,BlinkMacSystemFont,"Inter",system-ui,sans-serif;--radius-lg:14px;--radius-md:8px;--radius-sm:6px;}
+      *{box-sizing:border-box;}html,body{margin:0;padding:0;min-height:100%;background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:13px;}
+      body{padding:18px 18px 24px;background-image:radial-gradient(1200px 600px at 50% -200px,rgba(251,134,58,0.06),transparent),linear-gradient(to right,rgba(255,255,255,0.020) 1px,transparent 1px),linear-gradient(to bottom,rgba(255,255,255,0.020) 1px,transparent 1px);background-size:auto,40px 40px,40px 40px;}
+      .container{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:14px;}.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);}
+      button{background:var(--elevated);color:var(--fg);font:500 12px/1 var(--sans);border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;padding:9px 12px;transition:filter 150ms ease,transform 100ms ease,background 150ms ease,border-color 150ms ease;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;}
+      button:hover:not(:disabled){border-color:var(--border-strong);background:var(--surface);}button:active:not(:disabled){transform:scale(0.97);}button.primary{background:var(--accent);color:#1a1003;border-color:transparent;font-weight:600;}button.primary:hover:not(:disabled){filter:brightness(1.08);}button.ghost{background:transparent;}button i{font-size:14px;}input[type="range"]{accent-color:var(--accent);}
+      .hero{background:linear-gradient(180deg,rgba(255,255,255,0.014),transparent),var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px 12px;position:relative;overflow:hidden;}
+      .hero::before{content:"";position:absolute;inset:0;background:radial-gradient(420px 240px at 50% 0%,rgba(94,159,246,0.05),transparent 60%);pointer-events:none;}
+      .hero-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;position:relative;z-index:1;}
+      .ttl{font:600 11.5px var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:0.4px;}
+      .legend{font-size:11px;color:var(--muted);display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+      .legend .sw{display:inline-block;width:10px;height:10px;border-radius:3px;vertical-align:-1px;margin-right:4px;}
+      .sw.outside{background:transparent;border:1px dashed var(--border-strong);}.sw.range{background:var(--info-bg);border:1px solid var(--info-bd);}.sw.pivot{background:var(--purple-bg);border:1px solid var(--purple-bd);}.sw.scan{background:var(--warning-bg);border:1px solid var(--warning-bd);}.sw.swap{background:var(--danger-bg);border:1px solid var(--danger-bd);}.sw.sorted{background:var(--success-bg);border:1px solid var(--success-bd);}
+      .bracket{position:relative;height:28px;margin-bottom:2px;}.bracket svg{width:100%;height:28px;overflow:visible;position:absolute;inset:0;}
+      .bars{display:flex;align-items:flex-end;justify-content:center;gap:7px;height:210px;padding:0 4px;position:relative;z-index:1;}
+      .bar{border-radius:6px 6px 0 0;display:flex;align-items:flex-start;justify-content:center;padding-top:6px;font:600 12px var(--mono);transition:height 240ms cubic-bezier(0.4,0,0.2,1),background 200ms ease,border-color 200ms ease,transform 200ms ease,color 200ms ease;border:1px solid;}
+      .bar.outside{background:rgba(255,255,255,0.02);border-color:var(--border);color:var(--subtle);opacity:0.55;}
+      .bar.range{background:var(--info-bg);border-color:var(--info-bd);color:var(--info);}
+      .bar.pivot{background:var(--purple-bg);border-color:var(--purple-bd);color:var(--purple);transform:translateY(-12px);}
+      .bar.scan{background:var(--warning-bg);border-color:var(--warning-bd);color:var(--warning);}
+      .bar.swap{background:var(--danger-bg);border-color:var(--danger-bd);color:var(--danger);}
+      .bar.sorted{background:var(--success-bg);border-color:var(--success-bd);color:var(--success);}
+      .bar.pop{animation:pop 0.32s cubic-bezier(0.34,1.56,0.64,1);}
+      @keyframes pop{from{transform:scale(0.92);}50%{transform:scale(1.08);}to{transform:scale(1);}}
+      .ruler{display:flex;justify-content:center;gap:7px;padding:6px 4px 0;font:500 10.5px var(--mono);color:var(--subtle);position:relative;z-index:1;}.ruler .r{text-align:center;}
+      .narration{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 14px;position:relative;overflow:hidden;transition:border-color 350ms ease;}
+      .narration::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--border-strong);transition:background 350ms ease;}
+      .narration.cmp::before{background:var(--warning);}.narration.pivot::before{background:var(--purple);}.narration.swap::before{background:var(--danger);}.narration.lock::before,.narration.sorted::before{background:var(--success);}
+      .narr-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;}
+      .badge{font:600 10.5px var(--mono);padding:4px 9px;border-radius:999px;letter-spacing:0.4px;text-transform:uppercase;display:inline-flex;align-items:center;gap:5px;border:1px solid var(--border);color:var(--muted);background:var(--elevated);}
+      .badge.step{color:var(--fg);border-color:var(--border-strong);}
+      .badge.event.cmp{color:var(--warning);border-color:var(--warning-bd);background:transparent;}.badge.event.pivot{color:var(--purple);border-color:var(--purple-bd);background:transparent;}.badge.event.swap{color:var(--danger);border-color:var(--danger-bd);background:transparent;}.badge.event.lock{color:var(--success);border-color:var(--success-bd);background:transparent;}
+      .narr-text{margin:0;font-size:14px;line-height:1.55;color:var(--fg);}.narr-text code{font-family:var(--mono);background:rgba(255,255,255,0.06);padding:1px 6px;border-radius:4px;color:var(--accent);font-size:12px;}.narr-text strong{color:var(--fg);font-weight:600;}
+      .controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);}.controls .spacer{flex:1;}.speed-wrap{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font:500 11px var(--mono);}.speed-wrap input[type="range"]{width:90px;}.kbd{font-family:var(--mono);font-size:10.5px;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,0.06);color:var(--muted);border:1px solid var(--border);}.hint{font:11px var(--mono);color:var(--subtle);display:inline-flex;align-items:center;gap:5px;}
+      .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:10px 12px;}.stat .label{font:500 10.5px var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:0.4px;}.stat .value{font:600 22px var(--mono);margin-top:4px;line-height:1;}
+      .pseudo-row{display:grid;grid-template-columns:1.2fr 1fr;gap:10px;}
+      .pseudo{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 14px;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--muted);}.pseudo .pl{border-radius:5px;padding:1px 6px;transition:background 200ms ease,color 200ms ease;}.pseudo .pl.active{background:var(--info-bg);color:var(--info);}
+      .progress-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 14px;display:flex;flex-direction:column;gap:8px;}.progress-card .row{display:flex;justify-content:space-between;align-items:center;}.progress-card .lbl{font:500 10.5px var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:0.4px;}.progress-card .val{font:600 14px var(--mono);color:var(--fg);}
+      .progress-bar{height:6px;background:var(--elevated);border-radius:99px;overflow:hidden;}.progress-bar .fill{height:100%;background:var(--accent);border-radius:99px;transition:width 240ms ease;}
+      @media (max-width:540px){.stats{grid-template-columns:repeat(2,1fr);}.pseudo-row{grid-template-columns:1fr;}.bars{height:170px;}}
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2 class="sr-only">Interactive quick sort. A pivot is chosen, the range is partitioned around it, and the pivot lands in its final slot.</h2>
+      <div class="hero" aria-label="Quick sort bars">
+        <div class="hero-head">
+          <span class="ttl">Array · n=8 · Lomuto partition</span>
+          <span class="legend">
+            <span><span class="sw outside"></span>outside range</span>
+            <span><span class="sw range"></span>in range</span>
+            <span><span class="sw pivot"></span>pivot</span>
+            <span><span class="sw scan"></span>scanning</span>
+            <span><span class="sw swap"></span>swap</span>
+            <span><span class="sw sorted"></span>locked</span>
+          </span>
+        </div>
+        <div class="bracket"><svg id="bracket" aria-hidden="true"></svg></div>
+        <div id="bars" class="bars"></div>
+        <div id="ruler" class="ruler"></div>
+      </div>
+      <div id="narration" class="narration">
+        <div class="narr-meta"><span id="narr-step" class="badge step">Step 0 / 0</span><span id="narr-event" class="badge event" style="display:none"></span></div>
+        <p id="narr-text" class="narr-text"><strong>Press Play.</strong> Pick a pivot, push smaller-than-pivot left, larger right; the pivot lands at its sorted slot.</p>
+      </div>
+      <div class="controls">
+        <button id="btn-prev"><i class="ti ti-chevron-left"></i>Back</button>
+        <button id="btn-play" class="primary"><i id="play-icon" class="ti ti-player-play"></i><span id="play-label">Play</span></button>
+        <button id="btn-next"><i class="ti ti-chevron-right"></i>Step</button>
+        <button id="btn-shuffle" class="ghost"><i class="ti ti-refresh"></i>Shuffle</button>
+        <span class="spacer"></span>
+        <span class="speed-wrap"><span>Speed</span><input id="speed" type="range" min="1" max="10" step="1" value="5" /></span>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="label">comparisons</div><div id="s-cmp" class="value" style="color:var(--warning)">0</div></div>
+        <div class="stat"><div class="label">swaps</div><div id="s-swap" class="value" style="color:var(--danger)">0</div></div>
+        <div class="stat"><div class="label">pivots set</div><div id="s-pass" class="value" style="color:var(--purple)">0</div></div>
+        <div class="stat"><div class="label">progress</div><div id="s-prog" class="value" style="color:var(--accent)">0%</div></div>
+      </div>
+      <div class="pseudo-row">
+        <div class="pseudo">
+          <div id="pl-0" class="pl">quickSort(lo, hi):</div>
+          <div id="pl-1" class="pl" style="padding-left:14px">if lo ≥ hi → return</div>
+          <div id="pl-2" class="pl" style="padding-left:14px">pivot = a[hi]</div>
+          <div id="pl-3" class="pl" style="padding-left:14px">for j in lo … hi-1</div>
+          <div id="pl-4" class="pl" style="padding-left:28px">if a[j] &lt; pivot → swap into left</div>
+          <div id="pl-5" class="pl" style="padding-left:14px">put pivot after the left group</div>
+          <div id="pl-6" class="pl" style="padding-left:14px">recurse on left and right</div>
+        </div>
+        <div class="progress-card">
+          <div class="row"><span class="lbl">timeline</span><span class="val" id="tl-pos">0 / 0</span></div>
+          <div class="progress-bar"><div id="prog-fill" class="fill" style="width:0%"></div></div>
+          <div class="hint"><span class="kbd">←</span><span class="kbd">→</span><span class="kbd">space</span> &nbsp;walk steps</div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      (function(){
+        var barsEl=document.getElementById('bars'),rulerEl=document.getElementById('ruler'),bracketEl=document.getElementById('bracket');
+        var narrEl=document.getElementById('narration'),narrText=document.getElementById('narr-text'),narrStep=document.getElementById('narr-step'),narrEvent=document.getElementById('narr-event');
+        var sCmp=document.getElementById('s-cmp'),sSwap=document.getElementById('s-swap'),sPass=document.getElementById('s-pass'),sProg=document.getElementById('s-prog');
+        var tlPos=document.getElementById('tl-pos'),progFill=document.getElementById('prog-fill');
+        var plines=[0,1,2,3,4,5,6].map(function(i){return document.getElementById('pl-'+i);});
+        var btnPrev=document.getElementById('btn-prev'),btnPlay=document.getElementById('btn-play'),btnNext=document.getElementById('btn-next'),btnShuffle=document.getElementById('btn-shuffle');
+        var playIcon=document.getElementById('play-icon'),playLabel=document.getElementById('play-label'),speedEl=document.getElementById('speed');
+
+        var arr=[],steps=[],idx=0,playing=false,timer=null,maxVal=100;
+        function randArr(){ var a=[]; for(var i=0;i<8;i++) a.push(Math.floor(Math.random()*86)+14); return a; }
+
+        function buildSteps(a){
+          var s=[],data=a.slice(),n=data.length,sorted=[],pivots=0;
+          function snap(o){
+            o.arr=data.slice(); o.sorted=sorted.slice(); o.pivots=pivots;
+            if(o.swap===undefined) o.swap=[]; if(o.scan===undefined) o.scan=-1;
+            if(o.pivotIdx===undefined) o.pivotIdx=-1; if(o.lo===undefined) o.lo=-1; if(o.hi===undefined) o.hi=-1;
+            if(o.kind===undefined) o.kind='';
+            s.push(o);
+          }
+          snap({line:-1,kind:'',msg:'Starting range is the whole array. Pick a pivot to partition around.'});
+          function qs(lo,hi){
+            if(lo>hi) return;
+            if(lo===hi){ sorted.push(lo); snap({lo:lo,hi:hi,line:1,kind:'lock',msg:'Single element <code>'+data[lo]+'</code> — already at its slot.'}); return; }
+            var pivot=data[hi],pIdx=hi;
+            snap({lo:lo,hi:hi,pivotIdx:pIdx,line:2,kind:'pivot',msg:'Choose pivot = <code>'+pivot+'</code> (last in range <code>['+lo+'..'+hi+']</code>).'});
+            var i=lo-1;
+            for(var j=lo;j<hi;j++){
+              snap({lo:lo,hi:hi,pivotIdx:pIdx,scan:j,line:3,kind:'cmp',msg:'Is <code>'+data[j]+'</code> &lt; pivot <code>'+pivot+'</code>?'});
+              if(data[j]<pivot){
+                i++;
+                if(i!==j){
+                  snap({lo:lo,hi:hi,pivotIdx:pIdx,swap:[i,j],line:4,kind:'swap',msg:'Yes → swap <code>'+data[j]+'</code> into the smaller-than-pivot group.'});
+                  var t=data[i]; data[i]=data[j]; data[j]=t;
+                } else {
+                  snap({lo:lo,hi:hi,pivotIdx:pIdx,scan:j,line:4,kind:'cmp',msg:'Yes → already on the smaller side, no swap needed.'});
+                }
+              }
+            }
+            var pPos=i+1;
+            snap({lo:lo,hi:hi,pivotIdx:pIdx,swap:[pPos,hi],line:5,kind:'swap',msg:'Place pivot <code>'+pivot+'</code> right after the smaller group at index <code>'+pPos+'</code>.'});
+            var t2=data[pPos]; data[pPos]=data[hi]; data[hi]=t2;
+            pivots++; sorted.push(pPos);
+            snap({lo:lo,hi:hi,line:5,kind:'lock',msg:'Pivot <code>'+pivot+'</code> is now <strong>locked</strong> at its final slot.'});
+            qs(lo,pPos-1);
+            qs(pPos+1,hi);
+          }
+          qs(0,n-1);
+          var all=[]; for(var m=0;m<n;m++) all.push(m);
+          snap({line:-1,kind:'sorted',msg:'<strong>Sorted.</strong> Average O(n log n) with the constants that make quicksort the in-memory speed champion.'});
+          s[s.length-1].sorted=all; s[s.length-1].done=true;
+          return s;
+        }
+
+        function barMetrics(){ var n=arr.length,avail=barsEl.clientWidth||720,w=Math.floor((avail-(n-1)*7)/n); if(!w||w<12) w=60; return {w:w,gap:7}; }
+        function inRange(i,st){ return st.lo>=0 && i>=st.lo && i<=st.hi; }
+
+        function render(st){
+          barsEl.innerHTML=''; rulerEl.innerHTML='';
+          var n=st.arr.length,m=barMetrics();
+          for(var i=0;i<n;i++){
+            var role='outside';
+            if(st.sorted.indexOf(i)>=0) role='sorted';
+            else if(st.swap.indexOf(i)>=0) role='swap';
+            else if(i===st.pivotIdx) role='pivot';
+            else if(i===st.scan) role='scan';
+            else if(inRange(i,st)) role='range';
+            var h=Math.round((st.arr[i]/maxVal)*168)+22;
+            var bar=document.createElement('div');
+            bar.className='bar '+role+(st.swap.indexOf(i)>=0?' pop':'');
+            bar.style.cssText='width:'+m.w+'px;height:'+h+'px;';
+            bar.textContent=st.arr[i];
+            barsEl.appendChild(bar);
+            var r=document.createElement('div'); r.className='r'; r.style.width=m.w+'px'; r.textContent=i; rulerEl.appendChild(r);
+          }
+          drawBracket(st,m);
+          narrText.innerHTML=st.msg;
+          narrStep.textContent='Step '+idx+' / '+(steps.length-1);
+          narrEl.classList.remove('cmp','pivot','swap','lock','sorted');
+          if(st.kind) narrEl.classList.add(st.kind);
+          if(st.kind){ narrEvent.style.display=''; narrEvent.textContent=st.kind; narrEvent.className='badge event '+st.kind; } else narrEvent.style.display='none';
+          plines.forEach(function(p,k){ p.classList.toggle('active', k===st.line); });
+          sPass.textContent=st.pivots;
+          var pct=steps.length>1?Math.round((idx/(steps.length-1))*100):0;
+          sProg.textContent=pct+'%'; progFill.style.width=pct+'%'; tlPos.textContent=idx+' / '+(steps.length-1);
+        }
+
+        function drawBracket(st,m){
+          bracketEl.innerHTML='';
+          var pair=null,label='',color='';
+          if(st.swap.length){ pair=[st.swap[0],st.swap[1]]; label='swap'; color='var(--danger)'; }
+          else if(st.scan>=0 && st.pivotIdx>=0){ pair=[st.scan,st.pivotIdx]; label='vs pivot'; color='var(--warning)'; }
+          if(!pair) return;
+          var n=arr.length,totalW=n*m.w+(n-1)*m.gap;
+          var box=bracketEl.getBoundingClientRect();
+          var left=(box.width-totalW)/2;
+          var x1=left+pair[0]*(m.w+m.gap)+m.w/2,x2=left+pair[1]*(m.w+m.gap)+m.w/2;
+          var ns='http://www.w3.org/2000/svg';
+          var p=document.createElementNS(ns,'path');
+          p.setAttribute('d','M '+x1+' 26 L '+x1+' 12 L '+x2+' 12 L '+x2+' 26');
+          p.setAttribute('fill','none'); p.setAttribute('stroke',color); p.setAttribute('stroke-width','1.6'); p.setAttribute('stroke-linecap','round');
+          bracketEl.appendChild(p);
+          var lbl=document.createElementNS(ns,'text');
+          lbl.setAttribute('x',(x1+x2)/2); lbl.setAttribute('y','8'); lbl.setAttribute('text-anchor','middle');
+          lbl.setAttribute('fill',color); lbl.setAttribute('font-size','11'); lbl.setAttribute('font-weight','600'); lbl.setAttribute('font-family','ui-monospace, monospace');
+          lbl.textContent=label;
+          bracketEl.appendChild(lbl);
+        }
+
+        function recount(){ var c=0,sw=0; for(var k=1;k<=idx;k++){ if(steps[k].line===3) c++; if(steps[k].swap.length) sw++; } sCmp.textContent=c; sSwap.textContent=sw; }
+        function reset(a){ arr=a; maxVal=Math.max.apply(null,arr); steps=buildSteps(arr); idx=0; stop(); sCmp.textContent='0'; sSwap.textContent='0'; render(steps[0]); }
+        function next(){ if(idx>=steps.length-1){stop();return false;} idx++; recount(); render(steps[idx]); if(idx>=steps.length-1) stop(); return true; }
+        function prev(){ if(idx<=0) return; idx--; recount(); render(steps[idx]); }
+        function delay(){ return 1100-(parseInt(speedEl.value,10)*95); }
+        function play(){ if(idx>=steps.length-1) reset(arr.length?arr.slice():randArr()); playing=true; playLabel.textContent='Pause'; playIcon.className='ti ti-player-pause'; loop(); }
+        function loop(){ if(!playing) return; if(!next()){ stop(); return; } timer=setTimeout(loop,delay()); }
+        function stop(){ playing=false; if(timer){clearTimeout(timer); timer=null;} playLabel.textContent='Play'; playIcon.className='ti ti-player-play'; }
+
+        btnPlay.addEventListener('click',function(){ playing?stop():play(); });
+        btnNext.addEventListener('click',function(){ stop(); next(); });
+        btnPrev.addEventListener('click',function(){ stop(); prev(); });
+        btnShuffle.addEventListener('click',function(){ reset(randArr()); });
+        window.addEventListener('keydown',function(e){ if(e.key==='ArrowLeft'){stop();prev();} else if(e.key==='ArrowRight'){stop();next();} else if(e.key===' '){e.preventDefault(); playing?stop():play();} });
+        window.addEventListener('resize',function(){ render(steps[idx]); });
+        reset(randArr());
+
+        function postHeight(){ try{ parent.postMessage({type:'prototype:height',height:document.body.scrollHeight},'*'); }catch(e){} }
+        new ResizeObserver(postHeight).observe(document.body); postHeight();
+      })();
+    </script>
+  </body>
+</html>
