@@ -86,6 +86,17 @@ import { ring as leRing } from "./leader-election/ring";
 import { raftElection } from "./leader-election/raft-election";
 import { leaseBased } from "./leader-election/lease-based";
 import { zookeeper as leZookeeper } from "./leader-election/zookeeper";
+import { sortingTopic } from "./sorting/_topic";
+import { bubble as sBubble } from "./sorting/bubble";
+import { selection as sSelection } from "./sorting/selection";
+import { insertion as sInsertion } from "./sorting/insertion";
+import { merge as sMerge } from "./sorting/merge";
+import { quick as sQuick } from "./sorting/quick";
+import { heap as sHeap } from "./sorting/heap";
+import { counting as sCounting } from "./sorting/counting";
+import { radix as sRadix } from "./sorting/radix";
+import { bucket as sBucket } from "./sorting/bucket";
+import { timsort as sTimsort } from "./sorting/timsort";
 
 // Indexed by `${topicSlug}/${conceptSlug}`
 const CONCEPT_CONTENT: Record<string, ConceptContent> = {
@@ -164,6 +175,16 @@ const CONCEPT_CONTENT: Record<string, ConceptContent> = {
   "leader-election/raft-election": raftElection,
   "leader-election/lease-based": leaseBased,
   "leader-election/zookeeper": leZookeeper,
+  "sorting/bubble": sBubble,
+  "sorting/selection": sSelection,
+  "sorting/insertion": sInsertion,
+  "sorting/merge": sMerge,
+  "sorting/quick": sQuick,
+  "sorting/heap": sHeap,
+  "sorting/counting": sCounting,
+  "sorting/radix": sRadix,
+  "sorting/bucket": sBucket,
+  "sorting/timsort": sTimsort,
 };
 
 // Indexed by topic slug
@@ -180,6 +201,7 @@ const TOPIC_CONTENT: Record<string, TopicContent> = {
   "bloom-filters": bloomFiltersTopic,
   "consensus": consensusTopic,
   "leader-election": leaderElectionTopic,
+  "sorting": sortingTopic,
 };
 
 export function getConceptContent(

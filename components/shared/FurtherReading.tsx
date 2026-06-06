@@ -98,7 +98,7 @@ export function FurtherReading({ items }: { items: FurtherReadingItem[] }) {
                     linked && "group-hover:text-accent",
                   )}
                 >
-                  {r.label}
+                  {renderInline(r.label)}
                 </p>
 
                 {r.note ? (

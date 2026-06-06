@@ -2,6 +2,7 @@ import { Info, AlertTriangle, Lightbulb, CheckCircle2 } from "lucide-react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils/cn";
 import type { ReactNode } from "react";
+import { renderInline } from "@/components/shared/ProseRenderer";
 
 const calloutVariants = cva(
   "relative flex gap-3 rounded-lg border p-4 text-sm",
@@ -50,7 +51,9 @@ export function Callout({
     <div className={cn(calloutVariants({ variant: v }), className)}>
       <Icon className={cn("mt-0.5 h-4 w-4 shrink-0", ICON_COLORS[v])} />
       <div className="flex-1 space-y-1">
-        {title ? <p className="font-medium leading-tight">{title}</p> : null}
+        {title ? (
+          <p className="font-medium leading-tight">{renderInline(title)}</p>
+        ) : null}
         <div className="text-sm text-muted [&_p]:leading-6">{children}</div>
       </div>
     </div>

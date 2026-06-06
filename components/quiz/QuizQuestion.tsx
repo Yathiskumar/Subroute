@@ -43,7 +43,7 @@ export function QuizQuestion({
         ) : null}
       </div>
       <h4 className="text-lg font-medium leading-snug tracking-tight">
-        {item.question}
+        {renderInline(item.question)}
       </h4>
       <div className="flex flex-col gap-2">
         {item.options.map((opt) => {
@@ -96,7 +96,7 @@ export function QuizQuestion({
                   state === "selected" && "font-medium",
                 )}
               >
-                {opt.label}
+                {renderInline(opt.label)}
               </span>
               {submitted && isCorrect ? (
                 <Check className="ml-auto h-4 w-4 text-success" />

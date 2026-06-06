@@ -793,6 +793,109 @@ export const TOPICS: Topic[] = [
     ],
   },
   {
+    slug: "sorting",
+    title: "Sorting",
+    description:
+      "Order a list — ten ways. From the textbook swap-adjacent sorts you write in a single loop, to the divide-and-conquer giants, to the non-comparison tricks that beat O(n log n), to the hybrid your language's sort() actually uses.",
+    difficulty: "intermediate",
+    icon: "ArrowDownAZ",
+    tags: ["algorithms", "arrays", "fundamentals"],
+    estimatedTime: "75 min",
+    prerequisites: ["Arrays & indexing", "Big-O intuition", "Recursion basics"],
+    concepts: [
+      {
+        slug: "bubble",
+        title: "Bubble Sort",
+        oneLiner:
+          "Sweep through the list swapping any out-of-order neighbours. The biggest value bubbles to the end each pass.",
+        difficulty: "beginner",
+        estimatedTime: "7 min",
+        prototypePath: "/prototypes/sorting/bubble.html",
+      },
+      {
+        slug: "selection",
+        title: "Selection Sort",
+        oneLiner:
+          "Each round, find the smallest remaining value and swap it into the next sorted slot. One swap per pass — minimum movement.",
+        difficulty: "beginner",
+        estimatedTime: "7 min",
+        prototypePath: "/prototypes/sorting/selection.html",
+      },
+      {
+        slug: "insertion",
+        title: "Insertion Sort",
+        oneLiner:
+          "Pick up each value and slide it into its place in the sorted left side — exactly how you sort cards in your hand.",
+        difficulty: "beginner",
+        estimatedTime: "8 min",
+        prototypePath: "/prototypes/sorting/insertion.html",
+      },
+      {
+        slug: "merge",
+        title: "Merge Sort",
+        oneLiner:
+          "Split until each piece is one element, then merge sorted pairs back together. The classic O(n log n) divide-and-conquer.",
+        difficulty: "intermediate",
+        estimatedTime: "9 min",
+        prototypePath: "/prototypes/sorting/merge.html",
+      },
+      {
+        slug: "quick",
+        title: "Quick Sort",
+        oneLiner:
+          "Pick a pivot, partition the rest into smaller-than and larger-than, then recurse on each side. Fast in-place — and famously fragile on adversarial inputs.",
+        difficulty: "intermediate",
+        estimatedTime: "10 min",
+        prototypePath: "/prototypes/sorting/quick.html",
+      },
+      {
+        slug: "heap",
+        title: "Heap Sort",
+        oneLiner:
+          "Pour the array into a max-heap, then repeatedly pull the largest off the top. O(n log n) worst-case, in-place, no recursion.",
+        difficulty: "advanced",
+        estimatedTime: "10 min",
+        prototypePath: "/prototypes/sorting/heap.html",
+      },
+      {
+        slug: "counting",
+        title: "Counting Sort",
+        oneLiner:
+          "Tally each value, prefix-sum the tallies into end positions, then place every item directly. O(n + k) — no comparisons at all.",
+        difficulty: "intermediate",
+        estimatedTime: "8 min",
+        prototypePath: "/prototypes/sorting/counting.html",
+      },
+      {
+        slug: "radix",
+        title: "Radix Sort",
+        oneLiner:
+          "Sort by one digit at a time — ones, then tens, then hundreds — using a stable bucket pass per digit.",
+        difficulty: "advanced",
+        estimatedTime: "9 min",
+        prototypePath: "/prototypes/sorting/radix.html",
+      },
+      {
+        slug: "bucket",
+        title: "Bucket Sort",
+        oneLiner:
+          "Scatter values into range buckets, sort each bucket on its own, then concatenate. Near-linear when the inputs are roughly uniform.",
+        difficulty: "advanced",
+        estimatedTime: "8 min",
+        prototypePath: "/prototypes/sorting/bucket.html",
+      },
+      {
+        slug: "timsort",
+        title: "Timsort",
+        oneLiner:
+          "Find runs already in order, pad short ones with insertion sort, then merge runs in stack order. The hybrid your language's sort() actually ships.",
+        difficulty: "advanced",
+        estimatedTime: "11 min",
+        prototypePath: "/prototypes/sorting/timsort.html",
+      },
+    ],
+  },
+  {
     slug: "bloom-filters",
     title: "Bloom & Cuckoo Filters",
     description:
