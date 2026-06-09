@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Floyd-Warshall</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --success-bg: rgba(92,198,111,0.14); --success-bd: rgba(92,198,111,0.45);
+        --danger: #f06868;  --danger-bg: rgba(240,104,104,0.14); --danger-bd: rgba(240,104,104,0.45);
+        --warning: #f0b568; --warning-bg: rgba(240,181,104,0.14); --warning-bd: rgba(240,181,104,0.45);
+        --info: #5e9ff6;    --info-bg:    rgba(94,159,246,0.16); --info-bd:    rgba(94,159,246,0.45);
+        --purple: #a78bfa;  --purple-bg:  rgba(167,139,250,0.16); --purple-bd:  rgba(167,139,250,0.45);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --radius-lg: 14px; --radius-md: 8px; --radius-sm: 6px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body { padding: 18px 18px 24px; background-image: radial-gradient(1200px 600px at 50% -200px, rgba(251,134,58,0.06), transparent), linear-gradient(to right, rgba(255,255,255,0.020) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.020) 1px, transparent 1px); background-size: auto, 40px 40px, 40px 40px; }
+      .container { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; padding: 9px 12px; transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); color: var(--fg); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); color: #1a1003; }
+      button.ghost { background: transparent; }
+      button i { font-size: 14px; }
+      input[type="range"] { accent-color: var(--accent); }
+
+      .hero { background: linear-gradient(180deg, rgba(255,255,255,0.014), transparent), var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px 12px; position: relative; overflow: hidden; display: grid; grid-template-columns: 200px 1fr; gap: 14px; }
+      .hero::before { content: ""; position: absolute; inset: 0; background: radial-gradient(420px 240px at 50% 0%, rgba(94,159,246,0.05), transparent 60%); pointer-events: none; }
+      .hero-side { position: relative; z-index: 1; }
+      .ttl { font: 600 11.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 8px; display: block; }
+      svg.graph { width: 100%; height: 180px; display: block; }
+      .edge { stroke: var(--border-strong); stroke-width: 1.6; fill: none; }
+      .edge.k { stroke: var(--info); stroke-width: 2.2; }
+      .arrowhead { fill: var(--border-strong); }
+      .arrowhead.k { fill: var(--info); }
+      .edge-wt { font: 600 9.5px var(--mono); fill: var(--muted); pointer-events: none; }
+      .edge-wt.bg { fill: var(--surface); stroke: var(--surface); stroke-width: 3.5; paint-order: stroke; }
+      .node-circ { stroke-width: 2; transition: fill 220ms ease, stroke 220ms ease; }
+      .node-circ.idle { fill: var(--elevated); stroke: var(--border-strong); }
+      .node-circ.i { fill: rgba(240,181,104,0.22); stroke: var(--warning); }
+      .node-circ.j { fill: rgba(92,198,111,0.20); stroke: var(--success); }
+      .node-circ.k { fill: rgba(94,159,246,0.22); stroke: var(--info); }
+      .node-lbl { font: 600 11px var(--mono); fill: var(--fg); text-anchor: middle; pointer-events: none; }
+
+      .matrix-card { position: relative; z-index: 1; }
+      .matrix-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+      .matrix-head .scope { font: 500 11px var(--mono); color: var(--muted); }
+      .matrix-head .scope code { color: var(--accent); }
+      .matrix { display: grid; gap: 2px; }
+      .cell { display: flex; align-items: center; justify-content: center; font: 600 12px var(--mono); padding: 8px 4px; background: var(--elevated); border: 1px solid var(--border); border-radius: 4px; min-width: 36px; transition: background 220ms ease, border-color 220ms ease, color 220ms ease; color: var(--fg); }
+      .cell.hdr { background: transparent; border: none; color: var(--muted); font-size: 11.5px; padding: 4px; }
+      .cell.diag { background: rgba(255,255,255,0.03); color: var(--subtle); }
+      .cell.inf { color: var(--subtle); }
+      .cell.row-k { background: rgba(94,159,246,0.10); border-color: rgba(94,159,246,0.30); }
+      .cell.col-k { background: rgba(94,159,246,0.10); border-color: rgba(94,159,246,0.30); }
+      .cell.k-cell { background: rgba(94,159,246,0.22); border-color: var(--info); color: var(--info); }
+      .cell.cur { background: rgba(240,181,104,0.28); border-color: var(--warning); color: var(--warning); }
+      .cell.updated { background: rgba(92,198,111,0.22); border-color: var(--success-bd); color: var(--success); animation: pulseG 0.45s ease; }
+      @keyframes pulseG { 0% { transform: scale(1); } 50% { transform: scale(1.08); } 100% { transform: scale(1); } }
+
+      .narration { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; position: relative; overflow: hidden; transition: border-color 350ms ease; }
+      .narration::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--border-strong); transition: background 350ms ease; }
+      .narration.k::before { background: var(--info); } .narration.k { border-color: rgba(94,159,246,0.30); }
+      .narration.upd::before { background: var(--success); } .narration.upd { border-color: rgba(92,198,111,0.30); }
+      .narration.done::before { background: var(--success); } .narration.done { border-color: rgba(92,198,111,0.45); }
+      .narr-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+      .badge { font: 600 10.5px var(--mono); padding: 4px 9px; border-radius: 999px; letter-spacing: 0.4px; text-transform: uppercase; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); color: var(--muted); background: var(--elevated); }
+      .badge.step { background: var(--elevated); border-color: var(--border-strong); color: var(--fg); }
+      .badge.event { background: transparent; }
+      .badge.event.k { color: var(--info); border-color: var(--info-bd); }
+      .badge.event.upd { color: var(--success); border-color: var(--success-bd); }
+      .badge.event.done { color: var(--success); border-color: var(--success-bd); }
+      .narr-text { margin: 0; font-size: 14px; line-height: 1.55; color: var(--fg); }
+      .narr-text strong { color: var(--fg); font-weight: 600; }
+      .narr-text code { font-family: var(--mono); background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; color: var(--accent); font-size: 12px; }
+
+      .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+      .controls .spacer { flex: 1; }
+      .speed-wrap { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font: 500 11px var(--mono); }
+      .speed-wrap input[type="range"] { width: 80px; }
+      .kbd { font-family: var(--mono); font-size: 10.5px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); color: var(--muted); border: 1px solid var(--border); }
+      .hint { font: 11px var(--mono); color: var(--subtle); display: inline-flex; align-items: center; gap: 5px; }
+
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; }
+      .stat .label { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .stat .value { font: 600 22px var(--mono); margin-top: 4px; line-height: 1; }
+
+      .progress-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+      .progress-card .row { display: flex; justify-content: space-between; align-items: center; }
+      .progress-card .lbl { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .progress-card .val { font: 600 14px var(--mono); color: var(--fg); }
+      .progress-bar { height: 6px; background: var(--elevated); border-radius: 99px; overflow: hidden; }
+      .progress-bar .fill { height: 100%; background: var(--accent); border-radius: 99px; transition: width 240ms ease; }
+
+      @media (max-width: 540px) {
+        .stats { grid-template-columns: repeat(2, 1fr); }
+        .hero { grid-template-columns: 1fr; }
+        svg.graph { height: 140px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2 class="sr-only">Floyd-Warshall all-pairs shortest paths on a 5-node directed graph.</h2>
+
+      <div class="hero">
+        <div class="hero-side">
+          <span class="ttl">Source graph</span>
+          <svg id="graph" class="graph" viewBox="0 0 200 180" aria-hidden="true">
+            <defs>
+              <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path class="arrowhead" d="M0,0 L10,5 L0,10 Z"/></marker>
+              <marker id="arr-k" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path class="arrowhead k" d="M0,0 L10,5 L0,10 Z"/></marker>
+            </defs>
+            <g id="edges"></g>
+            <g id="edgeLabels"></g>
+            <g id="nodes"></g>
+          </svg>
+        </div>
+        <div class="matrix-card">
+          <div class="matrix-head">
+            <span class="ttl" style="margin-bottom:0">Distance matrix</span>
+            <span class="scope" id="scope">k=–, i=–, j=–</span>
+          </div>
+          <div id="matrix" class="matrix"></div>
+        </div>
+      </div>
+
+      <div id="narration" class="narration">
+        <div class="narr-meta">
+          <span id="narr-step" class="badge step">Step 0 / 0</span>
+          <span id="narr-event" class="badge event" style="display:none"></span>
+        </div>
+        <p id="narr-text" class="narr-text"><strong>Press Play.</strong> Floyd-Warshall walks every intermediate node `k`, source `i`, and target `j`.</p>
+      </div>
+
+      <div class="controls">
+        <button id="btn-prev"><i class="ti ti-chevron-left"></i>Back</button>
+        <button id="btn-play" class="primary"><i id="play-icon" class="ti ti-player-play"></i><span id="play-label">Play</span></button>
+        <button id="btn-next"><i class="ti ti-chevron-right"></i>Step</button>
+        <button id="btn-restart" class="ghost"><i class="ti ti-refresh"></i>Restart</button>
+        <span class="spacer"></span>
+        <span class="speed-wrap"><span>Speed</span><input id="speed" type="range" min="1" max="10" step="1" value="5" /></span>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="label">phase k</div><div id="s-k" class="value" style="color:var(--info)">—</div></div>
+        <div class="stat"><div class="label">updates</div><div id="s-upd" class="value" style="color:var(--success)">0</div></div>
+        <div class="stat"><div class="label">cells finite</div><div id="s-fin" class="value">0</div></div>
+        <div class="stat"><div class="label">progress</div><div id="s-prog" class="value" style="color:var(--accent)">0%</div></div>
+      </div>
+
+      <div class="progress-card">
+        <div class="row"><span class="lbl">timeline</span><span class="val" id="tl-pos">0 / 0</span></div>
+        <div class="progress-bar"><div id="prog-fill" class="fill" style="width:0%"></div></div>
+        <div class="hint"><span class="kbd">←</span><span class="kbd">→</span><span class="kbd">space</span>&nbsp;walk steps</div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        var NODES = ['A','B','C','D','E'];
+        var pos = { A:[40,30], B:[160,30], C:[100,90], D:[40,150], E:[160,150] };
+        var EDGES = [
+          ['A','B',3], ['A','D',10], ['B','C',1], ['B','E',8],
+          ['C','A',5], ['C','D',2], ['D','E',1]
+        ];
+        var nodesG = document.getElementById('nodes');
+        var edgesG = document.getElementById('edges');
+        var labelsG = document.getElementById('edgeLabels');
+        var matrixEl = document.getElementById('matrix');
+        var scopeEl = document.getElementById('scope');
+        var narrEl = document.getElementById('narration');
+        var narrText = document.getElementById('narr-text');
+        var narrStep = document.getElementById('narr-step');
+        var narrEvent = document.getElementById('narr-event');
+        var sK = document.getElementById('s-k');
+        var sUpd = document.getElementById('s-upd');
+        var sFin = document.getElementById('s-fin');
+        var sP = document.getElementById('s-prog');
+        var tlPos = document.getElementById('tl-pos');
+        var progFill = document.getElementById('prog-fill');
+        var btnPrev = document.getElementById('btn-prev');
+        var btnNext = document.getElementById('btn-next');
+        var btnPlay = document.getElementById('btn-play');
+        var btnRestart = document.getElementById('btn-restart');
+        var playIcon = document.getElementById('play-icon');
+        var playLabel = document.getElementById('play-label');
+        var speedEl = document.getElementById('speed');
+
+        var nodeEls = {}, edgeEls = {};
+        EDGES.forEach(function (e) {
+          var u = e[0], v = e[1], w = e[2];
+          var p1 = pos[u], p2 = pos[v];
+          var dx = p2[0]-p1[0], dy = p2[1]-p1[1];
+          var len = Math.hypot(dx,dy);
+          var ux = dx/len, uy = dy/len;
+          var R = 14;
+          var x1 = p1[0]+ux*R, y1 = p1[1]+uy*R;
+          var x2 = p2[0]-ux*(R+3), y2 = p2[1]-uy*(R+3);
+          var ln = document.createElementNS('http://www.w3.org/2000/svg','line');
+          ln.setAttribute('x1',x1); ln.setAttribute('y1',y1);
+          ln.setAttribute('x2',x2); ln.setAttribute('y2',y2);
+          ln.setAttribute('class','edge');
+          ln.setAttribute('marker-end','url(#arr)');
+          var k = u+'->'+v;
+          edgesG.appendChild(ln); edgeEls[k] = ln;
+          var mx = (x1+x2)/2, my = (y1+y2)/2-5;
+          var bg = document.createElementNS('http://www.w3.org/2000/svg','text');
+          bg.setAttribute('x',mx); bg.setAttribute('y',my); bg.setAttribute('class','edge-wt bg'); bg.setAttribute('text-anchor','middle');
+          bg.textContent = w;
+          var fg = document.createElementNS('http://www.w3.org/2000/svg','text');
+          fg.setAttribute('x',mx); fg.setAttribute('y',my); fg.setAttribute('class','edge-wt'); fg.setAttribute('text-anchor','middle');
+          fg.textContent = w;
+          labelsG.appendChild(bg); labelsG.appendChild(fg);
+        });
+        NODES.forEach(function (n) {
+          var x = pos[n][0], y = pos[n][1];
+          var c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+          c.setAttribute('cx',x); c.setAttribute('cy',y); c.setAttribute('r',14);
+          c.setAttribute('class','node-circ idle');
+          var t = document.createElementNS('http://www.w3.org/2000/svg','text');
+          t.setAttribute('x',x); t.setAttribute('y',y+4);
+          t.setAttribute('class','node-lbl'); t.textContent = n;
+          nodesG.appendChild(c); nodesG.appendChild(t);
+          nodeEls[n] = { c:c, t:t };
+        });
+
+        // Build the matrix DOM: 6 cols (header + 5 cols)
+        matrixEl.style.gridTemplateColumns = 'repeat(' + (NODES.length + 1) + ', minmax(0, 1fr))';
+        // Header row
+        var blank = document.createElement('div'); blank.className = 'cell hdr'; matrixEl.appendChild(blank);
+        NODES.forEach(function (n) {
+          var h = document.createElement('div'); h.className = 'cell hdr'; h.textContent = n; h.dataset.colHdr = n; matrixEl.appendChild(h);
+        });
+        var cellEls = {};
+        NODES.forEach(function (ri) {
+          var h = document.createElement('div'); h.className = 'cell hdr'; h.textContent = ri; h.dataset.rowHdr = ri; matrixEl.appendChild(h);
+          NODES.forEach(function (rj) {
+            var c = document.createElement('div'); c.className = 'cell';
+            c.dataset.i = ri; c.dataset.j = rj;
+            matrixEl.appendChild(c);
+            cellEls[ri + ',' + rj] = c;
+          });
+        });
+
+        var steps = [], idx = 0, playing = false, timer = null;
+        var INF = Infinity;
+
+        function buildSteps() {
+          var s = [];
+          var dist = {};
+          NODES.forEach(function (i) {
+            NODES.forEach(function (j) {
+              if (i === j) dist[i+','+j] = 0;
+              else dist[i+','+j] = INF;
+            });
+          });
+          EDGES.forEach(function (e) { dist[e[0]+','+e[1]] = e[2]; });
+          // initial
+          s.push({
+            dist: Object.assign({}, dist), k: null, i: null, j: null,
+            updated: null, event: 'k',
+            msg: '<strong>Initial matrix.</strong> Diagonal is 0; direct edges fill in; everything else is <code>∞</code>.'
+          });
+          NODES.forEach(function (k) {
+            s.push({
+              dist: Object.assign({}, dist), k: k, i: null, j: null,
+              updated: null, event: 'k',
+              msg: '<strong>Phase k=' + k + '.</strong> Check whether routing through <code>' + k + '</code> shortens any (i, j) pair.'
+            });
+            NODES.forEach(function (i) {
+              if (i === k) return;
+              if (dist[i+','+k] === INF) return;
+              NODES.forEach(function (j) {
+                if (j === k || j === i) return;
+                var through = dist[i+','+k] + dist[k+','+j];
+                if (through < dist[i+','+j]) {
+                  var old = dist[i+','+j];
+                  dist[i+','+j] = through;
+                  s.push({
+                    dist: Object.assign({}, dist), k: k, i: i, j: j,
+                    updated: i + ',' + j, event: 'upd',
+                    msg: 'Through <code>' + k + '</code>: <code>' + i + '→' + k + '</code> (' + dist[i+','+k] + ') + <code>' + k + '→' + j + '</code> (' + dist[k+','+j] + ') = <code>' + through + '</code> &lt; ' + (old === INF ? '<code>∞</code>' : '<code>' + old + '</code>') + '. Update <code>dist[' + i + '][' + j + ']</code>.'
+                  });
+                }
+              });
+            });
+          });
+          s.push({
+            dist: Object.assign({}, dist), k: null, i: null, j: null,
+            updated: null, event: 'done',
+            msg: '<strong>Done.</strong> All-pairs shortest paths computed in O(V³). No diagonal entry went negative — no negative cycle.'
+          });
+          return s;
+        }
+
+        function render(st) {
+          // Source-graph node colouring
+          Object.keys(nodeEls).forEach(function (n) {
+            var role = 'idle';
+            if (st.k === n) role = 'k';
+            else if (st.i === n) role = 'i';
+            else if (st.j === n) role = 'j';
+            nodeEls[n].c.setAttribute('class', 'node-circ ' + role);
+          });
+          // Highlight edges going through k
+          Object.keys(edgeEls).forEach(function (key) {
+            var on = false;
+            if (st.k && st.i && st.j) {
+              if (key === st.i + '->' + st.k || key === st.k + '->' + st.j) on = true;
+            }
+            edgeEls[key].setAttribute('class', 'edge' + (on ? ' k' : ''));
+            edgeEls[key].setAttribute('marker-end', on ? 'url(#arr-k)' : 'url(#arr)');
+          });
+          // Matrix
+          NODES.forEach(function (i) {
+            NODES.forEach(function (j) {
+              var c = cellEls[i+','+j];
+              var v = st.dist[i+','+j];
+              var cl = 'cell';
+              if (i === j) cl += ' diag';
+              if (v === INF) cl += ' inf';
+              if (st.k === i || st.k === j) cl += ' row-k';
+              if (st.k === i && st.k === j) cl += ' k-cell';
+              if (st.i === i && st.j === j) cl += ' cur';
+              if (st.updated === i + ',' + j) cl += ' updated';
+              c.className = cl;
+              c.textContent = v === INF ? '∞' : v;
+            });
+          });
+          scopeEl.innerHTML = 'k=<code>' + (st.k || '–') + '</code>, i=<code>' + (st.i || '–') + '</code>, j=<code>' + (st.j || '–') + '</code>';
+          narrText.innerHTML = st.msg;
+          narrStep.textContent = 'Step ' + idx + ' / ' + (steps.length - 1);
+          narrEl.classList.remove('k','upd','done');
+          if (st.event) narrEl.classList.add(st.event);
+          if (st.event) {
+            narrEvent.style.display = '';
+            narrEvent.textContent = st.event === 'k' ? 'phase' : st.event === 'upd' ? 'update' : 'done';
+            narrEvent.className = 'badge event ' + st.event;
+          } else { narrEvent.style.display = 'none'; }
+          sK.textContent = st.k || '—';
+          var u = 0;
+          for (var z = 1; z <= idx; z++) if (steps[z].event === 'upd') u++;
+          sUpd.textContent = u;
+          var fin = 0;
+          NODES.forEach(function (i) {
+            NODES.forEach(function (j) {
+              if (st.dist[i+','+j] !== INF) fin++;
+            });
+          });
+          sFin.textContent = fin;
+          var pct = steps.length > 1 ? Math.round((idx / (steps.length - 1)) * 100) : 0;
+          sP.textContent = pct + '%'; progFill.style.width = pct + '%';
+          tlPos.textContent = idx + ' / ' + (steps.length - 1);
+        }
+
+        function reset() { stop(); steps = buildSteps(); idx = 0; render(steps[0]); }
+        function next() { if (idx >= steps.length - 1) { stop(); return false; } idx++; render(steps[idx]); if (idx >= steps.length - 1) stop(); return true; }
+        function prev() { if (idx <= 0) return; idx--; render(steps[idx]); }
+        function delay() { return 1100 - (parseInt(speedEl.value, 10) * 95); }
+        function play() { if (idx >= steps.length - 1) reset(); playing = true; playLabel.textContent='Pause'; playIcon.className='ti ti-player-pause'; loop(); }
+        function loop() { if (!playing) return; if (!next()) { stop(); return; } timer = setTimeout(loop, delay()); }
+        function stop() { playing=false; if (timer){clearTimeout(timer);timer=null;} playLabel.textContent='Play'; playIcon.className='ti ti-player-play'; }
+
+        btnPlay.addEventListener('click', function(){ playing ? stop() : play(); });
+        btnNext.addEventListener('click', function(){ stop(); next(); });
+        btnPrev.addEventListener('click', function(){ stop(); prev(); });
+        btnRestart.addEventListener('click', function(){ reset(); });
+        window.addEventListener('keydown', function(e){
+          if (e.key === 'ArrowLeft') { stop(); prev(); }
+          else if (e.key === 'ArrowRight') { stop(); next(); }
+          else if (e.key === ' ') { e.preventDefault(); playing ? stop() : play(); }
+        });
+
+        reset();
+
+        function postHeight(){ try { parent.postMessage({type:'prototype:height',height:document.body.scrollHeight},'*'); } catch(e){} }
+        new ResizeObserver(postHeight).observe(document.body);
+        postHeight();
+      })();
+    </script>
+  </body>
+</html>
