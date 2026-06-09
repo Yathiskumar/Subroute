@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bellman-Ford</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --success-bg: rgba(92,198,111,0.14); --success-bd: rgba(92,198,111,0.45);
+        --danger: #f06868;  --danger-bg: rgba(240,104,104,0.14); --danger-bd: rgba(240,104,104,0.45);
+        --warning: #f0b568; --warning-bg: rgba(240,181,104,0.14); --warning-bd: rgba(240,181,104,0.45);
+        --info: #5e9ff6;    --info-bg:    rgba(94,159,246,0.16); --info-bd:    rgba(94,159,246,0.45);
+        --purple: #a78bfa;  --purple-bg:  rgba(167,139,250,0.16); --purple-bd:  rgba(167,139,250,0.45);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --radius-lg: 14px; --radius-md: 8px; --radius-sm: 6px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body { padding: 18px 18px 24px; background-image: radial-gradient(1200px 600px at 50% -200px, rgba(251,134,58,0.06), transparent), linear-gradient(to right, rgba(255,255,255,0.020) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.020) 1px, transparent 1px); background-size: auto, 40px 40px, 40px 40px; }
+      .container { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; padding: 9px 12px; transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); color: var(--fg); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); color: #1a1003; }
+      button.ghost { background: transparent; }
+      button i { font-size: 14px; }
+      input[type="range"] { accent-color: var(--accent); }
+
+      .hero { background: linear-gradient(180deg, rgba(255,255,255,0.014), transparent), var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px 12px; position: relative; overflow: hidden; }
+      .hero::before { content: ""; position: absolute; inset: 0; background: radial-gradient(420px 240px at 50% 0%, rgba(94,159,246,0.05), transparent 60%); pointer-events: none; }
+      .hero-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; position: relative; z-index: 1; gap: 12px; flex-wrap: wrap; }
+      .ttl { font: 600 11.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .pass-chip { font: 600 11px var(--mono); padding: 5px 10px; background: var(--elevated); border: 1px solid var(--border-strong); border-radius: 999px; color: var(--fg); }
+      .pass-chip.warn { background: rgba(240,104,104,0.16); border-color: var(--danger-bd); color: var(--danger); }
+
+      .graph-wrap { position: relative; z-index: 1; }
+      svg.graph { width: 100%; height: 260px; display: block; }
+      .edge { stroke: var(--border-strong); stroke-width: 2; transition: stroke 220ms ease, stroke-width 220ms ease; fill: none; }
+      .edge.relax { stroke: var(--warning); stroke-width: 3; }
+      .edge.improved { stroke: var(--success); stroke-width: 2.6; }
+      .edge.neg { stroke: var(--danger); }
+      .arrowhead { fill: var(--border-strong); }
+      .arrowhead.relax { fill: var(--warning); }
+      .arrowhead.improved { fill: var(--success); }
+      .arrowhead.neg { fill: var(--danger); }
+      .edge-wt { font: 600 11.5px var(--mono); fill: var(--muted); pointer-events: none; }
+      .edge-wt.neg { fill: var(--danger); }
+      .edge-wt.bg { fill: var(--bg); stroke: var(--bg); stroke-width: 4; paint-order: stroke; }
+      .node-circ { stroke-width: 2.4; transition: fill 220ms ease, stroke 220ms ease; }
+      .node-circ.unseen { fill: var(--elevated); stroke: var(--border-strong); }
+      .node-circ.frontier { fill: rgba(94,159,246,0.22); stroke: var(--info); }
+      .node-circ.target { fill: var(--warning); stroke: var(--warning); }
+      .node-circ.cycle { fill: rgba(240,104,104,0.18); stroke: var(--danger); }
+      .node-lbl { font: 600 13px var(--mono); fill: var(--fg); text-anchor: middle; pointer-events: none; }
+      .node-dist { font: 600 11px var(--mono); fill: var(--accent); text-anchor: middle; pointer-events: none; }
+
+      .lanes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      .lane { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; min-height: 80px; }
+      .lane .h { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px; }
+      .dist-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; }
+      .dist-item { display: flex; align-items: center; justify-content: space-between; padding: 4px 6px; background: var(--elevated); border: 1px solid var(--border); border-radius: 4px; font: 600 11.5px var(--mono); }
+      .dist-item.improved { background: rgba(92,198,111,0.18); border-color: var(--success-bd); }
+      .dist-item.cycle { background: rgba(240,104,104,0.18); border-color: var(--danger-bd); }
+      .dist-item .k { color: var(--muted); }
+      .dist-item .v { color: var(--accent); }
+      .dist-item.cycle .v { color: var(--danger); }
+      .edge-list { display: flex; flex-direction: column; gap: 3px; }
+      .edge-row { display: flex; align-items: center; gap: 8px; font: 500 11.5px var(--mono); color: var(--fg); padding: 3px 6px; border-radius: 4px; background: var(--elevated); border: 1px solid var(--border); }
+      .edge-row.cur { background: rgba(240,181,104,0.16); border-color: var(--warning-bd); }
+      .edge-row .w { color: var(--accent); margin-left: auto; }
+      .edge-row.cur .w { color: var(--warning); }
+      .edge-row.neg .w { color: var(--danger); }
+      .empty { font: 500 11.5px var(--mono); color: var(--subtle); padding: 4px 2px; }
+
+      .narration { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; position: relative; overflow: hidden; transition: border-color 350ms ease; }
+      .narration::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--border-strong); transition: background 350ms ease; }
+      .narration.relax::before { background: var(--warning); } .narration.relax { border-color: rgba(240,181,104,0.30); }
+      .narration.improve::before { background: var(--success); } .narration.improve { border-color: rgba(92,198,111,0.30); }
+      .narration.cycle::before { background: var(--danger); } .narration.cycle { border-color: rgba(240,104,104,0.30); }
+      .narration.done::before { background: var(--success); } .narration.done { border-color: rgba(92,198,111,0.45); }
+      .narr-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+      .badge { font: 600 10.5px var(--mono); padding: 4px 9px; border-radius: 999px; letter-spacing: 0.4px; text-transform: uppercase; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); color: var(--muted); background: var(--elevated); }
+      .badge.step { background: var(--elevated); border-color: var(--border-strong); color: var(--fg); }
+      .badge.event { background: transparent; }
+      .badge.event.relax { color: var(--warning); border-color: var(--warning-bd); }
+      .badge.event.improve { color: var(--success); border-color: var(--success-bd); }
+      .badge.event.cycle { color: var(--danger); border-color: var(--danger-bd); }
+      .badge.event.done { color: var(--success); border-color: var(--success-bd); }
+      .narr-text { margin: 0; font-size: 14px; line-height: 1.55; color: var(--fg); }
+      .narr-text strong { color: var(--fg); font-weight: 600; }
+      .narr-text code { font-family: var(--mono); background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; color: var(--accent); font-size: 12px; }
+
+      .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+      .controls .spacer { flex: 1; }
+      .speed-wrap { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font: 500 11px var(--mono); }
+      .speed-wrap input[type="range"] { width: 80px; }
+      .kbd { font-family: var(--mono); font-size: 10.5px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); color: var(--muted); border: 1px solid var(--border); }
+      .hint { font: 11px var(--mono); color: var(--subtle); display: inline-flex; align-items: center; gap: 5px; }
+
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; }
+      .stat .label { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .stat .value { font: 600 22px var(--mono); margin-top: 4px; line-height: 1; }
+
+      .progress-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+      .progress-card .row { display: flex; justify-content: space-between; align-items: center; }
+      .progress-card .lbl { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .progress-card .val { font: 600 14px var(--mono); color: var(--fg); }
+      .progress-bar { height: 6px; background: var(--elevated); border-radius: 99px; overflow: hidden; }
+      .progress-bar .fill { height: 100%; background: var(--accent); border-radius: 99px; transition: width 240ms ease; }
+
+      @media (max-width: 540px) {
+        .stats { grid-template-columns: repeat(2, 1fr); }
+        .lanes { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2 class="sr-only">Bellman-Ford on a directed weighted graph with negative edges and optional negative-cycle detection.</h2>
+
+      <div class="hero">
+        <div class="hero-head">
+          <span class="ttl">Directed weighted graph · Bellman-Ford</span>
+          <span id="pass-chip" class="pass-chip">Pass 0 / 3</span>
+        </div>
+        <div class="graph-wrap">
+          <svg id="graph" class="graph" viewBox="0 0 540 260" aria-hidden="true">
+            <defs>
+              <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="arrowhead" d="M0,0 L10,5 L0,10 Z"/></marker>
+              <marker id="arr-r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="arrowhead relax" d="M0,0 L10,5 L0,10 Z"/></marker>
+              <marker id="arr-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="arrowhead improved" d="M0,0 L10,5 L0,10 Z"/></marker>
+              <marker id="arr-n" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="arrowhead neg" d="M0,0 L10,5 L0,10 Z"/></marker>
+            </defs>
+            <g id="edges"></g>
+            <g id="edgeLabels"></g>
+            <g id="nodes"></g>
+          </svg>
+        </div>
+      </div>
+
+      <div class="lanes">
+        <div class="lane">
+          <div class="h">Distances from source</div>
+          <div id="lane-dist" class="dist-list"></div>
+        </div>
+        <div class="lane">
+          <div class="h">Edge order this pass</div>
+          <div id="lane-edges" class="edge-list"></div>
+        </div>
+      </div>
+
+      <div id="narration" class="narration">
+        <div class="narr-meta">
+          <span id="narr-step" class="badge step">Step 0 / 0</span>
+          <span id="narr-event" class="badge event" style="display:none"></span>
+        </div>
+        <p id="narr-text" class="narr-text"><strong>Press Play.</strong> Bellman-Ford relaxes every edge once per pass, V-1 times.</p>
+      </div>
+
+      <div class="controls">
+        <button id="btn-prev"><i class="ti ti-chevron-left"></i>Back</button>
+        <button id="btn-play" class="primary"><i id="play-icon" class="ti ti-player-play"></i><span id="play-label">Play</span></button>
+        <button id="btn-next"><i class="ti ti-chevron-right"></i>Step</button>
+        <button id="btn-restart" class="ghost"><i class="ti ti-refresh"></i>Restart</button>
+        <button id="btn-neg" class="ghost"><i class="ti ti-rotate"></i>Try neg-cycle</button>
+        <button id="btn-norm" class="ghost"><i class="ti ti-graph"></i>Normal</button>
+        <span class="spacer"></span>
+        <span class="speed-wrap"><span>Speed</span><input id="speed" type="range" min="1" max="10" step="1" value="5" /></span>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="label">pass</div><div id="s-pass" class="value" style="color:var(--warning)">0</div></div>
+        <div class="stat"><div class="label">updates</div><div id="s-upd" class="value" style="color:var(--success)">0</div></div>
+        <div class="stat"><div class="label">edges checked</div><div id="s-edges" class="value">0</div></div>
+        <div class="stat"><div class="label">progress</div><div id="s-prog" class="value" style="color:var(--accent)">0%</div></div>
+      </div>
+
+      <div class="progress-card">
+        <div class="row"><span class="lbl">timeline</span><span class="val" id="tl-pos">0 / 0</span></div>
+        <div class="progress-bar"><div id="prog-fill" class="fill" style="width:0%"></div></div>
+        <div class="hint"><span class="kbd">←</span><span class="kbd">→</span><span class="kbd">space</span>&nbsp;walk steps</div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        var GRAPHS = {
+          normal: {
+            pos: { A:[60,80], B:[280,80], C:[60,220], D:[280,220], E:[460,150] },
+            edges: [
+              ['A','B',4], ['A','C',5], ['B','C',-3], ['C','D',3], ['B','D',8], ['D','E',2], ['C','E',9]
+            ],
+            start: 'A'
+          },
+          neg: {
+            pos: { A:[80,150], B:[260,60], C:[260,230], D:[440,150] },
+            edges: [
+              ['A','B',1], ['B','C',-3], ['C','A',1], ['A','D',4]
+            ],
+            start: 'A'
+          }
+        };
+        var current = 'normal';
+
+        var nodesG = document.getElementById('nodes');
+        var edgesG = document.getElementById('edges');
+        var labelsG = document.getElementById('edgeLabels');
+        var narrEl = document.getElementById('narration');
+        var narrText = document.getElementById('narr-text');
+        var narrStep = document.getElementById('narr-step');
+        var narrEvent = document.getElementById('narr-event');
+        var passChip = document.getElementById('pass-chip');
+        var laneDist = document.getElementById('lane-dist');
+        var laneEdges = document.getElementById('lane-edges');
+        var sPass = document.getElementById('s-pass');
+        var sUpd = document.getElementById('s-upd');
+        var sEdges = document.getElementById('s-edges');
+        var sP = document.getElementById('s-prog');
+        var tlPos = document.getElementById('tl-pos');
+        var progFill = document.getElementById('prog-fill');
+        var btnPrev = document.getElementById('btn-prev');
+        var btnNext = document.getElementById('btn-next');
+        var btnPlay = document.getElementById('btn-play');
+        var btnRestart = document.getElementById('btn-restart');
+        var btnNeg = document.getElementById('btn-neg');
+        var btnNorm = document.getElementById('btn-norm');
+        var playIcon = document.getElementById('play-icon');
+        var playLabel = document.getElementById('play-label');
+        var speedEl = document.getElementById('speed');
+
+        var nodeEls = {}, edgeEls = {}, labelEls = {};
+        var steps = [], idx = 0, playing = false, timer = null;
+
+        function rebuildGraph() {
+          nodesG.innerHTML=''; edgesG.innerHTML=''; labelsG.innerHTML='';
+          nodeEls={}; edgeEls={}; labelEls={};
+          var g = GRAPHS[current];
+          g.edges.forEach(function (e) {
+            var u = e[0], v = e[1], w = e[2];
+            var p1 = g.pos[u], p2 = g.pos[v];
+            var dx = p2[0]-p1[0], dy = p2[1]-p1[1];
+            var len = Math.hypot(dx, dy);
+            var ux = dx/len, uy = dy/len;
+            var R = 22;
+            var x1 = p1[0] + ux * R, y1 = p1[1] + uy * R;
+            var x2 = p2[0] - ux * (R + 4), y2 = p2[1] - uy * (R + 4);
+            var ln = document.createElementNS('http://www.w3.org/2000/svg','line');
+            ln.setAttribute('x1',x1); ln.setAttribute('y1',y1);
+            ln.setAttribute('x2',x2); ln.setAttribute('y2',y2);
+            ln.setAttribute('class','edge' + (w < 0 ? ' neg' : ''));
+            ln.setAttribute('marker-end', w < 0 ? 'url(#arr-n)' : 'url(#arr)');
+            var k = u + '->' + v;
+            edgeEls[k] = ln; edgesG.appendChild(ln);
+            var mx = (x1+x2)/2, my = (y1+y2)/2 - 8;
+            var bg = document.createElementNS('http://www.w3.org/2000/svg','text');
+            bg.setAttribute('x',mx); bg.setAttribute('y',my); bg.setAttribute('class','edge-wt bg'); bg.setAttribute('text-anchor','middle');
+            bg.textContent = w;
+            var fg = document.createElementNS('http://www.w3.org/2000/svg','text');
+            fg.setAttribute('x',mx); fg.setAttribute('y',my); fg.setAttribute('class','edge-wt' + (w<0?' neg':'')); fg.setAttribute('text-anchor','middle');
+            fg.textContent = w;
+            labelsG.appendChild(bg); labelsG.appendChild(fg);
+            labelEls[k] = fg;
+          });
+          Object.keys(g.pos).forEach(function (n) {
+            var x = g.pos[n][0], y = g.pos[n][1];
+            var c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+            c.setAttribute('cx',x); c.setAttribute('cy',y); c.setAttribute('r',22);
+            c.setAttribute('class','node-circ unseen');
+            var t = document.createElementNS('http://www.w3.org/2000/svg','text');
+            t.setAttribute('x',x); t.setAttribute('y',y+5);
+            t.setAttribute('class','node-lbl'); t.textContent = n;
+            var d = document.createElementNS('http://www.w3.org/2000/svg','text');
+            d.setAttribute('x',x); d.setAttribute('y',y-30);
+            d.setAttribute('class','node-dist'); d.textContent='';
+            nodesG.appendChild(c); nodesG.appendChild(t); nodesG.appendChild(d);
+            nodeEls[n] = { c:c, t:t, d:d };
+          });
+        }
+
+        function buildSteps() {
+          var g = GRAPHS[current];
+          var nodes = Object.keys(g.pos);
+          var V = nodes.length;
+          var s = [];
+          var dist = {};
+          nodes.forEach(function (n) { dist[n] = Infinity; });
+          dist[g.start] = 0;
+          var improved = {};      // edge key -> improvement count
+          s.push({
+            dist: Object.assign({}, dist), pass: 0, edge: null, totalPasses: V - 1,
+            improvedSet: [], event: 'relax', cycleNodes: [],
+            msg: '<strong>Init.</strong> Source <code>' + g.start + '</code> = <code>0</code>, others <code>∞</code>. About to run ' + (V - 1) + ' passes.'
+          });
+          var cycleFound = false;
+          var cycleNodes = [];
+          for (var pass = 1; pass <= V && !cycleFound; pass++) {
+            var anyImprovement = false;
+            for (var ei = 0; ei < g.edges.length; ei++) {
+              var e = g.edges[ei];
+              var u = e[0], v = e[1], w = e[2];
+              var k = u + '->' + v;
+              var newD = (dist[u] === Infinity ? Infinity : dist[u] + w);
+              var improving = newD < dist[v];
+              if (pass === V) {
+                if (improving) {
+                  cycleFound = true;
+                  cycleNodes = [u, v];
+                  s.push({
+                    dist: Object.assign({}, dist), pass: pass, edge: k, totalPasses: V - 1,
+                    improvedSet: Object.keys(improved), event: 'cycle', cycleNodes: cycleNodes,
+                    msg: '<strong>V-th pass — edge ' + u + '→' + v + ' still improves!</strong> Negative cycle reachable. Distances would drop forever.'
+                  });
+                  break;
+                }
+                continue;
+              }
+              if (improving) {
+                dist[v] = newD;
+                improved[k] = (improved[k] || 0) + 1;
+                anyImprovement = true;
+                s.push({
+                  dist: Object.assign({}, dist), pass: pass, edge: k, totalPasses: V - 1,
+                  improvedSet: Object.keys(improved), event: 'improve', cycleNodes: [],
+                  msg: 'Pass ' + pass + ': relax <code>' + u + '→' + v + '</code> (w=' + w + ') — improved <code>dist[' + v + ']</code> to <code>' + newD + '</code>.'
+                });
+              } else {
+                s.push({
+                  dist: Object.assign({}, dist), pass: pass, edge: k, totalPasses: V - 1,
+                  improvedSet: Object.keys(improved), event: 'relax', cycleNodes: [],
+                  msg: 'Pass ' + pass + ': check <code>' + u + '→' + v + '</code> (w=' + w + '). No improvement (' + (newD === Infinity ? '∞' : newD) + ' ≥ ' + (dist[v] === Infinity ? '∞' : dist[v]) + ').'
+                });
+              }
+            }
+            if (pass < V && !cycleFound && !anyImprovement) {
+              s.push({
+                dist: Object.assign({}, dist), pass: pass, edge: null, totalPasses: V - 1,
+                improvedSet: Object.keys(improved), event: 'done', cycleNodes: [],
+                msg: 'Pass ' + pass + ' made no updates — distances are stable. Early exit.'
+              });
+              return s;
+            }
+          }
+          if (!cycleFound) {
+            s.push({
+              dist: Object.assign({}, dist), pass: V - 1, edge: null, totalPasses: V - 1,
+              improvedSet: Object.keys(improved), event: 'done', cycleNodes: [],
+              msg: '<strong>Done.</strong> No negative cycle. V-th pass would not change anything.'
+            });
+          }
+          return s;
+        }
+
+        function render(st) {
+          var g = GRAPHS[current];
+          // Pass chip
+          if (st.event === 'cycle') passChip.className = 'pass-chip warn';
+          else passChip.className = 'pass-chip';
+          passChip.textContent = st.event === 'cycle' ? 'Pass V — neg cycle' : 'Pass ' + st.pass + ' / ' + st.totalPasses;
+
+          // Nodes
+          Object.keys(nodeEls).forEach(function (n) {
+            var role = 'unseen';
+            if (st.cycleNodes.indexOf(n) >= 0) role = 'cycle';
+            else if (st.dist[n] !== Infinity && n === g.start) role = 'target';
+            else if (st.dist[n] !== Infinity) role = 'frontier';
+            nodeEls[n].c.setAttribute('class', 'node-circ ' + role);
+            nodeEls[n].d.textContent = st.dist[n] === Infinity ? '∞' : st.dist[n];
+          });
+          // Edges
+          Object.keys(edgeEls).forEach(function (k) {
+            var e = g.edges.find(function (e2) { return e2[0]+'->'+e2[1] === k; });
+            var neg = e && e[2] < 0;
+            var cl = 'edge' + (neg ? ' neg' : '');
+            var marker = neg ? 'url(#arr-n)' : 'url(#arr)';
+            if (st.edge === k) {
+              if (st.event === 'cycle') { cl = 'edge'; marker = 'url(#arr-n)'; cl += ' neg relax'; marker = 'url(#arr-r)'; }
+              else if (st.event === 'improve') { cl += ' improved'; marker = 'url(#arr-g)'; }
+              else { cl += ' relax'; marker = 'url(#arr-r)'; }
+            } else if (st.improvedSet.indexOf(k) >= 0) {
+              cl += ' improved'; marker = 'url(#arr-g)';
+            }
+            edgeEls[k].setAttribute('class', cl);
+            edgeEls[k].setAttribute('marker-end', marker);
+          });
+          // Distance list
+          laneDist.innerHTML = '';
+          Object.keys(g.pos).forEach(function (n) {
+            var di = document.createElement('div');
+            di.className = 'dist-item' + (st.cycleNodes.indexOf(n) >= 0 ? ' cycle' : (st.dist[n] !== Infinity && n !== g.start ? ' improved' : ''));
+            di.innerHTML = '<span class="k">' + n + '</span><span class="v">' + (st.dist[n] === Infinity ? '∞' : st.dist[n]) + '</span>';
+            laneDist.appendChild(di);
+          });
+          // Edge list
+          laneEdges.innerHTML = '';
+          g.edges.forEach(function (e) {
+            var k = e[0]+'->'+e[1];
+            var r = document.createElement('div');
+            r.className = 'edge-row' + (st.edge === k ? ' cur' : '') + (e[2] < 0 ? ' neg' : '');
+            r.innerHTML = '<span>' + e[0] + ' → ' + e[1] + '</span><span class="w">w=' + e[2] + '</span>';
+            laneEdges.appendChild(r);
+          });
+          narrText.innerHTML = st.msg;
+          narrStep.textContent = 'Step ' + idx + ' / ' + (steps.length - 1);
+          narrEl.classList.remove('relax','improve','cycle','done');
+          if (st.event) narrEl.classList.add(st.event);
+          if (st.event) {
+            narrEvent.style.display = '';
+            narrEvent.textContent = st.event === 'improve' ? 'update' : st.event === 'relax' ? 'check' : st.event;
+            narrEvent.className = 'badge event ' + st.event;
+          } else { narrEvent.style.display = 'none'; }
+          sPass.textContent = st.pass;
+          var u = 0, c = 0;
+          for (var i = 1; i <= idx; i++) {
+            if (steps[i].event === 'improve') u++;
+            if (steps[i].event === 'relax' || steps[i].event === 'improve' || steps[i].event === 'cycle') c++;
+          }
+          sUpd.textContent = u;
+          sEdges.textContent = c;
+          var pct = steps.length > 1 ? Math.round((idx / (steps.length - 1)) * 100) : 0;
+          sP.textContent = pct + '%'; progFill.style.width = pct + '%';
+          tlPos.textContent = idx + ' / ' + (steps.length - 1);
+        }
+
+        function reset() { stop(); rebuildGraph(); steps = buildSteps(); idx = 0; render(steps[0]); }
+        function next() { if (idx >= steps.length - 1) { stop(); return false; } idx++; render(steps[idx]); if (idx >= steps.length - 1) stop(); return true; }
+        function prev() { if (idx <= 0) return; idx--; render(steps[idx]); }
+        function delay() { return 1100 - (parseInt(speedEl.value, 10) * 95); }
+        function play() { if (idx >= steps.length - 1) reset(); playing = true; playLabel.textContent='Pause'; playIcon.className='ti ti-player-pause'; loop(); }
+        function loop() { if (!playing) return; if (!next()) { stop(); return; } timer = setTimeout(loop, delay()); }
+        function stop() { playing=false; if (timer){clearTimeout(timer);timer=null;} playLabel.textContent='Play'; playIcon.className='ti ti-player-play'; }
+
+        btnPlay.addEventListener('click', function(){ playing ? stop() : play(); });
+        btnNext.addEventListener('click', function(){ stop(); next(); });
+        btnPrev.addEventListener('click', function(){ stop(); prev(); });
+        btnRestart.addEventListener('click', function(){ reset(); });
+        btnNeg.addEventListener('click', function(){ current = 'neg'; reset(); });
+        btnNorm.addEventListener('click', function(){ current = 'normal'; reset(); });
+        window.addEventListener('keydown', function(e){
+          if (e.key === 'ArrowLeft') { stop(); prev(); }
+          else if (e.key === 'ArrowRight') { stop(); next(); }
+          else if (e.key === ' ') { e.preventDefault(); playing ? stop() : play(); }
+        });
+
+        reset();
+
+        function postHeight(){ try { parent.postMessage({type:'prototype:height',height:document.body.scrollHeight},'*'); } catch(e){} }
+        new ResizeObserver(postHeight).observe(document.body);
+        postHeight();
+      })();
+    </script>
+  </body>
+</html>

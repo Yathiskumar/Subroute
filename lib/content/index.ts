@@ -97,6 +97,17 @@ import { counting as sCounting } from "./sorting/counting";
 import { radix as sRadix } from "./sorting/radix";
 import { bucket as sBucket } from "./sorting/bucket";
 import { timsort as sTimsort } from "./sorting/timsort";
+import { graphAlgorithmsTopic } from "./graph-algorithms/_topic";
+import { bfs as gaBfs } from "./graph-algorithms/bfs";
+import { dfs as gaDfs } from "./graph-algorithms/dfs";
+import { topologicalSort as gaTopoSort } from "./graph-algorithms/topological-sort";
+import { dijkstra as gaDijkstra } from "./graph-algorithms/dijkstra";
+import { bellmanFord as gaBellmanFord } from "./graph-algorithms/bellman-ford";
+import { floydWarshall as gaFloydWarshall } from "./graph-algorithms/floyd-warshall";
+import { unionFind as gaUnionFind } from "./graph-algorithms/union-find";
+import { kruskal as gaKruskal } from "./graph-algorithms/kruskal";
+import { prim as gaPrim } from "./graph-algorithms/prim";
+import { astar as gaAstar } from "./graph-algorithms/astar";
 
 // Indexed by `${topicSlug}/${conceptSlug}`
 const CONCEPT_CONTENT: Record<string, ConceptContent> = {
@@ -185,6 +196,16 @@ const CONCEPT_CONTENT: Record<string, ConceptContent> = {
   "sorting/radix": sRadix,
   "sorting/bucket": sBucket,
   "sorting/timsort": sTimsort,
+  "graph-algorithms/bfs": gaBfs,
+  "graph-algorithms/dfs": gaDfs,
+  "graph-algorithms/topological-sort": gaTopoSort,
+  "graph-algorithms/dijkstra": gaDijkstra,
+  "graph-algorithms/bellman-ford": gaBellmanFord,
+  "graph-algorithms/floyd-warshall": gaFloydWarshall,
+  "graph-algorithms/union-find": gaUnionFind,
+  "graph-algorithms/kruskal": gaKruskal,
+  "graph-algorithms/prim": gaPrim,
+  "graph-algorithms/astar": gaAstar,
 };
 
 // Indexed by topic slug
@@ -202,6 +223,7 @@ const TOPIC_CONTENT: Record<string, TopicContent> = {
   "consensus": consensusTopic,
   "leader-election": leaderElectionTopic,
   "sorting": sortingTopic,
+  "graph-algorithms": graphAlgorithmsTopic,
 };
 
 export function getConceptContent(

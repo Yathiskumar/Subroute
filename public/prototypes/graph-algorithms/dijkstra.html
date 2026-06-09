@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dijkstra's Shortest Path</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --success-bg: rgba(92,198,111,0.14); --success-bd: rgba(92,198,111,0.45);
+        --danger: #f06868;  --danger-bg: rgba(240,104,104,0.14); --danger-bd: rgba(240,104,104,0.45);
+        --warning: #f0b568; --warning-bg: rgba(240,181,104,0.14); --warning-bd: rgba(240,181,104,0.45);
+        --info: #5e9ff6;    --info-bg:    rgba(94,159,246,0.16); --info-bd:    rgba(94,159,246,0.45);
+        --purple: #a78bfa;  --purple-bg:  rgba(167,139,250,0.16); --purple-bd:  rgba(167,139,250,0.45);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --radius-lg: 14px; --radius-md: 8px; --radius-sm: 6px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body { padding: 18px 18px 24px; background-image: radial-gradient(1200px 600px at 50% -200px, rgba(251,134,58,0.06), transparent), linear-gradient(to right, rgba(255,255,255,0.020) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.020) 1px, transparent 1px); background-size: auto, 40px 40px, 40px 40px; }
+      .container { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; padding: 9px 12px; transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); color: var(--fg); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); color: #1a1003; }
+      button.ghost { background: transparent; }
+      button i { font-size: 14px; }
+      select { background: var(--elevated); color: var(--fg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px 9px; font: 500 12px var(--sans); }
+      input[type="range"] { accent-color: var(--accent); }
+
+      .hero { background: linear-gradient(180deg, rgba(255,255,255,0.014), transparent), var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px 12px; position: relative; overflow: hidden; }
+      .hero::before { content: ""; position: absolute; inset: 0; background: radial-gradient(420px 240px at 50% 0%, rgba(94,159,246,0.05), transparent 60%); pointer-events: none; }
+      .hero-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; position: relative; z-index: 1; gap: 12px; flex-wrap: wrap; }
+      .ttl { font: 600 11.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .legend { font-size: 11px; color: var(--muted); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      .legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: -1px; margin-right: 4px; }
+
+      .graph-wrap { position: relative; z-index: 1; }
+      svg.graph { width: 100%; height: 280px; display: block; }
+      .edge { stroke: var(--border-strong); stroke-width: 2; transition: stroke 220ms ease, stroke-width 220ms ease; }
+      .edge.relax { stroke: var(--warning); stroke-width: 2.8; }
+      .edge.tree { stroke: var(--success); stroke-width: 2.6; }
+      .edge-wt { font: 600 11px var(--mono); fill: var(--muted); pointer-events: none; }
+      .edge-wt.bg { fill: var(--bg); stroke: var(--bg); stroke-width: 4; paint-order: stroke; }
+      .node-circ { stroke-width: 2.4; transition: fill 220ms ease, stroke 220ms ease; }
+      .node-circ.unseen { fill: var(--elevated); stroke: var(--border-strong); }
+      .node-circ.frontier { fill: rgba(94,159,246,0.22); stroke: var(--info); }
+      .node-circ.active { fill: var(--warning); stroke: var(--warning); }
+      .node-circ.settled { fill: rgba(92,198,111,0.25); stroke: var(--success); }
+      .node-lbl { font: 600 13px var(--mono); fill: var(--fg); text-anchor: middle; pointer-events: none; }
+      .node-dist { font: 600 11px var(--mono); fill: var(--accent); text-anchor: middle; pointer-events: none; }
+
+      .lanes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      .lane { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; min-height: 80px; }
+      .lane .h { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px; }
+      .lane .row { display: flex; flex-direction: column; gap: 4px; min-height: 28px; }
+      .pq-row { display: flex; align-items: center; gap: 8px; font: 500 12.5px var(--mono); color: var(--fg); padding: 4px 6px; border-radius: 4px; background: var(--elevated); border: 1px solid var(--border); }
+      .pq-row.stale { opacity: 0.45; text-decoration: line-through; }
+      .pq-row.head { background: rgba(240,181,104,0.16); border-color: var(--warning-bd); }
+      .pq-row .dist { color: var(--accent); }
+      .pq-row .lbl { color: var(--muted); margin-left: auto; font-size: 10.5px; text-transform: uppercase; }
+      .dist-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+      .dist-item { display: flex; align-items: center; justify-content: space-between; padding: 4px 6px; background: var(--elevated); border: 1px solid var(--border); border-radius: 4px; font: 600 11.5px var(--mono); }
+      .dist-item .k { color: var(--muted); }
+      .dist-item .v { color: var(--accent); }
+      .dist-item.settled { background: rgba(92,198,111,0.18); border-color: var(--success-bd); }
+      .empty { font: 500 11.5px var(--mono); color: var(--subtle); padding: 4px 2px; }
+
+      .narration { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; position: relative; overflow: hidden; transition: border-color 350ms ease; }
+      .narration::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--border-strong); transition: background 350ms ease; }
+      .narration.pop::before { background: var(--warning); } .narration.pop { border-color: rgba(240,181,104,0.30); }
+      .narration.relax::before { background: var(--info); } .narration.relax { border-color: rgba(94,159,246,0.30); }
+      .narration.skip::before { background: var(--subtle); }
+      .narration.done::before { background: var(--success); } .narration.done { border-color: rgba(92,198,111,0.45); }
+      .narr-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+      .badge { font: 600 10.5px var(--mono); padding: 4px 9px; border-radius: 999px; letter-spacing: 0.4px; text-transform: uppercase; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); color: var(--muted); background: var(--elevated); }
+      .badge.step { background: var(--elevated); border-color: var(--border-strong); color: var(--fg); }
+      .badge.event { background: transparent; }
+      .badge.event.pop { color: var(--warning); border-color: var(--warning-bd); }
+      .badge.event.relax { color: var(--info); border-color: var(--info-bd); }
+      .badge.event.skip { color: var(--subtle); border-color: var(--border-strong); }
+      .badge.event.done { color: var(--success); border-color: var(--success-bd); }
+      .narr-text { margin: 0; font-size: 14px; line-height: 1.55; color: var(--fg); }
+      .narr-text strong { color: var(--fg); font-weight: 600; }
+      .narr-text code { font-family: var(--mono); background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; color: var(--accent); font-size: 12px; }
+
+      .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+      .controls .spacer { flex: 1; }
+      .start-wrap, .speed-wrap { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font: 500 11px var(--mono); }
+      .speed-wrap input[type="range"] { width: 80px; }
+      .kbd { font-family: var(--mono); font-size: 10.5px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); color: var(--muted); border: 1px solid var(--border); }
+      .hint { font: 11px var(--mono); color: var(--subtle); display: inline-flex; align-items: center; gap: 5px; }
+
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; }
+      .stat .label { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .stat .value { font: 600 22px var(--mono); margin-top: 4px; line-height: 1; }
+
+      .progress-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+      .progress-card .row { display: flex; justify-content: space-between; align-items: center; }
+      .progress-card .lbl { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .progress-card .val { font: 600 14px var(--mono); color: var(--fg); }
+      .progress-bar { height: 6px; background: var(--elevated); border-radius: 99px; overflow: hidden; }
+      .progress-bar .fill { height: 100%; background: var(--accent); border-radius: 99px; transition: width 240ms ease; }
+
+      @media (max-width: 540px) {
+        .stats { grid-template-columns: repeat(2, 1fr); }
+        .lanes { grid-template-columns: 1fr; }
+        .dist-list { grid-template-columns: repeat(2, 1fr); }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2 class="sr-only">Dijkstra's algorithm on a six-node weighted graph.</h2>
+
+      <div class="hero">
+        <div class="hero-head">
+          <span class="ttl">Weighted graph · Dijkstra</span>
+          <span class="legend">
+            <span><span class="sw" style="background:rgba(94,159,246,0.30);border:1px solid var(--info-bd)"></span>frontier</span>
+            <span><span class="sw" style="background:var(--warning)"></span>active</span>
+            <span><span class="sw" style="background:rgba(92,198,111,0.30);border:1px solid var(--success-bd)"></span>settled</span>
+          </span>
+        </div>
+        <div class="graph-wrap">
+          <svg id="graph" class="graph" viewBox="0 0 540 280" aria-hidden="true">
+            <g id="edges"></g>
+            <g id="edgeLabels"></g>
+            <g id="nodes"></g>
+          </svg>
+        </div>
+      </div>
+
+      <div class="lanes">
+        <div class="lane">
+          <div class="h">Priority queue (min on top)</div>
+          <div id="lane-pq" class="row"><span class="empty">empty</span></div>
+        </div>
+        <div class="lane">
+          <div class="h">Distance from source</div>
+          <div id="lane-dist" class="dist-list"></div>
+        </div>
+      </div>
+
+      <div id="narration" class="narration">
+        <div class="narr-meta">
+          <span id="narr-step" class="badge step">Step 0 / 0</span>
+          <span id="narr-event" class="badge event" style="display:none"></span>
+        </div>
+        <p id="narr-text" class="narr-text"><strong>Press Play.</strong> Dijkstra seeds the priority queue with the source at distance 0.</p>
+      </div>
+
+      <div class="controls">
+        <button id="btn-prev"><i class="ti ti-chevron-left"></i>Back</button>
+        <button id="btn-play" class="primary"><i id="play-icon" class="ti ti-player-play"></i><span id="play-label">Play</span></button>
+        <button id="btn-next"><i class="ti ti-chevron-right"></i>Step</button>
+        <button id="btn-restart" class="ghost"><i class="ti ti-refresh"></i>Restart</button>
+        <span class="spacer"></span>
+        <span class="start-wrap"><span>Start</span>
+          <select id="start-sel">
+            <option>A</option><option>B</option><option>C</option><option>D</option><option>E</option><option>F</option>
+          </select>
+        </span>
+        <span class="speed-wrap"><span>Speed</span><input id="speed" type="range" min="1" max="10" step="1" value="5" /></span>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="label">settled</div><div id="s-settled" class="value" style="color:var(--success)">0</div></div>
+        <div class="stat"><div class="label">relaxations</div><div id="s-relax" class="value" style="color:var(--info)">0</div></div>
+        <div class="stat"><div class="label">heap size</div><div id="s-heap" class="value">0</div></div>
+        <div class="stat"><div class="label">progress</div><div id="s-prog" class="value" style="color:var(--accent)">0%</div></div>
+      </div>
+
+      <div class="progress-card">
+        <div class="row"><span class="lbl">timeline</span><span class="val" id="tl-pos">0 / 0</span></div>
+        <div class="progress-bar"><div id="prog-fill" class="fill" style="width:0%"></div></div>
+        <div class="hint"><span class="kbd">←</span><span class="kbd">→</span><span class="kbd">space</span>&nbsp;walk steps</div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        var pos = { A:[60,60], B:[260,60], C:[60,220], D:[260,220], E:[420,130], F:[480,250] };
+        var edges = [
+          ['A','B',4],['A','C',2],['B','C',1],['B','D',5],['C','D',8],
+          ['C','E',10],['D','E',2],['D','F',6],['E','F',3]
+        ];
+        // adjacency list
+        var adj = {};
+        Object.keys(pos).forEach(function(n){ adj[n] = []; });
+        edges.forEach(function (e) { adj[e[0]].push({to:e[1], w:e[2]}); adj[e[1]].push({to:e[0], w:e[2]}); });
+
+        var nodesG = document.getElementById('nodes');
+        var edgesG = document.getElementById('edges');
+        var labelsG = document.getElementById('edgeLabels');
+        var narrEl = document.getElementById('narration');
+        var narrText = document.getElementById('narr-text');
+        var narrStep = document.getElementById('narr-step');
+        var narrEvent = document.getElementById('narr-event');
+        var lanePQ = document.getElementById('lane-pq');
+        var laneDist = document.getElementById('lane-dist');
+        var sSettled = document.getElementById('s-settled');
+        var sRelax = document.getElementById('s-relax');
+        var sHeap = document.getElementById('s-heap');
+        var sP = document.getElementById('s-prog');
+        var tlPos = document.getElementById('tl-pos');
+        var progFill = document.getElementById('prog-fill');
+        var startSel = document.getElementById('start-sel');
+        var btnPrev = document.getElementById('btn-prev');
+        var btnNext = document.getElementById('btn-next');
+        var btnPlay = document.getElementById('btn-play');
+        var btnRestart = document.getElementById('btn-restart');
+        var playIcon = document.getElementById('play-icon');
+        var playLabel = document.getElementById('play-label');
+        var speedEl = document.getElementById('speed');
+
+        var nodeEls = {}, edgeEls = {};
+        edges.forEach(function (e) {
+          var u = e[0], v = e[1], w = e[2];
+          var k = [u,v].sort().join('-');
+          var p1 = pos[u], p2 = pos[v];
+          var ln = document.createElementNS('http://www.w3.org/2000/svg','line');
+          ln.setAttribute('x1', p1[0]); ln.setAttribute('y1', p1[1]);
+          ln.setAttribute('x2', p2[0]); ln.setAttribute('y2', p2[1]);
+          ln.setAttribute('class','edge');
+          edgesG.appendChild(ln); edgeEls[k] = ln;
+          // weight label at midpoint
+          var mx = (p1[0]+p2[0])/2, my = (p1[1]+p2[1])/2;
+          var bg = document.createElementNS('http://www.w3.org/2000/svg','text');
+          bg.setAttribute('x', mx); bg.setAttribute('y', my); bg.setAttribute('class','edge-wt bg'); bg.setAttribute('text-anchor','middle');
+          bg.textContent = w;
+          var fg = document.createElementNS('http://www.w3.org/2000/svg','text');
+          fg.setAttribute('x', mx); fg.setAttribute('y', my); fg.setAttribute('class','edge-wt'); fg.setAttribute('text-anchor','middle');
+          fg.textContent = w;
+          labelsG.appendChild(bg); labelsG.appendChild(fg);
+        });
+        Object.keys(pos).forEach(function (n) {
+          var x = pos[n][0], y = pos[n][1];
+          var c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+          c.setAttribute('cx', x); c.setAttribute('cy', y); c.setAttribute('r', 22);
+          c.setAttribute('class','node-circ unseen');
+          var t = document.createElementNS('http://www.w3.org/2000/svg','text');
+          t.setAttribute('x', x); t.setAttribute('y', y + 5);
+          t.setAttribute('class','node-lbl'); t.textContent = n;
+          var d = document.createElementNS('http://www.w3.org/2000/svg','text');
+          d.setAttribute('x', x); d.setAttribute('y', y - 30);
+          d.setAttribute('class','node-dist'); d.textContent = '';
+          nodesG.appendChild(c); nodesG.appendChild(t); nodesG.appendChild(d);
+          nodeEls[n] = { c: c, t: t, d: d };
+        });
+
+        var steps = [], idx = 0, playing = false, timer = null;
+
+        function buildSteps(start) {
+          var nodes = Object.keys(pos);
+          var s = [];
+          var dist = {};
+          nodes.forEach(function (n) { dist[n] = Infinity; });
+          dist[start] = 0;
+          var settled = [];
+          var heap = [[0, start]];     // sorted ascending by dist
+          var treeEdges = [];          // parent edges of shortest-path tree
+          var parent = {};
+
+          s.push({
+            dist: Object.assign({}, dist), settled: settled.slice(), heap: heap.slice(),
+            tree: treeEdges.slice(), active: null, relaxEdge: null,
+            event: 'pop', msg: '<strong>Init:</strong> seed the priority queue with (<code>' + start + '</code>, <code>0</code>). Everyone else starts at <code>∞</code>.'
+          });
+
+          while (heap.length > 0) {
+            heap.sort(function (a, b) { return a[0] - b[0]; });
+            var top = heap.shift();
+            var d = top[0], u = top[1];
+            if (d > dist[u]) {
+              s.push({
+                dist: Object.assign({}, dist), settled: settled.slice(), heap: heap.slice(),
+                tree: treeEdges.slice(), active: null, relaxEdge: null,
+                event: 'skip', msg: 'Pop (<code>' + u + '</code>, <code>' + d + '</code>) — stale (current dist is <code>' + dist[u] + '</code>). Skip.'
+              });
+              continue;
+            }
+            settled.push(u);
+            s.push({
+              dist: Object.assign({}, dist), settled: settled.slice(), heap: heap.slice(),
+              tree: treeEdges.slice(), active: u, relaxEdge: null,
+              event: 'pop', msg: '<strong>Settle ' + u + '</strong> at distance <code>' + d + '</code>. Relax its outgoing edges.'
+            });
+            adj[u].forEach(function (e) {
+              if (settled.indexOf(e.to) >= 0) return;
+              var nd = d + e.w;
+              if (nd < dist[e.to]) {
+                dist[e.to] = nd;
+                heap.push([nd, e.to]);
+                // update tree
+                if (parent[e.to]) {
+                  var oldK = [parent[e.to], e.to].sort().join('-');
+                  treeEdges = treeEdges.filter(function (k) { return k !== oldK; });
+                }
+                parent[e.to] = u;
+                treeEdges.push([u, e.to].sort().join('-'));
+                s.push({
+                  dist: Object.assign({}, dist), settled: settled.slice(), heap: heap.slice(),
+                  tree: treeEdges.slice(), active: u, relaxEdge: [u,e.to].sort().join('-'),
+                  event: 'relax', msg: 'Relax <code>' + u + '→' + e.to + '</code> (w=' + e.w + '). New distance to <code>' + e.to + '</code> = <code>' + nd + '</code>.'
+                });
+              }
+            });
+          }
+          s.push({
+            dist: Object.assign({}, dist), settled: settled.slice(), heap: [],
+            tree: treeEdges.slice(), active: null, relaxEdge: null,
+            event: 'done', msg: '<strong>Done.</strong> Shortest-path tree shown in green.'
+          });
+          return s;
+        }
+
+        function render(st) {
+          Object.keys(nodeEls).forEach(function (n) {
+            var role = 'unseen';
+            if (st.active === n) role = 'active';
+            else if (st.settled.indexOf(n) >= 0) role = 'settled';
+            else if (st.dist[n] !== Infinity) role = 'frontier';
+            nodeEls[n].c.setAttribute('class', 'node-circ ' + role);
+            nodeEls[n].d.textContent = st.dist[n] === Infinity ? '∞' : ('d=' + st.dist[n]);
+          });
+          Object.keys(edgeEls).forEach(function (k) {
+            var cl = 'edge';
+            if (st.tree.indexOf(k) >= 0) cl += ' tree';
+            if (st.relaxEdge === k) cl += ' relax';
+            edgeEls[k].setAttribute('class', cl);
+          });
+          lanePQ.innerHTML = '';
+          if (st.heap.length === 0) {
+            var em = document.createElement('span'); em.className='empty'; em.textContent='empty'; lanePQ.appendChild(em);
+          } else {
+            // sort copy by dist; mark head & stale entries
+            var sorted = st.heap.slice().sort(function (a, b) { return a[0] - b[0]; });
+            sorted.forEach(function (h, i) {
+              var stale = h[0] > st.dist[h[1]];
+              var row = document.createElement('div');
+              row.className = 'pq-row' + (i === 0 ? ' head' : '') + (stale ? ' stale' : '');
+              row.innerHTML = '<span class="dist">' + h[0] + '</span><span>→ ' + h[1] + '</span>' + (stale ? '<span class="lbl">stale</span>' : (i === 0 ? '<span class="lbl">top</span>' : ''));
+              lanePQ.appendChild(row);
+            });
+          }
+          laneDist.innerHTML = '';
+          Object.keys(pos).forEach(function (n) {
+            var d = document.createElement('div');
+            d.className = 'dist-item' + (st.settled.indexOf(n) >= 0 ? ' settled' : '');
+            d.innerHTML = '<span class="k">' + n + '</span><span class="v">' + (st.dist[n] === Infinity ? '∞' : st.dist[n]) + '</span>';
+            laneDist.appendChild(d);
+          });
+          narrText.innerHTML = st.msg;
+          narrStep.textContent = 'Step ' + idx + ' / ' + (steps.length - 1);
+          narrEl.classList.remove('pop','relax','skip','done');
+          if (st.event) narrEl.classList.add(st.event);
+          if (st.event) {
+            narrEvent.style.display = '';
+            narrEvent.textContent = st.event === 'pop' ? 'settle' : st.event;
+            narrEvent.className = 'badge event ' + st.event;
+          } else { narrEvent.style.display = 'none'; }
+          sSettled.textContent = st.settled.length;
+          var rcount = 0;
+          for (var i = 1; i <= idx; i++) if (steps[i].event === 'relax') rcount++;
+          sRelax.textContent = rcount;
+          sHeap.textContent = st.heap.length;
+          var pct = steps.length > 1 ? Math.round((idx / (steps.length - 1)) * 100) : 0;
+          sP.textContent = pct + '%'; progFill.style.width = pct + '%';
+          tlPos.textContent = idx + ' / ' + (steps.length - 1);
+        }
+
+        function reset() { stop(); steps = buildSteps(startSel.value); idx = 0; render(steps[0]); }
+        function next() { if (idx >= steps.length - 1) { stop(); return false; } idx++; render(steps[idx]); if (idx >= steps.length - 1) stop(); return true; }
+        function prev() { if (idx <= 0) return; idx--; render(steps[idx]); }
+        function delay() { return 1100 - (parseInt(speedEl.value, 10) * 95); }
+        function play() { if (idx >= steps.length - 1) reset(); playing = true; playLabel.textContent='Pause'; playIcon.className='ti ti-player-pause'; loop(); }
+        function loop() { if (!playing) return; if (!next()) { stop(); return; } timer = setTimeout(loop, delay()); }
+        function stop() { playing=false; if (timer){clearTimeout(timer);timer=null;} playLabel.textContent='Play'; playIcon.className='ti ti-player-play'; }
+
+        btnPlay.addEventListener('click', function(){ playing ? stop() : play(); });
+        btnNext.addEventListener('click', function(){ stop(); next(); });
+        btnPrev.addEventListener('click', function(){ stop(); prev(); });
+        btnRestart.addEventListener('click', function(){ reset(); });
+        startSel.addEventListener('change', function(){ reset(); });
+        window.addEventListener('keydown', function(e){
+          if (e.key === 'ArrowLeft') { stop(); prev(); }
+          else if (e.key === 'ArrowRight') { stop(); next(); }
+          else if (e.key === ' ') { e.preventDefault(); playing ? stop() : play(); }
+        });
+
+        reset();
+
+        function postHeight(){ try { parent.postMessage({type:'prototype:height',height:document.body.scrollHeight},'*'); } catch(e){} }
+        new ResizeObserver(postHeight).observe(document.body);
+        postHeight();
+      })();
+    </script>
+  </body>
+</html>

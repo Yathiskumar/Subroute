@@ -896,6 +896,109 @@ export const TOPICS: Topic[] = [
     ],
   },
   {
+    slug: "graph-algorithms",
+    title: "Graph Algorithms",
+    description:
+      "How computers reason about networks of things — roads, friends, packets, dependencies. Ten algorithms, from the two traversals every other algorithm is built on, to weighted shortest paths, minimum spanning trees, and the heuristic search behind every modern pathfinder.",
+    difficulty: "intermediate",
+    icon: "Waypoints",
+    tags: ["algorithms", "graphs", "fundamentals"],
+    estimatedTime: "100 min",
+    prerequisites: ["Arrays & maps", "Queues & stacks", "Big-O intuition"],
+    concepts: [
+      {
+        slug: "bfs",
+        title: "Breadth-First Search",
+        oneLiner:
+          "Visit a graph in expanding rings from the start — the foundation under shortest paths in unweighted graphs and almost every layered algorithm.",
+        difficulty: "beginner",
+        estimatedTime: "10 min",
+        prototypePath: "/prototypes/graph-algorithms/bfs.html",
+      },
+      {
+        slug: "dfs",
+        title: "Depth-First Search",
+        oneLiner:
+          "Go as deep as you can, then back up. The recursive twin of BFS — the engine behind cycle detection, topological sort, and connected components.",
+        difficulty: "beginner",
+        estimatedTime: "10 min",
+        prototypePath: "/prototypes/graph-algorithms/dfs.html",
+      },
+      {
+        slug: "topological-sort",
+        title: "Topological Sort",
+        oneLiner:
+          "Order the nodes of a DAG so every edge points forward. The classic build-order, course-prerequisite, and task-scheduling primitive.",
+        difficulty: "intermediate",
+        estimatedTime: "10 min",
+        prototypePath: "/prototypes/graph-algorithms/topological-sort.html",
+      },
+      {
+        slug: "dijkstra",
+        title: "Dijkstra's Shortest Path",
+        oneLiner:
+          "Single-source shortest paths in a non-negative weighted graph — grow a frontier by always settling the closest unsettled node.",
+        difficulty: "intermediate",
+        estimatedTime: "12 min",
+        prototypePath: "/prototypes/graph-algorithms/dijkstra.html",
+      },
+      {
+        slug: "bellman-ford",
+        title: "Bellman-Ford",
+        oneLiner:
+          "Single-source shortest paths that survive negative edges. Relax every edge n-1 times — slower than Dijkstra, but catches negative cycles.",
+        difficulty: "intermediate",
+        estimatedTime: "11 min",
+        prototypePath: "/prototypes/graph-algorithms/bellman-ford.html",
+      },
+      {
+        slug: "floyd-warshall",
+        title: "Floyd-Warshall",
+        oneLiner:
+          "All-pairs shortest paths in three nested loops. A dense-matrix DP that's still the right tool when you need every distance.",
+        difficulty: "advanced",
+        estimatedTime: "11 min",
+        prototypePath: "/prototypes/graph-algorithms/floyd-warshall.html",
+      },
+      {
+        slug: "union-find",
+        title: "Union-Find (DSU)",
+        oneLiner:
+          "Disjoint sets in near-constant time. The data structure that makes Kruskal's MST, connectivity queries, and Kruskal-like sweeps actually fast.",
+        difficulty: "intermediate",
+        estimatedTime: "10 min",
+        prototypePath: "/prototypes/graph-algorithms/union-find.html",
+      },
+      {
+        slug: "kruskal",
+        title: "Kruskal's MST",
+        oneLiner:
+          "Sort the edges, add the cheapest one that doesn't form a cycle. Union-Find polices the cycle check in α(n) per edge.",
+        difficulty: "intermediate",
+        estimatedTime: "11 min",
+        prototypePath: "/prototypes/graph-algorithms/kruskal.html",
+      },
+      {
+        slug: "prim",
+        title: "Prim's MST",
+        oneLiner:
+          "Grow one tree from a seed node, always pulling in the cheapest edge that reaches a new vertex. Dijkstra's twin for spanning trees.",
+        difficulty: "intermediate",
+        estimatedTime: "11 min",
+        prototypePath: "/prototypes/graph-algorithms/prim.html",
+      },
+      {
+        slug: "astar",
+        title: "A* Search",
+        oneLiner:
+          "Dijkstra plus a heuristic that whispers 'go this way.' The pathfinder behind game AI, GPS routing, and robotics motion planning.",
+        difficulty: "advanced",
+        estimatedTime: "12 min",
+        prototypePath: "/prototypes/graph-algorithms/astar.html",
+      },
+    ],
+  },
+  {
     slug: "bloom-filters",
     title: "Bloom & Cuckoo Filters",
     description:

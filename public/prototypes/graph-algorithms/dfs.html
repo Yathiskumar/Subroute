@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Depth-First Search</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --success-bg: rgba(92,198,111,0.14); --success-bd: rgba(92,198,111,0.45);
+        --danger: #f06868;  --danger-bg: rgba(240,104,104,0.14); --danger-bd: rgba(240,104,104,0.45);
+        --warning: #f0b568; --warning-bg: rgba(240,181,104,0.14); --warning-bd: rgba(240,181,104,0.45);
+        --info: #5e9ff6;    --info-bg:    rgba(94,159,246,0.16); --info-bd:    rgba(94,159,246,0.45);
+        --purple: #a78bfa;  --purple-bg:  rgba(167,139,250,0.16); --purple-bd:  rgba(167,139,250,0.45);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --radius-lg: 14px; --radius-md: 8px; --radius-sm: 6px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body { padding: 18px 18px 24px; background-image: radial-gradient(1200px 600px at 50% -200px, rgba(251,134,58,0.06), transparent), linear-gradient(to right, rgba(255,255,255,0.020) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.020) 1px, transparent 1px); background-size: auto, 40px 40px, 40px 40px; }
+      .container { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; padding: 9px 12px; transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); color: var(--fg); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); color: #1a1003; }
+      button.ghost { background: transparent; }
+      button i { font-size: 14px; }
+      input[type="range"] { accent-color: var(--accent); }
+
+      .mode-tabs { display: flex; gap: 6px; padding: 6px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); }
+      .mode-tabs button { flex: 1; padding: 8px 10px; font-weight: 500; background: transparent; border: 1px solid transparent; color: var(--muted); justify-content: center; }
+      .mode-tabs button:hover { color: var(--fg); }
+      .mode-tabs button.on { background: var(--elevated); border-color: var(--purple-bd); color: var(--purple); }
+
+      .rule-card { padding: 10px 14px; background: var(--purple-bg); border: 1px solid var(--purple-bd); border-radius: var(--radius-md); color: var(--fg); font-size: 13px; line-height: 1.5; }
+      .rule-card strong { color: var(--purple); }
+
+      .hero { background: linear-gradient(180deg, rgba(255,255,255,0.014), transparent), var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px 12px; position: relative; overflow: hidden; }
+      .hero::before { content: ""; position: absolute; inset: 0; background: radial-gradient(420px 240px at 50% 0%, rgba(167,139,250,0.06), transparent 60%); pointer-events: none; }
+      .hero-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; position: relative; z-index: 1; gap: 12px; flex-wrap: wrap; }
+      .ttl { font: 600 11.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .legend { font-size: 11px; color: var(--muted); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      .legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: -1px; margin-right: 4px; }
+
+      .tree-wrap { position: relative; z-index: 1; }
+      svg.tree { width: 100%; height: 290px; display: block; }
+      .edge { stroke: var(--border-strong); stroke-width: 2; transition: stroke 220ms ease; }
+      .edge.taken { stroke: var(--purple); stroke-width: 2.4; }
+      .node-circ { stroke-width: 2.4; transition: fill 220ms ease, stroke 220ms ease; }
+      .node-circ.un { fill: var(--elevated); stroke: var(--border-strong); }
+      .node-circ.stk { fill: rgba(167,139,250,0.22); stroke: var(--purple); }
+      .node-circ.rec { fill: var(--warning); stroke: var(--warning); }
+      .node-circ.done { fill: rgba(92,198,111,0.25); stroke: var(--success); }
+      .node-lbl { font: 600 13px var(--mono); fill: var(--fg); text-anchor: middle; pointer-events: none; user-select: none; }
+
+      .lanes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      .lane { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; min-height: 80px; }
+      .lane .h { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px; }
+      .lane .row { display: flex; flex-direction: column-reverse; gap: 4px; min-height: 28px; }
+      .lane .pills { display: flex; gap: 5px; flex-wrap: wrap; min-height: 28px; align-items: center; }
+      .frame { display: flex; align-items: center; gap: 8px; padding: 4px 8px; background: var(--elevated); border: 1px solid var(--purple-bd); border-radius: 4px; font: 600 11.5px var(--mono); color: var(--purple); }
+      .frame.top { background: rgba(167,139,250,0.18); }
+      .frame .tag { color: var(--muted); font-size: 10.5px; margin-left: auto; }
+      .pill { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; font: 600 12px var(--mono); background: rgba(92,198,111,0.22); color: var(--success); border: 1px solid var(--success-bd); }
+      .empty { font: 500 11.5px var(--mono); color: var(--subtle); padding: 4px 2px; }
+
+      .narration { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; position: relative; overflow: hidden; transition: border-color 350ms ease; }
+      .narration::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--border-strong); transition: background 350ms ease; }
+      .narration.enter::before { background: var(--purple); } .narration.enter { border-color: rgba(167,139,250,0.30); }
+      .narration.rec::before { background: var(--warning); } .narration.rec { border-color: rgba(240,181,104,0.30); }
+      .narration.exit::before { background: var(--success); } .narration.exit { border-color: rgba(92,198,111,0.30); }
+      .narration.done::before { background: var(--success); } .narration.done { border-color: rgba(92,198,111,0.45); }
+      .narr-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+      .badge { font: 600 10.5px var(--mono); padding: 4px 9px; border-radius: 999px; letter-spacing: 0.4px; text-transform: uppercase; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); color: var(--muted); background: var(--elevated); }
+      .badge.step { background: var(--elevated); border-color: var(--border-strong); color: var(--fg); }
+      .badge.event { background: transparent; }
+      .badge.event.enter { color: var(--purple); border-color: var(--purple-bd); }
+      .badge.event.rec { color: var(--warning); border-color: var(--warning-bd); }
+      .badge.event.exit { color: var(--success); border-color: var(--success-bd); }
+      .badge.event.done { color: var(--success); border-color: var(--success-bd); }
+      .narr-text { margin: 0; font-size: 14px; line-height: 1.55; color: var(--fg); }
+      .narr-text strong { color: var(--fg); font-weight: 600; }
+      .narr-text code { font-family: var(--mono); background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; color: var(--accent); font-size: 12px; }
+
+      .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+      .controls .spacer { flex: 1; }
+      .speed-wrap { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font: 500 11px var(--mono); }
+      .speed-wrap input[type="range"] { width: 80px; }
+      .kbd { font-family: var(--mono); font-size: 10.5px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); color: var(--muted); border: 1px solid var(--border); }
+      .hint { font: 11px var(--mono); color: var(--subtle); display: inline-flex; align-items: center; gap: 5px; }
+
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; }
+      .stat .label { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .stat .value { font: 600 22px var(--mono); margin-top: 4px; line-height: 1; }
+
+      .progress-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+      .progress-card .row { display: flex; justify-content: space-between; align-items: center; }
+      .progress-card .lbl { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .progress-card .val { font: 600 14px var(--mono); color: var(--fg); }
+      .progress-bar { height: 6px; background: var(--elevated); border-radius: 99px; overflow: hidden; }
+      .progress-bar .fill { height: 100%; background: var(--accent); border-radius: 99px; transition: width 240ms ease; }
+
+      @media (max-width: 540px) {
+        .stats { grid-template-columns: repeat(2, 1fr); }
+        .lanes { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2 class="sr-only">Binary tree traversal showing pre-order, in-order, and post-order DFS modes.</h2>
+
+      <div class="mode-tabs" id="mode-tabs" role="tablist">
+        <button data-m="pre" class="on">Pre-order (N L R)</button>
+        <button data-m="in">In-order (L N R)</button>
+        <button data-m="post">Post-order (L R N)</button>
+      </div>
+
+      <div id="rule" class="rule-card"></div>
+
+      <div class="hero">
+        <div class="hero-head">
+          <span class="ttl">Binary tree · 9 nodes · recursive DFS</span>
+          <span class="legend">
+            <span><span class="sw" style="background:var(--elevated);border:1px solid var(--border-strong)"></span>not yet</span>
+            <span><span class="sw" style="background:rgba(167,139,250,0.30);border:1px solid var(--purple-bd)"></span>on stack</span>
+            <span><span class="sw" style="background:var(--warning)"></span>recording</span>
+            <span><span class="sw" style="background:rgba(92,198,111,0.30);border:1px solid var(--success-bd)"></span>recorded</span>
+          </span>
+        </div>
+        <div class="tree-wrap">
+          <svg id="tree" class="tree" viewBox="0 0 480 290" aria-hidden="true">
+            <g id="edges"></g>
+            <g id="nodes"></g>
+          </svg>
+        </div>
+      </div>
+
+      <div class="lanes">
+        <div class="lane">
+          <div class="h">Call stack (top first)</div>
+          <div id="lane-stack" class="row"><span class="empty">empty</span></div>
+        </div>
+        <div class="lane">
+          <div class="h" id="result-label">Pre-order result</div>
+          <div id="lane-result" class="pills"><span class="empty">none</span></div>
+        </div>
+      </div>
+
+      <div id="narration" class="narration">
+        <div class="narr-meta">
+          <span id="narr-step" class="badge step">Step 0 / 0</span>
+          <span id="narr-event" class="badge event" style="display:none"></span>
+        </div>
+        <p id="narr-text" class="narr-text"><strong>Press Play.</strong> Recursive DFS walks the tree; the active mode decides *when* a node is recorded.</p>
+      </div>
+
+      <div class="controls">
+        <button id="btn-prev"><i class="ti ti-chevron-left"></i>Back</button>
+        <button id="btn-play" class="primary"><i id="play-icon" class="ti ti-player-play"></i><span id="play-label">Play</span></button>
+        <button id="btn-next"><i class="ti ti-chevron-right"></i>Step</button>
+        <button id="btn-restart" class="ghost"><i class="ti ti-refresh"></i>Restart</button>
+        <span class="spacer"></span>
+        <span class="speed-wrap"><span>Speed</span><input id="speed" type="range" min="1" max="10" step="1" value="5" /></span>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="label">stack depth</div><div id="s-stack" class="value" style="color:var(--purple)">0</div></div>
+        <div class="stat"><div class="label">recorded</div><div id="s-rec" class="value" style="color:var(--success)">0</div></div>
+        <div class="stat"><div class="label">max depth</div><div id="s-max" class="value">0</div></div>
+        <div class="stat"><div class="label">progress</div><div id="s-prog" class="value" style="color:var(--accent)">0%</div></div>
+      </div>
+
+      <div class="progress-card">
+        <div class="row"><span class="lbl">timeline</span><span class="val" id="tl-pos">0 / 0</span></div>
+        <div class="progress-bar"><div id="prog-fill" class="fill" style="width:0%"></div></div>
+        <div class="hint"><span class="kbd">←</span><span class="kbd">→</span><span class="kbd">space</span>&nbsp;walk steps</div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        // Binary tree layout
+        var pos = { F:[240,40], B:[130,110], G:[360,110], A:[70,185], D:[190,185], I:[420,185], C:[150,255], E:[240,255], H:[380,255] };
+        var L    = { F:'B', B:'A', D:'C', G:null, I:'H', A:null, C:null, E:null, H:null };
+        var R    = { F:'G', B:'D', D:'E', G:'I', A:null, C:null, E:null, H:null, I:null };
+        var ROOT = 'F';
+        var NODES = Object.keys(pos);
+
+        var META = {
+          pre:  { label:'Pre-order result',  ph:'Pre-order pseudocode (N L R)',
+                  rule: '<strong>Pre-order (N L R)</strong> — record a node the moment you arrive, then recurse left, then right. Useful for cloning trees and serialisation.',
+                  code:['preorder(node):','  if node is null: return','  record(node)','  preorder(node.left)','  preorder(node.right)'],
+                  enter:0, rec:2, goL:3, goR:4, exit:1 },
+          in:   { label:'In-order result',   ph:'In-order pseudocode (L N R)',
+                  rule: '<strong>In-order (L N R)</strong> — fully left first, then record the node, then right. On a BST, this comes out sorted.',
+                  code:['inorder(node):','  if node is null: return','  inorder(node.left)','  record(node)','  inorder(node.right)'],
+                  enter:0, rec:3, goL:2, goR:4, exit:1 },
+          post: { label:'Post-order result', ph:'Post-order pseudocode (L R N)',
+                  rule: '<strong>Post-order (L R N)</strong> — left, right, then record on the way back out. The order you need for deleting a tree or computing aggregates from leaves up.',
+                  code:['postorder(node):','  if node is null: return','  postorder(node.left)','  postorder(node.right)','  record(node)'],
+                  enter:0, rec:4, goL:2, goR:3, exit:1 },
+        };
+
+        var nodesG = document.getElementById('nodes');
+        var edgesG = document.getElementById('edges');
+        var modeTabs = document.getElementById('mode-tabs');
+        var ruleEl = document.getElementById('rule');
+        var resultLabel = document.getElementById('result-label');
+        var narrEl = document.getElementById('narration');
+        var narrText = document.getElementById('narr-text');
+        var narrStep = document.getElementById('narr-step');
+        var narrEvent = document.getElementById('narr-event');
+        var laneS = document.getElementById('lane-stack');
+        var laneR = document.getElementById('lane-result');
+        var sStack = document.getElementById('s-stack');
+        var sRec = document.getElementById('s-rec');
+        var sMax = document.getElementById('s-max');
+        var sP = document.getElementById('s-prog');
+        var tlPos = document.getElementById('tl-pos');
+        var progFill = document.getElementById('prog-fill');
+        var btnPrev = document.getElementById('btn-prev');
+        var btnNext = document.getElementById('btn-next');
+        var btnPlay = document.getElementById('btn-play');
+        var btnRestart = document.getElementById('btn-restart');
+        var playIcon = document.getElementById('play-icon');
+        var playLabel = document.getElementById('play-label');
+        var speedEl = document.getElementById('speed');
+
+        var nodeEls = {}, edgeEls = {};
+        NODES.forEach(function (n) {
+          [L[n], R[n]].forEach(function (ch) {
+            if (!ch) return;
+            var p1 = pos[n], p2 = pos[ch];
+            var ln = document.createElementNS('http://www.w3.org/2000/svg','line');
+            ln.setAttribute('x1',p1[0]); ln.setAttribute('y1',p1[1]);
+            ln.setAttribute('x2',p2[0]); ln.setAttribute('y2',p2[1]);
+            ln.setAttribute('class','edge');
+            edgesG.appendChild(ln);
+            edgeEls[n + '-' + ch] = ln;
+          });
+        });
+        NODES.forEach(function (n) {
+          var x = pos[n][0], y = pos[n][1];
+          var c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+          c.setAttribute('cx',x); c.setAttribute('cy',y); c.setAttribute('r',19);
+          c.setAttribute('class','node-circ un');
+          var t = document.createElementNS('http://www.w3.org/2000/svg','text');
+          t.setAttribute('x',x); t.setAttribute('y',y+5);
+          t.setAttribute('class','node-lbl'); t.textContent = n;
+          nodesG.appendChild(c); nodesG.appendChild(t);
+          nodeEls[n] = { c:c, t:t };
+        });
+
+        var mode = 'pre';
+        var steps = [], idx = 0, playing = false, timer = null;
+
+        function buildSteps(kind) {
+          var ev = [];
+          function walk(node) {
+            if (!node) return;
+            ev.push({ t:'enter', node: node });
+            if (kind === 'pre') ev.push({ t:'rec', node: node });
+            ev.push({ t:'goL', node: node, c: L[node] });
+            walk(L[node]);
+            if (kind === 'in') ev.push({ t:'rec', node: node });
+            ev.push({ t:'goR', node: node, c: R[node] });
+            walk(R[node]);
+            if (kind === 'post') ev.push({ t:'rec', node: node });
+            ev.push({ t:'exit', node: node });
+          }
+          walk(ROOT);
+          // Translate events into snapshots
+          var snap = [];
+          var stack = [], recorded = [], taken = [], current = null;
+          snap.push({ stack:[], recorded:[], taken:[], current:null, line:-1, event:'enter',
+            msg: '<strong>Ready.</strong> Press Step or Play to run the ' + kind + '-order traversal.' });
+          ev.forEach(function (e) {
+            var M = META[kind];
+            if (e.t === 'enter') {
+              stack = stack.concat([e.node]);
+              snap.push({ stack: stack.slice(), recorded: recorded.slice(), taken: taken.slice(), current: null,
+                line: M.enter, event: 'enter',
+                msg: 'Call <code>' + kind + '(' + e.node + ')</code> — push onto the stack.' });
+            } else if (e.t === 'rec') {
+              recorded = recorded.concat([e.node]);
+              snap.push({ stack: stack.slice(), recorded: recorded.slice(), taken: taken.slice(), current: e.node,
+                line: M.rec, event: 'rec',
+                msg: 'Record <strong>' + e.node + '</strong> → position ' + recorded.length + ' in the result.' });
+            } else if (e.t === 'goL') {
+              if (e.c) {
+                taken = taken.concat([e.node + '-' + e.c]);
+                snap.push({ stack: stack.slice(), recorded: recorded.slice(), taken: taken.slice(), current: null,
+                  line: M.goL, event: 'enter',
+                  msg: 'Recurse into <code>' + e.node + '</code>\'s <strong>left</strong> child → <code>' + e.c + '</code>.' });
+              } else {
+                snap.push({ stack: stack.slice(), recorded: recorded.slice(), taken: taken.slice(), current: null,
+                  line: M.goL, event: 'enter',
+                  msg: '<code>' + e.node + '</code> has no left child — that call returns immediately.' });
+              }
+            } else if (e.t === 'goR') {
+              if (e.c) {
+                taken = taken.concat([e.node + '-' + e.c]);
+                snap.push({ stack: stack.slice(), recorded: recorded.slice(), taken: taken.slice(), current: null,
+                  line: M.goR, event: 'enter',
+                  msg: 'Recurse into <code>' + e.node + '</code>\'s <strong>right</strong> child → <code>' + e.c + '</code>.' });
+              } else {
+                snap.push({ stack: stack.slice(), recorded: recorded.slice(), taken: taken.slice(), current: null,
+                  line: M.goR, event: 'enter',
+                  msg: '<code>' + e.node + '</code> has no right child — that call returns immediately.' });
+              }
+            } else if (e.t === 'exit') {
+              stack = stack.filter(function (x) { return x !== e.node; });
+              snap.push({ stack: stack.slice(), recorded: recorded.slice(), taken: taken.slice(), current: null,
+                line: M.exit, event: 'exit',
+                msg: '<code>' + kind + '(' + e.node + ')</code> returns — pop the frame off the stack.' });
+            }
+          });
+          snap.push({ stack:[], recorded: recorded.slice(), taken: taken.slice(), current: null, line: -1, event: 'done',
+            msg: '<strong>Done.</strong> ' + kind + '-order: ' + recorded.map(function (n) { return '<code>' + n + '</code>'; }).join(' → ') + '.' });
+          return snap;
+        }
+
+        function render(st) {
+          NODES.forEach(function (n) {
+            var role = 'un';
+            if (st.recorded.indexOf(n) >= 0) role = 'done';
+            else if (st.current === n) role = 'rec';
+            else if (st.stack.indexOf(n) >= 0) role = 'stk';
+            nodeEls[n].c.setAttribute('class', 'node-circ ' + role);
+          });
+          Object.keys(edgeEls).forEach(function (k) {
+            edgeEls[k].setAttribute('class', 'edge' + (st.taken.indexOf(k) >= 0 ? ' taken' : ''));
+          });
+          // Stack lane
+          laneS.innerHTML = '';
+          if (st.stack.length === 0) {
+            var em = document.createElement('span'); em.className='empty'; em.textContent='empty'; laneS.appendChild(em);
+          } else {
+            st.stack.forEach(function (n, i) {
+              var f = document.createElement('div');
+              f.className = 'frame' + (i === st.stack.length - 1 ? ' top' : '');
+              f.innerHTML = mode + '(' + n + ')' + (i === st.stack.length - 1 ? '<span class="tag">← running</span>' : '');
+              laneS.appendChild(f);
+            });
+          }
+          // Result lane
+          laneR.innerHTML = '';
+          if (st.recorded.length === 0) {
+            var em2 = document.createElement('span'); em2.className='empty'; em2.textContent='none'; laneR.appendChild(em2);
+          } else {
+            st.recorded.forEach(function (n) {
+              var p = document.createElement('span'); p.className='pill'; p.textContent = n; laneR.appendChild(p);
+            });
+          }
+          // Narration
+          narrText.innerHTML = st.msg;
+          narrStep.textContent = 'Step ' + idx + ' / ' + (steps.length - 1);
+          narrEl.classList.remove('enter','rec','exit','done');
+          if (st.event) narrEl.classList.add(st.event);
+          if (st.event) {
+            narrEvent.style.display = '';
+            narrEvent.textContent = st.event === 'rec' ? 'record' : st.event === 'enter' ? 'enter' : st.event === 'exit' ? 'return' : st.event;
+            narrEvent.className = 'badge event ' + st.event;
+          } else { narrEvent.style.display = 'none'; }
+          sStack.textContent = st.stack.length;
+          sRec.textContent = st.recorded.length;
+          var maxD = 0;
+          for (var i = 1; i <= idx; i++) if (steps[i].stack.length > maxD) maxD = steps[i].stack.length;
+          sMax.textContent = maxD;
+          var pct = steps.length > 1 ? Math.round((idx / (steps.length - 1)) * 100) : 0;
+          sP.textContent = pct + '%'; progFill.style.width = pct + '%';
+          tlPos.textContent = idx + ' / ' + (steps.length - 1);
+        }
+
+        function setMode(m) {
+          mode = m;
+          modeTabs.querySelectorAll('button').forEach(function (b) {
+            b.classList.toggle('on', b.dataset.m === m);
+          });
+          ruleEl.innerHTML = META[m].rule;
+          resultLabel.textContent = META[m].label;
+          reset();
+        }
+        function reset() { stop(); steps = buildSteps(mode); idx = 0; render(steps[0]); }
+        function next() { if (idx >= steps.length - 1) { stop(); return false; } idx++; render(steps[idx]); if (idx >= steps.length - 1) stop(); return true; }
+        function prev() { if (idx <= 0) return; idx--; render(steps[idx]); }
+        function delay() { return 1100 - (parseInt(speedEl.value, 10) * 95); }
+        function play() { if (idx >= steps.length - 1) reset(); playing = true; playLabel.textContent='Pause'; playIcon.className='ti ti-player-pause'; loop(); }
+        function loop() { if (!playing) return; if (!next()) { stop(); return; } timer = setTimeout(loop, delay()); }
+        function stop() { playing=false; if (timer){clearTimeout(timer);timer=null;} playLabel.textContent='Play'; playIcon.className='ti ti-player-play'; }
+
+        modeTabs.addEventListener('click', function (e) {
+          var b = e.target.closest('button[data-m]'); if (b) setMode(b.dataset.m);
+        });
+        btnPlay.addEventListener('click', function(){ playing ? stop() : play(); });
+        btnNext.addEventListener('click', function(){ stop(); next(); });
+        btnPrev.addEventListener('click', function(){ stop(); prev(); });
+        btnRestart.addEventListener('click', function(){ reset(); });
+        window.addEventListener('keydown', function(e){
+          if (e.key === 'ArrowLeft') { stop(); prev(); }
+          else if (e.key === 'ArrowRight') { stop(); next(); }
+          else if (e.key === ' ') { e.preventDefault(); playing ? stop() : play(); }
+        });
+
+        setMode('pre');
+
+        function postHeight(){ try { parent.postMessage({type:'prototype:height',height:document.body.scrollHeight},'*'); } catch(e){} }
+        new ResizeObserver(postHeight).observe(document.body);
+        postHeight();
+      })();
+    </script>
+  </body>
+</html>
