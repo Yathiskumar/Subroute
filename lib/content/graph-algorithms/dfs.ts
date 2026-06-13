@@ -2,7 +2,7 @@ import type { ConceptContent } from "@/lib/content/types";
 
 export const dfs: ConceptContent = {
   prototypeCaption:
-    "A nine-node binary tree walked recursively. The three tabs — **Pre-order**, **In-order**, **Post-order** — change *when* a node is recorded relative to its children; the rest of the DFS is identical. Use **Step** / **Back** to walk one call or return at a time.",
+    "A seven-node graph *with cycles* — the same graph the BFS prototype uses — walked by recursive DFS. Press **Play** to watch it dive deep down one branch, then **backtrack** when a node's neighbours are all seen. Green lines are **tree edges** (first-time discovery); a dashed red line is a **back edge** — an edge to a node still on the call stack, which means a **cycle**. Use **Step** / **Back** to walk one call or return at a time, and **Start** to re-root the search.",
 
   overview: [
     {
@@ -11,23 +11,23 @@ export const dfs: ConceptContent = {
     },
     {
       type: "p",
-      text: "Where BFS uses a queue and explores in rings, DFS uses a **stack** — usually the implicit call stack of recursion — and explores in branches. The single most important DFS concept is **when** you record each node relative to its children. On a tree the three answers form the three textbook traversal orders: **Pre-order (N L R)** records the node *before* descending; **In-order (L N R)** records it *between* the left and right recursion; **Post-order (L R N)** records it *after* both children are done. The recursion is the same — only the position of one `record(node)` line moves.",
+      text: "Where BFS uses a queue and explores in rings, DFS uses a **stack** — usually the implicit call stack of recursion — and explores in branches. Two timestamps fall out of every visit: a **discovery time** when the node is first reached and pushed, and a **finish time** when its call returns and it's popped. Those, plus the **edge classification** DFS produces — **tree edges** (first-time discovery) versus **back edges** (an edge to a node still on the stack) — are the raw material for almost everything DFS is good at. A back edge is the textbook signature of a **cycle**.",
     },
     {
       type: "p",
-      text: "Those three orders unlock real work. Pre-order is how you copy or serialise a tree. In-order, on a binary search tree, comes out *sorted*. Post-order is how you delete a tree or compute any aggregate from the leaves up (compiler IR sizes, file-system disk usage, expression-tree evaluation). And the same DFS skeleton — generalised from a tree to a graph — is the engine behind **cycle detection** (a back edge to a still-grey ancestor), **topological sort** (reverse post-order on a DAG), **connected components**, **Tarjan SCC**, and every **backtracking** solver from sudoku to maze.",
+      text: "That structure is the engine behind **cycle detection** (a back edge to a still-grey ancestor), **topological sort** (reverse post-order on a DAG), **connected components**, **Tarjan SCC**, and every **backtracking** solver from sudoku to maze. On a *tree* specifically — where there are no back edges — the only remaining choice is *when* you record a node relative to its children, and that single decision gives the three textbook orders: **pre-order** (record on the way down), **in-order** (between the children), and **post-order** (on the way back up). Same recursion as the graph walk; only the position of one `record(node)` line moves.",
     },
   ],
 
   howItWorks: [
-    { type: "h", text: "The three traversal orders, side by side" },
+    { type: "h", text: "What DFS does on a graph" },
     {
-      type: "ul",
+      type: "ol",
       items: [
-        "**Pre-order** (`N L R`) — `record(node)` is the *first* thing the function does after the null-check. You see every node *before* its children.",
-        "**In-order** (`L N R`) — `record(node)` sits *between* the recursive calls into left and right children. On a BST, this yields a sorted sequence.",
-        "**Post-order** (`L R N`) — `record(node)` is the *last* thing before the function returns. You see every node *after* both subtrees are fully done.",
-        "**Reverse post-order** of a DAG-DFS is exactly a topological sort. Same skeleton, same recursion — just a different *prepend* position.",
+        "Start at a node, mark it **grey** (discovered, now on the stack), and record its discovery number.",
+        "Scan its neighbours in order. For each *unseen* neighbour, follow a **tree edge** and recurse — dive deeper before going wider.",
+        "If a neighbour is **grey** (still on the stack), that edge is a **back edge** — you've found a cycle. If it's **black** (finished), skip it.",
+        "When every neighbour is handled, the call returns: pop the frame, mark the node **black** (finished), record its finish number. That return *is* backtracking.",
       ],
     },
     { type: "h", text: "Why the call stack matters" },
@@ -35,9 +35,19 @@ export const dfs: ConceptContent = {
       type: "ol",
       items: [
         "Each recursive call pushes a frame on the stack — that's the 'grey' set in textbook DFS.",
-        "While a frame is on the stack, its node is *in progress* — its children are being visited, but it isn't finished.",
+        "While a frame is on the stack, its node is *in progress* — its neighbours are being visited, but it isn't finished.",
         "When the function returns, the frame pops — the node becomes 'black' (finished).",
-        "A back edge to a still-grey node = a cycle. Forward / cross edges to black nodes = same component, no cycle.",
+        "A back edge to a still-grey node = a cycle. Edges to black nodes = same component, no cycle.",
+      ],
+    },
+    { type: "h", text: "On a tree: pre-, in-, and post-order" },
+    {
+      type: "ul",
+      items: [
+        "A tree has no back edges (no cycles), so the only freedom left is *when* you record a node relative to its children.",
+        "**Pre-order** (`N L R`) — record on the way *down*, at discovery time. Used to clone or serialise a tree.",
+        "**In-order** (`L N R`) — record *between* the two child recursions. On a BST this yields a sorted sequence.",
+        "**Post-order** (`L R N`) — record on the way *back up*, at finish time. Used to delete a tree or aggregate from the leaves up. **Reverse post-order** of a DAG is exactly a topological sort.",
       ],
     },
     {
@@ -96,55 +106,65 @@ export const dfs: ConceptContent = {
 
   handsOn: [
     {
-      title: "01 · Walk Pre-order (N L R)",
-      body: "Press **Play** in the **Pre-order** tab. Watch each node turn warning-orange the moment its frame is pushed — that's `record(node)` firing *before* either child is visited. The result row fills from the root downward. Result on this tree: `F B A D C E G I H`.",
+      title: "01 · Dive deep, then backtrack",
+      body: "Press **Play** from start **A**. Watch one branch go all the way down — `A → B → C → E → D` — *before* anything fans out. That's the stack at work: DFS commits to a path until it dead-ends. When a node's neighbours are all seen, its frame pops, the node turns green (finished), and the search backtracks to the previous node. Discovery order on this graph from A: `A B C E D G F`.",
     },
     {
-      title: "02 · Walk In-order (L N R)",
-      body: "Switch to **In-order**. Now `record()` happens *between* left and right recursion — so a node only fires after its entire left subtree is done. On this tree (which is a BST when you read it left-to-right), the result comes out sorted: `A B C D E F G H I`.",
+      title: "02 · Spot the back edges (cycles)",
+      body: "Three **dashed red** edges appear — `E–B`, `D–A`, and `F–C`. Each is an edge to a node *still on the call stack*, which is the signature of a **cycle**. The **back edges** counter climbs to 3. The 6 green tree edges plus these 3 back edges account for all 9 edges the search touches. On an acyclic graph (a tree) this counter would stay at 0.",
     },
     {
-      title: "03 · Walk Post-order (L R N)",
-      body: "Switch to **Post-order**. The recording happens on the *way back up* — every node fires after both subtrees are done. Watch the call stack pop a frame just as the node turns orange. Result: `A C E D B H I G F`. Reverse this and you have one valid topological order of the tree.",
+      title: "03 · Read the call stack",
+      body: "The left lane is the live **call stack**, top frame marked *running*. **Step** through and watch it grow as DFS descends and shrink as each `dfs()` returns. Its maximum height is the longest root-to-leaf path the search explored — the recursion depth that would overflow a real stack on a very deep graph.",
     },
     {
-      title: "04 · Compare the three result strings",
-      body: "Run each mode through to completion and compare the *Pre-order result* / *In-order result* / *Post-order result* rows in your head. The recursion is identical — only the position of one line of code moves. That's the whole pedagogy of the three traversals in one prototype.",
+      title: "04 · Re-root the search",
+      body: "Pick a different **Start** node. The discovery order and *which* edges become tree vs back edges both change — but the graph's node set and its underlying cycles don't. DFS structure depends on where you start and the neighbour order; the graph itself is fixed.",
     },
   ],
 
   code: {
     language: "typescript",
-    filename: "dfs-tree-traversal.ts",
-    code: `// Recursive DFS — pre/in/post-order on a binary tree.
-type Node = { val: string; left: Node | null; right: Node | null };
+    filename: "dfs-graph.ts",
+    code: `// Recursive DFS on a graph (adjacency list). Records discovery /
+// finish order and classifies each edge as a tree or back edge.
+type Color = "white" | "grey" | "black";
 
-function preorder(node: Node | null, out: string[] = []): string[] {
-  if (!node) return out;
-  out.push(node.val);                  // ← N (before children)
-  preorder(node.left, out);            //   L
-  preorder(node.right, out);           //   R
-  return out;
+function dfs(adj: Map<string, string[]>, start: string) {
+  const color = new Map<string, Color>();   // white = unseen, grey = on stack, black = done
+  const order: string[] = [];               // discovery order
+  const backEdges: [string, string][] = []; // each one closes a cycle
+  let time = 0;
+  const disc = new Map<string, number>();
+  const fin = new Map<string, number>();
+
+  function visit(u: string, parent: string | null) {
+    color.set(u, "grey");                    // push: discovered, now on the stack
+    disc.set(u, ++time);
+    order.push(u);
+
+    for (const v of adj.get(u) ?? []) {
+      if (v === parent) continue;            // skip the undirected edge we arrived on
+      const c = color.get(v) ?? "white";
+      if (c === "white") {
+        visit(v, u);                         // tree edge — recurse deeper
+      } else if (c === "grey") {
+        backEdges.push([u, v]);              // back edge → cycle
+      }
+      // black: already finished — nothing to do
+    }
+
+    color.set(u, "black");                   // pop: this frame returns, node finished
+    fin.set(u, ++time);
+  }
+
+  visit(start, null);
+  return { order, backEdges, disc, fin };
 }
 
-function inorder(node: Node | null, out: string[] = []): string[] {
-  if (!node) return out;
-  inorder(node.left, out);             //   L
-  out.push(node.val);                  // ← N (between children) — sorted on a BST
-  inorder(node.right, out);            //   R
-  return out;
-}
-
-function postorder(node: Node | null, out: string[] = []): string[] {
-  if (!node) return out;
-  postorder(node.left, out);           //   L
-  postorder(node.right, out);          //   R
-  out.push(node.val);                  // ← N (after both children done)
-  return out;
-}
-
-// Generalised to a graph: pre-order = discovery time, post-order = finish time.
-// Reverse post-order of a DAG-DFS is a topological sort.`,
+// disc = pre-order (discovery) time; fin = post-order (finish) time.
+// Reverse the nodes by finish time and you have a topological sort of a DAG.
+// On a graph millions of nodes deep, rewrite this with an explicit stack.`,
   },
 
   furtherReading: [
@@ -190,16 +210,16 @@ function postorder(node: Node | null, out: string[] = []): string[] {
     {
       id: "dfs-q1",
       question:
-        "What is the *only* difference between pre-order, in-order, and post-order DFS on a binary tree?",
+        "BFS and DFS both visit every node in O(V + E). What is the essential difference in *how* they explore a graph?",
       options: [
-        { id: "a", label: "The choice of data structure — pre uses a queue, in uses a stack, post uses a list." },
-        { id: "b", label: "The position of the `record(node)` line relative to the recursive calls into left and right children." },
-        { id: "c", label: "Pre-order visits all leaves first, post-order visits the root first." },
-        { id: "d", label: "They use different algorithms entirely." },
+        { id: "a", label: "BFS uses a stack and dives deep; DFS uses a queue and stays shallow." },
+        { id: "b", label: "DFS uses a stack (often the call stack) and dives deep down one branch before backtracking; BFS uses a queue and expands outward in rings of equal distance." },
+        { id: "c", label: "DFS finds shortest paths in an unweighted graph; BFS does not." },
+        { id: "d", label: "They are identical apart from the order the result is printed." },
       ],
       correctOptionId: "b",
       explanation:
-        "All three are the same recursive DFS — the only thing that moves is `record(node)`. Pre-order puts it *before* both recursive calls (N L R); in-order puts it *between* them (L N R); post-order puts it *after* both (L R N). Everything else — the stack, the recursion, the children order — is identical.",
+        "Same cost, opposite shape. DFS's stack makes it commit to one branch until it dead-ends, then backtrack — ideal for structural questions (cycles, topological order, components). BFS's queue makes it sweep level by level, so first-seen distance is the shortest path in an unweighted graph. DFS doesn't track distances and won't give shortest paths.",
     },
     {
       id: "dfs-q2",
@@ -218,16 +238,16 @@ function postorder(node: Node | null, out: string[] = []): string[] {
     {
       id: "dfs-q3",
       question:
-        "Why does *in-order* DFS on a binary search tree (BST) produce a sorted sequence?",
+        "After a DFS over a directed acyclic graph (DAG), how do you read off a valid topological order?",
       options: [
-        { id: "a", label: "Because DFS visits nodes in alphabetical order." },
-        { id: "b", label: "Because a BST stores all values < node in the left subtree and all values > node in the right subtree — recursing fully left first, then recording, then right, walks the values in ascending order." },
-        { id: "c", label: "Because in-order uses a min-heap internally." },
-        { id: "d", label: "Because BSTs are sorted by construction; the traversal order doesn't matter." },
+        { id: "a", label: "Take the discovery order — the order nodes were first pushed onto the stack." },
+        { id: "b", label: "Take the order nodes *finished* (were popped, marked black) and reverse it — reverse post-order." },
+        { id: "c", label: "Sort the nodes alphabetically." },
+        { id: "d", label: "Use the order the start node's neighbours appear in the adjacency list." },
       ],
       correctOptionId: "b",
       explanation:
-        "The BST invariant — left < node < right — means that fully exhausting the left subtree before recording the node yields the smallest values first. After the node, the right subtree contains everything larger. That's exactly the L-N-R order in-order DFS performs.",
+        "A node finishes only after all of its descendants have finished. So listing nodes by *finish* time and reversing it guarantees every edge points from an earlier node to a later one — exactly a topological order. It falls out of a single DFS with no extra passes, which is why reverse post-order is the standard topological-sort recipe.",
     },
   ],
 };

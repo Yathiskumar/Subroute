@@ -22,7 +22,14 @@
       }
       * { box-sizing: border-box; }
       html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
-      body { padding: 18px 18px 24px; background-image: radial-gradient(1200px 600px at 50% -200px, rgba(251,134,58,0.06), transparent), linear-gradient(to right, rgba(255,255,255,0.020) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.020) 1px, transparent 1px); background-size: auto, 40px 40px, 40px 40px; }
+      body {
+        padding: 18px 18px 24px;
+        background-image:
+          radial-gradient(1200px 600px at 50% -200px, rgba(251,134,58,0.06), transparent),
+          linear-gradient(to right, rgba(255,255,255,0.020) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.020) 1px, transparent 1px);
+        background-size: auto, 40px 40px, 40px 40px;
+      }
       .container { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
       .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
       button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; padding: 9px 12px; transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
@@ -33,15 +40,8 @@
       button.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); color: #1a1003; }
       button.ghost { background: transparent; }
       button i { font-size: 14px; }
+      select { background: var(--elevated); color: var(--fg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px 9px; font: 500 12px var(--sans); }
       input[type="range"] { accent-color: var(--accent); }
-
-      .mode-tabs { display: flex; gap: 6px; padding: 6px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); }
-      .mode-tabs button { flex: 1; padding: 8px 10px; font-weight: 500; background: transparent; border: 1px solid transparent; color: var(--muted); justify-content: center; }
-      .mode-tabs button:hover { color: var(--fg); }
-      .mode-tabs button.on { background: var(--elevated); border-color: var(--purple-bd); color: var(--purple); }
-
-      .rule-card { padding: 10px 14px; background: var(--purple-bg); border: 1px solid var(--purple-bd); border-radius: var(--radius-md); color: var(--fg); font-size: 13px; line-height: 1.5; }
-      .rule-card strong { color: var(--purple); }
 
       .hero { background: linear-gradient(180deg, rgba(255,255,255,0.014), transparent), var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px 12px; position: relative; overflow: hidden; }
       .hero::before { content: ""; position: absolute; inset: 0; background: radial-gradient(420px 240px at 50% 0%, rgba(167,139,250,0.06), transparent 60%); pointer-events: none; }
@@ -49,42 +49,49 @@
       .ttl { font: 600 11.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
       .legend { font-size: 11px; color: var(--muted); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
       .legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: -1px; margin-right: 4px; }
+      .legend .ln { display: inline-block; width: 14px; height: 0; border-top: 2.4px solid var(--border-strong); vertical-align: 3px; margin-right: 4px; }
 
-      .tree-wrap { position: relative; z-index: 1; }
-      svg.tree { width: 100%; height: 290px; display: block; }
-      .edge { stroke: var(--border-strong); stroke-width: 2; transition: stroke 220ms ease; }
-      .edge.taken { stroke: var(--purple); stroke-width: 2.4; }
-      .node-circ { stroke-width: 2.4; transition: fill 220ms ease, stroke 220ms ease; }
-      .node-circ.un { fill: var(--elevated); stroke: var(--border-strong); }
-      .node-circ.stk { fill: rgba(167,139,250,0.22); stroke: var(--purple); }
-      .node-circ.rec { fill: var(--warning); stroke: var(--warning); }
+      .graph-wrap { position: relative; z-index: 1; }
+      svg.graph { width: 100%; height: 280px; display: block; }
+      .edge { stroke: var(--border-strong); stroke-width: 2; transition: stroke 220ms ease, stroke-width 220ms ease; }
+      .edge.tree { stroke: var(--success); stroke-width: 2.6; }
+      .edge.back { stroke: var(--danger); stroke-width: 2.6; stroke-dasharray: 5 4; }
+      .node-circ { stroke-width: 2.4; transition: fill 220ms ease, stroke 220ms ease, transform 220ms ease; cursor: default; }
+      .node-circ.unseen { fill: var(--elevated); stroke: var(--border-strong); }
+      .node-circ.stack { fill: rgba(167,139,250,0.22); stroke: var(--purple); }
+      .node-circ.active { fill: var(--warning); stroke: var(--warning); }
       .node-circ.done { fill: rgba(92,198,111,0.25); stroke: var(--success); }
       .node-lbl { font: 600 13px var(--mono); fill: var(--fg); text-anchor: middle; pointer-events: none; user-select: none; }
+      .node-ord { font: 600 11px var(--mono); fill: var(--purple); text-anchor: middle; pointer-events: none; }
 
       .lanes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
       .lane { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; min-height: 80px; }
       .lane .h { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px; }
-      .lane .row { display: flex; flex-direction: column-reverse; gap: 4px; min-height: 28px; }
-      .lane .pills { display: flex; gap: 5px; flex-wrap: wrap; min-height: 28px; align-items: center; }
+      .lane .col { display: flex; flex-direction: column-reverse; gap: 4px; min-height: 28px; }
+      .lane .row { display: flex; gap: 5px; flex-wrap: wrap; min-height: 28px; align-items: center; }
       .frame { display: flex; align-items: center; gap: 8px; padding: 4px 8px; background: var(--elevated); border: 1px solid var(--purple-bd); border-radius: 4px; font: 600 11.5px var(--mono); color: var(--purple); }
       .frame.top { background: rgba(167,139,250,0.18); }
       .frame .tag { color: var(--muted); font-size: 10.5px; margin-left: auto; }
-      .pill { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; font: 600 12px var(--mono); background: rgba(92,198,111,0.22); color: var(--success); border: 1px solid var(--success-bd); }
+      .pill { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; font: 600 12px var(--mono); }
+      .pill.s { background: rgba(167,139,250,0.20); color: var(--purple); border: 1px solid var(--purple-bd); }
+      .pill.v { background: rgba(92,198,111,0.22); color: var(--success); border: 1px solid var(--success-bd); }
       .empty { font: 500 11.5px var(--mono); color: var(--subtle); padding: 4px 2px; }
 
       .narration { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; position: relative; overflow: hidden; transition: border-color 350ms ease; }
       .narration::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--border-strong); transition: background 350ms ease; }
-      .narration.enter::before { background: var(--purple); } .narration.enter { border-color: rgba(167,139,250,0.30); }
-      .narration.rec::before { background: var(--warning); } .narration.rec { border-color: rgba(240,181,104,0.30); }
-      .narration.exit::before { background: var(--success); } .narration.exit { border-color: rgba(92,198,111,0.30); }
+      .narration.discover::before { background: var(--purple); } .narration.discover { border-color: rgba(167,139,250,0.30); }
+      .narration.tree::before { background: var(--info); } .narration.tree { border-color: rgba(94,159,246,0.30); }
+      .narration.back::before { background: var(--danger); } .narration.back { border-color: rgba(240,104,104,0.35); }
+      .narration.finish::before { background: var(--success); } .narration.finish { border-color: rgba(92,198,111,0.30); }
       .narration.done::before { background: var(--success); } .narration.done { border-color: rgba(92,198,111,0.45); }
       .narr-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
       .badge { font: 600 10.5px var(--mono); padding: 4px 9px; border-radius: 999px; letter-spacing: 0.4px; text-transform: uppercase; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); color: var(--muted); background: var(--elevated); }
       .badge.step { background: var(--elevated); border-color: var(--border-strong); color: var(--fg); }
       .badge.event { background: transparent; }
-      .badge.event.enter { color: var(--purple); border-color: var(--purple-bd); }
-      .badge.event.rec { color: var(--warning); border-color: var(--warning-bd); }
-      .badge.event.exit { color: var(--success); border-color: var(--success-bd); }
+      .badge.event.discover { color: var(--purple); border-color: var(--purple-bd); }
+      .badge.event.tree { color: var(--info); border-color: var(--info-bd); }
+      .badge.event.back { color: var(--danger); border-color: var(--danger-bd); }
+      .badge.event.finish { color: var(--success); border-color: var(--success-bd); }
       .badge.event.done { color: var(--success); border-color: var(--success-bd); }
       .narr-text { margin: 0; font-size: 14px; line-height: 1.55; color: var(--fg); }
       .narr-text strong { color: var(--fg); font-weight: 600; }
@@ -92,6 +99,7 @@
 
       .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
       .controls .spacer { flex: 1; }
+      .start-wrap { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font: 500 11px var(--mono); }
       .speed-wrap { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font: 500 11px var(--mono); }
       .speed-wrap input[type="range"] { width: 80px; }
       .kbd { font-family: var(--mono); font-size: 10.5px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); color: var(--muted); border: 1px solid var(--border); }
@@ -117,28 +125,22 @@
   </head>
   <body>
     <div class="container">
-      <h2 class="sr-only">Binary tree traversal showing pre-order, in-order, and post-order DFS modes.</h2>
-
-      <div class="mode-tabs" id="mode-tabs" role="tablist">
-        <button data-m="pre" class="on">Pre-order (N L R)</button>
-        <button data-m="in">In-order (L N R)</button>
-        <button data-m="post">Post-order (L R N)</button>
-      </div>
-
-      <div id="rule" class="rule-card"></div>
+      <h2 class="sr-only">Depth-first search on a seven-node graph with cycles. Press Play to dive deep, backtrack, and discover back edges.</h2>
 
       <div class="hero">
         <div class="hero-head">
-          <span class="ttl">Binary tree · 9 nodes · recursive DFS</span>
+          <span class="ttl">Graph · DFS · recursive · stack</span>
           <span class="legend">
-            <span><span class="sw" style="background:var(--elevated);border:1px solid var(--border-strong)"></span>not yet</span>
+            <span><span class="sw" style="background:var(--elevated);border:1px solid var(--border-strong)"></span>unseen</span>
             <span><span class="sw" style="background:rgba(167,139,250,0.30);border:1px solid var(--purple-bd)"></span>on stack</span>
-            <span><span class="sw" style="background:var(--warning)"></span>recording</span>
-            <span><span class="sw" style="background:rgba(92,198,111,0.30);border:1px solid var(--success-bd)"></span>recorded</span>
+            <span><span class="sw" style="background:var(--warning)"></span>active</span>
+            <span><span class="sw" style="background:rgba(92,198,111,0.25);border:1px solid var(--success-bd)"></span>finished</span>
+            <span><span class="ln" style="border-top-color:var(--success)"></span>tree edge</span>
+            <span><span class="ln" style="border-top-color:var(--danger);border-top-style:dashed"></span>back edge</span>
           </span>
         </div>
-        <div class="tree-wrap">
-          <svg id="tree" class="tree" viewBox="0 0 480 290" aria-hidden="true">
+        <div class="graph-wrap">
+          <svg id="graph" class="graph" viewBox="0 0 540 280" aria-hidden="true">
             <g id="edges"></g>
             <g id="nodes"></g>
           </svg>
@@ -148,11 +150,11 @@
       <div class="lanes">
         <div class="lane">
           <div class="h">Call stack (top first)</div>
-          <div id="lane-stack" class="row"><span class="empty">empty</span></div>
+          <div id="lane-stack" class="col"><span class="empty">empty</span></div>
         </div>
         <div class="lane">
-          <div class="h" id="result-label">Pre-order result</div>
-          <div id="lane-result" class="pills"><span class="empty">none</span></div>
+          <div class="h">Discovery order</div>
+          <div id="lane-order" class="row"><span class="empty">none</span></div>
         </div>
       </div>
 
@@ -161,7 +163,7 @@
           <span id="narr-step" class="badge step">Step 0 / 0</span>
           <span id="narr-event" class="badge event" style="display:none"></span>
         </div>
-        <p id="narr-text" class="narr-text"><strong>Press Play.</strong> Recursive DFS walks the tree; the active mode decides *when* a node is recorded.</p>
+        <p id="narr-text" class="narr-text"><strong>Press Play.</strong> DFS dives as deep as it can down one branch, then backtracks. An edge to a node still on the stack is a <strong>back edge</strong> — a cycle.</p>
       </div>
 
       <div class="controls">
@@ -170,13 +172,19 @@
         <button id="btn-next"><i class="ti ti-chevron-right"></i>Step</button>
         <button id="btn-restart" class="ghost"><i class="ti ti-refresh"></i>Restart</button>
         <span class="spacer"></span>
+        <span class="start-wrap"><span>Start</span>
+          <select id="start-sel">
+            <option>A</option><option>B</option><option>C</option><option>D</option>
+            <option>E</option><option>F</option><option>G</option>
+          </select>
+        </span>
         <span class="speed-wrap"><span>Speed</span><input id="speed" type="range" min="1" max="10" step="1" value="5" /></span>
       </div>
 
       <div class="stats">
         <div class="stat"><div class="label">stack depth</div><div id="s-stack" class="value" style="color:var(--purple)">0</div></div>
-        <div class="stat"><div class="label">recorded</div><div id="s-rec" class="value" style="color:var(--success)">0</div></div>
-        <div class="stat"><div class="label">max depth</div><div id="s-max" class="value">0</div></div>
+        <div class="stat"><div class="label">finished</div><div id="s-done" class="value" style="color:var(--success)">0</div></div>
+        <div class="stat"><div class="label">back edges</div><div id="s-back" class="value" style="color:var(--danger)">0</div></div>
         <div class="stat"><div class="label">progress</div><div id="s-prog" class="value" style="color:var(--accent)">0%</div></div>
       </div>
 
@@ -189,45 +197,28 @@
 
     <script>
       (function () {
-        // Binary tree layout
-        var pos = { F:[240,40], B:[130,110], G:[360,110], A:[70,185], D:[190,185], I:[420,185], C:[150,255], E:[240,255], H:[380,255] };
-        var L    = { F:'B', B:'A', D:'C', G:null, I:'H', A:null, C:null, E:null, H:null };
-        var R    = { F:'G', B:'D', D:'E', G:'I', A:null, C:null, E:null, H:null, I:null };
-        var ROOT = 'F';
-        var NODES = Object.keys(pos);
+        // Same graph as the BFS prototype — an irregular, scattered layout
+        // (not a grid) with three cycles, so DFS produces back edges.
+        var pos = { A:[75,70], B:[250,48], C:[445,95], D:[80,210], E:[275,165], F:[455,215], G:[270,255] };
+        var adj = { A:["B","D"], B:["A","C","E"], C:["B","E","F"], D:["A","E"], E:["B","C","D","G"], F:["C","G"], G:["E","F"] };
 
-        var META = {
-          pre:  { label:'Pre-order result',  ph:'Pre-order pseudocode (N L R)',
-                  rule: '<strong>Pre-order (N L R)</strong> — record a node the moment you arrive, then recurse left, then right. Useful for cloning trees and serialisation.',
-                  code:['preorder(node):','  if node is null: return','  record(node)','  preorder(node.left)','  preorder(node.right)'],
-                  enter:0, rec:2, goL:3, goR:4, exit:1 },
-          in:   { label:'In-order result',   ph:'In-order pseudocode (L N R)',
-                  rule: '<strong>In-order (L N R)</strong> — fully left first, then record the node, then right. On a BST, this comes out sorted.',
-                  code:['inorder(node):','  if node is null: return','  inorder(node.left)','  record(node)','  inorder(node.right)'],
-                  enter:0, rec:3, goL:2, goR:4, exit:1 },
-          post: { label:'Post-order result', ph:'Post-order pseudocode (L R N)',
-                  rule: '<strong>Post-order (L R N)</strong> — left, right, then record on the way back out. The order you need for deleting a tree or computing aggregates from leaves up.',
-                  code:['postorder(node):','  if node is null: return','  postorder(node.left)','  postorder(node.right)','  record(node)'],
-                  enter:0, rec:4, goL:2, goR:3, exit:1 },
-        };
+        function key(u, v) { return [u, v].sort().join('-'); }
 
         var nodesG = document.getElementById('nodes');
         var edgesG = document.getElementById('edges');
-        var modeTabs = document.getElementById('mode-tabs');
-        var ruleEl = document.getElementById('rule');
-        var resultLabel = document.getElementById('result-label');
         var narrEl = document.getElementById('narration');
         var narrText = document.getElementById('narr-text');
         var narrStep = document.getElementById('narr-step');
         var narrEvent = document.getElementById('narr-event');
         var laneS = document.getElementById('lane-stack');
-        var laneR = document.getElementById('lane-result');
+        var laneO = document.getElementById('lane-order');
         var sStack = document.getElementById('s-stack');
-        var sRec = document.getElementById('s-rec');
-        var sMax = document.getElementById('s-max');
+        var sDone = document.getElementById('s-done');
+        var sBack = document.getElementById('s-back');
         var sP = document.getElementById('s-prog');
         var tlPos = document.getElementById('tl-pos');
         var progFill = document.getElementById('prog-fill');
+        var startSel = document.getElementById('start-sel');
         var btnPrev = document.getElementById('btn-prev');
         var btnNext = document.getElementById('btn-next');
         var btnPlay = document.getElementById('btn-play');
@@ -237,161 +228,172 @@
         var speedEl = document.getElementById('speed');
 
         var nodeEls = {}, edgeEls = {};
-        NODES.forEach(function (n) {
-          [L[n], R[n]].forEach(function (ch) {
-            if (!ch) return;
-            var p1 = pos[n], p2 = pos[ch];
+        var seenEdge = {};
+        Object.keys(adj).forEach(function (u) {
+          adj[u].forEach(function (v) {
+            var k = key(u, v);
+            if (seenEdge[k]) return; seenEdge[k] = true;
             var ln = document.createElementNS('http://www.w3.org/2000/svg','line');
-            ln.setAttribute('x1',p1[0]); ln.setAttribute('y1',p1[1]);
-            ln.setAttribute('x2',p2[0]); ln.setAttribute('y2',p2[1]);
+            ln.setAttribute('x1', pos[u][0]); ln.setAttribute('y1', pos[u][1]);
+            ln.setAttribute('x2', pos[v][0]); ln.setAttribute('y2', pos[v][1]);
             ln.setAttribute('class','edge');
+            edgeEls[k] = ln;
             edgesG.appendChild(ln);
-            edgeEls[n + '-' + ch] = ln;
           });
         });
-        NODES.forEach(function (n) {
+        Object.keys(pos).forEach(function (n) {
           var x = pos[n][0], y = pos[n][1];
           var c = document.createElementNS('http://www.w3.org/2000/svg','circle');
-          c.setAttribute('cx',x); c.setAttribute('cy',y); c.setAttribute('r',19);
-          c.setAttribute('class','node-circ un');
+          c.setAttribute('cx', x); c.setAttribute('cy', y); c.setAttribute('r', 22);
+          c.setAttribute('class','node-circ unseen');
           var t = document.createElementNS('http://www.w3.org/2000/svg','text');
-          t.setAttribute('x',x); t.setAttribute('y',y+5);
-          t.setAttribute('class','node-lbl'); t.textContent = n;
-          nodesG.appendChild(c); nodesG.appendChild(t);
-          nodeEls[n] = { c:c, t:t };
+          t.setAttribute('x', x); t.setAttribute('y', y + 5);
+          t.setAttribute('class','node-lbl');
+          t.textContent = n;
+          var o = document.createElementNS('http://www.w3.org/2000/svg','text');
+          o.setAttribute('x', x); o.setAttribute('y', y - 30);
+          o.setAttribute('class','node-ord');
+          o.textContent = '';
+          nodesG.appendChild(c); nodesG.appendChild(t); nodesG.appendChild(o);
+          nodeEls[n] = { c: c, t: t, o: o };
         });
 
-        var mode = 'pre';
         var steps = [], idx = 0, playing = false, timer = null;
 
-        function buildSteps(kind) {
-          var ev = [];
-          function walk(node) {
-            if (!node) return;
-            ev.push({ t:'enter', node: node });
-            if (kind === 'pre') ev.push({ t:'rec', node: node });
-            ev.push({ t:'goL', node: node, c: L[node] });
-            walk(L[node]);
-            if (kind === 'in') ev.push({ t:'rec', node: node });
-            ev.push({ t:'goR', node: node, c: R[node] });
-            walk(R[node]);
-            if (kind === 'post') ev.push({ t:'rec', node: node });
-            ev.push({ t:'exit', node: node });
+        function buildSteps(start) {
+          var snaps = [];
+          var stack = [];          // grey nodes — the call stack, bottom → top
+          var order = [];          // discovery order
+          var done = [];           // finished (black) nodes
+          var treeEdges = [];
+          var backEdges = [];
+          var ord = {};            // node → discovery index (1-based)
+          var seen = {};
+
+          function snap(extra) {
+            snaps.push({
+              stack: stack.slice(), order: order.slice(), done: done.slice(),
+              treeEdges: treeEdges.slice(), backEdges: backEdges.slice(),
+              ord: Object.assign({}, ord),
+              active: extra.active === undefined ? null : extra.active,
+              event: extra.event, msg: extra.msg,
+            });
           }
-          walk(ROOT);
-          // Translate events into snapshots
-          var snap = [];
-          var stack = [], recorded = [], taken = [], current = null;
-          snap.push({ stack:[], recorded:[], taken:[], current:null, line:-1, event:'enter',
-            msg: '<strong>Ready.</strong> Press Step or Play to run the ' + kind + '-order traversal.' });
-          ev.forEach(function (e) {
-            var M = META[kind];
-            if (e.t === 'enter') {
-              stack = stack.concat([e.node]);
-              snap.push({ stack: stack.slice(), recorded: recorded.slice(), taken: taken.slice(), current: null,
-                line: M.enter, event: 'enter',
-                msg: 'Call <code>' + kind + '(' + e.node + ')</code> — push onto the stack.' });
-            } else if (e.t === 'rec') {
-              recorded = recorded.concat([e.node]);
-              snap.push({ stack: stack.slice(), recorded: recorded.slice(), taken: taken.slice(), current: e.node,
-                line: M.rec, event: 'rec',
-                msg: 'Record <strong>' + e.node + '</strong> → position ' + recorded.length + ' in the result.' });
-            } else if (e.t === 'goL') {
-              if (e.c) {
-                taken = taken.concat([e.node + '-' + e.c]);
-                snap.push({ stack: stack.slice(), recorded: recorded.slice(), taken: taken.slice(), current: null,
-                  line: M.goL, event: 'enter',
-                  msg: 'Recurse into <code>' + e.node + '</code>\'s <strong>left</strong> child → <code>' + e.c + '</code>.' });
+
+          snap({ event: 'discover', active: null,
+            msg: '<strong>Ready.</strong> Start a recursive DFS from <code>' + start + '</code>. Press Step or Play.' });
+
+          function dfs(u, parent) {
+            seen[u] = true;
+            stack.push(u);
+            order.push(u);
+            ord[u] = order.length;
+            snap({ event: 'discover', active: u,
+              msg: '<strong>Discover ' + u + '</strong> — call <code>dfs(' + u + ')</code> and push its frame (discovery #' + ord[u] + '). ' +
+                (parent ? 'Reached by tree edge <code>' + parent + '–' + u + '</code>.' : 'This is the root.') });
+
+            adj[u].forEach(function (v) {
+              if (v === parent) return; // skip the undirected edge we arrived on
+              if (!seen[v]) {
+                treeEdges.push(key(u, v));
+                snap({ event: 'tree', active: u,
+                  msg: '<code>' + v + '</code> is unseen → take <strong>tree edge ' + u + '–' + v + '</strong> and recurse into <code>' + v + '</code>.' });
+                dfs(v, u);
+                snap({ event: 'tree', active: u,
+                  msg: 'Back at <code>' + u + '</code> — <code>' + v + '</code> finished. Resume scanning <code>' + u + '</code>’s remaining neighbours.' });
+              } else if (stack.indexOf(v) >= 0) {
+                backEdges.push(key(u, v));
+                snap({ event: 'back', active: u,
+                  msg: '<code>' + v + '</code> is still on the stack → <strong>back edge ' + u + '–' + v + '</strong>. This closes a <strong>cycle</strong>.' });
               } else {
-                snap.push({ stack: stack.slice(), recorded: recorded.slice(), taken: taken.slice(), current: null,
-                  line: M.goL, event: 'enter',
-                  msg: '<code>' + e.node + '</code> has no left child — that call returns immediately.' });
+                snap({ event: 'finish', active: u,
+                  msg: '<code>' + v + '</code> is already finished — skip it; no new edge.' });
               }
-            } else if (e.t === 'goR') {
-              if (e.c) {
-                taken = taken.concat([e.node + '-' + e.c]);
-                snap.push({ stack: stack.slice(), recorded: recorded.slice(), taken: taken.slice(), current: null,
-                  line: M.goR, event: 'enter',
-                  msg: 'Recurse into <code>' + e.node + '</code>\'s <strong>right</strong> child → <code>' + e.c + '</code>.' });
-              } else {
-                snap.push({ stack: stack.slice(), recorded: recorded.slice(), taken: taken.slice(), current: null,
-                  line: M.goR, event: 'enter',
-                  msg: '<code>' + e.node + '</code> has no right child — that call returns immediately.' });
-              }
-            } else if (e.t === 'exit') {
-              stack = stack.filter(function (x) { return x !== e.node; });
-              snap.push({ stack: stack.slice(), recorded: recorded.slice(), taken: taken.slice(), current: null,
-                line: M.exit, event: 'exit',
-                msg: '<code>' + kind + '(' + e.node + ')</code> returns — pop the frame off the stack.' });
-            }
-          });
-          snap.push({ stack:[], recorded: recorded.slice(), taken: taken.slice(), current: null, line: -1, event: 'done',
-            msg: '<strong>Done.</strong> ' + kind + '-order: ' + recorded.map(function (n) { return '<code>' + n + '</code>'; }).join(' → ') + '.' });
-          return snap;
+            });
+
+            stack.pop();
+            done.push(u);
+            snap({ event: 'finish', active: u,
+              msg: '<code>dfs(' + u + ')</code> returns — pop the frame; <strong>' + u + '</strong> is now finished.' });
+          }
+
+          dfs(start, null);
+
+          snap({ event: 'done', active: null,
+            msg: '<strong>DFS done.</strong> Discovery order: ' +
+              order.map(function (n) { return '<code>' + n + '</code>'; }).join(' → ') +
+              '. Back edges (cycles): ' +
+              (backEdges.length ? backEdges.map(function (k) { return '<code>' + k.replace('-', '–') + '</code>'; }).join(', ') : 'none') + '.' });
+          return snaps;
         }
 
         function render(st) {
-          NODES.forEach(function (n) {
-            var role = 'un';
-            if (st.recorded.indexOf(n) >= 0) role = 'done';
-            else if (st.current === n) role = 'rec';
-            else if (st.stack.indexOf(n) >= 0) role = 'stk';
+          Object.keys(nodeEls).forEach(function (n) {
+            var role = 'unseen';
+            if (st.active === n) role = 'active';
+            else if (st.done.indexOf(n) >= 0) role = 'done';
+            else if (st.stack.indexOf(n) >= 0) role = 'stack';
             nodeEls[n].c.setAttribute('class', 'node-circ ' + role);
+            nodeEls[n].o.textContent = (st.ord[n] !== undefined ? '#' + st.ord[n] : '');
           });
           Object.keys(edgeEls).forEach(function (k) {
-            edgeEls[k].setAttribute('class', 'edge' + (st.taken.indexOf(k) >= 0 ? ' taken' : ''));
+            var cls = 'edge';
+            if (st.treeEdges.indexOf(k) >= 0) cls += ' tree';
+            else if (st.backEdges.indexOf(k) >= 0) cls += ' back';
+            edgeEls[k].setAttribute('class', cls);
           });
-          // Stack lane
+
+          // Call-stack lane (top first)
           laneS.innerHTML = '';
           if (st.stack.length === 0) {
-            var em = document.createElement('span'); em.className='empty'; em.textContent='empty'; laneS.appendChild(em);
+            var em = document.createElement('span'); em.className = 'empty'; em.textContent = 'empty'; laneS.appendChild(em);
           } else {
             st.stack.forEach(function (n, i) {
               var f = document.createElement('div');
               f.className = 'frame' + (i === st.stack.length - 1 ? ' top' : '');
-              f.innerHTML = mode + '(' + n + ')' + (i === st.stack.length - 1 ? '<span class="tag">← running</span>' : '');
+              f.innerHTML = 'dfs(' + n + ')' + (i === st.stack.length - 1 ? '<span class="tag">← running</span>' : '');
               laneS.appendChild(f);
             });
           }
-          // Result lane
-          laneR.innerHTML = '';
-          if (st.recorded.length === 0) {
-            var em2 = document.createElement('span'); em2.className='empty'; em2.textContent='none'; laneR.appendChild(em2);
+
+          // Discovery-order lane
+          laneO.innerHTML = '';
+          if (st.order.length === 0) {
+            var em2 = document.createElement('span'); em2.className = 'empty'; em2.textContent = 'none'; laneO.appendChild(em2);
           } else {
-            st.recorded.forEach(function (n) {
-              var p = document.createElement('span'); p.className='pill'; p.textContent = n; laneR.appendChild(p);
+            st.order.forEach(function (n) {
+              var p = document.createElement('span');
+              p.className = 'pill ' + (st.done.indexOf(n) >= 0 ? 'v' : 's');
+              p.textContent = n; laneO.appendChild(p);
             });
           }
-          // Narration
+
           narrText.innerHTML = st.msg;
           narrStep.textContent = 'Step ' + idx + ' / ' + (steps.length - 1);
-          narrEl.classList.remove('enter','rec','exit','done');
+          narrEl.classList.remove('discover','tree','back','finish','done');
           if (st.event) narrEl.classList.add(st.event);
           if (st.event) {
             narrEvent.style.display = '';
-            narrEvent.textContent = st.event === 'rec' ? 'record' : st.event === 'enter' ? 'enter' : st.event === 'exit' ? 'return' : st.event;
+            var labelMap = { discover: 'discover', tree: 'tree edge', back: 'back edge', finish: 'return', done: 'done' };
+            narrEvent.textContent = labelMap[st.event] || st.event;
             narrEvent.className = 'badge event ' + st.event;
           } else { narrEvent.style.display = 'none'; }
+
           sStack.textContent = st.stack.length;
-          sRec.textContent = st.recorded.length;
-          var maxD = 0;
-          for (var i = 1; i <= idx; i++) if (steps[i].stack.length > maxD) maxD = steps[i].stack.length;
-          sMax.textContent = maxD;
+          sDone.textContent = st.done.length;
+          sBack.textContent = st.backEdges.length;
           var pct = steps.length > 1 ? Math.round((idx / (steps.length - 1)) * 100) : 0;
-          sP.textContent = pct + '%'; progFill.style.width = pct + '%';
+          sP.textContent = pct + '%';
+          progFill.style.width = pct + '%';
           tlPos.textContent = idx + ' / ' + (steps.length - 1);
         }
 
-        function setMode(m) {
-          mode = m;
-          modeTabs.querySelectorAll('button').forEach(function (b) {
-            b.classList.toggle('on', b.dataset.m === m);
-          });
-          ruleEl.innerHTML = META[m].rule;
-          resultLabel.textContent = META[m].label;
-          reset();
+        function reset() {
+          stop();
+          steps = buildSteps(startSel.value);
+          idx = 0;
+          render(steps[0]);
         }
-        function reset() { stop(); steps = buildSteps(mode); idx = 0; render(steps[0]); }
         function next() { if (idx >= steps.length - 1) { stop(); return false; } idx++; render(steps[idx]); if (idx >= steps.length - 1) stop(); return true; }
         function prev() { if (idx <= 0) return; idx--; render(steps[idx]); }
         function delay() { return 1100 - (parseInt(speedEl.value, 10) * 95); }
@@ -399,20 +401,18 @@
         function loop() { if (!playing) return; if (!next()) { stop(); return; } timer = setTimeout(loop, delay()); }
         function stop() { playing=false; if (timer){clearTimeout(timer);timer=null;} playLabel.textContent='Play'; playIcon.className='ti ti-player-play'; }
 
-        modeTabs.addEventListener('click', function (e) {
-          var b = e.target.closest('button[data-m]'); if (b) setMode(b.dataset.m);
-        });
         btnPlay.addEventListener('click', function(){ playing ? stop() : play(); });
         btnNext.addEventListener('click', function(){ stop(); next(); });
         btnPrev.addEventListener('click', function(){ stop(); prev(); });
         btnRestart.addEventListener('click', function(){ reset(); });
+        startSel.addEventListener('change', function(){ reset(); });
         window.addEventListener('keydown', function(e){
           if (e.key === 'ArrowLeft') { stop(); prev(); }
           else if (e.key === 'ArrowRight') { stop(); next(); }
           else if (e.key === ' ') { e.preventDefault(); playing ? stop() : play(); }
         });
 
-        setMode('pre');
+        reset();
 
         function postHeight(){ try { parent.postMessage({type:'prototype:height',height:document.body.scrollHeight},'*'); } catch(e){} }
         new ResizeObserver(postHeight).observe(document.body);
