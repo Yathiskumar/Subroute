@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AVL Tree</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --success-bg: rgba(92,198,111,0.14); --success-bd: rgba(92,198,111,0.45);
+        --danger: #f06868;  --danger-bg: rgba(240,104,104,0.14); --danger-bd: rgba(240,104,104,0.45);
+        --warning: #f0b568; --warning-bg: rgba(240,181,104,0.14); --warning-bd: rgba(240,181,104,0.45);
+        --info: #5e9ff6;    --info-bg:    rgba(94,159,246,0.16); --info-bd:    rgba(94,159,246,0.45);
+        --purple: #a78bfa;  --purple-bg:  rgba(167,139,250,0.16); --purple-bd:  rgba(167,139,250,0.45);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --radius-lg: 14px; --radius-md: 8px; --radius-sm: 6px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body {
+        padding: 18px 18px 24px;
+        background-image:
+          radial-gradient(1200px 600px at 50% -200px, rgba(251,134,58,0.06), transparent),
+          linear-gradient(to right, rgba(255,255,255,0.020) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.020) 1px, transparent 1px);
+        background-size: auto, 40px 40px, 40px 40px;
+      }
+      .container { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; padding: 9px 12px; transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); color: var(--fg); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); color: #1a1003; }
+      button.ghost { background: transparent; }
+      button.demo { background: transparent; color: var(--muted); border-style: dashed; font-size: 11.5px; padding: 7px 10px; }
+      button.demo:hover:not(:disabled) { color: var(--fg); border-color: var(--border-strong); }
+      button i { font-size: 14px; }
+      input[type="number"], input[type="text"] { background: var(--elevated); color: var(--fg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 9px; font: 500 12px var(--mono); width: 92px; }
+      input[type="number"]:focus, input[type="text"]:focus { outline: none; border-color: var(--info); }
+      input[type="range"] { accent-color: var(--accent); }
+      select { background: var(--elevated); color: var(--fg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px 9px; font: 500 12px var(--sans); }
+
+      .hero { background: linear-gradient(180deg, rgba(255,255,255,0.014), transparent), var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px 12px; position: relative; overflow: hidden; }
+      .hero::before { content: ""; position: absolute; inset: 0; background: radial-gradient(420px 240px at 50% 0%, rgba(94,159,246,0.05), transparent 60%); pointer-events: none; }
+      .hero-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; position: relative; z-index: 1; gap: 12px; flex-wrap: wrap; }
+      .ttl { font: 600 11.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .legend { font-size: 11px; color: var(--muted); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      .legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: -1px; margin-right: 4px; }
+
+      .tree-wrap { position: relative; z-index: 1; overflow-x: auto; }
+      svg.tree { width: 100%; min-width: 540px; height: 330px; display: block; }
+      .tree .edge { stroke: var(--border-strong); stroke-width: 1.8; transition: stroke 200ms ease; }
+      .tree .edge.on { stroke: var(--success); stroke-width: 2.4; }
+      .tree .edge.ghost { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 4 3; }
+      .tree .nlabel { font: 600 13px var(--mono); text-anchor: middle; pointer-events: none; user-select: none; }
+      .tree .ncirc { stroke-width: 2.2; transition: fill 200ms ease, stroke 200ms ease; }
+
+      .narration { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; position: relative; overflow: hidden; transition: border-color 350ms ease; }
+      .narration::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--border-strong); transition: background 350ms ease; }
+      .narration.go::before { background: var(--warning); } .narration.go { border-color: rgba(240,181,104,0.30); }
+      .narration.yes::before { background: var(--success); } .narration.yes { border-color: rgba(92,198,111,0.40); }
+      .narration.no::before { background: var(--danger); } .narration.no { border-color: rgba(240,104,104,0.35); }
+      .narration.add::before { background: var(--accent); } .narration.add { border-color: rgba(251,134,58,0.35); }
+      .narr-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+      .badge { font: 600 10.5px var(--mono); padding: 4px 9px; border-radius: 999px; letter-spacing: 0.4px; text-transform: uppercase; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); color: var(--muted); background: var(--elevated); }
+      .badge.op { background: var(--elevated); border-color: var(--border-strong); color: var(--fg); }
+      .badge.event { background: transparent; display: none; }
+      .badge.event.go { color: var(--warning); border-color: var(--warning-bd); }
+      .badge.event.yes { color: var(--success); border-color: var(--success-bd); }
+      .badge.event.no { color: var(--danger); border-color: var(--danger-bd); }
+      .badge.event.add { color: var(--accent); border-color: var(--accent); }
+      .narr-text { margin: 0; font-size: 14px; line-height: 1.55; color: var(--fg); }
+      .narr-text strong { color: var(--fg); font-weight: 600; }
+      .narr-text code { font-family: var(--mono); background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; color: var(--accent); font-size: 12px; }
+
+      .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+      .controls .spacer { flex: 1; }
+      .speed-wrap { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font: 500 11px var(--mono); }
+      .speed-wrap input[type="range"] { width: 80px; }
+      .demos { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+      .demos .lbl { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; margin-right: 2px; }
+
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; }
+      .stat .label { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .stat .value { font: 600 22px var(--mono); margin-top: 4px; line-height: 1; }
+
+      /* AVL-specific: balance factor badges on SVG nodes */
+      .bf-badge { font: 600 10px var(--mono); }
+
+      @media (max-width: 540px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2 class="sr-only">AVL Tree — self-balancing binary search tree that keeps height O(log n) by rotating nodes whenever a balance factor reaches ±2.</h2>
+
+      <div class="hero">
+        <div class="hero-head">
+          <span class="ttl">AVL Tree · self-balancing BST</span>
+          <span class="legend">
+            <span><span class="sw" style="background:var(--info-bg);border:1px solid var(--info-bd)"></span>node</span>
+            <span><span class="sw" style="background:var(--danger)"></span>unbalanced |bf|=2</span>
+            <span><span class="sw" style="background:var(--purple)"></span>rotating</span>
+            <span><span class="sw" style="background:var(--success)"></span>new·settled</span>
+          </span>
+        </div>
+        <div class="tree-wrap">
+          <svg id="tree" class="tree" viewBox="0 0 680 330" aria-hidden="true">
+            <g id="edges"></g>
+            <g id="nodes"></g>
+          </svg>
+        </div>
+      </div>
+
+      <div id="narration" class="narration">
+        <div class="narr-meta">
+          <span id="narr-op" class="badge op">Ready</span>
+          <span id="narr-event" class="badge event"></span>
+        </div>
+        <p id="narr-text" class="narr-text"><strong>Default AVL tree loaded.</strong> Insert a value and watch the tree rotate to stay balanced — each node shows its balance factor (left height − right height).</p>
+      </div>
+
+      <div class="controls">
+        <input id="val" type="number" placeholder="value" />
+        <button id="btn-insert" class="primary"><i class="ti ti-plus"></i>Insert</button>
+        <button id="btn-delete"><i class="ti ti-trash"></i>Delete</button>
+        <button id="btn-random" class="ghost"><i class="ti ti-dice"></i>Random</button>
+        <button id="btn-reset" class="ghost"><i class="ti ti-refresh"></i>Reset</button>
+        <span class="spacer"></span>
+        <span class="speed-wrap"><span>Speed</span><input id="speed" type="range" min="1" max="10" step="1" value="8" /></span>
+      </div>
+
+      <div class="demos">
+        <span class="lbl">Demos</span>
+        <button id="demo-ll" class="demo"><i class="ti ti-rotate-clockwise"></i>LL · single right-rotate (10,20,30)</button>
+        <button id="demo-rr" class="demo"><i class="ti ti-rotate"></i>RR · single left-rotate (30,20,10)</button>
+        <button id="demo-lr" class="demo"><i class="ti ti-arrows-exchange"></i>LR · double (30,10,20)</button>
+        <button id="demo-rl" class="demo"><i class="ti ti-arrows-exchange-2"></i>RL · double (10,30,20)</button>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="label">nodes</div><div id="s-nodes" class="value" style="color:var(--info)">0</div></div>
+        <div class="stat"><div class="label">height</div><div id="s-height" class="value" style="color:var(--purple)">0</div></div>
+        <div class="stat"><div class="label">rotations</div><div id="s-rots" class="value" style="color:var(--warning)">0</div></div>
+        <div class="stat"><div class="label">balanced</div><div id="s-bal" class="value" style="color:var(--success)">✓</div></div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        var svgNS = 'http://www.w3.org/2000/svg';
+        var edgesG = document.getElementById('edges');
+        var nodesG = document.getElementById('nodes');
+        var narrEl = document.getElementById('narration');
+        var narrOp = document.getElementById('narr-op');
+        var narrEvent = document.getElementById('narr-event');
+        var narrText = document.getElementById('narr-text');
+        var valEl = document.getElementById('val');
+        var speedEl = document.getElementById('speed');
+        var sNodes = document.getElementById('s-nodes');
+        var sHeight = document.getElementById('s-height');
+        var sRots = document.getElementById('s-rots');
+        var sBal = document.getElementById('s-bal');
+
+        var root = null, busy = false, lastRots = 0;
+
+        // ── Node helpers ──────────────────────────────────────────────────────
+        function Node(v) { return { v: v, left: null, right: null, h: 1 }; }
+        function ht(n) { return n ? n.h : 0; }
+        function bf(n) { return n ? ht(n.left) - ht(n.right) : 0; }
+        function upd(n) { if (n) n.h = 1 + Math.max(ht(n.left), ht(n.right)); }
+
+        function rotR(y) { var x = y.left; y.left = x.right; x.right = y; upd(y); upd(x); return x; }
+        function rotL(x) { var y = x.right; x.right = y.left; y.left = x; upd(x); upd(y); return y; }
+
+        function countNodes(n) { return n ? 1 + countNodes(n.left) + countNodes(n.right) : 0; }
+        function heightOf(n) { return n ? n.h : 0; }
+        function find(n, v) { if (!n) return null; if (v === n.v) return n; return v < n.v ? find(n.left, v) : find(n.right, v); }
+        function minNode(n) { while (n.left) n = n.left; return n; }
+        function isBalanced(n) { if (!n) return true; return Math.abs(bf(n)) <= 1 && isBalanced(n.left) && isBalanced(n.right); }
+
+        // Plain BST insert (no rotation) — used to place the node, then we animate rebalance
+        function bstInsert(n, v) {
+          if (!n) return Node(v);
+          if (v < n.v) n.left = bstInsert(n.left, v);
+          else if (v > n.v) n.right = bstInsert(n.right, v);
+          upd(n); return n;
+        }
+
+        function bstRemove(n, v) {
+          if (!n) return null;
+          if (v < n.v) n.left = bstRemove(n.left, v);
+          else if (v > n.v) n.right = bstRemove(n.right, v);
+          else {
+            if (!n.left) return n.right;
+            if (!n.right) return n.left;
+            var m = minNode(n.right); n.v = m.v; n.right = bstRemove(n.right, m.v);
+          }
+          upd(n); return n;
+        }
+
+        // Recompute all heights bottom-up
+        function fixHeights(n) { if (!n) return; fixHeights(n.left); fixHeights(n.right); upd(n); }
+
+        // Find the LOWEST unbalanced node (post-order: deepest first)
+        function findUnbalanced() {
+          var result = null;
+          (function rec(n, parent) {
+            if (!n) return;
+            rec(n.left, n);
+            rec(n.right, n);
+            if (!result && Math.abs(bf(n)) >= 2) result = { node: n, parent: parent };
+          })(root, null);
+          return result;
+        }
+
+        function replaceChild(parent, oldN, newN) {
+          if (!parent) { root = newN; return; }
+          if (parent.left === oldN) parent.left = newN;
+          else parent.right = newN;
+        }
+
+        // ── wait / say ────────────────────────────────────────────────────────
+        function wait() { return new Promise(function (r) { setTimeout(r, 1100 - parseInt(speedEl.value, 10) * 95); }); }
+
+        function say(op, event, text) {
+          narrOp.textContent = op;
+          narrEl.classList.remove('go', 'yes', 'no', 'add');
+          if (event) {
+            narrEl.classList.add(event);
+            narrEvent.style.display = '';
+            narrEvent.className = 'badge event ' + event;
+            narrEvent.textContent = event === 'go' ? 'compare' : event === 'yes' ? 'balanced' : event === 'no' ? 'unbalanced' : 'rotated';
+          } else {
+            narrEvent.style.display = 'none';
+          }
+          narrText.innerHTML = text;
+        }
+
+        // ── layout (same math as BST: in-order index → x, depth → y) ─────────
+        function inorder2(n, out) { if (!n) return; inorder2(n.left, out); out.push(n); inorder2(n.right, out); }
+
+        function layout() {
+          var pos = new Map();
+          if (!root) return pos;
+          var order = []; inorder2(root, order);
+          var depth = new Map();
+          (function sd(n, d) { if (!n) return; depth.set(n, d); sd(n.left, d + 1); sd(n.right, d + 1); })(root, 0);
+          var N = order.length, padX = 40, padY = 44, uW = 680 - 2 * padX, uH = 330 - 2 * padY;
+          var maxD = 0; depth.forEach(function (d) { if (d > maxD) maxD = d; });
+          order.forEach(function (n, i) {
+            var x = N === 1 ? 340 : padX + uW * i / (N - 1);
+            var y = padY + (maxD === 0 ? 0 : uH * depth.get(n) / Math.max(maxD, 1));
+            pos.set(n, { x: x, y: y });
+          });
+          return pos;
+        }
+
+        // ── render ────────────────────────────────────────────────────────────
+        // opts: { unbal, rotating (Set), fresh (Set) }
+        function render(opts) {
+          opts = opts || {};
+          var unbal = opts.unbal || null;
+          var rotating = opts.rotating || new Set();
+          var fresh = opts.fresh || new Set();
+
+          while (edgesG.firstChild) edgesG.removeChild(edgesG.firstChild);
+          while (nodesG.firstChild) nodesG.removeChild(nodesG.firstChild);
+
+          if (!root) {
+            var et = document.createElementNS(svgNS, 'text');
+            et.setAttribute('x', 340); et.setAttribute('y', 165);
+            et.setAttribute('text-anchor', 'middle');
+            et.setAttribute('fill', 'var(--muted)'); et.setAttribute('font-size', '14');
+            et.setAttribute('font-family', 'var(--mono)');
+            et.textContent = 'empty tree';
+            nodesG.appendChild(et);
+            updateStats(); return;
+          }
+
+          var pos = layout();
+
+          // edges
+          (function drawE(n) {
+            if (!n) return;
+            [n.left, n.right].forEach(function (c) {
+              if (!c) return;
+              var a = pos.get(n), b = pos.get(c);
+              var ln = document.createElementNS(svgNS, 'line');
+              ln.setAttribute('x1', a.x); ln.setAttribute('y1', a.y);
+              ln.setAttribute('x2', b.x); ln.setAttribute('y2', b.y);
+              ln.setAttribute('class', 'edge');
+              edgesG.appendChild(ln);
+            });
+            drawE(n.left); drawE(n.right);
+          })(root);
+
+          // nodes
+          pos.forEach(function (p, n) {
+            var fill = 'var(--info-bg)', stroke = 'var(--info)', tcol = 'var(--fg)';
+            if (rotating.has(n)) { fill = 'var(--purple)'; stroke = 'var(--purple)'; tcol = '#1a1003'; }
+            else if (n === unbal) { fill = 'var(--danger)'; stroke = 'var(--danger)'; tcol = '#1a1003'; }
+            else if (fresh.has(n)) { fill = 'var(--success)'; stroke = 'var(--success)'; tcol = '#1a1003'; }
+
+            // circle
+            var c = document.createElementNS(svgNS, 'circle');
+            c.setAttribute('cx', p.x); c.setAttribute('cy', p.y); c.setAttribute('r', 18);
+            c.setAttribute('class', 'ncirc');
+            c.setAttribute('fill', fill); c.setAttribute('stroke', stroke);
+            nodesG.appendChild(c);
+
+            // value label
+            var t = document.createElementNS(svgNS, 'text');
+            t.setAttribute('x', p.x); t.setAttribute('y', p.y + 5);
+            t.setAttribute('class', 'nlabel'); t.setAttribute('fill', tcol);
+            t.textContent = n.v;
+            nodesG.appendChild(t);
+
+            // balance factor badge
+            var b = bf(n);
+            var bStr = (b > 0 ? '+' : '') + b;
+            var bfill = (Math.abs(b) >= 2) ? 'var(--danger)' : 'var(--muted)';
+            // if node itself is in a colored state, show bf badge differently
+            if (rotating.has(n) || n === unbal || fresh.has(n)) bfill = 'rgba(255,255,255,0.55)';
+            var badge = document.createElementNS(svgNS, 'text');
+            badge.setAttribute('x', p.x + 22); badge.setAttribute('y', p.y - 13);
+            badge.setAttribute('text-anchor', 'start');
+            badge.setAttribute('class', 'bf-badge');
+            badge.setAttribute('fill', bfill);
+            badge.textContent = bStr;
+            nodesG.appendChild(badge);
+          });
+
+          updateStats();
+        }
+
+        function updateStats() {
+          sNodes.textContent = countNodes(root);
+          sHeight.textContent = heightOf(root);
+          sRots.textContent = lastRots;
+          sBal.textContent = isBalanced(root) ? '✓' : '✗';
+          sBal.style.color = isBalanced(root) ? 'var(--success)' : 'var(--danger)';
+        }
+
+        // ── animated rebalance ────────────────────────────────────────────────
+        async function rebalance(opName) {
+          fixHeights(root);
+          lastRots = 0;
+          var info = findUnbalanced();
+          while (info) {
+            var z = info.node, parent = info.parent;
+            var b = bf(z);
+            var bStr = (b > 0 ? '+' : '') + b;
+            var kind = '';
+            if (b > 1) { kind = bf(z.left) >= 0 ? 'LL' : 'LR'; }
+            else       { kind = bf(z.right) <= 0 ? 'RR' : 'RL'; }
+
+            render({ unbal: z });
+            say(opName, 'no', 'Node <strong>' + z.v + '</strong> is unbalanced — balance factor is <code>' + bStr + '</code>. This is a <strong>' + kind + '</strong> case.');
+            await wait();
+
+            var newSub;
+            if (kind === 'LL') {
+              render({ rotating: new Set([z, z.left]) });
+              say(opName, 'go', '<strong>LL case</strong> — left subtree is left-heavy. Performing a <strong>single right-rotate</strong> around <strong>' + z.v + '</strong>.');
+              await wait();
+              newSub = rotR(z);
+              lastRots++;
+            } else if (kind === 'RR') {
+              render({ rotating: new Set([z, z.right]) });
+              say(opName, 'go', '<strong>RR case</strong> — right subtree is right-heavy. Performing a <strong>single left-rotate</strong> around <strong>' + z.v + '</strong>.');
+              await wait();
+              newSub = rotL(z);
+              lastRots++;
+            } else if (kind === 'LR') {
+              render({ rotating: new Set([z.left, z.left.right]) });
+              say(opName, 'go', '<strong>LR case</strong> — left subtree is right-heavy. Step 1: <strong>left-rotate</strong> left child <strong>' + z.left.v + '</strong>.');
+              await wait();
+              z.left = rotL(z.left);
+              lastRots++;
+              render({ rotating: new Set([z, z.left]) });
+              say(opName, 'go', '<strong>LR case</strong> — Step 2: <strong>right-rotate</strong> around <strong>' + z.v + '</strong>.');
+              await wait();
+              newSub = rotR(z);
+              lastRots++;
+            } else { // RL
+              render({ rotating: new Set([z.right, z.right.left]) });
+              say(opName, 'go', '<strong>RL case</strong> — right subtree is left-heavy. Step 1: <strong>right-rotate</strong> right child <strong>' + z.right.v + '</strong>.');
+              await wait();
+              z.right = rotR(z.right);
+              lastRots++;
+              render({ rotating: new Set([z, z.right]) });
+              say(opName, 'go', '<strong>RL case</strong> — Step 2: <strong>left-rotate</strong> around <strong>' + z.v + '</strong>.');
+              await wait();
+              newSub = rotL(z);
+              lastRots++;
+            }
+
+            replaceChild(parent, z, newSub);
+            fixHeights(root);
+            render({ fresh: new Set([newSub]) });
+            say(opName, 'yes', '<strong>' + newSub.v + '</strong> is now the subtree root — balance restored after the ' + kind + ' rotation.');
+            await wait();
+
+            info = findUnbalanced();
+          }
+        }
+
+        // ── insert ────────────────────────────────────────────────────────────
+        async function doInsert(v) {
+          if (find(root, v)) {
+            render();
+            say('Insert ' + v, 'no', '<strong>' + v + ' is already in the tree</strong> — AVL trees hold no duplicates.');
+            return;
+          }
+          root = bstInsert(root, v);
+          var node = find(root, v);
+          render({ fresh: new Set([node]) });
+          say('Insert ' + v, 'add', 'Placed <strong>' + v + '</strong> using normal BST rules. Now checking balance factors up the path…');
+          await wait();
+          await rebalance('Insert ' + v);
+          render();
+          say('Insert ' + v, 'yes', '<strong>' + v + '</strong> inserted. Tree is balanced — all balance factors are within [−1, +1].');
+        }
+
+        // ── delete ────────────────────────────────────────────────────────────
+        async function doDelete(v) {
+          if (!find(root, v)) {
+            render();
+            say('Delete ' + v, 'no', '<strong>' + v + ' is not in the tree.</strong>');
+            return;
+          }
+          root = bstRemove(root, v);
+          render();
+          say('Delete ' + v, 'go', 'Removed <strong>' + v + '</strong> using BST delete. Now rebalancing up the path…');
+          await wait();
+          await rebalance('Delete ' + v);
+          render();
+          say('Delete ' + v, 'yes', '<strong>' + v + '</strong> deleted. Tree is balanced.');
+        }
+
+        // ── helpers ───────────────────────────────────────────────────────────
+        function parseVal() { var v = parseInt(valEl.value, 10); return isNaN(v) ? null : v; }
+        function run(fn, v) { if (busy) return; lock(true); Promise.resolve(fn(v)).then(function () { lock(false); }); }
+        function lock(b) { busy = b; }
+
+        function loadDefault() {
+          root = null;
+          [50, 30, 70, 20, 40, 60, 80].forEach(function (v) { root = bstInsert(root, v); });
+          fixHeights(root);
+          lastRots = 0;
+          render();
+        }
+
+        // Fast silent AVL insert (no animation) — used for demo setups and random
+        function avlInsertSilent(n, v) {
+          n = bstInsert(n, v);
+          fixHeights(n);
+          var info = findUnbalancedIn(n);
+          while (info) {
+            var z = info.node, parent = info.parent;
+            var b = bf(z);
+            var kind = b > 1 ? (bf(z.left) >= 0 ? 'LL' : 'LR') : (bf(z.right) <= 0 ? 'RR' : 'RL');
+            var newSub;
+            if (kind === 'LL') newSub = rotR(z);
+            else if (kind === 'RR') newSub = rotL(z);
+            else if (kind === 'LR') { z.left = rotL(z.left); newSub = rotR(z); }
+            else { z.right = rotR(z.right); newSub = rotL(z); }
+            if (!parent) n = newSub; else if (parent.left === z) parent.left = newSub; else parent.right = newSub;
+            fixHeights(n);
+            info = findUnbalancedIn(n);
+          }
+          return n;
+        }
+
+        function findUnbalancedIn(r) {
+          var result = null;
+          (function rec(n, parent) {
+            if (!n) return;
+            rec(n.left, n); rec(n.right, n);
+            if (!result && Math.abs(bf(n)) >= 2) result = { node: n, parent: parent };
+          })(r, null);
+          return result;
+        }
+
+        // ── button wiring ─────────────────────────────────────────────────────
+        document.getElementById('btn-insert').addEventListener('click', function () {
+          var v = parseVal();
+          if (v === null) { say('Insert', null, 'Enter a number first.'); return; }
+          run(doInsert, v);
+        });
+
+        document.getElementById('btn-delete').addEventListener('click', function () {
+          var v = parseVal();
+          if (v === null) { say('Delete', null, 'Enter a number first.'); return; }
+          run(doDelete, v);
+        });
+
+        document.getElementById('btn-random').addEventListener('click', function () {
+          if (busy) return;
+          root = null;
+          var vals = new Set();
+          while (vals.size < 7) vals.add(Math.floor(Math.random() * 99) + 1);
+          vals.forEach(function (v) { root = avlInsertSilent(root, v); });
+          lastRots = 0;
+          render();
+          say('Random', null, 'Built a random balanced AVL tree of <strong>7 nodes</strong>. Try inserting or deleting values to watch rotations.');
+        });
+
+        document.getElementById('btn-reset').addEventListener('click', function () {
+          if (busy) return;
+          loadDefault();
+          say('Reset', null, '<strong>Default tree restored.</strong> Insert, delete, or try a demo below.');
+        });
+
+        valEl.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter' && !busy) document.getElementById('btn-insert').click();
+        });
+
+        // ── demos ─────────────────────────────────────────────────────────────
+        async function runDemo(seq, label) {
+          if (busy) return;
+          lock(true);
+          root = null; lastRots = 0; render();
+          say(label, null, 'Starting demo: inserting <strong>' + seq.join(', ') + '</strong> one at a time…');
+          await wait();
+          for (var i = 0; i < seq.length; i++) {
+            valEl.value = seq[i];
+            await doInsert(seq[i]);
+            await wait();
+          }
+          lock(false);
+        }
+
+        document.getElementById('demo-ll').addEventListener('click', function () {
+          runDemo([10, 20, 30], 'LL Demo');
+        });
+        document.getElementById('demo-rr').addEventListener('click', function () {
+          runDemo([30, 20, 10], 'RR Demo');
+        });
+        document.getElementById('demo-lr').addEventListener('click', function () {
+          runDemo([30, 10, 20], 'LR Demo');
+        });
+        document.getElementById('demo-rl').addEventListener('click', function () {
+          runDemo([10, 30, 20], 'RL Demo');
+        });
+
+        // ── init ──────────────────────────────────────────────────────────────
+        loadDefault();
+        say('Ready', null, '<strong>Default AVL tree loaded.</strong> Insert a value and watch the tree rotate to stay balanced — each node shows its balance factor (left height − right height).');
+
+        function postHeight() { try { parent.postMessage({ type: 'prototype:height', height: document.body.scrollHeight }, '*'); } catch (e) {} }
+        new ResizeObserver(postHeight).observe(document.body);
+        postHeight();
+      })();
+    </script>
+  </body>
+</html>

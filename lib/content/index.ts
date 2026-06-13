@@ -108,6 +108,16 @@ import { unionFind as gaUnionFind } from "./graph-algorithms/union-find";
 import { kruskal as gaKruskal } from "./graph-algorithms/kruskal";
 import { prim as gaPrim } from "./graph-algorithms/prim";
 import { astar as gaAstar } from "./graph-algorithms/astar";
+import { treesTopic } from "./trees/_topic";
+import { bst as tBst } from "./trees/bst";
+import { avl as tAvl } from "./trees/avl";
+import { redBlack as tRedBlack } from "./trees/red-black";
+import { heap as tHeap } from "./trees/heap";
+import { trie as tTrie } from "./trees/trie";
+import { bTree as tBTree } from "./trees/b-tree";
+import { bPlusTree as tBPlusTree } from "./trees/b-plus-tree";
+import { segmentTree as tSegmentTree } from "./trees/segment-tree";
+import { fenwickTree as tFenwickTree } from "./trees/fenwick-tree";
 
 // Indexed by `${topicSlug}/${conceptSlug}`
 const CONCEPT_CONTENT: Record<string, ConceptContent> = {
@@ -206,6 +216,15 @@ const CONCEPT_CONTENT: Record<string, ConceptContent> = {
   "graph-algorithms/kruskal": gaKruskal,
   "graph-algorithms/prim": gaPrim,
   "graph-algorithms/astar": gaAstar,
+  "trees/bst": tBst,
+  "trees/avl": tAvl,
+  "trees/red-black": tRedBlack,
+  "trees/heap": tHeap,
+  "trees/trie": tTrie,
+  "trees/b-tree": tBTree,
+  "trees/b-plus-tree": tBPlusTree,
+  "trees/segment-tree": tSegmentTree,
+  "trees/fenwick-tree": tFenwickTree,
 };
 
 // Indexed by topic slug
@@ -224,6 +243,7 @@ const TOPIC_CONTENT: Record<string, TopicContent> = {
   "leader-election": leaderElectionTopic,
   "sorting": sortingTopic,
   "graph-algorithms": graphAlgorithmsTopic,
+  "trees": treesTopic,
 };
 
 export function getConceptContent(

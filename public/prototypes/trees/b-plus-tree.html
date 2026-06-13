@@ -1,0 +1,675 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>B+ Tree</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --success-bg: rgba(92,198,111,0.14); --success-bd: rgba(92,198,111,0.45);
+        --danger: #f06868;  --danger-bg: rgba(240,104,104,0.14); --danger-bd: rgba(240,104,104,0.45);
+        --warning: #f0b568; --warning-bg: rgba(240,181,104,0.14); --warning-bd: rgba(240,181,104,0.45);
+        --info: #5e9ff6;    --info-bg:    rgba(94,159,246,0.16); --info-bd:    rgba(94,159,246,0.45);
+        --purple: #a78bfa;  --purple-bg:  rgba(167,139,250,0.16); --purple-bd:  rgba(167,139,250,0.45);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --radius-lg: 14px; --radius-md: 8px; --radius-sm: 6px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body {
+        padding: 18px 18px 24px;
+        background-image:
+          radial-gradient(1200px 600px at 50% -200px, rgba(251,134,58,0.06), transparent),
+          linear-gradient(to right, rgba(255,255,255,0.020) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.020) 1px, transparent 1px);
+        background-size: auto, 40px 40px, 40px 40px;
+      }
+      .container { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; padding: 9px 12px; transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); color: var(--fg); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); color: #1a1003; }
+      button.ghost { background: transparent; }
+      button.demo { background: transparent; color: var(--muted); border-style: dashed; font-size: 11.5px; padding: 7px 10px; }
+      button.demo:hover:not(:disabled) { color: var(--fg); border-color: var(--border-strong); }
+      button i { font-size: 14px; }
+      input[type="number"], input[type="text"] { background: var(--elevated); color: var(--fg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 9px; font: 500 12px var(--mono); width: 72px; }
+      input[type="number"]:focus, input[type="text"]:focus { outline: none; border-color: var(--info); }
+      input[type="range"] { accent-color: var(--accent); }
+      select { background: var(--elevated); color: var(--fg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px 9px; font: 500 12px var(--sans); }
+
+      .hero { background: linear-gradient(180deg, rgba(255,255,255,0.014), transparent), var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px 12px; position: relative; overflow: hidden; }
+      .hero::before { content: ""; position: absolute; inset: 0; background: radial-gradient(420px 240px at 50% 0%, rgba(167,139,250,0.05), transparent 60%); pointer-events: none; }
+      .hero-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; position: relative; z-index: 1; gap: 12px; flex-wrap: wrap; }
+      .ttl { font: 600 11.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .legend { font-size: 11px; color: var(--muted); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      .legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; margin-right: 4px; }
+
+      .tree-wrap { position: relative; z-index: 1; overflow-x: auto; }
+      svg.tree { width: 100%; min-width: 580px; height: 340px; display: block; }
+
+      .narration { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; position: relative; overflow: hidden; transition: border-color 350ms ease; }
+      .narration::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--border-strong); transition: background 350ms ease; }
+      .narration.go::before { background: var(--warning); } .narration.go { border-color: rgba(240,181,104,0.30); }
+      .narration.yes::before { background: var(--success); } .narration.yes { border-color: rgba(92,198,111,0.40); }
+      .narration.no::before { background: var(--danger); } .narration.no { border-color: rgba(240,104,104,0.35); }
+      .narration.add::before { background: var(--accent); } .narration.add { border-color: rgba(251,134,58,0.35); }
+      .narr-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+      .badge { font: 600 10.5px var(--mono); padding: 4px 9px; border-radius: 999px; letter-spacing: 0.4px; text-transform: uppercase; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); color: var(--muted); background: var(--elevated); }
+      .badge.op { background: var(--elevated); border-color: var(--border-strong); color: var(--fg); }
+      .badge.event { background: transparent; display: none; }
+      .badge.event.go { color: var(--warning); border-color: var(--warning-bd); }
+      .badge.event.yes { color: var(--success); border-color: var(--success-bd); }
+      .badge.event.no { color: var(--danger); border-color: var(--danger-bd); }
+      .badge.event.add { color: var(--accent); border-color: var(--accent); }
+      .narr-text { margin: 0; font-size: 14px; line-height: 1.55; color: var(--fg); }
+      .narr-text strong { color: var(--fg); font-weight: 600; }
+      .narr-text code { font-family: var(--mono); background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; color: var(--accent); font-size: 12px; }
+
+      .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+      .controls .sep { width: 1px; height: 22px; background: var(--border); margin: 0 2px; }
+      .controls .spacer { flex: 1; }
+      .speed-wrap { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font: 500 11px var(--mono); }
+      .speed-wrap input[type="range"] { width: 80px; }
+      .demos { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+      .demos .lbl { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; margin-right: 2px; }
+
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; }
+      .stat .label { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .stat .value { font: 600 22px var(--mono); margin-top: 4px; line-height: 1; }
+
+      @media (max-width: 540px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+
+      /* B+ tree node rectangles */
+      .bnode { stroke-width: 1.8; rx: 5; transition: fill 200ms ease, stroke 200ms ease; }
+      .bleaf-link { stroke-dasharray: 4 3; stroke-width: 1.5; }
+      .tree-edge { stroke: var(--border-strong); stroke-width: 1.5; }
+      .range-lbl { font: 600 10px var(--mono); }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2 class="sr-only">B+ Tree order 4. All data lives in linked leaf nodes. Animate insert, search, and range scan — the killer feature of B+ trees over B-trees.</h2>
+
+      <div class="hero">
+        <div class="hero-head">
+          <span class="ttl">B+ Tree · order 4 · data only in leaves</span>
+          <span class="legend">
+            <span><span class="sw" style="background:var(--purple-bg);border:1px solid var(--purple-bd)"></span>internal (signpost)</span>
+            <span><span class="sw" style="background:var(--info-bg);border:1px solid var(--info-bd)"></span>leaf (data)</span>
+            <span><span class="sw" style="background:var(--warning-bg);border:1px solid var(--warning-bd)"></span>on-path</span>
+            <span><span class="sw" style="background:var(--success-bg);border:1px solid var(--success-bd)"></span>scan hit</span>
+          </span>
+        </div>
+        <div class="tree-wrap">
+          <svg id="tree" class="tree" viewBox="0 0 680 340" aria-hidden="true">
+            <defs>
+              <marker id="ar-success" markerWidth="7" markerHeight="7" refX="5.5" refY="3" orient="auto">
+                <path d="M0,0 L7,3 L0,6 Z" fill="#5cc66f"/>
+              </marker>
+              <marker id="ar-muted" markerWidth="7" markerHeight="7" refX="5.5" refY="3" orient="auto">
+                <path d="M0,0 L7,3 L0,6 Z" fill="#9099a8"/>
+              </marker>
+            </defs>
+            <g id="edges"></g>
+            <g id="links"></g>
+            <g id="nodes"></g>
+          </svg>
+        </div>
+      </div>
+
+      <div id="narration" class="narration">
+        <div class="narr-meta">
+          <span id="narr-op" class="badge op">Ready</span>
+          <span id="narr-event" class="badge event"></span>
+        </div>
+        <p id="narr-text" class="narr-text"><strong>Default B+ tree loaded.</strong> Internal nodes hold only <strong>signpost keys</strong> (no real data). All data lives in the linked <strong>leaf nodes</strong> at the bottom — unlike a B-tree where data can live in any node. Try a range scan to see why leaf links matter.</p>
+      </div>
+
+      <div class="controls">
+        <input id="val" type="number" placeholder="key" />
+        <button id="btn-insert" class="primary"><i class="ti ti-plus"></i>Insert</button>
+        <button id="btn-search"><i class="ti ti-search"></i>Search</button>
+        <span class="sep"></span>
+        <input id="lo" type="number" placeholder="lo" />
+        <input id="hi" type="number" placeholder="hi" />
+        <button id="btn-scan"><i class="ti ti-arrows-horizontal"></i>Range Scan</button>
+        <span class="sep"></span>
+        <button id="btn-reset" class="ghost"><i class="ti ti-refresh"></i>Reset</button>
+        <span class="spacer"></span>
+        <span class="speed-wrap"><span>Speed</span><input id="speed" type="range" min="1" max="10" step="1" value="8" /></span>
+      </div>
+
+      <div class="demos">
+        <span class="lbl">Demos</span>
+        <button id="demo-build" class="demo"><i class="ti ti-player-play"></i>Build 10→80</button>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="label">keys</div><div id="s-keys" class="value" style="color:var(--info)">0</div></div>
+        <div class="stat"><div class="label">height</div><div id="s-height" class="value" style="color:var(--purple)">0</div></div>
+        <div class="stat"><div class="label">leaves</div><div id="s-leaves" class="value" style="color:var(--warning)">0</div></div>
+        <div class="stat"><div class="label">scan hits</div><div id="s-scan" class="value" style="color:var(--success)">—</div></div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        var svgNS = 'http://www.w3.org/2000/svg';
+        var edgesG = document.getElementById('edges');
+        var linksG = document.getElementById('links');
+        var nodesG = document.getElementById('nodes');
+        var narrEl = document.getElementById('narration');
+        var narrOp = document.getElementById('narr-op');
+        var narrEvent = document.getElementById('narr-event');
+        var narrText = document.getElementById('narr-text');
+        var valEl = document.getElementById('val');
+        var loEl = document.getElementById('lo');
+        var hiEl = document.getElementById('hi');
+        var speedEl = document.getElementById('speed');
+        var sKeys = document.getElementById('s-keys');
+        var sHeight = document.getElementById('s-height');
+        var sLeaves = document.getElementById('s-leaves');
+        var sScan = document.getElementById('s-scan');
+
+        var ORDER = 4;
+        var MAXK = ORDER - 1; // max keys per node = 3
+        var busy = false;
+        var lastScanHits = null;
+
+        function wait() {
+          return new Promise(function (r) { setTimeout(r, 1100 - parseInt(speedEl.value, 10) * 95); });
+        }
+
+        // ---- Tree data structures ----
+        function Leaf() { return { keys: [], leaf: true, next: null }; }
+        function Internal() { return { keys: [], children: [], leaf: false }; }
+
+        var root = Leaf();
+
+        // ---- Core B+ tree logic ----
+        function rawInsert(k) {
+          var path = [];
+          var n = root;
+          while (!n.leaf) {
+            var i = 0;
+            while (i < n.keys.length && k >= n.keys[i]) i++;
+            path.push({ node: n, idx: i });
+            n = n.children[i];
+          }
+          if (n.keys.indexOf(k) !== -1) return; // duplicate
+          var i = 0;
+          while (i < n.keys.length && k > n.keys[i]) i++;
+          n.keys.splice(i, 0, k);
+          if (n.keys.length <= MAXK) return;
+          // split leaf: keep first mid in left, rest in right — COPY UP right[0]
+          var mid = Math.ceil(ORDER / 2);
+          var right = Leaf();
+          right.keys = n.keys.slice(mid);
+          n.keys = n.keys.slice(0, mid);
+          right.next = n.next;
+          n.next = right;
+          var upKey = right.keys[0]; // copy-up: the key stays in the leaf too
+          var newChild = right;
+          // propagate up through internals
+          for (var p = path.length - 1; p >= 0; p--) {
+            var par = path[p].node, ci = path[p].idx;
+            par.keys.splice(ci, 0, upKey);
+            par.children.splice(ci + 1, 0, newChild);
+            if (par.keys.length <= MAXK) return;
+            // split internal: move-up middle key (B+ internal split = move, not copy)
+            var m = Math.floor(par.keys.length / 2);
+            var rint = Internal();
+            upKey = par.keys[m];
+            rint.keys = par.keys.slice(m + 1);
+            rint.children = par.children.slice(m + 1);
+            par.keys = par.keys.slice(0, m);
+            par.children = par.children.slice(0, m + 1);
+            newChild = rint;
+          }
+          // need new root
+          var nr = Internal();
+          nr.keys = [upKey];
+          nr.children = [root, newChild];
+          root = nr;
+        }
+
+        function findLeaf(k) {
+          var n = root;
+          while (!n.leaf) {
+            var i = 0;
+            while (i < n.keys.length && k >= n.keys[i]) i++;
+            n = n.children[i];
+          }
+          return n;
+        }
+
+        function leftmostLeaf() {
+          var n = root;
+          while (!n.leaf) n = n.children[0];
+          return n;
+        }
+
+        function countKeys() {
+          var c = 0;
+          var lf = leftmostLeaf();
+          while (lf) { c += lf.keys.length; lf = lf.next; }
+          return c;
+        }
+
+        function countLeaves() {
+          var c = 0;
+          var lf = leftmostLeaf();
+          while (lf) { c++; lf = lf.next; }
+          return c;
+        }
+
+        function treeHeight() {
+          var h = 0, n = root;
+          while (!n.leaf) { h++; n = n.children[0]; }
+          return h + 1;
+        }
+
+        // ---- Layout ----
+        var CELL_W = 22;
+        var NODE_PAD = 8;
+        var NODE_H = 24;
+
+        function nodeWidth(n) {
+          return Math.max(n.keys.length, 1) * CELL_W + NODE_PAD;
+        }
+
+        function layout() {
+          var levels = [];
+          (function bfs(n, d) {
+            if (!levels[d]) levels[d] = [];
+            levels[d].push(n);
+            if (!n.leaf) n.children.forEach(function (c) { bfs(c, d + 1); });
+          })(root, 0);
+
+          var pos = new Map();
+          var padY = 36;
+          var levelH = levels.length > 1 ? (300 - padY) / (levels.length - 1) : 0;
+
+          // place leaves first, left to right
+          var leafLevel = levels[levels.length - 1];
+          var totalLeafW = leafLevel.reduce(function (s, n) { return s + nodeWidth(n); }, 0);
+          var gap = leafLevel.length > 1 ? Math.min(18, (620 - totalLeafW) / (leafLevel.length - 1)) : 0;
+          var startX = (680 - (totalLeafW + gap * (leafLevel.length - 1))) / 2;
+          var cx = startX;
+          var leafY = padY + (levels.length - 1) * levelH;
+          leafLevel.forEach(function (n) {
+            var w = nodeWidth(n);
+            pos.set(n, { x: cx + w / 2, y: leafY, w: w });
+            cx += w + gap;
+          });
+
+          // place internal nodes bottom-up
+          for (var d = levels.length - 2; d >= 0; d--) {
+            var y = padY + d * levelH;
+            levels[d].forEach(function (n) {
+              var childXs = n.children.map(function (c) { return pos.get(c).x; });
+              var cx2 = (childXs[0] + childXs[childXs.length - 1]) / 2;
+              pos.set(n, { x: cx2, y: y, w: nodeWidth(n) });
+            });
+          }
+
+          return pos;
+        }
+
+        // ---- Render ----
+        function render(opts) {
+          opts = opts || {};
+          var pathSet = opts.path || new Set();
+          var hotSet = opts.hot || new Set();
+
+          while (edgesG.firstChild) edgesG.removeChild(edgesG.firstChild);
+          while (linksG.firstChild) linksG.removeChild(linksG.firstChild);
+          while (nodesG.firstChild) nodesG.removeChild(nodesG.firstChild);
+
+          if (root.leaf && root.keys.length === 0) {
+            var t = document.createElementNS(svgNS, 'text');
+            t.setAttribute('x', 340); t.setAttribute('y', 170);
+            t.setAttribute('text-anchor', 'middle');
+            t.setAttribute('fill', 'var(--muted)'); t.setAttribute('font-size', '14');
+            t.textContent = 'empty tree';
+            nodesG.appendChild(t);
+            updateStats();
+            return;
+          }
+
+          var pos = layout();
+
+          // tree edges (internal → children)
+          (function drawEdges(n) {
+            if (n.leaf) return;
+            var a = pos.get(n);
+            n.children.forEach(function (c) {
+              var b = pos.get(c);
+              var ln = document.createElementNS(svgNS, 'line');
+              ln.setAttribute('x1', a.x); ln.setAttribute('y1', a.y + NODE_H / 2);
+              ln.setAttribute('x2', b.x); ln.setAttribute('y2', b.y - NODE_H / 2);
+              ln.setAttribute('class', 'tree-edge');
+              edgesG.appendChild(ln);
+              drawEdges(c);
+            });
+          })(root);
+
+          // leaf linked list arrows (drawn behind nodes)
+          var lf = leftmostLeaf();
+          while (lf && lf.next) {
+            var a = pos.get(lf);
+            var b = pos.get(lf.next);
+            if (a && b) {
+              var isHot = hotSet.has(lf) && hotSet.has(lf.next);
+              var arr = document.createElementNS(svgNS, 'line');
+              arr.setAttribute('x1', a.x + a.w / 2);
+              arr.setAttribute('y1', a.y);
+              arr.setAttribute('x2', b.x - b.w / 2 - 2);
+              arr.setAttribute('y2', b.y);
+              arr.setAttribute('stroke', isHot ? 'var(--success)' : 'var(--subtle)');
+              arr.setAttribute('stroke-width', isHot ? '2' : '1.2');
+              arr.setAttribute('stroke-dasharray', '4 3');
+              arr.setAttribute('marker-end', isHot ? 'url(#ar-success)' : 'url(#ar-muted)');
+              linksG.appendChild(arr);
+            }
+            lf = lf.next;
+          }
+
+          // nodes
+          pos.forEach(function (p, n) {
+            var isPath = pathSet.has(n);
+            var isHot = hotSet.has(n);
+            var fill, stroke, textCol;
+
+            if (n.leaf) {
+              if (isHot) {
+                fill = 'var(--success-bg)'; stroke = 'var(--success)'; textCol = 'var(--fg)';
+              } else if (isPath) {
+                fill = 'var(--warning-bg)'; stroke = 'var(--warning)'; textCol = 'var(--fg)';
+              } else {
+                fill = 'var(--info-bg)'; stroke = 'var(--info)'; textCol = 'var(--fg)';
+              }
+            } else {
+              if (isPath) {
+                fill = 'var(--warning-bg)'; stroke = 'var(--warning)'; textCol = 'var(--fg)';
+              } else {
+                fill = 'var(--purple-bg)'; stroke = 'var(--purple)'; textCol = 'var(--fg)';
+              }
+            }
+
+            var startX = p.x - p.w / 2;
+            var startY = p.y - NODE_H / 2;
+
+            // node rect
+            var rect = document.createElementNS(svgNS, 'rect');
+            rect.setAttribute('x', startX); rect.setAttribute('y', startY);
+            rect.setAttribute('width', p.w); rect.setAttribute('height', NODE_H);
+            rect.setAttribute('rx', 5); rect.setAttribute('ry', 5);
+            rect.setAttribute('fill', fill); rect.setAttribute('stroke', stroke);
+            rect.setAttribute('stroke-width', '1.8');
+            nodesG.appendChild(rect);
+
+            // key dividers and text
+            n.keys.forEach(function (k, i) {
+              if (i > 0) {
+                var sep = document.createElementNS(svgNS, 'line');
+                sep.setAttribute('x1', startX + NODE_PAD / 2 + i * CELL_W); sep.setAttribute('y1', startY + 2);
+                sep.setAttribute('x2', startX + NODE_PAD / 2 + i * CELL_W); sep.setAttribute('y2', startY + NODE_H - 2);
+                sep.setAttribute('stroke', stroke); sep.setAttribute('stroke-width', '0.8'); sep.setAttribute('opacity', '0.45');
+                nodesG.appendChild(sep);
+              }
+              var tx = startX + NODE_PAD / 2 + i * CELL_W + CELL_W / 2;
+              var t = document.createElementNS(svgNS, 'text');
+              t.setAttribute('x', tx); t.setAttribute('y', p.y + 4.5);
+              t.setAttribute('text-anchor', 'middle');
+              t.setAttribute('font-size', '11'); t.setAttribute('font-weight', '600');
+              t.setAttribute('font-family', 'ui-monospace, monospace');
+              t.setAttribute('fill', textCol);
+              t.textContent = k;
+              nodesG.appendChild(t);
+            });
+
+            // empty leaf placeholder
+            if (n.leaf && n.keys.length === 0) {
+              var t2 = document.createElementNS(svgNS, 'text');
+              t2.setAttribute('x', p.x); t2.setAttribute('y', p.y + 4.5);
+              t2.setAttribute('text-anchor', 'middle');
+              t2.setAttribute('font-size', '10'); t2.setAttribute('fill', 'var(--subtle)');
+              t2.textContent = '∅';
+              nodesG.appendChild(t2);
+            }
+          });
+
+          updateStats();
+        }
+
+        function updateStats() {
+          sKeys.textContent = countKeys();
+          sHeight.textContent = treeHeight();
+          sLeaves.textContent = countLeaves();
+          sScan.textContent = lastScanHits !== null ? lastScanHits : '—';
+        }
+
+        // ---- Narration ----
+        function say(op, event, text) {
+          narrOp.textContent = op;
+          narrEl.className = 'narration' + (event ? ' ' + event : '');
+          if (event) {
+            narrEvent.style.display = '';
+            narrEvent.className = 'badge event ' + event;
+            narrEvent.textContent = event === 'go' ? 'descend' : event === 'yes' ? 'found' : event === 'no' ? 'miss' : 'place';
+          } else {
+            narrEvent.style.display = 'none';
+          }
+          narrText.innerHTML = text;
+        }
+
+        function lock(b) { busy = b; }
+
+        function run(fn) {
+          if (busy) return;
+          lock(true);
+          Promise.resolve(fn()).then(function () { lock(false); });
+        }
+
+        // ---- Insert animation ----
+        async function doInsert(k) {
+          if (isNaN(k)) { say('Insert', null, 'Enter a key first.'); return; }
+          var leaf = findLeaf(k);
+          if (leaf.keys.indexOf(k) !== -1) {
+            render();
+            say('Insert ' + k, 'no', '<strong>' + k + ' already exists</strong> — B+ trees hold no duplicate keys.');
+            return;
+          }
+
+          var pathNodes = [];
+          var n = root;
+          while (!n.leaf) {
+            pathNodes.push(n);
+            render({ path: new Set(pathNodes) });
+            var i = 0;
+            while (i < n.keys.length && k >= n.keys[i]) i++;
+            var dir = i < n.keys.length ? ('&lt; <code>' + n.keys[i] + '</code> → child ' + i) : ('≥ all keys → rightmost child ' + i);
+            say('Insert ' + k, 'go', 'Internal node <code>[' + n.keys.join(', ') + ']</code> — <strong>signpost only, no data here</strong> (B-tree would store data). Key <code>' + k + '</code> is ' + dir + '.');
+            await wait();
+            n = n.children[i];
+          }
+
+          pathNodes.push(n);
+          render({ path: new Set(pathNodes) });
+          var willSplit = n.keys.length === MAXK;
+          say('Insert ' + k, 'go', 'Reached <strong>leaf</strong> <code>[' + n.keys.join(', ') + ']</code>. ' + (willSplit ? 'Leaf is <strong>full</strong> (' + MAXK + ' keys) — will split and <strong>copy up</strong> the separator (unlike B-tree which moves it).' : 'Leaf has room — insert in sorted order.'));
+          await wait();
+
+          rawInsert(k);
+          var newLeaf = findLeaf(k);
+          render({ hot: new Set([newLeaf]) });
+          say('Insert ' + k, 'add', willSplit
+            ? '<strong>Leaf split!</strong> New right leaf starts with <code>' + newLeaf.keys[0] + '</code>. That key is <strong>copied up</strong> into the parent as a signpost — it also remains in the leaf (B+ copy-up). B-tree would <em>move</em> it instead.'
+            : 'Inserted <code>' + k + '</code> into leaf. <strong>All data is in leaves</strong> — range scans only need to walk the leaf chain.'
+          );
+        }
+
+        // ---- Search animation ----
+        async function doSearch(k) {
+          if (isNaN(k)) { say('Search', null, 'Enter a key first.'); return; }
+
+          var pathNodes = [];
+          var n = root;
+          while (!n.leaf) {
+            pathNodes.push(n);
+            render({ path: new Set(pathNodes) });
+            var i = 0;
+            while (i < n.keys.length && k >= n.keys[i]) i++;
+            say('Search ' + k, 'go', 'Internal node <code>[' + n.keys.join(', ') + ']</code> — <strong>signpost only.</strong> No data here. B+ tree always descends to a leaf before checking for the key.');
+            await wait();
+            n = n.children[i];
+          }
+
+          pathNodes.push(n);
+          render({ path: new Set(pathNodes) });
+          say('Search ' + k, 'go', 'Reached leaf <code>[' + n.keys.join(', ') + ']</code>. Checking if <code>' + k + '</code> is here…');
+          await wait();
+
+          var found = n.keys.indexOf(k) !== -1;
+          if (found) {
+            render({ path: new Set(pathNodes.slice(0, -1)), hot: new Set([n]) });
+            say('Search ' + k, 'yes', '<strong>Found <code>' + k + '</code></strong> in leaf <code>[' + n.keys.join(', ') + ']</code>. Every successful search ends at a leaf — this is guaranteed in B+ trees.');
+          } else {
+            render({ path: new Set(pathNodes) });
+            say('Search ' + k, 'no', '<strong><code>' + k + '</code> not in tree.</strong> Fell off the leaf level. B+ ensures: if it exists, it is in a leaf.');
+          }
+        }
+
+        // ---- Range Scan animation ----
+        async function doScan(lo, hi) {
+          if (isNaN(lo) || isNaN(hi)) { say('Range Scan', null, 'Enter both <strong>lo</strong> and <strong>hi</strong> bounds.'); return; }
+          if (lo > hi) { say('Range Scan', null, '<code>lo</code> must be ≤ <code>hi</code>.'); return; }
+
+          lastScanHits = null;
+
+          // Step 1: descend to leaf for lo
+          var pathNodes = [];
+          var n = root;
+          while (!n.leaf) {
+            pathNodes.push(n);
+            render({ path: new Set(pathNodes) });
+            var i = 0;
+            while (i < n.keys.length && lo >= n.keys[i]) i++;
+            say('Range Scan [' + lo + '–' + hi + ']', 'go', 'Descend using <code>' + lo + '</code> (range start) — internal node <code>[' + n.keys.join(', ') + ']</code> is a <strong>signpost, not data</strong>.');
+            await wait();
+            n = n.children[i];
+          }
+
+          pathNodes.push(n);
+          render({ path: new Set(pathNodes) });
+          say('Range Scan [' + lo + '–' + hi + ']', 'go', 'Arrived at leaf <code>[' + n.keys.join(', ') + ']</code>. Now <strong>walk the leaf chain rightward</strong> — this is the B+ superpower. No need to re-traverse the tree!');
+          await wait();
+
+          // Step 2: walk leaf chain collecting hits
+          var collected = [];
+          var hotLeaves = new Set();
+          var leaf = n;
+
+          while (leaf) {
+            var anyInRange = leaf.keys.some(function (k) { return k >= lo && k <= hi; });
+            var anyBelow = leaf.keys.some(function (k) { return k <= hi; });
+
+            if (anyBelow) {
+              hotLeaves.add(leaf);
+              render({ path: new Set(pathNodes.slice(0, -1)), hot: new Set(hotLeaves) });
+              leaf.keys.forEach(function (k) { if (k >= lo && k <= hi) collected.push(k); });
+              say('Range Scan [' + lo + '–' + hi + ']', 'yes', 'Leaf <code>[' + leaf.keys.join(', ') + ']</code> — walking the <strong>leaf link</strong>. Collected so far: <code>[' + collected.join(', ') + ']</code>.');
+              await wait();
+            }
+
+            // stop if last key in this leaf already exceeds hi
+            if (leaf.keys.length > 0 && leaf.keys[leaf.keys.length - 1] > hi) break;
+            leaf = leaf.next;
+          }
+
+          lastScanHits = collected.length;
+          render({ path: new Set(pathNodes.slice(0, -1)), hot: new Set(hotLeaves) });
+          say('Range Scan [' + lo + '–' + hi + ']', 'yes',
+            collected.length > 0
+              ? '<strong>Range [' + lo + '–' + hi + '] = <code>[' + collected.join(', ') + ']</code></strong> (' + collected.length + ' key' + (collected.length > 1 ? 's' : '') + '). Only <strong>1 tree descent + leaf-chain walk</strong> — no backtracking. This is impossible to do cheaply in a B-tree where data scatters across all nodes.'
+              : '<strong>No keys in [' + lo + '–' + hi + '].</strong> Descended once, walked the leaves, done. Zero wasted node visits.'
+          );
+          updateStats();
+        }
+
+        // ---- Reset / default tree ----
+        function loadDefault() {
+          root = Leaf();
+          [10, 20, 30, 40, 50, 60, 70].forEach(rawInsert);
+          lastScanHits = null;
+          render();
+        }
+
+        // ---- Event wiring ----
+        document.getElementById('btn-insert').addEventListener('click', function () {
+          run(function () { return doInsert(parseInt(valEl.value, 10)); });
+        });
+
+        document.getElementById('btn-search').addEventListener('click', function () {
+          run(function () { return doSearch(parseInt(valEl.value, 10)); });
+        });
+
+        document.getElementById('btn-scan').addEventListener('click', function () {
+          run(function () { return doScan(parseInt(loEl.value, 10), parseInt(hiEl.value, 10)); });
+        });
+
+        document.getElementById('btn-reset').addEventListener('click', function () {
+          if (busy) return;
+          loadDefault();
+          say('Reset', null, '<strong>Default tree restored.</strong> Keys [10, 20, 30, 40, 50, 60, 70] — try a range scan from <strong>25 to 55</strong> to see the leaf-chain walk in action.');
+        });
+
+        valEl.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter' && !busy) document.getElementById('btn-insert').click();
+        });
+
+        // ---- Demo: Build 10→80 ----
+        document.getElementById('demo-build').addEventListener('click', function () {
+          if (busy) return;
+          root = Leaf();
+          lastScanHits = null;
+          render();
+          say('Demo', null, 'Building B+ tree by inserting <strong>10, 20, 30, 40, 50, 60, 70, 80</strong> one at a time. Watch leaves split and keys get <strong>copied up</strong> — the separator stays in the leaf too (B+ copy-up vs B-tree move-up).');
+          run(async function () {
+            var seq = [10, 20, 30, 40, 50, 60, 70, 80];
+            for (var i = 0; i < seq.length; i++) {
+              valEl.value = seq[i];
+              await doInsert(seq[i]);
+              await wait();
+            }
+            valEl.value = '';
+            say('Demo complete', 'yes', 'B+ tree of [10–80] built. Internal nodes have <strong>signpost keys only</strong>. Every key is also in a leaf. Now try <strong>Range Scan 25–65</strong> — watch it descend once then follow the leaf links.');
+          });
+        });
+
+        // ---- Init ----
+        loadDefault();
+        say('Ready', null, '<strong>Default B+ tree loaded.</strong> Internal nodes hold only <strong>signpost keys</strong> (no real data). All data lives in the linked <strong>leaf nodes</strong> at the bottom — unlike a B-tree where data can live in any node. Try a range scan to see why leaf links matter.');
+
+        // ---- Height postMessage ----
+        function postHeight() {
+          try { parent.postMessage({ type: 'prototype:height', height: document.body.scrollHeight }, '*'); } catch (e) {}
+        }
+        new ResizeObserver(postHeight).observe(document.body);
+        postHeight();
+      })();
+    </script>
+  </body>
+</html>

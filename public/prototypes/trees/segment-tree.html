@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Segment Tree — Range Query &amp; Point Update</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --success-bg: rgba(92,198,111,0.14); --success-bd: rgba(92,198,111,0.45);
+        --danger: #f06868;  --danger-bg: rgba(240,104,104,0.14); --danger-bd: rgba(240,104,104,0.45);
+        --warning: #f0b568; --warning-bg: rgba(240,181,104,0.14); --warning-bd: rgba(240,181,104,0.45);
+        --info: #5e9ff6;    --info-bg:    rgba(94,159,246,0.16); --info-bd:    rgba(94,159,246,0.45);
+        --purple: #a78bfa;  --purple-bg:  rgba(167,139,250,0.16); --purple-bd:  rgba(167,139,250,0.45);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --radius-lg: 14px; --radius-md: 8px; --radius-sm: 6px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body {
+        padding: 18px 18px 24px;
+        background-image:
+          radial-gradient(1200px 600px at 50% -200px, rgba(251,134,58,0.06), transparent),
+          linear-gradient(to right, rgba(255,255,255,0.020) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.020) 1px, transparent 1px);
+        background-size: auto, 40px 40px, 40px 40px;
+      }
+      .container { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; padding: 9px 12px; transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); color: var(--fg); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); color: #1a1003; }
+      button.ghost { background: transparent; }
+      button.active-mode { background: var(--info-bg); color: var(--info); border-color: var(--info-bd); font-weight: 600; }
+      button.demo { background: transparent; color: var(--muted); border-style: dashed; font-size: 11.5px; padding: 7px 10px; }
+      button.demo:hover:not(:disabled) { color: var(--fg); border-color: var(--border-strong); }
+      button i { font-size: 14px; }
+      input[type="number"], input[type="text"] { background: var(--elevated); color: var(--fg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 9px; font: 500 12px var(--mono); width: 72px; }
+      input[type="number"]:focus, input[type="text"]:focus { outline: none; border-color: var(--info); }
+      input[type="range"] { accent-color: var(--accent); }
+
+      .hero { background: linear-gradient(180deg, rgba(255,255,255,0.014), transparent), var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px 12px; position: relative; overflow: hidden; }
+      .hero::before { content: ""; position: absolute; inset: 0; background: radial-gradient(420px 240px at 50% 0%, rgba(94,159,246,0.05), transparent 60%); pointer-events: none; }
+      .hero-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; position: relative; z-index: 1; gap: 12px; flex-wrap: wrap; }
+      .ttl { font: 600 11.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .legend { font-size: 11px; color: var(--muted); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      .legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; vertical-align: -1px; margin-right: 4px; }
+
+      .tree-wrap { position: relative; z-index: 1; overflow-x: auto; }
+      svg.tree { width: 100%; min-width: 580px; height: 360px; display: block; }
+      .tree .edge { stroke: var(--border-strong); stroke-width: 1.6; }
+      .tree .edge.on { stroke: var(--accent); stroke-width: 2.2; }
+      .tree .nrect { stroke-width: 1.8; transition: fill 200ms ease, stroke 200ms ease; }
+      .tree .nval { font: 700 13px var(--mono); text-anchor: middle; pointer-events: none; user-select: none; }
+      .tree .nrng { font: 500 9px var(--mono); text-anchor: middle; pointer-events: none; user-select: none; }
+
+      .narration { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; position: relative; overflow: hidden; transition: border-color 350ms ease; }
+      .narration::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--border-strong); transition: background 350ms ease; }
+      .narration.go::before { background: var(--warning); } .narration.go { border-color: rgba(240,181,104,0.30); }
+      .narration.yes::before { background: var(--success); } .narration.yes { border-color: rgba(92,198,111,0.40); }
+      .narration.no::before { background: var(--danger); } .narration.no { border-color: rgba(240,104,104,0.35); }
+      .narration.add::before { background: var(--accent); } .narration.add { border-color: rgba(251,134,58,0.35); }
+      .narr-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+      .badge { font: 600 10.5px var(--mono); padding: 4px 9px; border-radius: 999px; letter-spacing: 0.4px; text-transform: uppercase; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); color: var(--muted); background: var(--elevated); }
+      .badge.op { background: var(--elevated); border-color: var(--border-strong); color: var(--fg); }
+      .badge.event { background: transparent; display: none; }
+      .badge.event.go { color: var(--warning); border-color: var(--warning-bd); }
+      .badge.event.yes { color: var(--success); border-color: var(--success-bd); }
+      .badge.event.no { color: var(--danger); border-color: var(--danger-bd); }
+      .badge.event.add { color: var(--accent); border-color: var(--accent); }
+      .narr-text { margin: 0; font-size: 14px; line-height: 1.55; color: var(--fg); }
+      .narr-text strong { color: var(--fg); font-weight: 600; }
+      .narr-text code { font-family: var(--mono); background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; color: var(--accent); font-size: 12px; }
+
+      .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+      .controls .sep { width: 1px; height: 22px; background: var(--border); flex-shrink: 0; }
+      .controls .spacer { flex: 1; min-width: 8px; }
+      .controls label { font: 500 11px var(--mono); color: var(--muted); }
+      .speed-wrap { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font: 500 11px var(--mono); }
+      .speed-wrap input[type="range"] { width: 80px; }
+
+      .demos { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+      .demos .lbl { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; margin-right: 2px; }
+
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; }
+      .stat .label { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .stat .value { font: 600 22px var(--mono); margin-top: 4px; line-height: 1; }
+
+      @media (max-width: 540px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2 class="sr-only">Segment tree over an 8-element array. Animate range queries that decompose into O(log n) nodes and point updates that ripple to the root.</h2>
+
+      <div class="hero">
+        <div class="hero-head">
+          <span class="ttl">Segment Tree · range query &amp; point update</span>
+          <span class="legend">
+            <span><span class="sw" style="background:var(--info-bg);border:1px solid var(--info-bd)"></span>node</span>
+            <span><span class="sw" style="background:var(--warning)"></span>visiting</span>
+            <span><span class="sw" style="background:var(--success)"></span>taken · fully inside</span>
+            <span><span class="sw" style="background:var(--subtle);opacity:0.7"></span>skipped · disjoint</span>
+          </span>
+        </div>
+        <div class="tree-wrap">
+          <svg id="tree" class="tree" viewBox="0 0 680 360" aria-hidden="true">
+            <g id="edges"></g>
+            <g id="nodes"></g>
+          </svg>
+        </div>
+      </div>
+
+      <div id="narration" class="narration">
+        <div class="narr-meta">
+          <span id="narr-op" class="badge op">Ready</span>
+          <span id="narr-event" class="badge event"></span>
+        </div>
+        <p id="narr-text" class="narr-text"><strong>Default array [3,2,5,1,4,6,2,7] loaded.</strong> Set a range and press <strong>Query</strong>, or pick an index and value and press <strong>Update</strong>.</p>
+      </div>
+
+      <div class="controls">
+        <button id="mode-sum" class="active-mode"><i class="ti ti-sum"></i>Sum</button>
+        <button id="mode-min"><i class="ti ti-arrow-badge-down"></i>Min</button>
+        <button id="mode-max"><i class="ti ti-arrow-badge-up"></i>Max</button>
+        <span class="sep"></span>
+        <label>lo</label>
+        <input id="lo" type="number" min="1" max="8" value="2" placeholder="lo" />
+        <label>hi</label>
+        <input id="hi" type="number" min="1" max="8" value="6" placeholder="hi" />
+        <button id="btn-query" class="primary"><i class="ti ti-search"></i>Query</button>
+        <span class="sep"></span>
+        <label>idx</label>
+        <input id="idx" type="number" min="1" max="8" value="4" placeholder="idx" />
+        <label>=</label>
+        <input id="kv" type="number" value="9" placeholder="val" />
+        <button id="btn-update"><i class="ti ti-pencil"></i>Update</button>
+        <span class="sep"></span>
+        <button id="btn-reset" class="ghost"><i class="ti ti-refresh"></i>Reset</button>
+        <span class="spacer"></span>
+        <span class="speed-wrap"><span>Speed</span><input id="speed" type="range" min="1" max="10" step="1" value="8" /></span>
+      </div>
+
+      <div class="demos">
+        <span class="lbl">Demos</span>
+        <button id="demo-full" class="demo"><i class="ti ti-arrows-left-right"></i>Query full range [1..8]</button>
+        <button id="demo-single" class="demo"><i class="ti ti-point"></i>Query single element [3..3]</button>
+        <button id="demo-update" class="demo"><i class="ti ti-edit"></i>Set a5 = 10, then query [3..6]</button>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="label">n</div><div id="s-n" class="value" style="color:var(--info)">8</div></div>
+        <div class="stat"><div class="label">height</div><div id="s-height" class="value" style="color:var(--purple)">4</div></div>
+        <div class="stat"><div class="label">result</div><div id="s-result" class="value" style="color:var(--success)">—</div></div>
+        <div class="stat"><div class="label">visited</div><div id="s-visited" class="value" style="color:var(--warning)">0</div></div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        var svgNS = 'http://www.w3.org/2000/svg';
+        var edgesG = document.getElementById('edges');
+        var nodesG = document.getElementById('nodes');
+        var narrEl = document.getElementById('narration');
+        var narrOp = document.getElementById('narr-op');
+        var narrEvent = document.getElementById('narr-event');
+        var narrText = document.getElementById('narr-text');
+        var speedEl = document.getElementById('speed');
+        var sN = document.getElementById('s-n');
+        var sHeight = document.getElementById('s-height');
+        var sResult = document.getElementById('s-result');
+        var sVisited = document.getElementById('s-visited');
+
+        // --- State ---
+        var N = 8;
+        var defaultArr = [3, 2, 5, 1, 4, 6, 2, 7];
+        var arr = defaultArr.slice();
+        var mode = 'sum'; // 'sum' | 'min' | 'max'
+        var busy = false;
+        var visitedCount = 0;
+
+        function wait() {
+          return new Promise(function (r) {
+            setTimeout(r, 1100 - parseInt(speedEl.value, 10) * 95);
+          });
+        }
+
+        function run(fn) {
+          if (busy) return;
+          busy = true;
+          Promise.resolve(fn()).then(function () { busy = false; });
+        }
+
+        function say(op, event, text) {
+          narrOp.textContent = op;
+          narrEl.classList.remove('go', 'yes', 'no', 'add');
+          if (event) {
+            narrEl.classList.add(event);
+            narrEvent.style.display = '';
+            narrEvent.className = 'badge event ' + event;
+            narrEvent.textContent = event === 'go' ? 'recurse' : event === 'yes' ? 'taken' : event === 'no' ? 'skip' : 'update';
+          } else {
+            narrEvent.style.display = 'none';
+          }
+          narrText.innerHTML = text;
+        }
+
+        // --- Segment tree: flat array representation, 1-indexed, size 2*nextPow2(N) ---
+        // We use a node-object approach for cleaner layout
+        var treeNodes = {}; // id -> {lo, hi, val, left, right}
+        var rootId = 1;
+        var nextId = 1;
+
+        function combine(x, y) {
+          if (mode === 'sum') return x + y;
+          if (mode === 'min') return Math.min(x, y);
+          return Math.max(x, y);
+        }
+
+        function build() {
+          treeNodes = {};
+          nextId = 1;
+          function rec(lo, hi) {
+            var id = nextId++;
+            if (lo === hi) {
+              treeNodes[id] = { lo: lo, hi: hi, val: arr[lo], left: null, right: null };
+              return id;
+            }
+            var mid = (lo + hi) >> 1;
+            var l = rec(lo, mid);
+            var r = rec(mid + 1, hi);
+            treeNodes[id] = { lo: lo, hi: hi, val: combine(treeNodes[l].val, treeNodes[r].val), left: l, right: r };
+            return id;
+          }
+          rootId = rec(0, N - 1);
+        }
+
+        // --- Layout: position nodes in a binary-tree layout ---
+        function layout() {
+          var pos = {};
+          var leafX = 0;
+          var maxD = 0;
+          (function md(id, d) {
+            if (id === null) return;
+            if (d > maxD) maxD = d;
+            var n = treeNodes[id];
+            md(n.left, d + 1);
+            md(n.right, d + 1);
+          })(rootId, 0);
+
+          var padX = 30, padY = 36;
+          var totalW = 680 - 2 * padX;
+          var totalH = 360 - 2 * padY;
+          var levelH = maxD > 0 ? totalH / maxD : totalH;
+          var leafStep = totalW / N;
+
+          (function place(id, d) {
+            if (id === null) return 0;
+            var n = treeNodes[id];
+            if (n.left === null) {
+              // leaf
+              var x = padX + leafX * leafStep + leafStep / 2;
+              leafX++;
+              pos[id] = { x: x, y: padY + d * levelH };
+              return x;
+            }
+            var lx = place(n.left, d + 1);
+            var rx = place(n.right, d + 1);
+            var x = (lx + rx) / 2;
+            pos[id] = { x: x, y: padY + d * levelH };
+            return x;
+          })(rootId, 0);
+
+          return pos;
+        }
+
+        // --- Render: rebuild SVG from scratch each call ---
+        function render(opts) {
+          opts = opts || {};
+          var visiting = opts.visiting || new Set();
+          var taken = opts.taken || new Set();
+          var skipped = opts.skipped || new Set();
+          var updated = opts.updated || new Set();
+          var onPath = opts.onPath || new Set();
+
+          while (edgesG.firstChild) edgesG.removeChild(edgesG.firstChild);
+          while (nodesG.firstChild) nodesG.removeChild(nodesG.firstChild);
+
+          var pos = layout();
+
+          // Draw edges
+          (function drawEdges(id) {
+            if (id === null) return;
+            var n = treeNodes[id];
+            var a = pos[id];
+            [n.left, n.right].forEach(function (cid) {
+              if (cid === null) return;
+              var b = pos[cid];
+              var ln = document.createElementNS(svgNS, 'line');
+              ln.setAttribute('x1', a.x);
+              ln.setAttribute('y1', a.y + 14);
+              ln.setAttribute('x2', b.x);
+              ln.setAttribute('y2', b.y - 14);
+              var cls = 'edge';
+              if (onPath.has(id) && onPath.has(cid)) cls += ' on';
+              ln.setAttribute('class', cls);
+              edgesG.appendChild(ln);
+              drawEdges(cid);
+            });
+          })(rootId);
+
+          // Draw nodes
+          Object.keys(pos).forEach(function (idStr) {
+            var id = +idStr;
+            var n = treeNodes[id];
+            var p = pos[id];
+            var isLeaf = n.left === null;
+            var w = isLeaf ? 42 : 56;
+            var h = 26;
+
+            // Determine color state
+            var fill, stroke, textCol;
+            if (updated.has(id)) {
+              fill = 'rgba(251,134,58,0.22)'; stroke = 'var(--accent)'; textCol = 'var(--accent)';
+            } else if (taken.has(id)) {
+              fill = 'var(--success-bg)'; stroke = 'var(--success)'; textCol = 'var(--success)';
+            } else if (visiting.has(id)) {
+              fill = 'var(--warning-bg)'; stroke = 'var(--warning)'; textCol = 'var(--warning)';
+            } else if (skipped.has(id)) {
+              fill = 'rgba(107,114,128,0.10)'; stroke = 'var(--subtle)'; textCol = 'var(--subtle)';
+            } else {
+              fill = 'var(--info-bg)'; stroke = 'var(--info)'; textCol = 'var(--fg)';
+            }
+
+            // Rect
+            var rect = document.createElementNS(svgNS, 'rect');
+            rect.setAttribute('x', p.x - w / 2);
+            rect.setAttribute('y', p.y - h / 2);
+            rect.setAttribute('width', w);
+            rect.setAttribute('height', h);
+            rect.setAttribute('rx', '5');
+            rect.setAttribute('class', 'nrect');
+            rect.setAttribute('fill', fill);
+            rect.setAttribute('stroke', stroke);
+            nodesG.appendChild(rect);
+
+            // Range label above rect (superscript style)
+            var rng = document.createElementNS(svgNS, 'text');
+            rng.setAttribute('x', p.x);
+            rng.setAttribute('y', p.y - h / 2 - 3);
+            rng.setAttribute('class', 'nrng');
+            rng.setAttribute('fill', skipped.has(id) ? 'var(--subtle)' : 'var(--muted)');
+            rng.textContent = n.lo === n.hi ? ('a' + (n.lo + 1)) : ('[' + (n.lo + 1) + '..' + (n.hi + 1) + ']');
+            nodesG.appendChild(rng);
+
+            // Value text
+            var val = document.createElementNS(svgNS, 'text');
+            val.setAttribute('x', p.x);
+            val.setAttribute('y', p.y + 5);
+            val.setAttribute('class', 'nval');
+            val.setAttribute('fill', textCol);
+            val.textContent = n.val;
+            nodesG.appendChild(val);
+          });
+
+          // Update stats
+          sN.textContent = N;
+          sHeight.textContent = Math.ceil(Math.log2(N)) + 1;
+          sVisited.textContent = visitedCount;
+        }
+
+        // --- Range Query ---
+        async function doQuery(L, R) {
+          // L, R are 0-indexed internally
+          visitedCount = 0;
+          var visiting = new Set();
+          var taken = new Set();
+          var skipped = new Set();
+          var onPath = new Set();
+          var acc = null;
+          var takenParts = [];
+
+          async function go(id) {
+            if (id === null) return;
+            var n = treeNodes[id];
+            visitedCount++;
+
+            // Disjoint: node range is completely outside [L,R]
+            if (n.hi < L || n.lo > R) {
+              visiting.add(id);
+              render({ visiting: new Set(visiting), taken: new Set(taken), skipped: new Set(skipped), onPath: new Set(onPath) });
+              say('Query [' + (L + 1) + '..' + (R + 1) + ']', 'no',
+                'Node <code>[' + (n.lo + 1) + '..' + (n.hi + 1) + ']</code> is <strong>disjoint</strong> — no overlap with <code>[' + (L + 1) + '..' + (R + 1) + ']</code>. <strong>Skip</strong> this entire subtree.');
+              await wait();
+              visiting.delete(id);
+              skipped.add(id);
+              render({ visiting: new Set(visiting), taken: new Set(taken), skipped: new Set(skipped), onPath: new Set(onPath) });
+              return;
+            }
+
+            // Fully inside: node range is completely within [L,R]
+            if (L <= n.lo && n.hi <= R) {
+              visiting.add(id);
+              render({ visiting: new Set(visiting), taken: new Set(taken), skipped: new Set(skipped), onPath: new Set(onPath) });
+              say('Query [' + (L + 1) + '..' + (R + 1) + ']', 'yes',
+                'Node <code>[' + (n.lo + 1) + '..' + (n.hi + 1) + ']</code> is <strong>fully inside</strong> — take its ' + mode + ' value <strong>' + n.val + '</strong>. No need to recurse deeper!');
+              await wait();
+              visiting.delete(id);
+              taken.add(id);
+              takenParts.push(n.val);
+              acc = (acc === null) ? n.val : combine(acc, n.val);
+              render({ visiting: new Set(visiting), taken: new Set(taken), skipped: new Set(skipped), onPath: new Set(onPath) });
+              return;
+            }
+
+            // Partial overlap: recurse into both children
+            visiting.add(id);
+            onPath.add(id);
+            render({ visiting: new Set(visiting), taken: new Set(taken), skipped: new Set(skipped), onPath: new Set(onPath) });
+            say('Query [' + (L + 1) + '..' + (R + 1) + ']', 'go',
+              'Node <code>[' + (n.lo + 1) + '..' + (n.hi + 1) + ']</code> <strong>partially overlaps</strong> — can\'t use it directly. Recurse into both children to find the exact pieces.');
+            await wait();
+            visiting.delete(id);
+            render({ visiting: new Set(visiting), taken: new Set(taken), skipped: new Set(skipped), onPath: new Set(onPath) });
+
+            await go(n.left);
+            await go(n.right);
+          }
+
+          await go(rootId);
+          render({ taken: taken, skipped: skipped, onPath: onPath });
+
+          var opSym = mode === 'sum' ? '+' : mode;
+          var resultStr = acc === null ? '(empty)' : String(acc);
+          sResult.textContent = resultStr;
+
+          var partsStr = takenParts.length
+            ? takenParts.join(mode === 'sum' ? ' + ' : ', ') + ' → <strong>' + resultStr + '</strong>'
+            : '<strong>' + resultStr + '</strong>';
+
+          say('Query [' + (L + 1) + '..' + (R + 1) + ']', 'yes',
+            mode[0].toUpperCase() + mode.slice(1) + ' of <code>[' + (L + 1) + '..' + (R + 1) + ']</code> = ' + partsStr +
+            '. Only <strong>' + taken.size + '</strong> node' + (taken.size !== 1 ? 's' : '') + ' contributed — O(log n) work.');
+        }
+
+        // --- Point Update ---
+        async function doUpdate(idxZero, newVal) {
+          visitedCount = 0;
+          var onPath = new Set();
+          var updated = new Set();
+
+          // Find path root → leaf
+          var path = [];
+          var cur = rootId;
+          while (cur !== null) {
+            path.push(cur);
+            var n = treeNodes[cur];
+            if (n.lo === n.hi) break;
+            var mid = (n.lo + n.hi) >> 1;
+            cur = idxZero <= mid ? n.left : n.right;
+          }
+
+          // Animate descent
+          for (var i = 0; i < path.length; i++) {
+            visitedCount++;
+            var stepId = path[i];
+            var sn = treeNodes[stepId];
+            onPath.add(stepId);
+            render({ onPath: new Set(onPath), updated: new Set(updated) });
+            say('Update a' + (idxZero + 1) + '=' + newVal, 'go',
+              'Descending to leaf <code>a' + (idxZero + 1) + '</code>: at node <code>[' + (sn.lo + 1) + '..' + (sn.hi + 1) + ']</code> — going ' +
+              (sn.lo === sn.hi ? '<strong>this is the leaf</strong>.' :
+                (idxZero <= ((sn.lo + sn.hi) >> 1) ? '<strong>left</strong>.' : '<strong>right</strong>.')));
+            await wait();
+          }
+
+          // Update leaf value
+          arr[idxZero] = newVal;
+          var leafId = path[path.length - 1];
+          treeNodes[leafId].val = newVal;
+          updated.add(leafId);
+          render({ onPath: new Set(onPath), updated: new Set(updated) });
+          say('Update a' + (idxZero + 1) + '=' + newVal, 'add',
+            'Reached leaf <code>a' + (idxZero + 1) + '</code>. Set its value to <strong>' + newVal + '</strong>.');
+          await wait();
+
+          // Recompute bottom-up
+          for (var j = path.length - 2; j >= 0; j--) {
+            visitedCount++;
+            var pid = path[j];
+            var pn = treeNodes[pid];
+            var oldVal = pn.val;
+            pn.val = combine(treeNodes[pn.left].val, treeNodes[pn.right].val);
+            updated.add(pid);
+            render({ onPath: new Set(onPath), updated: new Set(updated) });
+            say('Update a' + (idxZero + 1) + '=' + newVal, 'add',
+              'Recompute <code>[' + (pn.lo + 1) + '..' + (pn.hi + 1) + ']</code>: ' +
+              mode + '(' + treeNodes[pn.left].val + ', ' + treeNodes[pn.right].val + ') = <strong>' + pn.val + '</strong>. (was ' + oldVal + ')');
+            await wait();
+          }
+
+          render({ updated: updated });
+          sResult.textContent = '—';
+          say('Update a' + (idxZero + 1) + '=' + newVal, 'yes',
+            'Updated <code>a' + (idxZero + 1) + '</code> to <strong>' + newVal + '</strong>. Only <strong>' + path.length + '</strong> nodes on the root-to-leaf path recomputed — O(log n) work.');
+        }
+
+        // --- Mode toggle ---
+        function setMode(m) {
+          if (busy) return;
+          mode = m;
+          ['sum', 'min', 'max'].forEach(function (x) {
+            var btn = document.getElementById('mode-' + x);
+            btn.className = x === m ? 'active-mode' : '';
+          });
+          build();
+          visitedCount = 0;
+          render();
+          sResult.textContent = '—';
+          say(m[0].toUpperCase() + m.slice(1) + ' mode', null,
+            'Switched to <strong>' + m + '</strong> — every node now stores the <strong>' + m + '</strong> of its covered range. The tree has been rebuilt.');
+        }
+
+        // --- Button wiring ---
+        document.getElementById('mode-sum').addEventListener('click', function () { setMode('sum'); });
+        document.getElementById('mode-min').addEventListener('click', function () { setMode('min'); });
+        document.getElementById('mode-max').addEventListener('click', function () { setMode('max'); });
+
+        document.getElementById('btn-query').addEventListener('click', function () {
+          if (busy) return;
+          var L = parseInt(document.getElementById('lo').value, 10);
+          var R = parseInt(document.getElementById('hi').value, 10);
+          if (isNaN(L) || isNaN(R) || L < 1 || R > N || L > R) {
+            say('Query', null, 'Enter a valid range: lo and hi both in 1–8, lo ≤ hi.');
+            return;
+          }
+          run(function () { return doQuery(L - 1, R - 1); });
+        });
+
+        document.getElementById('btn-update').addEventListener('click', function () {
+          if (busy) return;
+          var idx = parseInt(document.getElementById('idx').value, 10);
+          var kv = parseInt(document.getElementById('kv').value, 10);
+          if (isNaN(idx) || idx < 1 || idx > N || isNaN(kv)) {
+            say('Update', null, 'Enter a valid index (1–8) and a new value.');
+            return;
+          }
+          run(function () { return doUpdate(idx - 1, kv); });
+        });
+
+        document.getElementById('btn-reset').addEventListener('click', function () {
+          if (busy) return;
+          arr = defaultArr.slice();
+          build();
+          visitedCount = 0;
+          render();
+          sResult.textContent = '—';
+          say('Reset', null, '<strong>Array reset</strong> to [3, 2, 5, 1, 4, 6, 2, 7]. Tree rebuilt from scratch.');
+        });
+
+        // --- Demos ---
+        document.getElementById('demo-full').addEventListener('click', function () {
+          if (busy) return;
+          document.getElementById('lo').value = '1';
+          document.getElementById('hi').value = '8';
+          say('Demo', null, 'Querying the <strong>full range [1..8]</strong>. Watch the root get taken immediately — the whole tree is inside the query.');
+          run(function () { return doQuery(0, 7); });
+        });
+
+        document.getElementById('demo-single').addEventListener('click', function () {
+          if (busy) return;
+          document.getElementById('lo').value = '3';
+          document.getElementById('hi').value = '3';
+          say('Demo', null, 'Querying a <strong>single element [3..3]</strong>. The algorithm descends all the way to the leaf — worst case O(log n) depth.');
+          run(function () { return doQuery(2, 2); });
+        });
+
+        document.getElementById('demo-update').addEventListener('click', async function () {
+          if (busy) return;
+          busy = true;
+          document.getElementById('idx').value = '5';
+          document.getElementById('kv').value = '10';
+          say('Demo', null, 'First <strong>updating a5 = 10</strong>, then querying <strong>[3..6]</strong> to see the new result.');
+          await doUpdate(4, 10);
+          await wait();
+          document.getElementById('lo').value = '3';
+          document.getElementById('hi').value = '6';
+          await doQuery(2, 5);
+          busy = false;
+        });
+
+        // --- Init ---
+        build();
+        render();
+        say('Ready', null, '<strong>Default array [3, 2, 5, 1, 4, 6, 2, 7] loaded.</strong> Indices are <strong>1-based</strong>: a1=3, a2=2, …, a8=7. Set a range and press <strong>Query</strong>, or pick an index and press <strong>Update</strong>.');
+
+        function postHeight() { try { parent.postMessage({ type: 'prototype:height', height: document.body.scrollHeight }, '*'); } catch (e) {} }
+        new ResizeObserver(postHeight).observe(document.body);
+        postHeight();
+      })();
+    </script>
+  </body>
+</html>

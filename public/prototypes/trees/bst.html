@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Binary Search Tree</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --success-bg: rgba(92,198,111,0.14); --success-bd: rgba(92,198,111,0.45);
+        --danger: #f06868;  --danger-bg: rgba(240,104,104,0.14); --danger-bd: rgba(240,104,104,0.45);
+        --warning: #f0b568; --warning-bg: rgba(240,181,104,0.14); --warning-bd: rgba(240,181,104,0.45);
+        --info: #5e9ff6;    --info-bg:    rgba(94,159,246,0.16); --info-bd:    rgba(94,159,246,0.45);
+        --purple: #a78bfa;  --purple-bg:  rgba(167,139,250,0.16); --purple-bd:  rgba(167,139,250,0.45);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --radius-lg: 14px; --radius-md: 8px; --radius-sm: 6px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body {
+        padding: 18px 18px 24px;
+        background-image:
+          radial-gradient(1200px 600px at 50% -200px, rgba(251,134,58,0.06), transparent),
+          linear-gradient(to right, rgba(255,255,255,0.020) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.020) 1px, transparent 1px);
+        background-size: auto, 40px 40px, 40px 40px;
+      }
+      .container { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; padding: 9px 12px; transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); color: var(--fg); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); color: #1a1003; }
+      button.ghost { background: transparent; }
+      button.demo { background: transparent; color: var(--muted); border-style: dashed; font-size: 11.5px; padding: 7px 10px; }
+      button.demo:hover:not(:disabled) { color: var(--fg); border-color: var(--border-strong); }
+      button i { font-size: 14px; }
+      input[type="number"], input[type="text"] { background: var(--elevated); color: var(--fg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 9px; font: 500 12px var(--mono); width: 92px; }
+      input[type="number"]:focus, input[type="text"]:focus { outline: none; border-color: var(--info); }
+      input[type="range"] { accent-color: var(--accent); }
+      select { background: var(--elevated); color: var(--fg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px 9px; font: 500 12px var(--sans); }
+
+      .hero { background: linear-gradient(180deg, rgba(255,255,255,0.014), transparent), var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px 12px; position: relative; overflow: hidden; }
+      .hero::before { content: ""; position: absolute; inset: 0; background: radial-gradient(420px 240px at 50% 0%, rgba(94,159,246,0.05), transparent 60%); pointer-events: none; }
+      .hero-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; position: relative; z-index: 1; gap: 12px; flex-wrap: wrap; }
+      .ttl { font: 600 11.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .legend { font-size: 11px; color: var(--muted); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      .legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: -1px; margin-right: 4px; }
+
+      .tree-wrap { position: relative; z-index: 1; overflow-x: auto; }
+      svg.tree { width: 100%; min-width: 540px; height: 330px; display: block; }
+      .tree .edge { stroke: var(--border-strong); stroke-width: 1.8; transition: stroke 200ms ease; }
+      .tree .edge.on { stroke: var(--success); stroke-width: 2.4; }
+      .tree .edge.ghost { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 4 3; }
+      .tree .nlabel { font: 600 13px var(--mono); text-anchor: middle; pointer-events: none; user-select: none; }
+      .tree .ncirc { stroke-width: 2.2; transition: fill 200ms ease, stroke 200ms ease; }
+
+      .narration { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; position: relative; overflow: hidden; transition: border-color 350ms ease; }
+      .narration::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--border-strong); transition: background 350ms ease; }
+      .narration.go::before { background: var(--warning); } .narration.go { border-color: rgba(240,181,104,0.30); }
+      .narration.yes::before { background: var(--success); } .narration.yes { border-color: rgba(92,198,111,0.40); }
+      .narration.no::before { background: var(--danger); } .narration.no { border-color: rgba(240,104,104,0.35); }
+      .narration.add::before { background: var(--accent); } .narration.add { border-color: rgba(251,134,58,0.35); }
+      .narr-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+      .badge { font: 600 10.5px var(--mono); padding: 4px 9px; border-radius: 999px; letter-spacing: 0.4px; text-transform: uppercase; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); color: var(--muted); background: var(--elevated); }
+      .badge.op { background: var(--elevated); border-color: var(--border-strong); color: var(--fg); }
+      .badge.event { background: transparent; display: none; }
+      .badge.event.go { color: var(--warning); border-color: var(--warning-bd); }
+      .badge.event.yes { color: var(--success); border-color: var(--success-bd); }
+      .badge.event.no { color: var(--danger); border-color: var(--danger-bd); }
+      .badge.event.add { color: var(--accent); border-color: var(--accent); }
+      .narr-text { margin: 0; font-size: 14px; line-height: 1.55; color: var(--fg); }
+      .narr-text strong { color: var(--fg); font-weight: 600; }
+      .narr-text code { font-family: var(--mono); background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; color: var(--accent); font-size: 12px; }
+
+      .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+      .controls .spacer { flex: 1; }
+      .speed-wrap { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font: 500 11px var(--mono); }
+      .speed-wrap input[type="range"] { width: 80px; }
+      .demos { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+      .demos .lbl { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; margin-right: 2px; }
+
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; }
+      .stat .label { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .stat .value { font: 600 22px var(--mono); margin-top: 4px; line-height: 1; }
+
+      @media (max-width: 540px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2 class="sr-only">Binary search tree. Insert, search, and delete values and watch the comparison path walk down the tree one node at a time.</h2>
+
+      <div class="hero">
+        <div class="hero-head">
+          <span class="ttl">BST · ordered binary tree</span>
+          <span class="legend">
+            <span><span class="sw" style="background:var(--info-bg);border:1px solid var(--info-bd)"></span>node</span>
+            <span><span class="sw" style="background:var(--warning)"></span>comparing</span>
+            <span><span class="sw" style="background:var(--success-bg);border:1px solid var(--success-bd)"></span>path</span>
+            <span><span class="sw" style="background:var(--accent)"></span>target / new</span>
+            <span><span class="sw" style="background:var(--purple-bg);border:1px solid var(--purple-bd)"></span>successor</span>
+          </span>
+        </div>
+        <div class="tree-wrap">
+          <svg id="tree" class="tree" viewBox="0 0 680 330" aria-hidden="true">
+            <g id="edges"></g>
+            <g id="nodes"></g>
+          </svg>
+        </div>
+      </div>
+
+      <div id="narration" class="narration">
+        <div class="narr-meta">
+          <span id="narr-op" class="badge op">Ready</span>
+          <span id="narr-event" class="badge event"></span>
+        </div>
+        <p id="narr-text" class="narr-text"><strong>A default tree is loaded.</strong> Type a value and press <strong>Insert</strong>, <strong>Search</strong>, or <strong>Delete</strong> — or run a demo below to watch the comparison path walk down.</p>
+      </div>
+
+      <div class="controls">
+        <input id="val" type="number" placeholder="value" />
+        <button id="btn-insert" class="primary"><i class="ti ti-plus"></i>Insert</button>
+        <button id="btn-search"><i class="ti ti-search"></i>Search</button>
+        <button id="btn-delete"><i class="ti ti-trash"></i>Delete</button>
+        <button id="btn-random" class="ghost"><i class="ti ti-dice"></i>Random</button>
+        <button id="btn-reset" class="ghost"><i class="ti ti-refresh"></i>Reset</button>
+        <span class="spacer"></span>
+        <span class="speed-wrap"><span>Speed</span><input id="speed" type="range" min="1" max="10" step="1" value="6" /></span>
+      </div>
+
+      <div class="demos">
+        <span class="lbl">Demos</span>
+        <button id="demo-skew" class="demo"><i class="ti ti-stairs-down"></i>Insert 10→70 sorted (degenerates)</button>
+        <button id="demo-two" class="demo"><i class="ti ti-binary-tree"></i>Delete 30 (two children)</button>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="label">nodes</div><div id="s-nodes" class="value" style="color:var(--info)">0</div></div>
+        <div class="stat"><div class="label">height</div><div id="s-height" class="value" style="color:var(--purple)">0</div></div>
+        <div class="stat"><div class="label">comparisons</div><div id="s-cmp" class="value" style="color:var(--warning)">0</div></div>
+        <div class="stat"><div class="label">in-order</div><div id="s-order" class="value" style="color:var(--success);font-size:13px;line-height:1.4">—</div></div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        var svgNS = 'http://www.w3.org/2000/svg';
+        var edgesG = document.getElementById('edges');
+        var nodesG = document.getElementById('nodes');
+        var narrEl = document.getElementById('narration');
+        var narrOp = document.getElementById('narr-op');
+        var narrEvent = document.getElementById('narr-event');
+        var narrText = document.getElementById('narr-text');
+        var valEl = document.getElementById('val');
+        var speedEl = document.getElementById('speed');
+        var sNodes = document.getElementById('s-nodes');
+        var sHeight = document.getElementById('s-height');
+        var sCmp = document.getElementById('s-cmp');
+        var sOrder = document.getElementById('s-order');
+
+        var root = null, busy = false, cmp = 0;
+
+        function Node(v) { return { v: v, left: null, right: null }; }
+        function rawInsert(n, v) {
+          if (!n) return Node(v);
+          if (v < n.v) n.left = rawInsert(n.left, v);
+          else if (v > n.v) n.right = rawInsert(n.right, v);
+          return n;
+        }
+        function find(n, v) { if (!n) return null; if (v === n.v) return n; return v < n.v ? find(n.left, v) : find(n.right, v); }
+        function minNode(n) { while (n.left) n = n.left; return n; }
+        function countNodes(n) { return n ? 1 + countNodes(n.left) + countNodes(n.right) : 0; }
+        function heightOf(n) { return n ? 1 + Math.max(heightOf(n.left), heightOf(n.right)) : 0; }
+        function inorder(n, out) { if (!n) return; inorder(n.left, out); out.push(n.v); inorder(n.right, out); }
+
+        function removeBST(n, v) {
+          if (!n) return null;
+          if (v < n.v) n.left = removeBST(n.left, v);
+          else if (v > n.v) n.right = removeBST(n.right, v);
+          else {
+            if (!n.left) return n.right;
+            if (!n.right) return n.left;
+            var m = minNode(n.right); n.v = m.v; n.right = removeBST(n.right, m.v);
+          }
+          return n;
+        }
+
+        function wait() { return new Promise(function (r) { setTimeout(r, 1100 - parseInt(speedEl.value, 10) * 95); }); }
+
+        function layout() {
+          var pos = new Map();
+          if (!root) return pos;
+          var order = []; inorder2(root, order);
+          var depth = new Map();
+          (function sd(n, d) { if (!n) return; depth.set(n, d); sd(n.left, d + 1); sd(n.right, d + 1); })(root, 0);
+          var N = order.length, padX = 40, padY = 40, uW = 680 - 2 * padX, uH = 330 - 2 * padY;
+          var maxD = 0; depth.forEach(function (d) { if (d > maxD) maxD = d; });
+          order.forEach(function (n, i) {
+            var x = N === 1 ? 340 : padX + uW * i / (N - 1);
+            var y = padY + (maxD === 0 ? 0 : uH * depth.get(n) / Math.max(maxD, 1));
+            pos.set(n, { x: x, y: y });
+          });
+          return pos;
+        }
+        function inorder2(n, out) { if (!n) return; inorder2(n.left, out); out.push(n); inorder2(n.right, out); }
+
+        function render(opts) {
+          opts = opts || {};
+          var current = opts.current || null, visited = opts.visited || new Set();
+          var target = opts.target, successor = opts.successor || null;
+          var ghost = opts.ghost || null, ghostEdge = opts.ghostEdge || null;
+          while (edgesG.firstChild) edgesG.removeChild(edgesG.firstChild);
+          while (nodesG.firstChild) nodesG.removeChild(nodesG.firstChild);
+          var pos = layout();
+          // edges
+          (function drawE(n) {
+            if (!n) return;
+            [n.left, n.right].forEach(function (c) {
+              if (!c) return;
+              var a = pos.get(n), b = pos.get(c);
+              var ln = document.createElementNS(svgNS, 'line');
+              ln.setAttribute('x1', a.x); ln.setAttribute('y1', a.y);
+              ln.setAttribute('x2', b.x); ln.setAttribute('y2', b.y);
+              ln.setAttribute('class', 'edge' + (visited.has(c) && visited.has(n) ? ' on' : ''));
+              edgesG.appendChild(ln);
+            });
+            drawE(n.left); drawE(n.right);
+          })(root);
+          if (ghostEdge) {
+            var gl = document.createElementNS(svgNS, 'line');
+            gl.setAttribute('x1', ghostEdge.x1); gl.setAttribute('y1', ghostEdge.y1);
+            gl.setAttribute('x2', ghostEdge.x2); gl.setAttribute('y2', ghostEdge.y2);
+            gl.setAttribute('class', 'edge ghost'); edgesG.appendChild(gl);
+          }
+          // nodes
+          pos.forEach(function (p, n) {
+            var fill = 'var(--info-bg)', stroke = 'var(--info)', tcol = 'var(--fg)';
+            if (n === successor) { fill = 'var(--purple-bg)'; stroke = 'var(--purple)'; }
+            else if (n === current) { fill = 'var(--warning)'; stroke = 'var(--warning)'; tcol = '#1a1003'; }
+            else if (target != null && n.v === target && visited.has(n)) { fill = 'var(--accent)'; stroke = 'var(--accent)'; tcol = '#1a1003'; }
+            else if (visited.has(n)) { fill = 'var(--success-bg)'; stroke = 'var(--success)'; }
+            drawCircle(p, n.v, fill, stroke, tcol, false);
+          });
+          if (ghost) drawCircle(ghost, ghost.v, 'var(--accent)', 'var(--accent)', '#1a1003', true);
+          // stats
+          sNodes.textContent = countNodes(root);
+          sHeight.textContent = heightOf(root);
+          var ord = []; inorder(root, ord);
+          sOrder.textContent = ord.length ? ord.join(' ') : '—';
+        }
+
+        function drawCircle(p, v, fill, stroke, tcol, dashed) {
+          var c = document.createElementNS(svgNS, 'circle');
+          c.setAttribute('cx', p.x); c.setAttribute('cy', p.y); c.setAttribute('r', 18);
+          c.setAttribute('class', 'ncirc');
+          c.setAttribute('fill', fill); c.setAttribute('stroke', stroke);
+          if (dashed) c.setAttribute('stroke-dasharray', '4 3');
+          nodesG.appendChild(c);
+          var t = document.createElementNS(svgNS, 'text');
+          t.setAttribute('x', p.x); t.setAttribute('y', p.y + 4);
+          t.setAttribute('class', 'nlabel'); t.setAttribute('fill', tcol);
+          t.textContent = v; nodesG.appendChild(t);
+        }
+
+        function say(op, event, text) {
+          narrOp.textContent = op;
+          narrEl.classList.remove('go', 'yes', 'no', 'add');
+          if (event) { narrEl.classList.add(event); narrEvent.style.display = ''; narrEvent.className = 'badge event ' + event; narrEvent.textContent = event === 'go' ? 'compare' : event === 'yes' ? 'found' : event === 'no' ? 'miss' : 'place'; }
+          else { narrEvent.style.display = 'none'; }
+          narrText.innerHTML = text;
+          sCmp.textContent = cmp;
+        }
+
+        function lock(b) { busy = b; [valEl].forEach(function () {}); }
+
+        async function doSearch(v) {
+          cmp = 0;
+          if (!root) { say('Search ' + v, 'no', 'The tree is <strong>empty</strong>. Nothing to find.'); return; }
+          var visited = new Set(), n = root;
+          while (n) {
+            cmp++;
+            render({ current: n, visited: new Set(visited) });
+            if (v === n.v) { say('Search ' + v, 'go', 'Compare <code>' + v + '</code> with <strong>' + n.v + '</strong> → <strong>equal</strong>.'); }
+            else say('Search ' + v, 'go', 'Compare <code>' + v + '</code> with <strong>' + n.v + '</strong> → ' + (v < n.v ? 'smaller, go <strong>left</strong>.' : 'larger, go <strong>right</strong>.'));
+            await wait();
+            visited.add(n);
+            if (v === n.v) { render({ target: v, visited: visited }); say('Search ' + v, 'yes', '<strong>Found ' + v + '</strong> after <code>' + cmp + '</code> comparison' + (cmp > 1 ? 's' : '') + '.'); return; }
+            n = v < n.v ? n.left : n.right;
+          }
+          render({ visited: visited });
+          say('Search ' + v, 'no', '<strong>' + v + ' is not in the tree.</strong> Fell off a branch after <code>' + cmp + '</code> comparison' + (cmp > 1 ? 's' : '') + '.');
+        }
+
+        async function doInsert(v) {
+          cmp = 0;
+          if (find(root, v)) { render(); say('Insert ' + v, 'no', '<strong>' + v + ' is already in the tree</strong> — a BST holds no duplicates.'); return; }
+          if (!root) { root = rawInsert(root, v); render({ target: v, visited: new Set([root]) }); say('Insert ' + v, 'add', 'The tree was empty — <strong>' + v + ' becomes the root</strong>.'); return; }
+          var n = root, parent = null, dir = '', visited = new Set();
+          while (n) {
+            cmp++;
+            render({ current: n, visited: new Set(visited) });
+            say('Insert ' + v, 'go', 'Compare <code>' + v + '</code> with <strong>' + n.v + '</strong> → ' + (v < n.v ? 'go <strong>left</strong>.' : 'go <strong>right</strong>.'));
+            await wait();
+            visited.add(n); parent = n;
+            if (v < n.v) { dir = 'left'; n = n.left; } else { dir = 'right'; n = n.right; }
+          }
+          var pos = layout(), pp = pos.get(parent);
+          var gx = dir === 'left' ? pp.x - 46 : pp.x + 46, gy = pp.y + 56;
+          render({ visited: visited, ghost: { x: gx, y: gy, v: v }, ghostEdge: { x1: pp.x, y1: pp.y, x2: gx, y2: gy } });
+          say('Insert ' + v, 'add', 'Empty <strong>' + dir + '</strong> slot under <strong>' + parent.v + '</strong> → attach <code>' + v + '</code> here.');
+          await wait();
+          root = rawInsert(root, v);
+          render({ target: v, visited: new Set([find(root, v)]) });
+          say('Insert ' + v, 'add', 'Inserted <strong>' + v + '</strong> as the ' + dir + ' child of <strong>' + parent.v + '</strong> (' + cmp + ' comparison' + (cmp > 1 ? 's' : '') + ').');
+        }
+
+        async function doDelete(v) {
+          cmp = 0;
+          if (!find(root, v)) { render(); say('Delete ' + v, 'no', '<strong>' + v + ' is not in the tree.</strong>'); return; }
+          var visited = new Set(), n = root;
+          while (n && n.v !== v) { cmp++; render({ current: n, visited: new Set(visited) }); say('Delete ' + v, 'go', 'Find <code>' + v + '</code>: compare with <strong>' + n.v + '</strong> → ' + (v < n.v ? 'left.' : 'right.')); await wait(); visited.add(n); n = v < n.v ? n.left : n.right; }
+          cmp++;
+          visited.add(n);
+          render({ target: v, visited: new Set(visited) });
+          var hasL = !!n.left, hasR = !!n.right;
+          if (!hasL && !hasR) {
+            say('Delete ' + v, 'go', '<strong>' + v + ' is a leaf</strong> (no children) → just unlink it.'); await wait();
+            root = removeBST(root, v);
+          } else if (hasL !== hasR) {
+            var child = n.left || n.right;
+            say('Delete ' + v, 'go', '<strong>' + v + ' has one child</strong> (' + child.v + ') → splice it out; <strong>' + child.v + '</strong> takes its place.'); await wait();
+            root = removeBST(root, v);
+          } else {
+            say('Delete ' + v, 'go', '<strong>' + v + ' has two children</strong> → find its <strong>in-order successor</strong> (smallest key on the right).'); await wait();
+            var s = n.right, sv = new Set(visited);
+            while (s) { render({ successor: s, target: v, visited: new Set(sv) }); say('Delete ' + v, 'go', s.left ? 'Successor walk: go left from <strong>' + s.v + '</strong>.' : 'Smallest on the right is <strong>' + s.v + '</strong> — it will replace ' + v + '.'); await wait(); sv.add(s); if (!s.left) break; s = s.left; }
+            render({ successor: s, target: v, visited: sv });
+            say('Delete ' + v, 'add', 'Copy <strong>' + s.v + '</strong> into ' + v + '&rsquo;s slot, then delete the old <strong>' + s.v + '</strong>.'); await wait();
+            root = removeBST(root, v);
+          }
+          render();
+          say('Delete ' + v, 'yes', 'Deleted <strong>' + v + '</strong>. The tree is still correctly ordered.');
+        }
+
+        function parseVal() { var v = parseInt(valEl.value, 10); return isNaN(v) ? null : v; }
+        function run(fn, v) { if (busy) return; lock(true); Promise.resolve(fn(v)).then(function () { lock(false); }); }
+
+        document.getElementById('btn-insert').addEventListener('click', function () { var v = parseVal(); if (v === null) { say('Insert', null, 'Enter a number first.'); return; } run(doInsert, v); });
+        document.getElementById('btn-search').addEventListener('click', function () { var v = parseVal(); if (v === null) { say('Search', null, 'Enter a number first.'); return; } run(doSearch, v); });
+        document.getElementById('btn-delete').addEventListener('click', function () { var v = parseVal(); if (v === null) { say('Delete', null, 'Enter a number first.'); return; } run(doDelete, v); });
+        document.getElementById('btn-random').addEventListener('click', function () {
+          if (busy) return; root = null; var vals = new Set();
+          while (vals.size < 7) vals.add(Math.floor(Math.random() * 99) + 1);
+          vals.forEach(function (v) { root = rawInsert(root, v); });
+          cmp = 0; render(); say('Random', null, 'Built a random tree of <strong>7 nodes</strong>. Try insert / search / delete.');
+        });
+        document.getElementById('btn-reset').addEventListener('click', function () { if (busy) return; loadDefault(); say('Reset', null, '<strong>Default tree restored.</strong>'); });
+        valEl.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !busy) document.getElementById('btn-insert').click(); });
+
+        async function runSeq(seq, fn) { if (busy) return; lock(true); for (var i = 0; i < seq.length; i++) { valEl.value = seq[i]; await fn(seq[i]); await wait(); } lock(false); }
+        document.getElementById('demo-skew').addEventListener('click', function () {
+          if (busy) return; root = null; render();
+          say('Demo', null, 'Inserting <strong>10, 20, 30, … 70 in sorted order</strong> — watch the tree collapse into a one-sided chain (height = n, the BST worst case).');
+          runSeq([10, 20, 30, 40, 50, 60, 70], doInsert);
+        });
+        document.getElementById('demo-two').addEventListener('click', function () {
+          if (busy) return; loadDefault();
+          valEl.value = 30;
+          say('Demo', null, 'Deleting <strong>30</strong>, which has two children — the hardest delete case.');
+          run(doDelete, 30);
+        });
+
+        function loadDefault() { root = null;[50, 30, 70, 20, 40, 60, 80].forEach(function (v) { root = rawInsert(root, v); }); cmp = 0; render(); }
+
+        loadDefault();
+        say('Ready', null, '<strong>A default tree is loaded.</strong> Type a value and press <strong>Insert</strong>, <strong>Search</strong>, or <strong>Delete</strong> — or run a demo below to watch the comparison path walk down.');
+
+        function postHeight() { try { parent.postMessage({ type: 'prototype:height', height: document.body.scrollHeight }, '*'); } catch (e) {} }
+        new ResizeObserver(postHeight).observe(document.body);
+        postHeight();
+      })();
+    </script>
+  </body>
+</html>
