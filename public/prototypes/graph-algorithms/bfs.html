@@ -187,9 +187,11 @@
 
     <script>
       (function () {
-        // Graph topology — chosen so the tree fans out nicely.
-        var pos = { A:[270,40], B:[130,110], C:[410,110], D:[60,210], E:[200,210], F:[340,210], G:[470,210] };
-        var adj = { A:["B","C"], B:["A","D","E"], C:["A","F","G"], D:["B"], E:["B"], F:["C"], G:["C"] };
+        // Same graph as the DFS prototype — an irregular, scattered layout
+        // (not a grid) with cycles, so non-tree (cross) edges stay grey and
+        // you can see it's a real graph rather than a tree.
+        var pos = { A:[75,70], B:[250,48], C:[445,95], D:[80,210], E:[275,165], F:[455,215], G:[270,255] };
+        var adj = { A:["B","D"], B:["A","C","E"], C:["B","E","F"], D:["A","E"], E:["B","C","D","G"], F:["C","G"], G:["E","F"] };
 
         var nodesG = document.getElementById('nodes');
         var edgesG = document.getElementById('edges');
