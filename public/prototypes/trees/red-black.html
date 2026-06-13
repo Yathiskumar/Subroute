@@ -1,0 +1,618 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Red-Black Tree</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --success-bg: rgba(92,198,111,0.14); --success-bd: rgba(92,198,111,0.45);
+        --danger: #f06868;  --danger-bg: rgba(240,104,104,0.14); --danger-bd: rgba(240,104,104,0.45);
+        --warning: #f0b568; --warning-bg: rgba(240,181,104,0.14); --warning-bd: rgba(240,181,104,0.45);
+        --info: #5e9ff6;    --info-bg:    rgba(94,159,246,0.16); --info-bd:    rgba(94,159,246,0.45);
+        --purple: #a78bfa;  --purple-bg:  rgba(167,139,250,0.16); --purple-bd:  rgba(167,139,250,0.45);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --radius-lg: 14px; --radius-md: 8px; --radius-sm: 6px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body {
+        padding: 18px 18px 24px;
+        background-image:
+          radial-gradient(1200px 600px at 50% -200px, rgba(240,104,104,0.05), transparent),
+          linear-gradient(to right, rgba(255,255,255,0.020) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.020) 1px, transparent 1px);
+        background-size: auto, 40px 40px, 40px 40px;
+      }
+      .container { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; padding: 9px 12px; transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); color: var(--fg); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); color: #1a1003; }
+      button.ghost { background: transparent; }
+      button.demo { background: transparent; color: var(--muted); border-style: dashed; font-size: 11.5px; padding: 7px 10px; }
+      button.demo:hover:not(:disabled) { color: var(--fg); border-color: var(--border-strong); }
+      button i { font-size: 14px; }
+      input[type="number"], input[type="text"] { background: var(--elevated); color: var(--fg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 9px; font: 500 12px var(--mono); width: 92px; }
+      input[type="number"]:focus, input[type="text"]:focus { outline: none; border-color: var(--info); }
+      input[type="range"] { accent-color: var(--accent); }
+      select { background: var(--elevated); color: var(--fg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px 9px; font: 500 12px var(--sans); }
+
+      .hero { background: linear-gradient(180deg, rgba(255,255,255,0.014), transparent), var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px 12px; position: relative; overflow: hidden; }
+      .hero::before { content: ""; position: absolute; inset: 0; background: radial-gradient(420px 240px at 50% 0%, rgba(240,104,104,0.06), transparent 60%); pointer-events: none; }
+      .hero-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; position: relative; z-index: 1; gap: 12px; flex-wrap: wrap; }
+      .ttl { font: 600 11.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .legend { font-size: 11px; color: var(--muted); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      .legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: -1px; margin-right: 4px; }
+
+      .tree-wrap { position: relative; z-index: 1; overflow-x: auto; }
+      svg.tree { width: 100%; min-width: 540px; height: 330px; display: block; }
+      .tree .edge { stroke: var(--border-strong); stroke-width: 1.8; transition: stroke 200ms ease; }
+      .tree .edge.on { stroke: var(--success); stroke-width: 2.4; }
+      .tree .edge.ghost { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 4 3; }
+      .tree .nlabel { font: 600 13px var(--mono); text-anchor: middle; pointer-events: none; user-select: none; }
+      .tree .ncirc { stroke-width: 2.2; transition: fill 200ms ease, stroke 200ms ease; }
+
+      .narration { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; position: relative; overflow: hidden; transition: border-color 350ms ease; }
+      .narration::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--border-strong); transition: background 350ms ease; }
+      .narration.go::before { background: var(--warning); } .narration.go { border-color: rgba(240,181,104,0.30); }
+      .narration.yes::before { background: var(--success); } .narration.yes { border-color: rgba(92,198,111,0.40); }
+      .narration.no::before { background: var(--danger); } .narration.no { border-color: rgba(240,104,104,0.35); }
+      .narration.add::before { background: var(--accent); } .narration.add { border-color: rgba(251,134,58,0.35); }
+      .narr-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+      .badge { font: 600 10.5px var(--mono); padding: 4px 9px; border-radius: 999px; letter-spacing: 0.4px; text-transform: uppercase; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); color: var(--muted); background: var(--elevated); }
+      .badge.op { background: var(--elevated); border-color: var(--border-strong); color: var(--fg); }
+      .badge.event { background: transparent; display: none; }
+      .badge.event.go { color: var(--warning); border-color: var(--warning-bd); }
+      .badge.event.yes { color: var(--success); border-color: var(--success-bd); }
+      .badge.event.no { color: var(--danger); border-color: var(--danger-bd); }
+      .badge.event.add { color: var(--accent); border-color: var(--accent); }
+      .narr-text { margin: 0; font-size: 14px; line-height: 1.55; color: var(--fg); }
+      .narr-text strong { color: var(--fg); font-weight: 600; }
+      .narr-text code { font-family: var(--mono); background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; color: var(--accent); font-size: 12px; }
+
+      .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+      .controls .spacer { flex: 1; }
+      .speed-wrap { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font: 500 11px var(--mono); }
+      .speed-wrap input[type="range"] { width: 80px; }
+      .demos { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+      .demos .lbl { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; margin-right: 2px; }
+
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; }
+      .stat .label { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .stat .value { font: 600 22px var(--mono); margin-top: 4px; line-height: 1; }
+
+      @media (max-width: 540px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+
+      /* RB-specific: search path highlight on edges */
+      .tree .edge.path { stroke: var(--info); stroke-width: 2.2; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2 class="sr-only">Red-Black Tree. Insert values and watch the tree self-balance via recoloring and rotations to maintain the red-black invariants.</h2>
+
+      <div class="hero">
+        <div class="hero-head">
+          <span class="ttl">Red-Black Tree · self-balancing BST</span>
+          <span class="legend">
+            <span><span class="sw" style="background:#f06868;border:1.5px solid #a83030"></span>red node</span>
+            <span><span class="sw" style="background:#2a2f37;border:1.5px solid var(--border-strong)"></span>black node</span>
+            <span><span class="sw" style="background:var(--warning)"></span>fixup focus</span>
+            <span><span class="sw" style="background:var(--accent)"></span>new node</span>
+          </span>
+        </div>
+        <div class="tree-wrap">
+          <svg id="tree" class="tree" viewBox="0 0 680 330" aria-hidden="true">
+            <g id="edges"></g>
+            <g id="nodes"></g>
+          </svg>
+        </div>
+      </div>
+
+      <div id="narration" class="narration">
+        <div class="narr-meta">
+          <span id="narr-op" class="badge op">Ready</span>
+          <span id="narr-event" class="badge event"></span>
+        </div>
+        <p id="narr-text" class="narr-text"><strong>A valid red-black tree is loaded.</strong> Type a value and press <strong>Insert</strong> or <strong>Search</strong> — or run a demo below to watch recoloring and rotations fix red-red violations.</p>
+      </div>
+
+      <div class="controls">
+        <input id="val" type="number" placeholder="value" />
+        <button id="btn-insert" class="primary"><i class="ti ti-plus"></i>Insert</button>
+        <button id="btn-search"><i class="ti ti-search"></i>Search</button>
+        <button id="btn-random" class="ghost"><i class="ti ti-dice"></i>Random</button>
+        <button id="btn-reset" class="ghost"><i class="ti ti-refresh"></i>Reset</button>
+        <span class="spacer"></span>
+        <span class="speed-wrap"><span>Speed</span><input id="speed" type="range" min="1" max="10" step="1" value="8" /></span>
+      </div>
+
+      <div class="demos">
+        <span class="lbl">Demos</span>
+        <button id="demo-seq" class="demo"><i class="ti ti-stairs-down"></i>Sequential insert 1→7</button>
+        <button id="demo-mix" class="demo"><i class="ti ti-rotate-clockwise"></i>Recolor then rotate (50,30,70,20,40,10)</button>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="label">nodes</div><div id="s-nodes" class="value" style="color:var(--info)">0</div></div>
+        <div class="stat"><div class="label">height</div><div id="s-height" class="value" style="color:var(--purple)">0</div></div>
+        <div class="stat"><div class="label">recolors</div><div id="s-recolor" class="value" style="color:var(--danger)">0</div></div>
+        <div class="stat"><div class="label">rotations</div><div id="s-rotate" class="value" style="color:var(--warning)">0</div></div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        var svgNS = 'http://www.w3.org/2000/svg';
+        var edgesG = document.getElementById('edges');
+        var nodesG = document.getElementById('nodes');
+        var narrEl = document.getElementById('narration');
+        var narrOp = document.getElementById('narr-op');
+        var narrEvent = document.getElementById('narr-event');
+        var narrText = document.getElementById('narr-text');
+        var valEl = document.getElementById('val');
+        var speedEl = document.getElementById('speed');
+        var sNodes = document.getElementById('s-nodes');
+        var sHeight = document.getElementById('s-height');
+        var sRecolor = document.getElementById('s-recolor');
+        var sRotate = document.getElementById('s-rotate');
+
+        var RED = 0, BLACK = 1;
+        var NIL = { v: null, color: BLACK, left: null, right: null, parent: null, nil: true };
+        NIL.left = NIL; NIL.right = NIL; NIL.parent = NIL;
+
+        var root = NIL;
+        var busy = false;
+        var lastRecolors = 0, lastRotations = 0;
+
+        function wait() {
+          return new Promise(function (r) { setTimeout(r, 1100 - parseInt(speedEl.value, 10) * 95); });
+        }
+
+        function RBNode(v) {
+          return { v: v, color: RED, left: NIL, right: NIL, parent: NIL, nil: false };
+        }
+
+        // ── rotations ──────────────────────────────────────────────────
+        function rotL(x) {
+          var y = x.right; x.right = y.left;
+          if (y.left !== NIL) y.left.parent = x;
+          y.parent = x.parent;
+          if (x.parent === NIL) root = y;
+          else if (x === x.parent.left) x.parent.left = y;
+          else x.parent.right = y;
+          y.left = x; x.parent = y;
+        }
+        function rotR(x) {
+          var y = x.left; x.left = y.right;
+          if (y.right !== NIL) y.right.parent = x;
+          y.parent = x.parent;
+          if (x.parent === NIL) root = y;
+          else if (x === x.parent.right) x.parent.right = y;
+          else x.parent.left = y;
+          y.right = x; x.parent = y;
+        }
+
+        // ── BST insert (no fixup) ────────────────────────────────────
+        function bstInsert(v) {
+          var y = NIL, x = root;
+          while (x !== NIL) {
+            y = x;
+            if (v < x.v) x = x.left;
+            else if (v > x.v) x = x.right;
+            else return null; // duplicate
+          }
+          var z = RBNode(v); z.parent = y;
+          if (y === NIL) root = z;
+          else if (v < y.v) y.left = z;
+          else y.right = z;
+          return z;
+        }
+
+        // ── silent RB insert (for loadDefault / random) ───────────────
+        function silentInsert(v) {
+          var z = bstInsert(v); if (!z) return;
+          var n = z;
+          while (n.parent.color === RED) {
+            if (n.parent === n.parent.parent.left) {
+              var u = n.parent.parent.right;
+              if (u.color === RED) { n.parent.color = BLACK; u.color = BLACK; n.parent.parent.color = RED; n = n.parent.parent; }
+              else { if (n === n.parent.right) { n = n.parent; rotL(n); } n.parent.color = BLACK; n.parent.parent.color = RED; rotR(n.parent.parent); }
+            } else {
+              var u2 = n.parent.parent.left;
+              if (u2.color === RED) { n.parent.color = BLACK; u2.color = BLACK; n.parent.parent.color = RED; n = n.parent.parent; }
+              else { if (n === n.parent.left) { n = n.parent; rotR(n); } n.parent.color = BLACK; n.parent.parent.color = RED; rotL(n.parent.parent); }
+            }
+            if (n === root) break;
+          }
+          root.color = BLACK;
+        }
+
+        // ── tree metrics ───────────────────────────────────────────────
+        function countNodes(n) { return (n === NIL) ? 0 : 1 + countNodes(n.left) + countNodes(n.right); }
+        function heightOf(n) { return (n === NIL) ? 0 : 1 + Math.max(heightOf(n.left), heightOf(n.right)); }
+
+        // ── layout (inorder x, depth y) ───────────────────────────────
+        function layout() {
+          var pos = new Map();
+          if (root === NIL) return pos;
+          var order = [];
+          (function io(n) { if (n === NIL) return; io(n.left); order.push(n); io(n.right); })(root);
+          var depth = new Map();
+          (function sd(n, d) { if (n === NIL) return; depth.set(n, d); sd(n.left, d + 1); sd(n.right, d + 1); })(root, 0);
+          var N = order.length, padX = 40, padY = 40, uW = 680 - 2 * padX, uH = 330 - 2 * padY;
+          var maxD = 0; depth.forEach(function (d) { if (d > maxD) maxD = d; });
+          order.forEach(function (n, i) {
+            var x = N === 1 ? 340 : padX + uW * i / (N - 1);
+            var y = padY + (maxD === 0 ? 0 : uH * depth.get(n) / Math.max(maxD, 1));
+            pos.set(n, { x: x, y: y });
+          });
+          return pos;
+        }
+
+        // ── render ─────────────────────────────────────────────────────
+        // opts: { focus, newNode, searchPath, searchCurrent }
+        function render(opts) {
+          opts = opts || {};
+          var focus = opts.focus || null;
+          var newNode = opts.newNode || null;
+          var searchPath = opts.searchPath || new Set();
+          var searchCurrent = opts.searchCurrent || null;
+
+          while (edgesG.firstChild) edgesG.removeChild(edgesG.firstChild);
+          while (nodesG.firstChild) nodesG.removeChild(nodesG.firstChild);
+
+          if (root === NIL) {
+            var empty = document.createElementNS(svgNS, 'text');
+            empty.setAttribute('x', 340); empty.setAttribute('y', 165);
+            empty.setAttribute('text-anchor', 'middle');
+            empty.setAttribute('fill', 'var(--subtle)'); empty.setAttribute('font-size', '14');
+            empty.setAttribute('font-family', 'var(--sans)');
+            empty.textContent = 'empty tree'; nodesG.appendChild(empty);
+            updateStats(); return;
+          }
+
+          var pos = layout();
+
+          // edges
+          (function drawEdges(n) {
+            if (n === NIL) return;
+            [n.left, n.right].forEach(function (c) {
+              if (c === NIL) return;
+              var a = pos.get(n), b = pos.get(c);
+              var ln = document.createElementNS(svgNS, 'line');
+              ln.setAttribute('x1', a.x); ln.setAttribute('y1', a.y);
+              ln.setAttribute('x2', b.x); ln.setAttribute('y2', b.y);
+              var cls = 'edge';
+              if (searchPath.has(n) && searchPath.has(c)) cls += ' path';
+              ln.setAttribute('class', cls);
+              edgesG.appendChild(ln);
+            });
+            drawEdges(n.left); drawEdges(n.right);
+          })(root);
+
+          // nodes
+          pos.forEach(function (p, n) {
+            var fill, stroke, tcol = '#ffffff', sw = 2.2, strokeDash = '';
+            if (n === searchCurrent) {
+              // currently comparing during search
+              fill = 'var(--warning)'; stroke = 'var(--warning)'; tcol = '#1a1003';
+            } else if (n === focus) {
+              // fixup focus node
+              fill = 'var(--warning)'; stroke = '#d4901a'; tcol = '#1a1003'; sw = 3;
+            } else if (n === newNode) {
+              // freshly inserted, before fixup
+              fill = 'var(--accent)'; stroke = 'var(--accent)'; tcol = '#1a1003';
+            } else if (n.color === RED) {
+              fill = '#f06868'; stroke = '#a83030';
+            } else {
+              // BLACK
+              fill = '#2a2f37'; stroke = 'var(--border-strong)';
+            }
+
+            // if it's on the search path (but not current), tint edge
+            var c = document.createElementNS(svgNS, 'circle');
+            c.setAttribute('cx', p.x); c.setAttribute('cy', p.y); c.setAttribute('r', 18);
+            c.setAttribute('class', 'ncirc');
+            c.setAttribute('fill', fill); c.setAttribute('stroke', stroke);
+            c.setAttribute('stroke-width', sw);
+            if (strokeDash) c.setAttribute('stroke-dasharray', strokeDash);
+            nodesG.appendChild(c);
+
+            var t = document.createElementNS(svgNS, 'text');
+            t.setAttribute('x', p.x); t.setAttribute('y', p.y + 4);
+            t.setAttribute('class', 'nlabel'); t.setAttribute('fill', tcol);
+            t.textContent = n.v; nodesG.appendChild(t);
+          });
+
+          updateStats();
+        }
+
+        function updateStats() {
+          sNodes.textContent = countNodes(root);
+          sHeight.textContent = heightOf(root);
+          sRecolor.textContent = lastRecolors;
+          sRotate.textContent = lastRotations;
+        }
+
+        // ── narration ──────────────────────────────────────────────────
+        function say(op, event, text) {
+          narrOp.textContent = op;
+          narrEl.classList.remove('go', 'yes', 'no', 'add');
+          if (event) {
+            narrEl.classList.add(event);
+            narrEvent.style.display = '';
+            narrEvent.className = 'badge event ' + event;
+            narrEvent.textContent = event === 'go' ? 'compare' : event === 'yes' ? 'found' : event === 'no' ? 'miss' : 'place';
+          } else {
+            narrEvent.style.display = 'none';
+          }
+          narrText.innerHTML = text;
+        }
+
+        function lock(b) { busy = b; }
+
+        // ── animated insert with fixup ─────────────────────────────────
+        async function doInsert(v) {
+          lastRecolors = 0; lastRotations = 0;
+
+          // check duplicate
+          var tmp = root;
+          while (tmp !== NIL) {
+            if (v === tmp.v) {
+              render();
+              say('Insert ' + v, 'no', '<strong>' + v + ' is already in the tree</strong> — a red-black tree holds no duplicates.');
+              return;
+            }
+            tmp = v < tmp.v ? tmp.left : tmp.right;
+          }
+
+          // BST insert → new red node
+          var z = bstInsert(v);
+          render({ newNode: z });
+          say('Insert ' + v, 'add', 'Place <code>' + v + '</code> at its BST position as a <strong>RED</strong> node. Red nodes are the default — we fix violations next.');
+          await wait();
+
+          // fixup
+          await fixInsert(z, v);
+
+          // force root black
+          if (root.color === RED) {
+            root.color = BLACK;
+            lastRecolors++;
+            render();
+            say('Insert ' + v, 'go', '<strong>Rule 1:</strong> Root must always be <strong>black</strong> — recolored root to black.');
+            await wait();
+          }
+
+          render();
+          say('Insert ' + v, 'yes', '<strong>' + v + ' inserted.</strong> All 5 red-black rules hold: root black, no red-red parent-child, equal black-height on every path. Recolors: <code>' + lastRecolors + '</code> · Rotations: <code>' + lastRotations + '</code>.');
+        }
+
+        async function fixInsert(z, opLabel) {
+          while (z !== root && z.parent.color === RED) {
+            var gp = z.parent.parent;
+
+            if (z.parent === gp.left) {
+              // parent is LEFT child of grandparent
+              var uncle = gp.right;
+
+              if (uncle.color === RED) {
+                // ── Case 1: red uncle → recolor ──────────────────────
+                render({ focus: z });
+                say('Insert ' + opLabel, 'go',
+                  '<strong>Case 1 — Red uncle (' + uncle.v + '):</strong> Parent <code>' + z.parent.v + '</code> and uncle <code>' + uncle.v + '</code> are both red. ' +
+                  'Recolor both <strong>black</strong>, grandparent <code>' + gp.v + '</code> <strong>red</strong>. Move focus up to grandparent.');
+                await wait();
+                z.parent.color = BLACK; uncle.color = BLACK; gp.color = RED;
+                lastRecolors += 3;
+                z = gp;
+                render({ focus: z });
+                await wait();
+
+              } else {
+                // uncle is BLACK
+                if (z === z.parent.right) {
+                  // ── Case 2: black uncle, triangle (zig-zag) → left rotate ──
+                  z = z.parent;
+                  render({ focus: z });
+                  say('Insert ' + opLabel, 'go',
+                    '<strong>Case 2 — Black uncle, triangle (zig-zag):</strong> Focus <code>' + z.v + '</code> is a right child — ' +
+                    'left-rotate at <code>' + z.v + '</code> to straighten into a line (sets up Case 3).');
+                  await wait();
+                  rotL(z); lastRotations++;
+                  render({ focus: z.parent });
+                  await wait();
+                }
+                // ── Case 3: black uncle, line (zig-zig) → right rotate ──
+                var gp2 = z.parent.parent;
+                render({ focus: gp2 });
+                say('Insert ' + opLabel, 'go',
+                  '<strong>Case 3 — Black uncle, line (zig-zig):</strong> Recolor parent <code>' + z.parent.v + '</code> <strong>black</strong>, ' +
+                  'grandparent <code>' + gp2.v + '</code> <strong>red</strong>, then right-rotate at grandparent. Balance restored locally.');
+                await wait();
+                z.parent.color = BLACK; gp2.color = RED; lastRecolors += 2;
+                rotR(gp2); lastRotations++;
+                render({ focus: z });
+                await wait();
+              }
+
+            } else {
+              // parent is RIGHT child of grandparent (mirror)
+              var uncle2 = gp.left;
+
+              if (uncle2.color === RED) {
+                // ── Case 1 (mirror): red uncle → recolor ─────────────
+                render({ focus: z });
+                say('Insert ' + opLabel, 'go',
+                  '<strong>Case 1 — Red uncle (' + uncle2.v + '):</strong> Parent <code>' + z.parent.v + '</code> and uncle <code>' + uncle2.v + '</code> are both red. ' +
+                  'Recolor both <strong>black</strong>, grandparent <code>' + gp.v + '</code> <strong>red</strong>. Move focus up.');
+                await wait();
+                z.parent.color = BLACK; uncle2.color = BLACK; gp.color = RED;
+                lastRecolors += 3;
+                z = gp;
+                render({ focus: z });
+                await wait();
+
+              } else {
+                // uncle is BLACK
+                if (z === z.parent.left) {
+                  // ── Case 2 (mirror): triangle → right rotate ─────────
+                  z = z.parent;
+                  render({ focus: z });
+                  say('Insert ' + opLabel, 'go',
+                    '<strong>Case 2 — Black uncle, triangle (zig-zag):</strong> Focus <code>' + z.v + '</code> is a left child — ' +
+                    'right-rotate at <code>' + z.v + '</code> to straighten into a line (sets up Case 3).');
+                  await wait();
+                  rotR(z); lastRotations++;
+                  render({ focus: z.parent });
+                  await wait();
+                }
+                // ── Case 3 (mirror): line → left rotate ──────────────
+                var gp3 = z.parent.parent;
+                render({ focus: gp3 });
+                say('Insert ' + opLabel, 'go',
+                  '<strong>Case 3 — Black uncle, line (zig-zig):</strong> Recolor parent <code>' + z.parent.v + '</code> <strong>black</strong>, ' +
+                  'grandparent <code>' + gp3.v + '</code> <strong>red</strong>, then left-rotate at grandparent.');
+                await wait();
+                z.parent.color = BLACK; gp3.color = RED; lastRecolors += 2;
+                rotL(gp3); lastRotations++;
+                render({ focus: z });
+                await wait();
+              }
+            }
+          }
+        }
+
+        // ── animated search ────────────────────────────────────────────
+        async function doSearch(v) {
+          lastRecolors = 0; lastRotations = 0;
+          if (root === NIL) {
+            render();
+            say('Search ' + v, 'no', 'The tree is <strong>empty</strong>. Nothing to find.');
+            return;
+          }
+          var path = new Set(), n = root;
+          while (n !== NIL) {
+            render({ searchCurrent: n, searchPath: new Set(path) });
+            if (v === n.v) {
+              say('Search ' + v, 'go', 'Compare <code>' + v + '</code> with <strong>' + n.v + '</strong> → <strong>equal</strong>.');
+            } else {
+              say('Search ' + v, 'go', 'Compare <code>' + v + '</code> with <strong>' + n.v + '</strong> → ' +
+                (v < n.v ? 'smaller, go <strong>left</strong>.' : 'larger, go <strong>right</strong>.'));
+            }
+            await wait();
+            path.add(n);
+            if (v === n.v) {
+              render({ searchPath: path });
+              say('Search ' + v, 'yes', '<strong>Found ' + v + '</strong> after <code>' + path.size + '</code> comparison' + (path.size > 1 ? 's' : '') + '. The red-black tree keeps height ≤ 2 log(n+1), so search is always O(log n).');
+              return;
+            }
+            n = v < n.v ? n.left : n.right;
+          }
+          render({ searchPath: path });
+          say('Search ' + v, 'no', '<strong>' + v + ' is not in the tree.</strong> Fell off the tree after <code>' + path.size + '</code> comparison' + (path.size > 1 ? 's' : '') + '.');
+        }
+
+        // ── helpers ────────────────────────────────────────────────────
+        function parseVal() { var v = parseInt(valEl.value, 10); return isNaN(v) ? null : v; }
+        function run(fn, v) { if (busy) return; lock(true); Promise.resolve(fn(v)).then(function () { lock(false); }); }
+
+        function loadDefault() {
+          root = NIL;
+          [50, 30, 70, 20, 40, 60, 80].forEach(silentInsert);
+          lastRecolors = 0; lastRotations = 0;
+          render();
+        }
+
+        // ── event listeners ────────────────────────────────────────────
+        document.getElementById('btn-insert').addEventListener('click', function () {
+          var v = parseVal();
+          if (v === null) { say('Insert', null, 'Enter a number first.'); return; }
+          run(doInsert, v);
+        });
+
+        document.getElementById('btn-search').addEventListener('click', function () {
+          var v = parseVal();
+          if (v === null) { say('Search', null, 'Enter a number first.'); return; }
+          run(doSearch, v);
+        });
+
+        document.getElementById('btn-random').addEventListener('click', function () {
+          if (busy) return;
+          root = NIL;
+          var vals = new Set();
+          while (vals.size < 8) vals.add(Math.floor(Math.random() * 98) + 1);
+          vals.forEach(silentInsert);
+          lastRecolors = 0; lastRotations = 0;
+          render();
+          say('Random', null, 'Built a random <strong>8-node</strong> valid red-black tree. Try inserting a value to watch fixup in action.');
+        });
+
+        document.getElementById('btn-reset').addEventListener('click', function () {
+          if (busy) return;
+          loadDefault();
+          say('Reset', null, '<strong>Default tree restored</strong> [50,30,70,20,40,60,80] — a valid red-black tree with correct coloring.');
+        });
+
+        valEl.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter' && !busy) document.getElementById('btn-insert').click();
+        });
+
+        // ── demo: sequential 1→7 ──────────────────────────────────────
+        document.getElementById('demo-seq').addEventListener('click', function () {
+          if (busy) return;
+          root = NIL; lastRecolors = 0; lastRotations = 0; render();
+          say('Demo', null, 'Inserting <strong>1, 2, 3, 4, 5, 6, 7</strong> in sorted order — a BST would degenerate to a chain, but red-black rotations keep it balanced. Watch!');
+          lock(true);
+          (async function () {
+            var seq = [1, 2, 3, 4, 5, 6, 7];
+            for (var i = 0; i < seq.length; i++) {
+              valEl.value = seq[i];
+              await doInsert(seq[i]);
+              await wait();
+            }
+            lock(false);
+          })();
+        });
+
+        // ── demo: recolor then rotate ──────────────────────────────────
+        document.getElementById('demo-mix').addEventListener('click', function () {
+          if (busy) return;
+          root = NIL; lastRecolors = 0; lastRotations = 0; render();
+          say('Demo', null, 'Inserting <strong>50, 30, 70, 20, 40, 10</strong> — triggers both recoloring (Case 1) and rotations (Case 3). Watch the fixup cases fire.');
+          lock(true);
+          (async function () {
+            var seq = [50, 30, 70, 20, 40, 10];
+            for (var i = 0; i < seq.length; i++) {
+              valEl.value = seq[i];
+              await doInsert(seq[i]);
+              await wait();
+            }
+            lock(false);
+          })();
+        });
+
+        // ── init ───────────────────────────────────────────────────────
+        loadDefault();
+        say('Ready', null, '<strong>A valid red-black tree is loaded</strong> [50,30,70,20,40,60,80]. Type a value and press <strong>Insert</strong> or <strong>Search</strong> — or run a demo below to watch recoloring and rotations keep the tree balanced.');
+
+        // ── height reporting for iframe embed ─────────────────────────
+        function postHeight() { try { parent.postMessage({ type: 'prototype:height', height: document.body.scrollHeight }, '*'); } catch (e) {} }
+        new ResizeObserver(postHeight).observe(document.body);
+        postHeight();
+      })();
+    </script>
+  </body>
+</html>

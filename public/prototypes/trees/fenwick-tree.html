@@ -1,0 +1,543 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Fenwick Tree (Binary Indexed Tree)</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --success-bg: rgba(92,198,111,0.14); --success-bd: rgba(92,198,111,0.45);
+        --danger: #f06868;  --danger-bg: rgba(240,104,104,0.14); --danger-bd: rgba(240,104,104,0.45);
+        --warning: #f0b568; --warning-bg: rgba(240,181,104,0.14); --warning-bd: rgba(240,181,104,0.45);
+        --info: #5e9ff6;    --info-bg:    rgba(94,159,246,0.16); --info-bd:    rgba(94,159,246,0.45);
+        --purple: #a78bfa;  --purple-bg:  rgba(167,139,250,0.16); --purple-bd:  rgba(167,139,250,0.45);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --radius-lg: 14px; --radius-md: 8px; --radius-sm: 6px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body {
+        padding: 18px 18px 24px;
+        background-image:
+          radial-gradient(1200px 600px at 50% -200px, rgba(251,134,58,0.06), transparent),
+          linear-gradient(to right, rgba(255,255,255,0.020) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.020) 1px, transparent 1px);
+        background-size: auto, 40px 40px, 40px 40px;
+      }
+      .container { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; padding: 9px 12px; transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); color: var(--fg); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); color: #1a1003; }
+      button.ghost { background: transparent; }
+      button.demo { background: transparent; color: var(--muted); border-style: dashed; font-size: 11.5px; padding: 7px 10px; }
+      button.demo:hover:not(:disabled) { color: var(--fg); border-color: var(--border-strong); }
+      button i { font-size: 14px; }
+      input[type="number"], input[type="text"] { background: var(--elevated); color: var(--fg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 9px; font: 500 12px var(--mono); width: 72px; }
+      input[type="number"]:focus, input[type="text"]:focus { outline: none; border-color: var(--info); }
+      input[type="range"] { accent-color: var(--accent); }
+      select { background: var(--elevated); color: var(--fg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px 9px; font: 500 12px var(--sans); }
+
+      .hero { background: linear-gradient(180deg, rgba(255,255,255,0.014), transparent), var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px 12px; position: relative; overflow: hidden; }
+      .hero::before { content: ""; position: absolute; inset: 0; background: radial-gradient(420px 240px at 50% 0%, rgba(94,159,246,0.05), transparent 60%); pointer-events: none; }
+      .hero-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; position: relative; z-index: 1; gap: 12px; flex-wrap: wrap; }
+      .ttl { font: 600 11.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .legend { font-size: 11px; color: var(--muted); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      .legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; vertical-align: -1px; margin-right: 4px; }
+
+      .tree-wrap { position: relative; z-index: 1; overflow-x: auto; }
+      svg.bit-viz { width: 100%; min-width: 560px; height: 310px; display: block; }
+
+      .narration { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; position: relative; overflow: hidden; transition: border-color 350ms ease; }
+      .narration::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--border-strong); transition: background 350ms ease; }
+      .narration.go::before { background: var(--warning); } .narration.go { border-color: rgba(240,181,104,0.30); }
+      .narration.yes::before { background: var(--success); } .narration.yes { border-color: rgba(92,198,111,0.40); }
+      .narration.no::before { background: var(--danger); } .narration.no { border-color: rgba(240,104,104,0.35); }
+      .narration.add::before { background: var(--accent); } .narration.add { border-color: rgba(251,134,58,0.35); }
+      .narr-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+      .badge { font: 600 10.5px var(--mono); padding: 4px 9px; border-radius: 999px; letter-spacing: 0.4px; text-transform: uppercase; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); color: var(--muted); background: var(--elevated); }
+      .badge.op { background: var(--elevated); border-color: var(--border-strong); color: var(--fg); }
+      .badge.event { background: transparent; display: none; }
+      .badge.event.go { color: var(--warning); border-color: var(--warning-bd); }
+      .badge.event.yes { color: var(--success); border-color: var(--success-bd); }
+      .badge.event.no { color: var(--danger); border-color: var(--danger-bd); }
+      .badge.event.add { color: var(--accent); border-color: var(--accent); }
+      .narr-text { margin: 0; font-size: 14px; line-height: 1.55; color: var(--fg); }
+      .narr-text strong { color: var(--fg); font-weight: 600; }
+      .narr-text code { font-family: var(--mono); background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; color: var(--accent); font-size: 12px; }
+
+      .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+      .controls .sep { width: 1px; height: 22px; background: var(--border); margin: 0 2px; }
+      .controls .spacer { flex: 1; }
+      .speed-wrap { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font: 500 11px var(--mono); }
+      .speed-wrap input[type="range"] { width: 80px; }
+      .demos { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+      .demos .lbl { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; margin-right: 2px; }
+
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; }
+      .stat .label { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .stat .value { font: 600 22px var(--mono); margin-top: 4px; line-height: 1; }
+
+      @media (max-width: 540px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+
+      /* Fenwick-specific */
+      .ctrl-label { font: 500 11px var(--mono); color: var(--muted); white-space: nowrap; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2 class="sr-only">Fenwick Tree (Binary Indexed Tree) — watch prefix-sum queries hop DOWN by lowbit and point-updates ripple UP by lowbit in O(log n).</h2>
+
+      <div class="hero">
+        <div class="hero-head">
+          <span class="ttl">Fenwick Tree · Binary Indexed Tree · n=8</span>
+          <span class="legend">
+            <span><span class="sw" style="background:var(--info-bg);border:1px solid var(--info-bd)"></span>array cell</span>
+            <span><span class="sw" style="background:var(--elevated);border:1px solid var(--border-strong)"></span>tree cell</span>
+            <span><span class="sw" style="background:var(--warning)"></span>current hop</span>
+            <span><span class="sw" style="background:var(--success-bg);border:1px solid var(--success-bd)"></span>accumulated</span>
+            <span><span class="sw" style="background:var(--accent)"></span>updated</span>
+          </span>
+        </div>
+        <div class="tree-wrap">
+          <svg id="bit-svg" class="bit-viz" viewBox="0 0 680 310" aria-hidden="true"></svg>
+        </div>
+      </div>
+
+      <div id="narration" class="narration">
+        <div class="narr-meta">
+          <span id="narr-op" class="badge op">Ready</span>
+          <span id="narr-event" class="badge event"></span>
+        </div>
+        <p id="narr-text" class="narr-text"><strong>Default array loaded:</strong> a = [3,2,5,1,4,6,2,7]. The BIT is built from it. Enter <strong>k</strong> and press <strong>Query</strong> to see how prefix sum hops <em>down</em> via <code>i -= lowbit(i)</code>; enter <strong>idx</strong> + <strong>delta</strong> and press <strong>Update</strong> to watch the ripple go <em>up</em> via <code>i += lowbit(i)</code>.</p>
+      </div>
+
+      <div class="controls">
+        <span class="ctrl-label">prefix[1..</span>
+        <input id="k" type="number" min="1" max="8" value="6" placeholder="k" />
+        <span class="ctrl-label">]</span>
+        <button id="btn-query" class="primary"><i class="ti ti-sigma"></i>Query</button>
+        <div class="sep"></div>
+        <span class="ctrl-label">a[</span>
+        <input id="idx" type="number" min="1" max="8" value="3" placeholder="idx" />
+        <span class="ctrl-label">] +=</span>
+        <input id="delta" type="number" value="5" placeholder="Δ" />
+        <button id="btn-update"><i class="ti ti-plus"></i>Update</button>
+        <div class="sep"></div>
+        <button id="btn-reset" class="ghost"><i class="ti ti-refresh"></i>Reset</button>
+        <span class="spacer"></span>
+        <span class="speed-wrap"><span>Speed</span><input id="speed" type="range" min="1" max="10" step="1" value="8" /></span>
+      </div>
+
+      <div class="demos">
+        <span class="lbl">Demos</span>
+        <button id="demo-query-full" class="demo"><i class="ti ti-sigma"></i>Query full prefix [1..8]</button>
+        <button id="demo-update-mid" class="demo"><i class="ti ti-arrows-up"></i>Update a[5] += 10 (ripple)</button>
+        <button id="demo-range" class="demo"><i class="ti ti-arrows-horizontal"></i>Range sum [3..6]</button>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="label">n</div><div id="s-n" class="value" style="color:var(--info)">8</div></div>
+        <div class="stat"><div class="label">result</div><div id="s-result" class="value" style="color:var(--success)">—</div></div>
+        <div class="stat"><div class="label">hops</div><div id="s-hops" class="value" style="color:var(--warning)">0</div></div>
+        <div class="stat"><div class="label">lowbit(k)</div><div id="s-lowbit" class="value" style="color:var(--purple)">—</div></div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        var svgNS = 'http://www.w3.org/2000/svg';
+        var svg = document.getElementById('bit-svg');
+        var narrEl = document.getElementById('narration');
+        var narrOp = document.getElementById('narr-op');
+        var narrEvent = document.getElementById('narr-event');
+        var narrText = document.getElementById('narr-text');
+        var speedEl = document.getElementById('speed');
+        var sResult = document.getElementById('s-result');
+        var sHops = document.getElementById('s-hops');
+        var sLowbit = document.getElementById('s-lowbit');
+
+        var N = 8;
+        var busy = false;
+        var lastHops = 0;
+        var lastResult = null;
+
+        // 1-indexed base array
+        var aDefault = [0, 3, 2, 5, 1, 4, 6, 2, 7];
+        var a = aDefault.slice();
+        var tree = new Array(N + 1).fill(0);
+
+        function lowbit(i) { return i & -i; }
+
+        function buildBIT() {
+          tree = new Array(N + 1).fill(0);
+          for (var i = 1; i <= N; i++) {
+            tree[i] += a[i];
+            var j = i + lowbit(i);
+            if (j <= N) tree[j] += tree[i]; // propagate
+          }
+          // Proper build via point-update pattern
+          tree = new Array(N + 1).fill(0);
+          for (var i = 1; i <= N; i++) {
+            var ii = i;
+            while (ii <= N) { tree[ii] += a[i]; ii += lowbit(ii); }
+          }
+        }
+
+        function coverage(i) { return [i - lowbit(i) + 1, i]; }
+
+        function wait() {
+          var v = parseInt(speedEl.value, 10);
+          return new Promise(function (r) { setTimeout(r, 1100 - v * 95); });
+        }
+
+        // Geometry
+        var VW = 680, VH = 310;
+        var cellW = 62, cellH = 28;
+        var gapX = 10;
+        var startX = 26;
+        var baseY = 265; // bottom row (base array) top edge
+        var bitRowH = 40; // height of each BIT level row
+
+        function cellX(i) { return startX + (i - 1) * (cellW + gapX); }
+
+        // BIT cells stacked by coverage level
+        // level = log2(lowbit(i)): 0=covers 1, 1=covers 2, 2=covers 4, 3=covers 8
+        function bitLevel(i) { return Math.round(Math.log2(lowbit(i))); }
+        function bitY(i) {
+          var lv = bitLevel(i); // 0..3
+          // higher coverage = higher on screen (lower y)
+          return baseY - 46 - lv * bitRowH;
+        }
+
+        function render(opts) {
+          opts = opts || {};
+          var hop = opts.hop != null ? opts.hop : -1;
+          var accumulated = opts.accumulated || new Set();
+          var updated = opts.updated || new Set();
+          var arrowFrom = opts.arrowFrom != null ? opts.arrowFrom : -1;
+          var arrowTo = opts.arrowTo != null ? opts.arrowTo : -1;
+
+          while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+          // ---- base array row labels (a1..a8) ----
+          for (var i = 1; i <= N; i++) {
+            var x = cellX(i);
+            // label above cell
+            var lbl = document.createElementNS(svgNS, 'text');
+            lbl.setAttribute('x', x + cellW / 2); lbl.setAttribute('y', baseY - 5);
+            lbl.setAttribute('text-anchor', 'middle'); lbl.setAttribute('font-size', '10');
+            lbl.setAttribute('font-family', 'ui-monospace,monospace');
+            lbl.setAttribute('fill', 'rgba(144,153,168,0.8)');
+            lbl.textContent = 'a' + i; svg.appendChild(lbl);
+          }
+
+          // ---- base array cells ----
+          for (var i = 1; i <= N; i++) {
+            var x = cellX(i);
+            var rect = document.createElementNS(svgNS, 'rect');
+            rect.setAttribute('x', x); rect.setAttribute('y', baseY);
+            rect.setAttribute('width', cellW); rect.setAttribute('height', cellH);
+            rect.setAttribute('rx', '4');
+            rect.setAttribute('fill', 'rgba(94,159,246,0.16)');
+            rect.setAttribute('stroke', 'rgba(94,159,246,0.45)'); rect.setAttribute('stroke-width', '1.2');
+            svg.appendChild(rect);
+            var val = document.createElementNS(svgNS, 'text');
+            val.setAttribute('x', x + cellW / 2); val.setAttribute('y', baseY + 18);
+            val.setAttribute('text-anchor', 'middle'); val.setAttribute('font-size', '13');
+            val.setAttribute('font-weight', '600'); val.setAttribute('font-family', 'ui-monospace,monospace');
+            val.setAttribute('fill', '#e8e4dc');
+            val.textContent = a[i]; svg.appendChild(val);
+          }
+
+          // ---- BIT cells (bars spanning coverage range) ----
+          for (var i = 1; i <= N; i++) {
+            var cov = coverage(i);
+            var lo = cov[0], hi = cov[1];
+            var bx = cellX(lo);
+            var bw = cellX(hi) + cellW - cellX(lo);
+            var by = bitY(i);
+
+            var fill, stroke, textFill;
+            if (updated.has(i)) {
+              fill = 'rgba(251,134,58,0.22)'; stroke = 'var(--accent)'; textFill = 'var(--accent)';
+            } else if (i === hop) {
+              fill = 'rgba(240,181,104,0.22)'; stroke = 'var(--warning)'; textFill = 'var(--warning)';
+            } else if (accumulated.has(i)) {
+              fill = 'rgba(92,198,111,0.18)'; stroke = 'var(--success)'; textFill = 'var(--success)';
+            } else {
+              fill = 'var(--elevated)'; stroke = 'var(--border-strong)'; textFill = 'var(--muted)';
+            }
+
+            var r = document.createElementNS(svgNS, 'rect');
+            r.setAttribute('x', bx); r.setAttribute('y', by);
+            r.setAttribute('width', bw); r.setAttribute('height', cellH);
+            r.setAttribute('rx', '4');
+            r.setAttribute('fill', fill); r.setAttribute('stroke', stroke); r.setAttribute('stroke-width', '1.5');
+            svg.appendChild(r);
+
+            // label: t_i
+            var tLbl = document.createElementNS(svgNS, 'text');
+            tLbl.setAttribute('x', bx + 7); tLbl.setAttribute('y', by + 18);
+            tLbl.setAttribute('text-anchor', 'start'); tLbl.setAttribute('font-size', '10');
+            tLbl.setAttribute('font-family', 'ui-monospace,monospace');
+            tLbl.setAttribute('fill', textFill); tLbl.setAttribute('opacity', '0.85');
+            tLbl.textContent = 't' + i; svg.appendChild(tLbl);
+
+            // value in center
+            var tVal = document.createElementNS(svgNS, 'text');
+            tVal.setAttribute('x', bx + bw / 2); tVal.setAttribute('y', by + 18);
+            tVal.setAttribute('text-anchor', 'middle'); tVal.setAttribute('font-size', '13');
+            tVal.setAttribute('font-weight', '600'); tVal.setAttribute('font-family', 'ui-monospace,monospace');
+            tVal.setAttribute('fill', textFill);
+            tVal.textContent = tree[i]; svg.appendChild(tVal);
+
+            // coverage range at right
+            var tCov = document.createElementNS(svgNS, 'text');
+            tCov.setAttribute('x', bx + bw - 6); tCov.setAttribute('y', by + 18);
+            tCov.setAttribute('text-anchor', 'end'); tCov.setAttribute('font-size', '9.5');
+            tCov.setAttribute('font-family', 'ui-monospace,monospace');
+            tCov.setAttribute('fill', textFill); tCov.setAttribute('opacity', '0.75');
+            tCov.textContent = '[' + lo + '..' + hi + ']'; svg.appendChild(tCov);
+          }
+
+          // ---- hop arrow (dashed --warning curve) ----
+          if (arrowFrom >= 1 && arrowTo >= 1 && arrowTo <= N) {
+            var defs = document.createElementNS(svgNS, 'defs');
+            defs.innerHTML = '<marker id="arrowhead" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#f0b568"/></marker>';
+            svg.appendChild(defs);
+            var covF = coverage(arrowFrom), covT = coverage(arrowTo);
+            var x1 = cellX(covF[0]) + 8, y1 = bitY(arrowFrom) + cellH / 2;
+            var x2 = cellX(covT[1]) + cellW - 8, y2 = bitY(arrowTo) + cellH / 2;
+            var my = Math.min(y1, y2) - 18;
+            var path = document.createElementNS(svgNS, 'path');
+            path.setAttribute('d', 'M' + x1 + ',' + y1 + ' Q' + ((x1 + x2) / 2) + ',' + my + ' ' + x2 + ',' + y2);
+            path.setAttribute('fill', 'none'); path.setAttribute('stroke', 'var(--warning)');
+            path.setAttribute('stroke-width', '1.8'); path.setAttribute('stroke-dasharray', '5 3');
+            path.setAttribute('marker-end', 'url(#arrowhead)');
+            svg.appendChild(path);
+          } else if (arrowFrom >= 1 && (arrowTo < 1 || arrowTo > N)) {
+            // arrow going out of range (end of chain) — draw a short stub
+            var covF = coverage(arrowFrom);
+            var x1 = cellX(covF[0]) + 8, y1 = bitY(arrowFrom) + cellH / 2;
+            var path = document.createElementNS(svgNS, 'path');
+            path.setAttribute('d', 'M' + x1 + ',' + y1 + ' L' + (x1 - 28) + ',' + (y1 - 12));
+            path.setAttribute('fill', 'none'); path.setAttribute('stroke', 'var(--muted)');
+            path.setAttribute('stroke-width', '1.2'); path.setAttribute('stroke-dasharray', '4 3');
+            svg.appendChild(path);
+          }
+
+          // ---- stats update ----
+          sHops.textContent = lastHops;
+          sResult.textContent = lastResult !== null ? lastResult : '—';
+          var kVal = parseInt(document.getElementById('k').value, 10);
+          sLowbit.textContent = (!isNaN(kVal) && kVal >= 1 && kVal <= N) ? (kVal & -kVal) : '—';
+        }
+
+        function say(op, event, text) {
+          narrOp.textContent = op;
+          narrEl.classList.remove('go', 'yes', 'no', 'add');
+          if (event) {
+            narrEl.classList.add(event);
+            narrEvent.style.display = '';
+            narrEvent.className = 'badge event ' + event;
+            narrEvent.textContent = event === 'go' ? 'hop' : event === 'yes' ? 'done' : event === 'no' ? 'error' : 'update';
+          } else {
+            narrEvent.style.display = 'none';
+          }
+          narrText.innerHTML = text;
+        }
+
+        function lock(b) { busy = b; }
+
+        function run(fn) {
+          if (busy) return;
+          lock(true);
+          Promise.resolve(fn()).then(function () { lock(false); });
+        }
+
+        // ---- QUERY ----
+        async function doQuery(k) {
+          if (k < 1 || k > N) {
+            say('Query', 'no', 'Enter <strong>k</strong> between 1 and ' + N + '.');
+            return;
+          }
+          lastHops = 0;
+          lastResult = null;
+          var sum = 0;
+          var accumulated = new Set();
+          var i = k;
+
+          say('Query [1..' + k + ']', 'go',
+            'Starting prefix-sum query. <code>i = ' + k + '</code>. We\'ll loop <code>while i &gt; 0</code>, each time adding <code>t[i]</code> then jumping <code>i -= lowbit(i)</code> (i.e. <code>i &= i-1</code>). <strong>lowbit(i) = i &amp; -i</strong> strips the lowest set bit, moving left.</p>');
+          render({ accumulated: new Set(accumulated) });
+          await wait();
+
+          while (i > 0) {
+            lastHops++;
+            var cov = coverage(i);
+            var lb = lowbit(i);
+            var nxt = i - lb;
+
+            render({ hop: i, accumulated: new Set(accumulated) });
+            say('Query [1..' + k + ']', 'go',
+              '<code>i = ' + i + '</code> — <code>t[' + i + '] = ' + tree[i] + '</code> covers range <strong>[' + cov[0] + '..' + cov[1] + ']</strong>. Add to sum → <strong>' + (sum + tree[i]) + '</strong>. Then <code>lowbit(' + i + ') = ' + i + ' &amp; -' + i + ' = ' + lb + '</code>, so next <code>i = ' + i + ' − ' + lb + ' = ' + nxt + '</code>.');
+            await wait();
+
+            sum += tree[i];
+            accumulated.add(i);
+
+            if (nxt >= 1) {
+              render({ accumulated: new Set(accumulated), arrowFrom: i, arrowTo: nxt });
+            } else {
+              render({ accumulated: new Set(accumulated), arrowFrom: i, arrowTo: 0 });
+            }
+            await wait();
+
+            i = nxt;
+          }
+
+          lastResult = sum;
+          render({ accumulated: accumulated });
+          say('Query [1..' + k + ']', 'yes',
+            '<strong>Prefix sum [1..' + k + '] = ' + sum + '</strong> in <code>' + lastHops + '</code> hop' + (lastHops !== 1 ? 's' : '') + ' — O(log n). Note: a <strong>range sum [l..r]</strong> = <code>query(r) − query(l−1)</code>.');
+        }
+
+        // ---- UPDATE ----
+        async function doUpdate(idx, delta) {
+          if (idx < 1 || idx > N || isNaN(delta)) {
+            say('Update', 'no', 'Enter <strong>idx</strong> 1–' + N + ' and a numeric <strong>delta</strong>.');
+            return;
+          }
+          lastHops = 0;
+          lastResult = null;
+          var updated = new Set();
+          var i = idx;
+
+          a[idx] += delta;
+          say('Update a[' + idx + '] += ' + delta, 'add',
+            '<code>a[' + idx + '] += ' + delta + '</code> (now ' + a[idx] + '). Every <code>t[i]</code> whose coverage includes index <strong>' + idx + '</strong> must increase by <code>' + delta + '</code>. We hop <em>UP</em>: <code>i += lowbit(i)</code>.');
+          render({ updated: new Set(updated) });
+          await wait();
+
+          while (i <= N) {
+            lastHops++;
+            var lb = lowbit(i);
+            var nxt = i + lb;
+            var cov = coverage(i);
+
+            render({ hop: i, updated: new Set(updated) });
+            say('Update a[' + idx + '] += ' + delta, 'add',
+              '<code>t[' + i + ']</code> covers <strong>[' + cov[0] + '..' + cov[1] + ']</strong> which includes <strong>' + idx + '</strong> → add <code>' + delta + '</code> → new value <strong>' + (tree[i] + delta) + '</strong>. <code>lowbit(' + i + ') = ' + lb + '</code>, next <code>i = ' + i + ' + ' + lb + ' = ' + nxt + '</code>.');
+            await wait();
+
+            tree[i] += delta;
+            updated.add(i);
+
+            if (nxt <= N) {
+              render({ updated: new Set(updated), arrowFrom: i, arrowTo: nxt });
+            } else {
+              render({ updated: new Set(updated), arrowFrom: i, arrowTo: N + 1 });
+            }
+            await wait();
+
+            i = nxt;
+          }
+
+          render({ updated: updated });
+          say('Update a[' + idx + '] += ' + delta, 'yes',
+            '<strong>Update done</strong> in <code>' + lastHops + '</code> hop' + (lastHops !== 1 ? 's' : '') + ' — O(log n). Only tree cells whose coverage spans index <strong>' + idx + '</strong> were touched; all others unchanged.');
+        }
+
+        // ---- RESET ----
+        function doReset() {
+          if (busy) return;
+          a = aDefault.slice();
+          buildBIT();
+          lastHops = 0;
+          lastResult = null;
+          render({});
+          say('Ready', null, '<strong>Reset to default array:</strong> a = [3,2,5,1,4,6,2,7]. BIT rebuilt. Enter <strong>k</strong> and press <strong>Query</strong>, or enter <strong>idx</strong> + <strong>delta</strong> and press <strong>Update</strong>.');
+        }
+
+        // ---- EVENT LISTENERS ----
+        document.getElementById('btn-query').addEventListener('click', function () {
+          var k = parseInt(document.getElementById('k').value, 10);
+          run(function () { return doQuery(k); });
+        });
+
+        document.getElementById('btn-update').addEventListener('click', function () {
+          var idx = parseInt(document.getElementById('idx').value, 10);
+          var delta = parseInt(document.getElementById('delta').value, 10);
+          run(function () { return doUpdate(idx, delta); });
+        });
+
+        document.getElementById('btn-reset').addEventListener('click', function () {
+          doReset();
+        });
+
+        document.getElementById('k').addEventListener('input', function () {
+          var kVal = parseInt(this.value, 10);
+          document.getElementById('s-lowbit').textContent = (!isNaN(kVal) && kVal >= 1 && kVal <= N) ? (kVal & -kVal) : '—';
+        });
+
+        // ---- DEMOS ----
+        document.getElementById('demo-query-full').addEventListener('click', function () {
+          if (busy) return;
+          document.getElementById('k').value = 8;
+          run(function () { return doQuery(8); });
+        });
+
+        document.getElementById('demo-update-mid').addEventListener('click', function () {
+          if (busy) return;
+          document.getElementById('idx').value = 5;
+          document.getElementById('delta').value = 10;
+          run(function () { return doUpdate(5, 10); });
+        });
+
+        document.getElementById('demo-range').addEventListener('click', async function () {
+          if (busy) return;
+          lock(true);
+          // Range sum [3..6] = query(6) - query(2)
+          say('Range [3..6]', 'go',
+            '<strong>Range sum [3..6] = query(6) − query(2)</strong>. First computing query(6)…');
+          document.getElementById('k').value = 6;
+          await doQuery(6);
+          var r6 = lastResult;
+          await wait();
+          say('Range [3..6]', 'go',
+            '<strong>query(6) = ' + r6 + '</strong>. Now computing query(2) to subtract…');
+          document.getElementById('k').value = 2;
+          await doQuery(2);
+          var r2 = lastResult;
+          await wait();
+          lastResult = r6 - r2;
+          render({});
+          say('Range [3..6]', 'yes',
+            '<strong>Range sum [3..6] = query(6) − query(2) = ' + r6 + ' − ' + r2 + ' = ' + lastResult + '</strong>. Any range query reduces to two prefix queries — still O(log n).');
+          lock(false);
+        });
+
+        // ---- INIT ----
+        buildBIT();
+        render({});
+        say('Ready', null, '<strong>Default array loaded:</strong> a = [3,2,5,1,4,6,2,7]. The BIT is built from it. Enter <strong>k</strong> and press <strong>Query</strong> to see how prefix sum hops <em>down</em> via <code>i -= lowbit(i)</code>; enter <strong>idx</strong> + <strong>delta</strong> and press <strong>Update</strong> to watch the ripple go <em>up</em> via <code>i += lowbit(i)</code>.');
+
+        // ---- HEIGHT REPORTING ----
+        function postHeight() { try { parent.postMessage({ type: 'prototype:height', height: document.body.scrollHeight }, '*'); } catch (e) {} }
+        new ResizeObserver(postHeight).observe(document.body);
+        postHeight();
+      })();
+    </script>
+  </body>
+</html>

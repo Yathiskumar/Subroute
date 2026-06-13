@@ -999,6 +999,100 @@ export const TOPICS: Topic[] = [
     ],
   },
   {
+    slug: "trees",
+    title: "Trees",
+    description:
+      "The branching data structure under databases, filesystems, autocompletes, and priority queues. Nine trees, from the plain binary search tree through the self-balancing workhorses to the disk-friendly B-trees and the range-query structures competitive programmers swear by.",
+    difficulty: "intermediate",
+    icon: "ListTree",
+    tags: ["data-structures", "search", "fundamentals"],
+    estimatedTime: "95 min",
+    prerequisites: ["Pointers & references", "Recursion basics", "Big-O intuition"],
+    concepts: [
+      {
+        slug: "bst",
+        title: "Binary Search Tree",
+        oneLiner:
+          "Smaller keys go left, larger keys go right. Every search, insert, and delete is one walk down the tree — fast when balanced, a linked list when not.",
+        difficulty: "beginner",
+        estimatedTime: "10 min",
+        prototypePath: "/prototypes/trees/bst.html",
+      },
+      {
+        slug: "avl",
+        title: "AVL Tree",
+        oneLiner:
+          "A BST that refuses to lean. Track every node's balance factor and rotate the instant it hits ±2 — guaranteeing O(log n) forever.",
+        difficulty: "intermediate",
+        estimatedTime: "11 min",
+        prototypePath: "/prototypes/trees/avl.html",
+      },
+      {
+        slug: "red-black",
+        title: "Red-Black Tree",
+        oneLiner:
+          "Looser balancing through five color rules. Fewer rotations than AVL — which is why it's the tree inside your language's standard map and the Linux kernel.",
+        difficulty: "advanced",
+        estimatedTime: "12 min",
+        prototypePath: "/prototypes/trees/red-black.html",
+      },
+      {
+        slug: "heap",
+        title: "Binary Heap",
+        oneLiner:
+          "A complete binary tree where every parent beats its children. Stored in a plain array, it makes the smallest (or largest) item O(1) to peek and O(log n) to pull.",
+        difficulty: "beginner",
+        estimatedTime: "10 min",
+        prototypePath: "/prototypes/trees/heap.html",
+      },
+      {
+        slug: "trie",
+        title: "Trie (Prefix Tree)",
+        oneLiner:
+          "A tree keyed by characters, not whole values. Shared prefixes share a path — the structure behind autocomplete, spell-check, and IP routing tables.",
+        difficulty: "intermediate",
+        estimatedTime: "10 min",
+        prototypePath: "/prototypes/trees/trie.html",
+      },
+      {
+        slug: "b-tree",
+        title: "B-Tree",
+        oneLiner:
+          "A wide, shallow tree where each node holds many keys. Built so one disk read fetches a whole node — the index structure under most databases and filesystems.",
+        difficulty: "advanced",
+        estimatedTime: "12 min",
+        prototypePath: "/prototypes/trees/b-tree.html",
+      },
+      {
+        slug: "b-plus-tree",
+        title: "B+ Tree",
+        oneLiner:
+          "A B-tree that keeps all real data in the leaves and links those leaves in a chain — so range scans walk a list instead of re-descending the tree.",
+        difficulty: "advanced",
+        estimatedTime: "12 min",
+        prototypePath: "/prototypes/trees/b-plus-tree.html",
+      },
+      {
+        slug: "segment-tree",
+        title: "Segment Tree",
+        oneLiner:
+          "A tree of ranges over an array. Answer 'sum/min/max of indices l..r' and update any element, both in O(log n) — the competitive-programmer's range engine.",
+        difficulty: "advanced",
+        estimatedTime: "11 min",
+        prototypePath: "/prototypes/trees/segment-tree.html",
+      },
+      {
+        slug: "fenwick-tree",
+        title: "Fenwick Tree (BIT)",
+        oneLiner:
+          "Prefix sums with updates in O(log n) using nothing but an array and a bit trick. Smaller and simpler than a segment tree when all you need is sums.",
+        difficulty: "advanced",
+        estimatedTime: "11 min",
+        prototypePath: "/prototypes/trees/fenwick-tree.html",
+      },
+    ],
+  },
+  {
     slug: "bloom-filters",
     title: "Bloom & Cuckoo Filters",
     description:
