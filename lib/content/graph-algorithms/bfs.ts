@@ -2,7 +2,7 @@ import type { ConceptContent } from "@/lib/content/types";
 
 export const bfs: ConceptContent = {
   prototypeCaption:
-    "A seven-node graph, a queue, and a visit order. Press **Play** to watch BFS sweep outward in expanding rings, or use **Step** / **Back** to walk one dequeue at a time. The **Start** dropdown lets you re-run from any node so you can compare distance fields.",
+    "A seven-node graph *with cycles* — the same graph the DFS prototype uses — plus a queue and a visit order. Press **Play** to watch BFS sweep outward in expanding rings, or use **Step** / **Back** to walk one dequeue at a time. Green lines are the BFS tree (first-time discovery); the grey edges that stay grey are the cross edges that make this a graph rather than a tree. The **Start** dropdown re-runs from any node so you can compare distance fields.",
 
   overview: [
     {
@@ -91,7 +91,7 @@ export const bfs: ConceptContent = {
   handsOn: [
     {
       title: "01 · Play through one full BFS",
-      body: "Press **Play** and watch the orange ring sweep outward from **A**. Notice how every distance-1 neighbour (B, C) gets enqueued before any distance-2 neighbour. The colour transitions go *unseen → queued → visited* — same three-state pattern from the explanation.",
+      body: "Press **Play** and watch the orange ring sweep outward from **A**. Notice how both distance-1 neighbours (B, D) get enqueued before any distance-2 neighbour. The colour transitions go *unseen → queued → visited* — same three-state pattern from the explanation. Visit order from A: `A B D C E F G`.",
     },
     {
       title: "02 · Step through one dequeue at a time",
@@ -99,7 +99,7 @@ export const bfs: ConceptContent = {
     },
     {
       title: "03 · Try a different start node",
-      body: "Pick a leaf like **D** or **G** in the **Start** dropdown. The visit order changes completely — and so do the distances. From a leaf, BFS has to crawl back up through its only neighbour before fanning out, so the distance field looks lopsided.",
+      body: "Pick a low-degree corner like **D** or **F** (only two neighbours) in the **Start** dropdown. The visit order changes completely — and so do the distances. From the edge of the graph, BFS has to crawl inward before fanning out, so the distance field looks lopsided. Then start from the hub **E** (four neighbours) and watch the rings stay tight — most nodes are only one or two hops away.",
     },
     {
       title: "04 · Find the longest shortest path",
