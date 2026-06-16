@@ -2,60 +2,664 @@ import type { Topic } from "@/lib/types";
 
 export const TOPICS: Topic[] = [
   {
-    slug: "rate-limiting",
-    title: "Rate Limiting",
+    slug: "sorting",
+    title: "Sorting",
     description:
-      "Control request throughput so a noisy client cannot starve everyone else. Compare the five canonical algorithms side-by-side.",
+      "Order a list — ten ways. From the textbook swap-adjacent sorts you write in a single loop, to the divide-and-conquer giants, to the non-comparison tricks that beat O(n log n), to the hybrid your language's sort() actually uses.",
     difficulty: "intermediate",
-    icon: "Gauge",
-    tags: ["distributed", "api", "throughput"],
-    estimatedTime: "45 min",
-    prerequisites: ["HTTP basics", "Time complexity"],
+    icon: "ArrowDownAZ",
+    tags: ["algorithms", "arrays", "fundamentals"],
+    estimatedTime: "75 min",
+    prerequisites: ["Arrays & indexing", "Big-O intuition", "Recursion basics"],
     concepts: [
       {
-        slug: "token-bucket",
-        title: "Token Bucket Algorithm",
+        slug: "bubble",
+        title: "Bubble Sort",
         oneLiner:
-          "A refilling bucket of tokens lets bursts through, but caps the sustained rate.",
-        difficulty: "intermediate",
-        estimatedTime: "8 min",
-        prototypePath: "/prototypes/rate-limiting/token-bucket.html",
-      },
-      {
-        slug: "leaky-bucket",
-        title: "Leaky Bucket Algorithm",
-        oneLiner:
-          "Requests drain at a constant rate, regardless of how fast they arrive.",
-        difficulty: "intermediate",
-        estimatedTime: "7 min",
-        prototypePath: "/prototypes/rate-limiting/leaky-bucket.html",
-      },
-      {
-        slug: "fixed-window",
-        title: "Fixed Window Counter",
-        oneLiner:
-          "Count requests per discrete time window. Simple, but suffers boundary spikes.",
+          "Sweep through the list swapping any out-of-order neighbours. The biggest value bubbles to the end each pass.",
         difficulty: "beginner",
-        estimatedTime: "5 min",
-        prototypePath: "/prototypes/rate-limiting/fixed-window.html",
+        estimatedTime: "7 min",
+        prototypePath: "/prototypes/sorting/bubble.html",
       },
       {
-        slug: "sliding-window",
-        title: "Sliding Window Counter",
+        slug: "selection",
+        title: "Selection Sort",
         oneLiner:
-          "Smooth out boundary effects by tracking a rolling, weighted view.",
+          "Each round, find the smallest remaining value and swap it into the next sorted slot. One swap per pass — minimum movement.",
+        difficulty: "beginner",
+        estimatedTime: "7 min",
+        prototypePath: "/prototypes/sorting/selection.html",
+      },
+      {
+        slug: "insertion",
+        title: "Insertion Sort",
+        oneLiner:
+          "Pick up each value and slide it into its place in the sorted left side — exactly how you sort cards in your hand.",
+        difficulty: "beginner",
+        estimatedTime: "8 min",
+        prototypePath: "/prototypes/sorting/insertion.html",
+      },
+      {
+        slug: "merge",
+        title: "Merge Sort",
+        oneLiner:
+          "Split until each piece is one element, then merge sorted pairs back together. The classic O(n log n) divide-and-conquer.",
+        difficulty: "intermediate",
+        estimatedTime: "9 min",
+        prototypePath: "/prototypes/sorting/merge.html",
+      },
+      {
+        slug: "quick",
+        title: "Quick Sort",
+        oneLiner:
+          "Pick a pivot, partition the rest into smaller-than and larger-than, then recurse on each side. Fast in-place — and famously fragile on adversarial inputs.",
+        difficulty: "intermediate",
+        estimatedTime: "10 min",
+        prototypePath: "/prototypes/sorting/quick.html",
+      },
+      {
+        slug: "heap",
+        title: "Heap Sort",
+        oneLiner:
+          "Pour the array into a max-heap, then repeatedly pull the largest off the top. O(n log n) worst-case, in-place, no recursion.",
+        difficulty: "advanced",
+        estimatedTime: "10 min",
+        prototypePath: "/prototypes/sorting/heap.html",
+      },
+      {
+        slug: "counting",
+        title: "Counting Sort",
+        oneLiner:
+          "Tally each value, prefix-sum the tallies into end positions, then place every item directly. O(n + k) — no comparisons at all.",
         difficulty: "intermediate",
         estimatedTime: "8 min",
-        prototypePath: "/prototypes/rate-limiting/sliding-window.html",
+        prototypePath: "/prototypes/sorting/counting.html",
       },
       {
-        slug: "sliding-log",
-        title: "Sliding Window Log",
+        slug: "radix",
+        title: "Radix Sort",
         oneLiner:
-          "Precise but memory-heavy: keep a log of every request timestamp.",
+          "Sort by one digit at a time — ones, then tens, then hundreds — using a stable bucket pass per digit.",
         difficulty: "advanced",
         estimatedTime: "9 min",
-        prototypePath: "/prototypes/rate-limiting/sliding-log.html",
+        prototypePath: "/prototypes/sorting/radix.html",
+      },
+      {
+        slug: "bucket",
+        title: "Bucket Sort",
+        oneLiner:
+          "Scatter values into range buckets, sort each bucket on its own, then concatenate. Near-linear when the inputs are roughly uniform.",
+        difficulty: "advanced",
+        estimatedTime: "8 min",
+        prototypePath: "/prototypes/sorting/bucket.html",
+      },
+      {
+        slug: "timsort",
+        title: "Timsort",
+        oneLiner:
+          "Find runs already in order, pad short ones with insertion sort, then merge runs in stack order. The hybrid your language's sort() actually ships.",
+        difficulty: "advanced",
+        estimatedTime: "11 min",
+        prototypePath: "/prototypes/sorting/timsort.html",
+      },
+    ],
+  },
+  {
+    slug: "trees",
+    title: "Trees",
+    description:
+      "The branching data structure under databases, filesystems, autocompletes, and priority queues. Nine trees, from the plain binary search tree through the self-balancing workhorses to the disk-friendly B-trees and the range-query structures competitive programmers swear by.",
+    difficulty: "intermediate",
+    icon: "ListTree",
+    tags: ["data-structures", "search", "fundamentals"],
+    estimatedTime: "95 min",
+    prerequisites: ["Pointers & references", "Recursion basics", "Big-O intuition"],
+    concepts: [
+      {
+        slug: "bst",
+        title: "Binary Search Tree",
+        oneLiner:
+          "Smaller keys go left, larger keys go right. Every search, insert, and delete is one walk down the tree — fast when balanced, a linked list when not.",
+        difficulty: "beginner",
+        estimatedTime: "10 min",
+        prototypePath: "/prototypes/trees/bst.html",
+      },
+      {
+        slug: "avl",
+        title: "AVL Tree",
+        oneLiner:
+          "A BST that refuses to lean. Track every node's balance factor and rotate the instant it hits ±2 — guaranteeing O(log n) forever.",
+        difficulty: "intermediate",
+        estimatedTime: "11 min",
+        prototypePath: "/prototypes/trees/avl.html",
+      },
+      {
+        slug: "red-black",
+        title: "Red-Black Tree",
+        oneLiner:
+          "Looser balancing through five color rules. Fewer rotations than AVL — which is why it's the tree inside your language's standard map and the Linux kernel.",
+        difficulty: "advanced",
+        estimatedTime: "12 min",
+        prototypePath: "/prototypes/trees/red-black.html",
+      },
+      {
+        slug: "heap",
+        title: "Binary Heap",
+        oneLiner:
+          "A complete binary tree where every parent beats its children. Stored in a plain array, it makes the smallest (or largest) item O(1) to peek and O(log n) to pull.",
+        difficulty: "beginner",
+        estimatedTime: "10 min",
+        prototypePath: "/prototypes/trees/heap.html",
+      },
+      {
+        slug: "trie",
+        title: "Trie (Prefix Tree)",
+        oneLiner:
+          "A tree keyed by characters, not whole values. Shared prefixes share a path — the structure behind autocomplete, spell-check, and IP routing tables.",
+        difficulty: "intermediate",
+        estimatedTime: "10 min",
+        prototypePath: "/prototypes/trees/trie.html",
+      },
+      {
+        slug: "b-tree",
+        title: "B-Tree",
+        oneLiner:
+          "A wide, shallow tree where each node holds many keys. Built so one disk read fetches a whole node — the index structure under most databases and filesystems.",
+        difficulty: "advanced",
+        estimatedTime: "12 min",
+        prototypePath: "/prototypes/trees/b-tree.html",
+      },
+      {
+        slug: "b-plus-tree",
+        title: "B+ Tree",
+        oneLiner:
+          "A B-tree that keeps all real data in the leaves and links those leaves in a chain — so range scans walk a list instead of re-descending the tree.",
+        difficulty: "advanced",
+        estimatedTime: "12 min",
+        prototypePath: "/prototypes/trees/b-plus-tree.html",
+      },
+      {
+        slug: "segment-tree",
+        title: "Segment Tree",
+        oneLiner:
+          "A tree of ranges over an array. Answer 'sum/min/max of indices l..r' and update any element, both in O(log n) — the competitive-programmer's range engine.",
+        difficulty: "advanced",
+        estimatedTime: "11 min",
+        prototypePath: "/prototypes/trees/segment-tree.html",
+      },
+      {
+        slug: "fenwick-tree",
+        title: "Fenwick Tree (BIT)",
+        oneLiner:
+          "Prefix sums with updates in O(log n) using nothing but an array and a bit trick. Smaller and simpler than a segment tree when all you need is sums.",
+        difficulty: "advanced",
+        estimatedTime: "11 min",
+        prototypePath: "/prototypes/trees/fenwick-tree.html",
+      },
+    ],
+  },
+  {
+    slug: "graph-theory",
+    title: "Graph Theory",
+    description:
+      "Before the algorithms, the shapes. Eight kinds of graph — directed and undirected, weighted and not, complete, bipartite, cyclic, and the all-important DAG — and how each property decides what you're allowed to do with the graph.",
+    difficulty: "beginner",
+    icon: "Network",
+    tags: ["graphs", "fundamentals", "data-structures"],
+    estimatedTime: "70 min",
+    prerequisites: ["Sets & maps", "Big-O intuition"],
+    concepts: [
+      {
+        slug: "undirected-graph",
+        title: "Undirected Graphs",
+        oneLiner:
+          "Vertices joined by two-way edges — the plainest graph there is. Meet degree, paths, components, and the handshake lemma.",
+        difficulty: "beginner",
+        estimatedTime: "8 min",
+        prototypePath: "/prototypes/graph-theory/undirected-graph.html",
+      },
+      {
+        slug: "directed-graph",
+        title: "Directed Graphs",
+        oneLiner:
+          "Give each edge an arrow and 'connected' splits into in-degree and out-degree — A reaching B no longer means B reaches A.",
+        difficulty: "beginner",
+        estimatedTime: "9 min",
+        prototypePath: "/prototypes/graph-theory/directed-graph.html",
+      },
+      {
+        slug: "unweighted-graph",
+        title: "Unweighted Graphs",
+        oneLiner:
+          "Every edge counts the same, so 'shortest path' means fewest hops — and BFS reads the distance off in expanding rings.",
+        difficulty: "beginner",
+        estimatedTime: "8 min",
+        prototypePath: "/prototypes/graph-theory/unweighted-graph.html",
+      },
+      {
+        slug: "weighted-graph",
+        title: "Weighted Graphs",
+        oneLiner:
+          "Put a cost on every edge and the cheapest route stops being the one with the fewest hops. The shape that makes Dijkstra necessary.",
+        difficulty: "intermediate",
+        estimatedTime: "9 min",
+        prototypePath: "/prototypes/graph-theory/weighted-graph.html",
+      },
+      {
+        slug: "complete-graph",
+        title: "Complete Graphs (Kₙ)",
+        oneLiner:
+          "Every node joined to every other. The densest graph possible — exactly n(n−1)/2 edges — and the worst case every algorithm fears.",
+        difficulty: "beginner",
+        estimatedTime: "8 min",
+        prototypePath: "/prototypes/graph-theory/complete-graph.html",
+      },
+      {
+        slug: "bipartite-graph",
+        title: "Bipartite Graphs",
+        oneLiner:
+          "Nodes split into two sides with edges only crossing between them. Two-colourable exactly when there's no odd cycle.",
+        difficulty: "intermediate",
+        estimatedTime: "9 min",
+        prototypePath: "/prototypes/graph-theory/bipartite-graph.html",
+      },
+      {
+        slug: "cyclic-graph",
+        title: "Cyclic Graphs",
+        oneLiner:
+          "A graph you can walk in a circle. Spotting the loop — the back edge to a node still on the stack — is the whole game.",
+        difficulty: "intermediate",
+        estimatedTime: "9 min",
+        prototypePath: "/prototypes/graph-theory/cyclic-graph.html",
+      },
+      {
+        slug: "dag",
+        title: "Directed Acyclic Graphs",
+        oneLiner:
+          "Directed, with no way to loop back. The shape behind build systems and schedulers — it always has a topological order.",
+        difficulty: "intermediate",
+        estimatedTime: "10 min",
+        prototypePath: "/prototypes/graph-theory/dag.html",
+      },
+    ],
+  },
+  {
+    slug: "graph-algorithms",
+    title: "Graph Algorithms",
+    description:
+      "How computers reason about networks of things — roads, friends, packets, dependencies. Ten algorithms, from the two traversals every other algorithm is built on, to weighted shortest paths, minimum spanning trees, and the heuristic search behind every modern pathfinder.",
+    difficulty: "intermediate",
+    icon: "Waypoints",
+    tags: ["algorithms", "graphs", "fundamentals"],
+    estimatedTime: "100 min",
+    prerequisites: ["Arrays & maps", "Queues & stacks", "Big-O intuition"],
+    concepts: [
+      {
+        slug: "bfs",
+        title: "Breadth-First Search",
+        oneLiner:
+          "Visit a graph in expanding rings from the start — the foundation under shortest paths in unweighted graphs and almost every layered algorithm.",
+        difficulty: "beginner",
+        estimatedTime: "10 min",
+        prototypePath: "/prototypes/graph-algorithms/bfs.html",
+      },
+      {
+        slug: "dfs",
+        title: "Depth-First Search",
+        oneLiner:
+          "Go as deep as you can, then back up. The recursive twin of BFS — the engine behind cycle detection, topological sort, and connected components.",
+        difficulty: "beginner",
+        estimatedTime: "10 min",
+        prototypePath: "/prototypes/graph-algorithms/dfs.html",
+      },
+      {
+        slug: "topological-sort",
+        title: "Topological Sort",
+        oneLiner:
+          "Order the nodes of a DAG so every edge points forward. The classic build-order, course-prerequisite, and task-scheduling primitive.",
+        difficulty: "intermediate",
+        estimatedTime: "10 min",
+        prototypePath: "/prototypes/graph-algorithms/topological-sort.html",
+      },
+      {
+        slug: "dijkstra",
+        title: "Dijkstra's Shortest Path",
+        oneLiner:
+          "Single-source shortest paths in a non-negative weighted graph — grow a frontier by always settling the closest unsettled node.",
+        difficulty: "intermediate",
+        estimatedTime: "12 min",
+        prototypePath: "/prototypes/graph-algorithms/dijkstra.html",
+      },
+      {
+        slug: "bellman-ford",
+        title: "Bellman-Ford",
+        oneLiner:
+          "Single-source shortest paths that survive negative edges. Relax every edge n-1 times — slower than Dijkstra, but catches negative cycles.",
+        difficulty: "intermediate",
+        estimatedTime: "11 min",
+        prototypePath: "/prototypes/graph-algorithms/bellman-ford.html",
+      },
+      {
+        slug: "floyd-warshall",
+        title: "Floyd-Warshall",
+        oneLiner:
+          "All-pairs shortest paths in three nested loops. A dense-matrix DP that's still the right tool when you need every distance.",
+        difficulty: "advanced",
+        estimatedTime: "11 min",
+        prototypePath: "/prototypes/graph-algorithms/floyd-warshall.html",
+      },
+      {
+        slug: "union-find",
+        title: "Union-Find (DSU)",
+        oneLiner:
+          "Disjoint sets in near-constant time. The data structure that makes Kruskal's MST, connectivity queries, and Kruskal-like sweeps actually fast.",
+        difficulty: "intermediate",
+        estimatedTime: "10 min",
+        prototypePath: "/prototypes/graph-algorithms/union-find.html",
+      },
+      {
+        slug: "kruskal",
+        title: "Kruskal's MST",
+        oneLiner:
+          "Sort the edges, add the cheapest one that doesn't form a cycle. Union-Find polices the cycle check in α(n) per edge.",
+        difficulty: "intermediate",
+        estimatedTime: "11 min",
+        prototypePath: "/prototypes/graph-algorithms/kruskal.html",
+      },
+      {
+        slug: "prim",
+        title: "Prim's MST",
+        oneLiner:
+          "Grow one tree from a seed node, always pulling in the cheapest edge that reaches a new vertex. Dijkstra's twin for spanning trees.",
+        difficulty: "intermediate",
+        estimatedTime: "11 min",
+        prototypePath: "/prototypes/graph-algorithms/prim.html",
+      },
+      {
+        slug: "astar",
+        title: "A* Search",
+        oneLiner:
+          "Dijkstra plus a heuristic that whispers 'go this way.' The pathfinder behind game AI, GPS routing, and robotics motion planning.",
+        difficulty: "advanced",
+        estimatedTime: "12 min",
+        prototypePath: "/prototypes/graph-algorithms/astar.html",
+      },
+    ],
+  },
+  {
+    slug: "bloom-filters",
+    title: "Bloom & Cuckoo Filters",
+    description:
+      "Three probabilistic set-membership structures that answer 'have I seen this before?' in a few bytes per item. From the classic bit-array Bloom filter to the counting variant that can delete, to the cuckoo filter that does it all with a smaller memory footprint.",
+    difficulty: "intermediate",
+    icon: "Filter",
+    tags: ["data-structures", "memory", "probabilistic"],
+    estimatedTime: "35 min",
+    prerequisites: ["Hash functions", "Bit arrays", "Set membership"],
+    concepts: [
+      {
+        slug: "bloom",
+        title: "Bloom Filter",
+        oneLiner:
+          "A bit array plus a few hash functions: definitely-not or maybe-yes membership, in a fraction of the memory a hash set needs.",
+        difficulty: "beginner",
+        estimatedTime: "10 min",
+        prototypePath: "/prototypes/bloom-filters/bloom.html",
+      },
+      {
+        slug: "counting-bloom",
+        title: "Counting Bloom Filter",
+        oneLiner:
+          "Each bit becomes a small counter so items can be removed by decrementing — at roughly 4× the memory of a vanilla Bloom filter.",
+        difficulty: "intermediate",
+        estimatedTime: "10 min",
+        prototypePath: "/prototypes/bloom-filters/counting-bloom.html",
+      },
+      {
+        slug: "cuckoo",
+        title: "Cuckoo Filter",
+        oneLiner:
+          "Store short fingerprints in two candidate buckets and bump existing entries to their other home on collision. Delete-supporting and usually smaller than Bloom.",
+        difficulty: "advanced",
+        estimatedTime: "12 min",
+        prototypePath: "/prototypes/bloom-filters/cuckoo.html",
+      },
+    ],
+  },
+  {
+    slug: "memory-allocation",
+    title: "Memory Allocation",
+    description:
+      "Before garbage collection ever runs, something has to hand out the memory. Six allocators — four ways to pick a hole, plus the two structured schemes real kernels actually ship.",
+    difficulty: "intermediate",
+    icon: "MemoryStick",
+    tags: ["memory", "runtime", "performance"],
+    estimatedTime: "70 min",
+    prerequisites: ["Pointers & addresses", "Heap basics", "Big-O intuition"],
+    concepts: [
+      {
+        slug: "first-fit",
+        title: "First Fit",
+        oneLiner:
+          "Scan from the start, grab the first hole big enough. The fast, simple default — and where fragmentation begins.",
+        difficulty: "beginner",
+        estimatedTime: "9 min",
+        prototypePath: "/prototypes/memory-allocation/first-fit.html",
+      },
+      {
+        slug: "best-fit",
+        title: "Best Fit",
+        oneLiner:
+          "Check every hole, take the smallest one that fits. Minimizes leftover — and breeds tiny, useless slivers.",
+        difficulty: "intermediate",
+        estimatedTime: "10 min",
+        prototypePath: "/prototypes/memory-allocation/best-fit.html",
+      },
+      {
+        slug: "worst-fit",
+        title: "Worst Fit",
+        oneLiner:
+          "Always carve from the largest hole. The intuition is to leave reusable leftovers — it usually backfires.",
+        difficulty: "intermediate",
+        estimatedTime: "9 min",
+        prototypePath: "/prototypes/memory-allocation/worst-fit.html",
+      },
+      {
+        slug: "next-fit",
+        title: "Next Fit",
+        oneLiner:
+          "First Fit with a memory: resume scanning where you stopped last time, wrapping around the end.",
+        difficulty: "intermediate",
+        estimatedTime: "9 min",
+        prototypePath: "/prototypes/memory-allocation/next-fit.html",
+      },
+      {
+        slug: "buddy",
+        title: "Buddy System",
+        oneLiner:
+          "Round up to a power of two, split blocks in half to fit, and merge buddies back on free. Fast coalescing, at the cost of internal waste.",
+        difficulty: "advanced",
+        estimatedTime: "12 min",
+        prototypePath: "/prototypes/memory-allocation/buddy.html",
+      },
+      {
+        slug: "slab",
+        title: "Slab Allocation",
+        oneLiner:
+          "Pre-size caches of fixed slots per object type. O(1) allocation, zero external fragmentation — the kernel's workhorse.",
+        difficulty: "advanced",
+        estimatedTime: "12 min",
+        prototypePath: "/prototypes/memory-allocation/slab.html",
+      },
+    ],
+  },
+  {
+    slug: "garbage-collection",
+    title: "Garbage Collection",
+    description:
+      "How a runtime reclaims memory you stopped using — without you ever calling free(). Eight algorithms, from the counter on every object to the collectors that run alongside your program.",
+    difficulty: "advanced",
+    icon: "Recycle",
+    tags: ["memory", "runtime", "performance"],
+    estimatedTime: "90 min",
+    prerequisites: ["Pointers & references", "Graphs & reachability", "Heap basics"],
+    concepts: [
+      {
+        slug: "reference-counting",
+        title: "Reference Counting",
+        oneLiner:
+          "Every object carries a count of who points at it. Hits zero, it dies — instantly, but cycles leak.",
+        difficulty: "beginner",
+        estimatedTime: "8 min",
+        prototypePath: "/prototypes/garbage-collection/reference-counting.html",
+      },
+      {
+        slug: "mark-sweep",
+        title: "Mark & Sweep",
+        oneLiner:
+          "Trace from the roots, mark everything reachable, then sweep the rest. The tracing collector in its purest form.",
+        difficulty: "intermediate",
+        estimatedTime: "9 min",
+        prototypePath: "/prototypes/garbage-collection/mark-sweep.html",
+      },
+      {
+        slug: "mark-compact",
+        title: "Mark-Compact",
+        oneLiner:
+          "Mark the living, then slide them together to squeeze out the holes. Defeats fragmentation at a copying cost.",
+        difficulty: "intermediate",
+        estimatedTime: "10 min",
+        prototypePath: "/prototypes/garbage-collection/mark-compact.html",
+      },
+      {
+        slug: "copying-cheney",
+        title: "Copying — Cheney's Algorithm",
+        oneLiner:
+          "Two half-heaps. Copy the survivors to the empty half with a tidy breadth-first scan, then swap. Allocation becomes a pointer bump.",
+        difficulty: "intermediate",
+        estimatedTime: "11 min",
+        prototypePath: "/prototypes/garbage-collection/copying-cheney.html",
+      },
+      {
+        slug: "generational",
+        title: "Generational GC",
+        oneLiner:
+          "Most objects die young, so collect the nursery often and the old guard rarely. The weak generational hypothesis, exploited.",
+        difficulty: "advanced",
+        estimatedTime: "11 min",
+        prototypePath: "/prototypes/garbage-collection/generational.html",
+      },
+      {
+        slug: "tri-color",
+        title: "Tri-Color Marking",
+        oneLiner:
+          "White, grey, black — an invariant that lets a collector mark the heap while the program keeps mutating it.",
+        difficulty: "advanced",
+        estimatedTime: "10 min",
+        prototypePath: "/prototypes/garbage-collection/tri-color.html",
+      },
+      {
+        slug: "incremental",
+        title: "Incremental GC",
+        oneLiner:
+          "Slice the collection into tiny steps interleaved with the program, trading throughput for short pauses.",
+        difficulty: "advanced",
+        estimatedTime: "10 min",
+        prototypePath: "/prototypes/garbage-collection/incremental.html",
+      },
+      {
+        slug: "concurrent-mark-sweep",
+        title: "Concurrent Mark-Sweep",
+        oneLiner:
+          "Run the collector on its own thread, in parallel with the application, with write barriers keeping the marking honest.",
+        difficulty: "advanced",
+        estimatedTime: "12 min",
+        prototypePath: "/prototypes/garbage-collection/concurrent-mark-sweep.html",
+      },
+    ],
+  },
+  {
+    slug: "page-replacement",
+    title: "Page Replacement",
+    description:
+      "When memory is full and a new page must come in, which page do you throw out? Eight algorithms, from the simple FIFO baseline through the unbeatable Optimal to the LRU approximations real operating systems actually ship.",
+    difficulty: "intermediate",
+    icon: "Replace",
+    tags: ["os", "memory", "caching"],
+    estimatedTime: "70 min",
+    prerequisites: ["Virtual memory basics", "Pages and frames", "Hit/miss intuition"],
+    concepts: [
+      {
+        slug: "fifo",
+        title: "FIFO",
+        oneLiner:
+          "Evict the oldest-loaded page. The simplest baseline — and the famous home of Belady's anomaly, where more memory can mean more faults.",
+        difficulty: "beginner",
+        estimatedTime: "8 min",
+        prototypePath: "/prototypes/page-replacement/fifo.html",
+      },
+      {
+        slug: "optimal",
+        title: "Optimal (Belady's)",
+        oneLiner:
+          "Evict the page used furthest in the future. Unbeatable but unimplementable — it needs to see the future, so it's the yardstick every real policy is measured against.",
+        difficulty: "intermediate",
+        estimatedTime: "8 min",
+        prototypePath: "/prototypes/page-replacement/optimal.html",
+      },
+      {
+        slug: "lru",
+        title: "LRU",
+        oneLiner:
+          "Evict the least-recently-used page. Bet the recent past predicts the near future — the practical gold standard that often lands close to Optimal.",
+        difficulty: "intermediate",
+        estimatedTime: "9 min",
+        prototypePath: "/prototypes/page-replacement/lru.html",
+      },
+      {
+        slug: "second-chance",
+        title: "Second Chance",
+        oneLiner:
+          "FIFO plus one reference bit: spare a page that was used recently by rotating it to the back instead of evicting it. The cheap upgrade over FIFO.",
+        difficulty: "intermediate",
+        estimatedTime: "8 min",
+        prototypePath: "/prototypes/page-replacement/second-chance.html",
+      },
+      {
+        slug: "clock",
+        title: "Clock",
+        oneLiner:
+          "Second Chance done efficiently: pages stay in a ring and a hand sweeps for a victim. The LRU approximation operating systems and buffer pools really ship.",
+        difficulty: "intermediate",
+        estimatedTime: "9 min",
+        prototypePath: "/prototypes/page-replacement/clock.html",
+      },
+      {
+        slug: "nru",
+        title: "NRU",
+        oneLiner:
+          "Sort pages into four classes by referenced and dirty bits, then evict from the cheapest class — folding writeback cost into the decision.",
+        difficulty: "intermediate",
+        estimatedTime: "9 min",
+        prototypePath: "/prototypes/page-replacement/nru.html",
+      },
+      {
+        slug: "aging",
+        title: "Aging",
+        oneLiner:
+          "Give each page a shift-register counter that ages old use away one bit at a time. Software's close, cheap imitation of LRU.",
+        difficulty: "advanced",
+        estimatedTime: "10 min",
+        prototypePath: "/prototypes/page-replacement/aging.html",
+      },
+      {
+        slug: "lfu",
+        title: "LFU",
+        oneLiner:
+          "Evict the least-frequently-used page. Popularity over recency — great for a stable hot set, but stale-but-popular pages cling forever without decay.",
+        difficulty: "advanced",
+        estimatedTime: "9 min",
+        prototypePath: "/prototypes/page-replacement/lfu.html",
       },
     ],
   },
@@ -203,154 +807,60 @@ export const TOPICS: Topic[] = [
     ],
   },
   {
-    slug: "garbage-collection",
-    title: "Garbage Collection",
+    slug: "rate-limiting",
+    title: "Rate Limiting",
     description:
-      "How a runtime reclaims memory you stopped using — without you ever calling free(). Eight algorithms, from the counter on every object to the collectors that run alongside your program.",
-    difficulty: "advanced",
-    icon: "Recycle",
-    tags: ["memory", "runtime", "performance"],
-    estimatedTime: "90 min",
-    prerequisites: ["Pointers & references", "Graphs & reachability", "Heap basics"],
-    concepts: [
-      {
-        slug: "reference-counting",
-        title: "Reference Counting",
-        oneLiner:
-          "Every object carries a count of who points at it. Hits zero, it dies — instantly, but cycles leak.",
-        difficulty: "beginner",
-        estimatedTime: "8 min",
-        prototypePath: "/prototypes/garbage-collection/reference-counting.html",
-      },
-      {
-        slug: "mark-sweep",
-        title: "Mark & Sweep",
-        oneLiner:
-          "Trace from the roots, mark everything reachable, then sweep the rest. The tracing collector in its purest form.",
-        difficulty: "intermediate",
-        estimatedTime: "9 min",
-        prototypePath: "/prototypes/garbage-collection/mark-sweep.html",
-      },
-      {
-        slug: "mark-compact",
-        title: "Mark-Compact",
-        oneLiner:
-          "Mark the living, then slide them together to squeeze out the holes. Defeats fragmentation at a copying cost.",
-        difficulty: "intermediate",
-        estimatedTime: "10 min",
-        prototypePath: "/prototypes/garbage-collection/mark-compact.html",
-      },
-      {
-        slug: "copying-cheney",
-        title: "Copying — Cheney's Algorithm",
-        oneLiner:
-          "Two half-heaps. Copy the survivors to the empty half with a tidy breadth-first scan, then swap. Allocation becomes a pointer bump.",
-        difficulty: "intermediate",
-        estimatedTime: "11 min",
-        prototypePath: "/prototypes/garbage-collection/copying-cheney.html",
-      },
-      {
-        slug: "generational",
-        title: "Generational GC",
-        oneLiner:
-          "Most objects die young, so collect the nursery often and the old guard rarely. The weak generational hypothesis, exploited.",
-        difficulty: "advanced",
-        estimatedTime: "11 min",
-        prototypePath: "/prototypes/garbage-collection/generational.html",
-      },
-      {
-        slug: "tri-color",
-        title: "Tri-Color Marking",
-        oneLiner:
-          "White, grey, black — an invariant that lets a collector mark the heap while the program keeps mutating it.",
-        difficulty: "advanced",
-        estimatedTime: "10 min",
-        prototypePath: "/prototypes/garbage-collection/tri-color.html",
-      },
-      {
-        slug: "incremental",
-        title: "Incremental GC",
-        oneLiner:
-          "Slice the collection into tiny steps interleaved with the program, trading throughput for short pauses.",
-        difficulty: "advanced",
-        estimatedTime: "10 min",
-        prototypePath: "/prototypes/garbage-collection/incremental.html",
-      },
-      {
-        slug: "concurrent-mark-sweep",
-        title: "Concurrent Mark-Sweep",
-        oneLiner:
-          "Run the collector on its own thread, in parallel with the application, with write barriers keeping the marking honest.",
-        difficulty: "advanced",
-        estimatedTime: "12 min",
-        prototypePath: "/prototypes/garbage-collection/concurrent-mark-sweep.html",
-      },
-    ],
-  },
-  {
-    slug: "memory-allocation",
-    title: "Memory Allocation",
-    description:
-      "Before garbage collection ever runs, something has to hand out the memory. Six allocators — four ways to pick a hole, plus the two structured schemes real kernels actually ship.",
+      "Control request throughput so a noisy client cannot starve everyone else. Compare the five canonical algorithms side-by-side.",
     difficulty: "intermediate",
-    icon: "MemoryStick",
-    tags: ["memory", "runtime", "performance"],
-    estimatedTime: "70 min",
-    prerequisites: ["Pointers & addresses", "Heap basics", "Big-O intuition"],
+    icon: "Gauge",
+    tags: ["distributed", "api", "throughput"],
+    estimatedTime: "45 min",
+    prerequisites: ["HTTP basics", "Time complexity"],
     concepts: [
       {
-        slug: "first-fit",
-        title: "First Fit",
+        slug: "token-bucket",
+        title: "Token Bucket Algorithm",
         oneLiner:
-          "Scan from the start, grab the first hole big enough. The fast, simple default — and where fragmentation begins.",
+          "A refilling bucket of tokens lets bursts through, but caps the sustained rate.",
+        difficulty: "intermediate",
+        estimatedTime: "8 min",
+        prototypePath: "/prototypes/rate-limiting/token-bucket.html",
+      },
+      {
+        slug: "leaky-bucket",
+        title: "Leaky Bucket Algorithm",
+        oneLiner:
+          "Requests drain at a constant rate, regardless of how fast they arrive.",
+        difficulty: "intermediate",
+        estimatedTime: "7 min",
+        prototypePath: "/prototypes/rate-limiting/leaky-bucket.html",
+      },
+      {
+        slug: "fixed-window",
+        title: "Fixed Window Counter",
+        oneLiner:
+          "Count requests per discrete time window. Simple, but suffers boundary spikes.",
         difficulty: "beginner",
-        estimatedTime: "9 min",
-        prototypePath: "/prototypes/memory-allocation/first-fit.html",
+        estimatedTime: "5 min",
+        prototypePath: "/prototypes/rate-limiting/fixed-window.html",
       },
       {
-        slug: "best-fit",
-        title: "Best Fit",
+        slug: "sliding-window",
+        title: "Sliding Window Counter",
         oneLiner:
-          "Check every hole, take the smallest one that fits. Minimizes leftover — and breeds tiny, useless slivers.",
+          "Smooth out boundary effects by tracking a rolling, weighted view.",
         difficulty: "intermediate",
-        estimatedTime: "10 min",
-        prototypePath: "/prototypes/memory-allocation/best-fit.html",
+        estimatedTime: "8 min",
+        prototypePath: "/prototypes/rate-limiting/sliding-window.html",
       },
       {
-        slug: "worst-fit",
-        title: "Worst Fit",
+        slug: "sliding-log",
+        title: "Sliding Window Log",
         oneLiner:
-          "Always carve from the largest hole. The intuition is to leave reusable leftovers — it usually backfires.",
-        difficulty: "intermediate",
-        estimatedTime: "9 min",
-        prototypePath: "/prototypes/memory-allocation/worst-fit.html",
-      },
-      {
-        slug: "next-fit",
-        title: "Next Fit",
-        oneLiner:
-          "First Fit with a memory: resume scanning where you stopped last time, wrapping around the end.",
-        difficulty: "intermediate",
-        estimatedTime: "9 min",
-        prototypePath: "/prototypes/memory-allocation/next-fit.html",
-      },
-      {
-        slug: "buddy",
-        title: "Buddy System",
-        oneLiner:
-          "Round up to a power of two, split blocks in half to fit, and merge buddies back on free. Fast coalescing, at the cost of internal waste.",
+          "Precise but memory-heavy: keep a log of every request timestamp.",
         difficulty: "advanced",
-        estimatedTime: "12 min",
-        prototypePath: "/prototypes/memory-allocation/buddy.html",
-      },
-      {
-        slug: "slab",
-        title: "Slab Allocation",
-        oneLiner:
-          "Pre-size caches of fixed slots per object type. O(1) allocation, zero external fragmentation — the kernel's workhorse.",
-        difficulty: "advanced",
-        estimatedTime: "12 min",
-        prototypePath: "/prototypes/memory-allocation/slab.html",
+        estimatedTime: "9 min",
+        prototypePath: "/prototypes/rate-limiting/sliding-log.html",
       },
     ],
   },
@@ -503,91 +1013,6 @@ export const TOPICS: Topic[] = [
         difficulty: "advanced",
         estimatedTime: "12 min",
         prototypePath: "/prototypes/consistent-hashing/maglev.html",
-      },
-    ],
-  },
-  {
-    slug: "page-replacement",
-    title: "Page Replacement",
-    description:
-      "When memory is full and a new page must come in, which page do you throw out? Eight algorithms, from the simple FIFO baseline through the unbeatable Optimal to the LRU approximations real operating systems actually ship.",
-    difficulty: "intermediate",
-    icon: "Replace",
-    tags: ["os", "memory", "caching"],
-    estimatedTime: "70 min",
-    prerequisites: ["Virtual memory basics", "Pages and frames", "Hit/miss intuition"],
-    concepts: [
-      {
-        slug: "fifo",
-        title: "FIFO",
-        oneLiner:
-          "Evict the oldest-loaded page. The simplest baseline — and the famous home of Belady's anomaly, where more memory can mean more faults.",
-        difficulty: "beginner",
-        estimatedTime: "8 min",
-        prototypePath: "/prototypes/page-replacement/fifo.html",
-      },
-      {
-        slug: "optimal",
-        title: "Optimal (Belady's)",
-        oneLiner:
-          "Evict the page used furthest in the future. Unbeatable but unimplementable — it needs to see the future, so it's the yardstick every real policy is measured against.",
-        difficulty: "intermediate",
-        estimatedTime: "8 min",
-        prototypePath: "/prototypes/page-replacement/optimal.html",
-      },
-      {
-        slug: "lru",
-        title: "LRU",
-        oneLiner:
-          "Evict the least-recently-used page. Bet the recent past predicts the near future — the practical gold standard that often lands close to Optimal.",
-        difficulty: "intermediate",
-        estimatedTime: "9 min",
-        prototypePath: "/prototypes/page-replacement/lru.html",
-      },
-      {
-        slug: "second-chance",
-        title: "Second Chance",
-        oneLiner:
-          "FIFO plus one reference bit: spare a page that was used recently by rotating it to the back instead of evicting it. The cheap upgrade over FIFO.",
-        difficulty: "intermediate",
-        estimatedTime: "8 min",
-        prototypePath: "/prototypes/page-replacement/second-chance.html",
-      },
-      {
-        slug: "clock",
-        title: "Clock",
-        oneLiner:
-          "Second Chance done efficiently: pages stay in a ring and a hand sweeps for a victim. The LRU approximation operating systems and buffer pools really ship.",
-        difficulty: "intermediate",
-        estimatedTime: "9 min",
-        prototypePath: "/prototypes/page-replacement/clock.html",
-      },
-      {
-        slug: "nru",
-        title: "NRU",
-        oneLiner:
-          "Sort pages into four classes by referenced and dirty bits, then evict from the cheapest class — folding writeback cost into the decision.",
-        difficulty: "intermediate",
-        estimatedTime: "9 min",
-        prototypePath: "/prototypes/page-replacement/nru.html",
-      },
-      {
-        slug: "aging",
-        title: "Aging",
-        oneLiner:
-          "Give each page a shift-register counter that ages old use away one bit at a time. Software's close, cheap imitation of LRU.",
-        difficulty: "advanced",
-        estimatedTime: "10 min",
-        prototypePath: "/prototypes/page-replacement/aging.html",
-      },
-      {
-        slug: "lfu",
-        title: "LFU",
-        oneLiner:
-          "Evict the least-frequently-used page. Popularity over recency — great for a stable hot set, but stale-but-popular pages cling forever without decay.",
-        difficulty: "advanced",
-        estimatedTime: "9 min",
-        prototypePath: "/prototypes/page-replacement/lfu.html",
       },
     ],
   },
@@ -789,346 +1214,6 @@ export const TOPICS: Topic[] = [
         difficulty: "advanced",
         estimatedTime: "12 min",
         prototypePath: "/prototypes/leader-election/zookeeper.html",
-      },
-    ],
-  },
-  {
-    slug: "sorting",
-    title: "Sorting",
-    description:
-      "Order a list — ten ways. From the textbook swap-adjacent sorts you write in a single loop, to the divide-and-conquer giants, to the non-comparison tricks that beat O(n log n), to the hybrid your language's sort() actually uses.",
-    difficulty: "intermediate",
-    icon: "ArrowDownAZ",
-    tags: ["algorithms", "arrays", "fundamentals"],
-    estimatedTime: "75 min",
-    prerequisites: ["Arrays & indexing", "Big-O intuition", "Recursion basics"],
-    concepts: [
-      {
-        slug: "bubble",
-        title: "Bubble Sort",
-        oneLiner:
-          "Sweep through the list swapping any out-of-order neighbours. The biggest value bubbles to the end each pass.",
-        difficulty: "beginner",
-        estimatedTime: "7 min",
-        prototypePath: "/prototypes/sorting/bubble.html",
-      },
-      {
-        slug: "selection",
-        title: "Selection Sort",
-        oneLiner:
-          "Each round, find the smallest remaining value and swap it into the next sorted slot. One swap per pass — minimum movement.",
-        difficulty: "beginner",
-        estimatedTime: "7 min",
-        prototypePath: "/prototypes/sorting/selection.html",
-      },
-      {
-        slug: "insertion",
-        title: "Insertion Sort",
-        oneLiner:
-          "Pick up each value and slide it into its place in the sorted left side — exactly how you sort cards in your hand.",
-        difficulty: "beginner",
-        estimatedTime: "8 min",
-        prototypePath: "/prototypes/sorting/insertion.html",
-      },
-      {
-        slug: "merge",
-        title: "Merge Sort",
-        oneLiner:
-          "Split until each piece is one element, then merge sorted pairs back together. The classic O(n log n) divide-and-conquer.",
-        difficulty: "intermediate",
-        estimatedTime: "9 min",
-        prototypePath: "/prototypes/sorting/merge.html",
-      },
-      {
-        slug: "quick",
-        title: "Quick Sort",
-        oneLiner:
-          "Pick a pivot, partition the rest into smaller-than and larger-than, then recurse on each side. Fast in-place — and famously fragile on adversarial inputs.",
-        difficulty: "intermediate",
-        estimatedTime: "10 min",
-        prototypePath: "/prototypes/sorting/quick.html",
-      },
-      {
-        slug: "heap",
-        title: "Heap Sort",
-        oneLiner:
-          "Pour the array into a max-heap, then repeatedly pull the largest off the top. O(n log n) worst-case, in-place, no recursion.",
-        difficulty: "advanced",
-        estimatedTime: "10 min",
-        prototypePath: "/prototypes/sorting/heap.html",
-      },
-      {
-        slug: "counting",
-        title: "Counting Sort",
-        oneLiner:
-          "Tally each value, prefix-sum the tallies into end positions, then place every item directly. O(n + k) — no comparisons at all.",
-        difficulty: "intermediate",
-        estimatedTime: "8 min",
-        prototypePath: "/prototypes/sorting/counting.html",
-      },
-      {
-        slug: "radix",
-        title: "Radix Sort",
-        oneLiner:
-          "Sort by one digit at a time — ones, then tens, then hundreds — using a stable bucket pass per digit.",
-        difficulty: "advanced",
-        estimatedTime: "9 min",
-        prototypePath: "/prototypes/sorting/radix.html",
-      },
-      {
-        slug: "bucket",
-        title: "Bucket Sort",
-        oneLiner:
-          "Scatter values into range buckets, sort each bucket on its own, then concatenate. Near-linear when the inputs are roughly uniform.",
-        difficulty: "advanced",
-        estimatedTime: "8 min",
-        prototypePath: "/prototypes/sorting/bucket.html",
-      },
-      {
-        slug: "timsort",
-        title: "Timsort",
-        oneLiner:
-          "Find runs already in order, pad short ones with insertion sort, then merge runs in stack order. The hybrid your language's sort() actually ships.",
-        difficulty: "advanced",
-        estimatedTime: "11 min",
-        prototypePath: "/prototypes/sorting/timsort.html",
-      },
-    ],
-  },
-  {
-    slug: "graph-algorithms",
-    title: "Graph Algorithms",
-    description:
-      "How computers reason about networks of things — roads, friends, packets, dependencies. Ten algorithms, from the two traversals every other algorithm is built on, to weighted shortest paths, minimum spanning trees, and the heuristic search behind every modern pathfinder.",
-    difficulty: "intermediate",
-    icon: "Waypoints",
-    tags: ["algorithms", "graphs", "fundamentals"],
-    estimatedTime: "100 min",
-    prerequisites: ["Arrays & maps", "Queues & stacks", "Big-O intuition"],
-    concepts: [
-      {
-        slug: "bfs",
-        title: "Breadth-First Search",
-        oneLiner:
-          "Visit a graph in expanding rings from the start — the foundation under shortest paths in unweighted graphs and almost every layered algorithm.",
-        difficulty: "beginner",
-        estimatedTime: "10 min",
-        prototypePath: "/prototypes/graph-algorithms/bfs.html",
-      },
-      {
-        slug: "dfs",
-        title: "Depth-First Search",
-        oneLiner:
-          "Go as deep as you can, then back up. The recursive twin of BFS — the engine behind cycle detection, topological sort, and connected components.",
-        difficulty: "beginner",
-        estimatedTime: "10 min",
-        prototypePath: "/prototypes/graph-algorithms/dfs.html",
-      },
-      {
-        slug: "topological-sort",
-        title: "Topological Sort",
-        oneLiner:
-          "Order the nodes of a DAG so every edge points forward. The classic build-order, course-prerequisite, and task-scheduling primitive.",
-        difficulty: "intermediate",
-        estimatedTime: "10 min",
-        prototypePath: "/prototypes/graph-algorithms/topological-sort.html",
-      },
-      {
-        slug: "dijkstra",
-        title: "Dijkstra's Shortest Path",
-        oneLiner:
-          "Single-source shortest paths in a non-negative weighted graph — grow a frontier by always settling the closest unsettled node.",
-        difficulty: "intermediate",
-        estimatedTime: "12 min",
-        prototypePath: "/prototypes/graph-algorithms/dijkstra.html",
-      },
-      {
-        slug: "bellman-ford",
-        title: "Bellman-Ford",
-        oneLiner:
-          "Single-source shortest paths that survive negative edges. Relax every edge n-1 times — slower than Dijkstra, but catches negative cycles.",
-        difficulty: "intermediate",
-        estimatedTime: "11 min",
-        prototypePath: "/prototypes/graph-algorithms/bellman-ford.html",
-      },
-      {
-        slug: "floyd-warshall",
-        title: "Floyd-Warshall",
-        oneLiner:
-          "All-pairs shortest paths in three nested loops. A dense-matrix DP that's still the right tool when you need every distance.",
-        difficulty: "advanced",
-        estimatedTime: "11 min",
-        prototypePath: "/prototypes/graph-algorithms/floyd-warshall.html",
-      },
-      {
-        slug: "union-find",
-        title: "Union-Find (DSU)",
-        oneLiner:
-          "Disjoint sets in near-constant time. The data structure that makes Kruskal's MST, connectivity queries, and Kruskal-like sweeps actually fast.",
-        difficulty: "intermediate",
-        estimatedTime: "10 min",
-        prototypePath: "/prototypes/graph-algorithms/union-find.html",
-      },
-      {
-        slug: "kruskal",
-        title: "Kruskal's MST",
-        oneLiner:
-          "Sort the edges, add the cheapest one that doesn't form a cycle. Union-Find polices the cycle check in α(n) per edge.",
-        difficulty: "intermediate",
-        estimatedTime: "11 min",
-        prototypePath: "/prototypes/graph-algorithms/kruskal.html",
-      },
-      {
-        slug: "prim",
-        title: "Prim's MST",
-        oneLiner:
-          "Grow one tree from a seed node, always pulling in the cheapest edge that reaches a new vertex. Dijkstra's twin for spanning trees.",
-        difficulty: "intermediate",
-        estimatedTime: "11 min",
-        prototypePath: "/prototypes/graph-algorithms/prim.html",
-      },
-      {
-        slug: "astar",
-        title: "A* Search",
-        oneLiner:
-          "Dijkstra plus a heuristic that whispers 'go this way.' The pathfinder behind game AI, GPS routing, and robotics motion planning.",
-        difficulty: "advanced",
-        estimatedTime: "12 min",
-        prototypePath: "/prototypes/graph-algorithms/astar.html",
-      },
-    ],
-  },
-  {
-    slug: "trees",
-    title: "Trees",
-    description:
-      "The branching data structure under databases, filesystems, autocompletes, and priority queues. Nine trees, from the plain binary search tree through the self-balancing workhorses to the disk-friendly B-trees and the range-query structures competitive programmers swear by.",
-    difficulty: "intermediate",
-    icon: "ListTree",
-    tags: ["data-structures", "search", "fundamentals"],
-    estimatedTime: "95 min",
-    prerequisites: ["Pointers & references", "Recursion basics", "Big-O intuition"],
-    concepts: [
-      {
-        slug: "bst",
-        title: "Binary Search Tree",
-        oneLiner:
-          "Smaller keys go left, larger keys go right. Every search, insert, and delete is one walk down the tree — fast when balanced, a linked list when not.",
-        difficulty: "beginner",
-        estimatedTime: "10 min",
-        prototypePath: "/prototypes/trees/bst.html",
-      },
-      {
-        slug: "avl",
-        title: "AVL Tree",
-        oneLiner:
-          "A BST that refuses to lean. Track every node's balance factor and rotate the instant it hits ±2 — guaranteeing O(log n) forever.",
-        difficulty: "intermediate",
-        estimatedTime: "11 min",
-        prototypePath: "/prototypes/trees/avl.html",
-      },
-      {
-        slug: "red-black",
-        title: "Red-Black Tree",
-        oneLiner:
-          "Looser balancing through five color rules. Fewer rotations than AVL — which is why it's the tree inside your language's standard map and the Linux kernel.",
-        difficulty: "advanced",
-        estimatedTime: "12 min",
-        prototypePath: "/prototypes/trees/red-black.html",
-      },
-      {
-        slug: "heap",
-        title: "Binary Heap",
-        oneLiner:
-          "A complete binary tree where every parent beats its children. Stored in a plain array, it makes the smallest (or largest) item O(1) to peek and O(log n) to pull.",
-        difficulty: "beginner",
-        estimatedTime: "10 min",
-        prototypePath: "/prototypes/trees/heap.html",
-      },
-      {
-        slug: "trie",
-        title: "Trie (Prefix Tree)",
-        oneLiner:
-          "A tree keyed by characters, not whole values. Shared prefixes share a path — the structure behind autocomplete, spell-check, and IP routing tables.",
-        difficulty: "intermediate",
-        estimatedTime: "10 min",
-        prototypePath: "/prototypes/trees/trie.html",
-      },
-      {
-        slug: "b-tree",
-        title: "B-Tree",
-        oneLiner:
-          "A wide, shallow tree where each node holds many keys. Built so one disk read fetches a whole node — the index structure under most databases and filesystems.",
-        difficulty: "advanced",
-        estimatedTime: "12 min",
-        prototypePath: "/prototypes/trees/b-tree.html",
-      },
-      {
-        slug: "b-plus-tree",
-        title: "B+ Tree",
-        oneLiner:
-          "A B-tree that keeps all real data in the leaves and links those leaves in a chain — so range scans walk a list instead of re-descending the tree.",
-        difficulty: "advanced",
-        estimatedTime: "12 min",
-        prototypePath: "/prototypes/trees/b-plus-tree.html",
-      },
-      {
-        slug: "segment-tree",
-        title: "Segment Tree",
-        oneLiner:
-          "A tree of ranges over an array. Answer 'sum/min/max of indices l..r' and update any element, both in O(log n) — the competitive-programmer's range engine.",
-        difficulty: "advanced",
-        estimatedTime: "11 min",
-        prototypePath: "/prototypes/trees/segment-tree.html",
-      },
-      {
-        slug: "fenwick-tree",
-        title: "Fenwick Tree (BIT)",
-        oneLiner:
-          "Prefix sums with updates in O(log n) using nothing but an array and a bit trick. Smaller and simpler than a segment tree when all you need is sums.",
-        difficulty: "advanced",
-        estimatedTime: "11 min",
-        prototypePath: "/prototypes/trees/fenwick-tree.html",
-      },
-    ],
-  },
-  {
-    slug: "bloom-filters",
-    title: "Bloom & Cuckoo Filters",
-    description:
-      "Three probabilistic set-membership structures that answer 'have I seen this before?' in a few bytes per item. From the classic bit-array Bloom filter to the counting variant that can delete, to the cuckoo filter that does it all with a smaller memory footprint.",
-    difficulty: "intermediate",
-    icon: "Filter",
-    tags: ["data-structures", "memory", "probabilistic"],
-    estimatedTime: "35 min",
-    prerequisites: ["Hash functions", "Bit arrays", "Set membership"],
-    concepts: [
-      {
-        slug: "bloom",
-        title: "Bloom Filter",
-        oneLiner:
-          "A bit array plus a few hash functions: definitely-not or maybe-yes membership, in a fraction of the memory a hash set needs.",
-        difficulty: "beginner",
-        estimatedTime: "10 min",
-        prototypePath: "/prototypes/bloom-filters/bloom.html",
-      },
-      {
-        slug: "counting-bloom",
-        title: "Counting Bloom Filter",
-        oneLiner:
-          "Each bit becomes a small counter so items can be removed by decrementing — at roughly 4× the memory of a vanilla Bloom filter.",
-        difficulty: "intermediate",
-        estimatedTime: "10 min",
-        prototypePath: "/prototypes/bloom-filters/counting-bloom.html",
-      },
-      {
-        slug: "cuckoo",
-        title: "Cuckoo Filter",
-        oneLiner:
-          "Store short fingerprints in two candidate buckets and bump existing entries to their other home on collision. Delete-supporting and usually smaller than Bloom.",
-        difficulty: "advanced",
-        estimatedTime: "12 min",
-        prototypePath: "/prototypes/bloom-filters/cuckoo.html",
       },
     ],
   },

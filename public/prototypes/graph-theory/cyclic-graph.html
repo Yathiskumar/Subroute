@@ -1,0 +1,601 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cyclic Graphs</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --success-bg: rgba(92,198,111,0.14); --success-bd: rgba(92,198,111,0.45);
+        --danger: #f06868;  --danger-bg: rgba(240,104,104,0.14); --danger-bd: rgba(240,104,104,0.45);
+        --warning: #f0b568; --warning-bg: rgba(240,181,104,0.14); --warning-bd: rgba(240,181,104,0.45);
+        --info: #5e9ff6;    --info-bg:    rgba(94,159,246,0.16); --info-bd:    rgba(94,159,246,0.45);
+        --purple: #a78bfa;  --purple-bg:  rgba(167,139,250,0.16); --purple-bd:  rgba(167,139,250,0.45);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --radius-lg: 14px; --radius-md: 8px; --radius-sm: 6px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body {
+        padding: 18px 18px 24px;
+        background-image:
+          radial-gradient(1200px 600px at 50% -200px, rgba(251,134,58,0.06), transparent),
+          linear-gradient(to right, rgba(255,255,255,0.020) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.020) 1px, transparent 1px);
+        background-size: auto, 40px 40px, 40px 40px;
+      }
+      .container { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; padding: 9px 12px; transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); color: var(--fg); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); color: #1a1003; }
+      button.ghost { background: transparent; }
+      button i { font-size: 14px; }
+      select { background: var(--elevated); color: var(--fg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px 9px; font: 500 12px var(--sans); }
+      input[type="range"] { accent-color: var(--accent); }
+
+      .tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+      .tab { background: var(--elevated); border: 1px solid var(--border); color: var(--muted); border-radius: 999px; padding: 7px 13px; font: 500 11.5px var(--sans); cursor: pointer; transition: all 150ms ease; }
+      .tab:hover { border-color: var(--border-strong); color: var(--fg); }
+      .tab.active { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+
+      .hero { background: linear-gradient(180deg, rgba(255,255,255,0.014), transparent), var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px 12px; position: relative; overflow: hidden; }
+      .hero::before { content: ""; position: absolute; inset: 0; background: radial-gradient(420px 240px at 50% 0%, rgba(94,159,246,0.05), transparent 60%); pointer-events: none; }
+      .hero-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; position: relative; z-index: 1; gap: 12px; flex-wrap: wrap; }
+      .ttl { font: 600 11.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .legend { font-size: 11px; color: var(--muted); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      .legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: -1px; margin-right: 4px; }
+
+      .graph-wrap { position: relative; z-index: 1; }
+      svg.graph { width: 100%; height: 290px; display: block; touch-action: none; }
+      .edge { stroke: var(--border-strong); stroke-width: 2.4; transition: stroke 220ms ease, stroke-width 220ms ease, opacity 220ms ease; }
+      .edge.active { stroke: var(--warning); stroke-width: 4; stroke-dasharray: 7 5; }
+      .edge.tree { stroke: var(--success); stroke-width: 3; }
+      .edge.path { stroke: var(--accent); stroke-width: 4.5; }
+      .edge.cycle { stroke: var(--danger); stroke-width: 5; }
+      .edge.dim { opacity: 0.4; }
+      .edge.gone { opacity: 0.1; stroke-dasharray: 3 7; }
+      .edge.hit { stroke: transparent; stroke-width: 18; }
+      .node-circ { stroke-width: 2.4; transition: fill 220ms ease, stroke 220ms ease; }
+      .node-circ.dim { fill: var(--elevated); stroke: var(--border-strong); }
+      .node-circ.seen { fill: rgba(94,159,246,0.20); stroke: var(--info); }
+      .node-circ.active { fill: var(--warning); stroke: var(--warning); }
+      .node-circ.done { fill: rgba(92,198,111,0.22); stroke: var(--success); }
+      .node-circ.path { fill: rgba(251,134,58,0.22); stroke: var(--accent); }
+      .node-circ.cycle { fill: rgba(240,104,104,0.30); stroke: var(--danger); }
+      .node-circ.pop { animation: pop 0.32s cubic-bezier(0.34, 1.56, 0.64, 1); }
+      @keyframes pop { from { transform: scale(0.92); } 50% { transform: scale(1.10); } to { transform: scale(1); } }
+      .node-lbl { font: 600 13px var(--mono); fill: var(--fg); text-anchor: middle; pointer-events: none; user-select: none; }
+      .node-badge { font: 600 10px var(--mono); fill: var(--muted); text-anchor: middle; pointer-events: none; }
+
+      .side { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; min-height: 56px; }
+      .side .h { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 7px; }
+      .side .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; min-height: 28px; }
+      .chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 6px; font: 600 11.5px var(--mono); border: 1px solid var(--border-strong); background: var(--elevated); color: var(--fg); }
+      .chip.v { background: rgba(92,198,111,0.18); color: var(--success); border-color: var(--success-bd); }
+      .chip.i { background: rgba(94,159,246,0.16); color: var(--info); border-color: var(--info-bd); }
+      .chip.top { background: rgba(240,181,104,0.16); color: var(--warning); border-color: var(--warning-bd); }
+      .chip.d { background: rgba(240,104,104,0.16); color: var(--danger); border-color: var(--danger-bd); }
+      .empty { font: 500 11.5px var(--mono); color: var(--subtle); }
+      .side .total { margin-left: auto; font: 600 12px var(--mono); color: var(--accent); }
+
+      .narration { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; position: relative; overflow: hidden; transition: border-color 350ms ease; }
+      .narration::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--border-strong); transition: background 350ms ease; }
+      .narration.add::before { background: var(--info); } .narration.add { border-color: rgba(94,159,246,0.30); }
+      .narration.calc::before { background: var(--purple); } .narration.calc { border-color: rgba(167,139,250,0.30); }
+      .narration.path::before { background: var(--accent); } .narration.path { border-color: rgba(251,134,58,0.32); }
+      .narration.cycle::before { background: var(--danger); } .narration.cycle { border-color: rgba(240,104,104,0.45); }
+      .narration.done::before { background: var(--success); } .narration.done { border-color: rgba(92,198,111,0.45); }
+      .narr-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+      .badge { font: 600 10.5px var(--mono); padding: 4px 9px; border-radius: 999px; letter-spacing: 0.4px; text-transform: uppercase; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); color: var(--muted); background: var(--elevated); }
+      .badge.step { background: var(--elevated); border-color: var(--border-strong); color: var(--fg); }
+      .badge.event { background: transparent; }
+      .badge.event.add { color: var(--info); border-color: var(--info-bd); }
+      .badge.event.calc { color: var(--purple); border-color: var(--purple-bd); }
+      .badge.event.path { color: var(--accent); border-color: var(--warning-bd); }
+      .badge.event.cycle { color: var(--danger); border-color: var(--danger-bd); }
+      .badge.event.done { color: var(--success); border-color: var(--success-bd); }
+      .narr-text { margin: 0; font-size: 14px; line-height: 1.55; color: var(--fg); }
+      .narr-text strong { color: var(--fg); font-weight: 600; }
+      .narr-text code { font-family: var(--mono); background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; color: var(--accent); font-size: 12px; }
+
+      .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+      .controls .spacer { flex: 1; }
+      .speed-wrap { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font: 500 11px var(--mono); }
+      .speed-wrap input[type="range"] { width: 80px; }
+      .kbd { font-family: var(--mono); font-size: 10.5px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); color: var(--muted); border: 1px solid var(--border); }
+      .hint { font: 11px var(--mono); color: var(--subtle); display: inline-flex; align-items: center; gap: 5px; }
+
+      .free-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; display: none; flex-direction: column; gap: 10px; }
+      .free-card.show { display: flex; }
+      .free-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+      .free-note { font: 11.5px var(--mono); color: var(--muted); }
+
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; }
+      .stat .label { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .stat .value { font: 600 22px var(--mono); margin-top: 4px; line-height: 1; }
+
+      @media (max-width: 540px) {
+        .stats { grid-template-columns: repeat(2, 1fr); }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2 class="sr-only">A cyclic graph: step through DFS cycle detection on a looping graph and on a tree, break the cycle with one edge, or build your own graph and detect cycles in free play.</h2>
+
+      <div class="tabs" id="tabs">
+        <button class="tab active" data-sc="0">Find the cycle</button>
+        <button class="tab" data-sc="1">The acyclic case</button>
+        <button class="tab" data-sc="2">Break the cycle</button>
+        <button class="tab" data-sc="3">Free play</button>
+      </div>
+
+      <div class="hero">
+        <div class="hero-head">
+          <span class="ttl" id="hero-ttl">Cyclic · DFS finds a back edge</span>
+          <span class="legend">
+            <span><span class="sw" style="background:var(--elevated);border:1px solid var(--border-strong)"></span>unseen</span>
+            <span><span class="sw" style="background:var(--warning)"></span>current</span>
+            <span><span class="sw" style="background:rgba(94,159,246,0.25);border:1px solid var(--info-bd)"></span>on stack</span>
+            <span><span class="sw" style="background:rgba(92,198,111,0.25);border:1px solid var(--success-bd)"></span>done</span>
+            <span><span class="sw" style="background:rgba(240,104,104,0.30);border:1px solid var(--danger-bd)"></span>cycle</span>
+          </span>
+        </div>
+        <div class="graph-wrap">
+          <svg id="graph" class="graph" viewBox="0 0 560 300" aria-hidden="true">
+            <g id="edges"></g>
+            <g id="nodes"></g>
+          </svg>
+        </div>
+      </div>
+
+      <div class="side">
+        <div class="h" id="side-h">DFS stack (top = current path tip)</div>
+        <div id="side-row" class="row"><span class="empty">—</span></div>
+      </div>
+
+      <div id="narration" class="narration">
+        <div class="narr-meta">
+          <span id="narr-step" class="badge step">Step 0 / 0</span>
+          <span id="narr-event" class="badge event" style="display:none"></span>
+        </div>
+        <p id="narr-text" class="narr-text"><strong>Press Play.</strong> DFS walks the graph keeping a stack of the current path — a cycle is an edge back to a vertex still on that stack.</p>
+      </div>
+
+      <div class="controls" id="controls">
+        <button id="btn-prev"><i class="ti ti-chevron-left"></i>Back</button>
+        <button id="btn-play" class="primary"><i id="play-icon" class="ti ti-player-play"></i><span id="play-label">Play</span></button>
+        <button id="btn-next"><i class="ti ti-chevron-right"></i>Step</button>
+        <button id="btn-restart" class="ghost"><i class="ti ti-refresh"></i>Restart</button>
+        <span class="spacer"></span>
+        <span class="speed-wrap"><span>Speed</span><input id="speed" type="range" min="1" max="10" step="1" value="5" /></span>
+      </div>
+
+      <div class="free-card" id="free-card">
+        <div class="free-row">
+          <button id="f-detect"><i class="ti ti-refresh-alert"></i>Detect cycle</button>
+          <button id="f-clear" class="ghost"><i class="ti ti-eraser"></i>Clear edges</button>
+          <button id="f-reset" class="ghost"><i class="ti ti-refresh"></i>Reset graph</button>
+        </div>
+        <span class="free-note" id="free-note">Click two vertices to toggle an edge between them. Drag a vertex to move it. Then hit Detect cycle.</span>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="label">vertices</div><div id="s-v" class="value" style="color:var(--info)">0</div></div>
+        <div class="stat"><div class="label">edges</div><div id="s-e" class="value" style="color:var(--accent)">0</div></div>
+        <div class="stat"><div class="label" id="s3-label">on stack</div><div id="s-sum" class="value" style="color:var(--warning)">0</div></div>
+        <div class="stat"><div class="label" id="s4-label">result</div><div id="s-cmp" class="value" style="font-size:18px;color:var(--muted)">—</div></div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        // Preset 0/2: contains a cycle A-B-E-D-A. Preset 1: a tree (acyclic).
+        var CYCLE_POS = { A:[80,80], B:[280,60], C:[470,92], D:[92,238], E:[285,240], F:[472,224] };
+        var CYCLE_EDGES = [["A","B"],["B","C"],["A","D"],["D","E"],["B","E"],["C","F"]];
+        var TREE_POS = { A:[280,52], B:[120,140], C:[440,140], D:[70,250], E:[200,250], F:[440,250] };
+        var TREE_EDGES = [["A","B"],["A","C"],["B","D"],["B","E"],["C","F"]];
+
+        var pos = {}, edges = [];
+        function loadCycle() {
+          pos = {}; Object.keys(CYCLE_POS).forEach(function(k){ pos[k] = CYCLE_POS[k].slice(); });
+          edges = CYCLE_EDGES.map(function(e){ return e.slice(); });
+        }
+        function loadTree() {
+          pos = {}; Object.keys(TREE_POS).forEach(function(k){ pos[k] = TREE_POS[k].slice(); });
+          edges = TREE_EDGES.map(function(e){ return e.slice(); });
+        }
+        loadCycle();
+
+        var NODES = function(){ return Object.keys(pos); };
+        function ekey(a,b){ return [a,b].sort().join('-'); }
+        function hasEdge(a,b){ return edges.some(function(e){ return ekey(e[0],e[1])===ekey(a,b); }); }
+        function adjacency() {
+          var adj = {}; NODES().forEach(function(n){ adj[n]=[]; });
+          edges.forEach(function(e){ adj[e[0]].push(e[1]); adj[e[1]].push(e[0]); });
+          NODES().forEach(function(n){ adj[n].sort(); });
+          return adj;
+        }
+
+        // Core: DFS cycle detection. Returns { found, cycleNodes, cycleEdges }.
+        function detectCycle() {
+          var adj = adjacency(), state = {};
+          NODES().forEach(function(n){ state[n] = 'white'; });
+          var stack = [], result = { found:false, cycleNodes:[], cycleEdges:[] };
+          function dfs(u, parent) {
+            state[u] = 'gray'; stack.push(u);
+            var nbrs = adj[u];
+            for (var i=0;i<nbrs.length;i++) {
+              var v = nbrs[i];
+              if (v === parent) continue;
+              if (state[v] === 'gray') {
+                var idx = stack.indexOf(v);
+                var cp = stack.slice(idx); cp.push(v);
+                result.found = true; result.cycleNodes = cp.slice(0,-1);
+                result.cycleEdges = [];
+                for (var j=0;j<cp.length-1;j++) result.cycleEdges.push(ekey(cp[j],cp[j+1]));
+                return true;
+              }
+              if (state[v] === 'white') { if (dfs(v,u)) return true; }
+            }
+            state[u] = 'black'; stack.pop();
+            return false;
+          }
+          var ns = NODES();
+          for (var k=0;k<ns.length;k++) { if (state[ns[k]]==='white') { if (dfs(ns[k],null)) break; } }
+          return result;
+        }
+
+        var nodesG = document.getElementById('nodes');
+        var edgesG = document.getElementById('edges');
+        var nodeEls = {}, edgeEls = {}, edgeHit = {};
+
+        function buildSVG() {
+          edgesG.innerHTML = ''; nodesG.innerHTML = ''; nodeEls = {}; edgeEls = {}; edgeHit = {};
+          edges.forEach(function(e){
+            var k = ekey(e[0],e[1]);
+            var hit = document.createElementNS('http://www.w3.org/2000/svg','line');
+            hit.setAttribute('class','edge hit'); edgeHit[k] = hit; edgesG.appendChild(hit);
+            var ln = document.createElementNS('http://www.w3.org/2000/svg','line');
+            ln.setAttribute('class','edge'); edgeEls[k] = ln; edgesG.appendChild(ln);
+          });
+          NODES().forEach(function(n){
+            var c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+            c.setAttribute('r', 22); c.setAttribute('class','node-circ dim');
+            c.dataset.id = n;
+            var t = document.createElementNS('http://www.w3.org/2000/svg','text');
+            t.setAttribute('class','node-lbl'); t.textContent = n; t.dataset.id = n;
+            var b = document.createElementNS('http://www.w3.org/2000/svg','text');
+            b.setAttribute('class','node-badge');
+            nodesG.appendChild(c); nodesG.appendChild(t); nodesG.appendChild(b);
+            nodeEls[n] = { c: c, t: t, b: b };
+          });
+          positionSVG();
+        }
+        function positionSVG() {
+          Object.keys(edgeEls).forEach(function(k){
+            var p = k.split('-'); var a = pos[p[0]], b = pos[p[1]];
+            [edgeEls[k], edgeHit[k]].forEach(function(ln){
+              ln.setAttribute('x1',a[0]); ln.setAttribute('y1',a[1]);
+              ln.setAttribute('x2',b[0]); ln.setAttribute('y2',b[1]);
+            });
+          });
+          NODES().forEach(function(n){
+            var x = pos[n][0], y = pos[n][1];
+            nodeEls[n].c.setAttribute('cx',x); nodeEls[n].c.setAttribute('cy',y);
+            nodeEls[n].t.setAttribute('x',x); nodeEls[n].t.setAttribute('y',y+5);
+            nodeEls[n].b.setAttribute('x',x); nodeEls[n].b.setAttribute('y',y-30);
+          });
+        }
+
+        // ---- scripted scenarios produce arrays of step snapshots ----
+        function snap(o){
+          return { nodeRole: o.nodeRole||{}, edgeRole: o.edgeRole||{}, badge: o.badge||{},
+                   side: o.side||null, sideH: o.sideH||null, msg: o.msg, event: o.event||null,
+                   stat3: o.stat3, stat4: o.stat4 };
+        }
+        // Build the side-panel stack chips from an array of node ids.
+        function stackChips(st){
+          return st.map(function(id,i){ return { t: id + (i===st.length-1 ? ' ◂ top' : ''), cls: i===st.length-1 ? 'top' : 'i' }; });
+        }
+        // edgeRole map for a snapshot: tree edges + optional active/cycle overrides.
+        function baseEdges(state){
+          var er = {};
+          Object.keys(edgeEls).forEach(function(k){
+            var p = k.split('-');
+            // an edge is part of the explored frontier if either endpoint is seen
+            var on = (state[p[0]] && state[p[0]]!=='white') || (state[p[1]] && state[p[1]]!=='white');
+            er[k] = on ? 'tree' : 'dim';
+          });
+          return er;
+        }
+        function nodeRoles(state, current){
+          var nr = {};
+          NODES().forEach(function(n){
+            if (n === current) nr[n] = 'active';
+            else if (state[n] === 'gray') nr[n] = 'seen';
+            else if (state[n] === 'black') nr[n] = 'done';
+            else nr[n] = 'dim';
+          });
+          return nr;
+        }
+
+        // Generic DFS trace that records full snapshots. Used by tabs 0,1,2.
+        function traceDFS(opts) {
+          opts = opts || {};
+          var s = [];
+          var adj = adjacency(), state = {};
+          NODES().forEach(function(n){ state[n] = 'white'; });
+          var stack = [], result = { found:false };
+          var SH = 'DFS stack (top = current path tip)';
+
+          s.push(snap({ msg: opts.intro || 'Run <strong>DFS</strong> from <strong>A</strong>. We keep a <strong>stack</strong> of the vertices on the current path. A <strong>cycle</strong> is found the instant an edge reaches a vertex still on this stack (that is not the parent).', event:'add', sideH: SH, side: [], nodeRole: nodeRoles(state,null), edgeRole: baseEdges(state) }));
+
+          function dfs(u, parent) {
+            if (result.found) return true;
+            state[u] = 'gray'; stack.push(u);
+            s.push(snap({ msg:'Visit <strong>'+u+'</strong> — push it on the stack (now <em>on stack</em>). Parent: <code>'+(parent||'none')+'</code>.', event:'add', sideH:SH, side: stackChips(stack), nodeRole: nodeRoles(state,u), edgeRole: baseEdges(state) }));
+            var nbrs = adj[u];
+            for (var i=0;i<nbrs.length;i++) {
+              var v = nbrs[i];
+              if (result.found) return true;
+              if (v === parent) {
+                var erP = baseEdges(state); erP[ekey(u,v)] = 'active';
+                s.push(snap({ msg:'Edge <code>'+u+'–'+v+'</code> just leads back to the <strong>parent</strong> '+v+' — same undirected edge, not a loop. Skip it.', event:'calc', sideH:SH, side: stackChips(stack), nodeRole: nodeRoles(state,u), edgeRole: erP }));
+                continue;
+              }
+              if (state[v] === 'gray') {
+                var idx = stack.indexOf(v);
+                var cp = stack.slice(idx); cp.push(v);
+                var cnodes = cp.slice(0,-1), cedges = [];
+                for (var j=0;j<cp.length-1;j++) cedges.push(ekey(cp[j],cp[j+1]));
+                result.found = true;
+                var erC = baseEdges(state); cedges.forEach(function(kk){ erC[kk]='cycle'; });
+                var nrC = nodeRoles(state,u); cnodes.forEach(function(nn){ nrC[nn]='cycle'; });
+                s.push(snap({ msg:'Edge <code>'+u+'–'+v+'</code> reaches <strong>'+v+'</strong>, which is <strong>still on the stack</strong> — a <strong>back edge</strong>! Cycle: <code>'+cp.join(' → ')+'</code>.', event:'cycle', sideH:SH, side: stackChips(stack), nodeRole: nrC, edgeRole: erC }));
+                return true;
+              }
+              if (state[v] === 'white') {
+                var erG = baseEdges(state); erG[ekey(u,v)] = 'active';
+                s.push(snap({ msg:'Edge <code>'+u+'–'+v+'</code>: '+v+' is <em>unseen</em> — go deeper into '+v+'.', event:'add', sideH:SH, side: stackChips(stack), nodeRole: nodeRoles(state,u), edgeRole: erG }));
+                if (dfs(v,u)) return true;
+                s.push(snap({ msg:'Back at <strong>'+u+'</strong> after finishing '+v+'. Check '+u+'’s remaining neighbours.', event:'add', sideH:SH, side: stackChips(stack), nodeRole: nodeRoles(state,u), edgeRole: baseEdges(state) }));
+              } else {
+                var erB = baseEdges(state); erB[ekey(u,v)] = 'active';
+                s.push(snap({ msg:'Edge <code>'+u+'–'+v+'</code>: '+v+' is already <em>done</em> and off the stack — no loop here.', event:'calc', sideH:SH, side: stackChips(stack), nodeRole: nodeRoles(state,u), edgeRole: erB }));
+              }
+            }
+            state[u] = 'black'; stack.pop();
+            s.push(snap({ msg:'No more neighbours for <strong>'+u+'</strong> — pop it off the stack (now <em>done</em>).', event:'add', sideH:SH, side: stackChips(stack), nodeRole: nodeRoles(state,null), edgeRole: baseEdges(state) }));
+            return false;
+          }
+
+          var ns = NODES();
+          for (var k=0;k<ns.length;k++) {
+            if (result.found) break;
+            if (state[ns[k]]==='white') { dfs(ns[k], null); }
+          }
+
+          // closing frame
+          if (result.found) {
+            s.push(snap({ msg: opts.foundMsg || '<strong>Result: Cyclic.</strong> A back edge hit a vertex on the stack — the highlighted red loop proves it. Detection cost just one DFS pass, <code>O(V + E)</code>.', event:'cycle', sideH:SH, side: stackChips(stack), nodeRole: s[s.length-1].nodeRole, edgeRole: s[s.length-1].edgeRole, stat4:'Cyclic' }));
+          } else {
+            var allDone = {}; NODES().forEach(function(n){ allDone[n]='done'; });
+            var allTree = {}; Object.keys(edgeEls).forEach(function(k){ allTree[k]='tree'; });
+            s.push(snap({ msg: opts.acyclicMsg || '<strong>Result: Acyclic.</strong> DFS finished with the stack empty and <em>no</em> back edge ever found — every edge led either deeper or back to a parent. This graph has no cycles.', event:'done', sideH:SH, side: [], nodeRole: allDone, edgeRole: allTree, stat4:'Acyclic' }));
+          }
+          return s;
+        }
+
+        function scFind() { loadCycle(); buildSVG(); return traceDFS({}); }
+        function scAcyclic() {
+          loadTree(); buildSVG();
+          return traceDFS({
+            intro:'Same <strong>DFS</strong>, but this preset is a <strong>tree</strong> — 6 vertices, 5 edges. Watch the stack grow and shrink: if no back edge ever appears, the graph is <strong>acyclic</strong>.',
+            acyclicMsg:'<strong>Result: Acyclic.</strong> Every edge DFS tested led to an <em>unseen</em> vertex or straight back to the <em>parent</em> — never to another on-stack vertex. No back edge means no cycle. A connected graph with no cycle is a <strong>tree</strong>.'
+          });
+        }
+
+        // Tab 2: show the cycle, then remove one cycle edge and re-run to prove acyclic.
+        function scBreak() {
+          loadCycle(); buildSVG();
+          var s = [];
+          var SH = 'Before / after';
+          // 1. find the cycle on the full graph
+          var r = detectCycle();
+          var erC = {}; Object.keys(edgeEls).forEach(function(k){ erC[k]='tree'; });
+          r.cycleEdges.forEach(function(k){ erC[k]='cycle'; });
+          var nrC = {}; NODES().forEach(function(n){ nrC[n]='done'; }); r.cycleNodes.forEach(function(n){ nrC[n]='cycle'; });
+          var cycleStr = r.cycleNodes.concat(r.cycleNodes[0]).join(' → ');
+          s.push(snap({ msg:'Start from the looping graph. DFS already found this cycle: <code>'+cycleStr+'</code> (red). A cycle stays closed only while <em>all</em> its edges are present.', event:'cycle', sideH:SH, side:[{t:'cycle: '+r.cycleEdges.length+' edges', cls:'d'}], nodeRole: nrC, edgeRole: erC, stat4:'Cyclic' }));
+
+          // 2. pick one cycle edge to remove
+          var rem = r.cycleEdges[0].split('-');
+          var erRem = {}; Object.keys(edgeEls).forEach(function(k){ erRem[k]='tree'; });
+          r.cycleEdges.forEach(function(k){ erRem[k]='cycle'; });
+          erRem[r.cycleEdges[0]] = 'gone';
+          s.push(snap({ msg:'<strong>Remove one edge</strong> of the loop — say <code>'+rem[0]+'–'+rem[1]+'</code> (now faded). We don’t need to remove the whole cycle; cutting a single edge is enough to open the chain.', event:'cycle', sideH:SH, side:[{t:'removing '+rem[0]+'–'+rem[1], cls:'d'}], nodeRole: nrC, edgeRole: erRem, stat4:'Cyclic' }));
+
+          // 3. actually remove and rebuild, then run DFS trace
+          edges = edges.filter(function(e){ return ekey(e[0],e[1]) !== r.cycleEdges[0]; });
+          buildSVG();
+          var after = traceDFS({
+            intro:'Edge <code>'+rem[0]+'–'+rem[1]+'</code> is gone — re-run DFS on what’s left. With the loop opened, no edge should ever reach an on-stack vertex.',
+            acyclicMsg:'<strong>Result: Acyclic.</strong> DFS finished with no back edge — that one cut broke the only cycle. Lesson: a cycle needs <em>every</em> one of its edges, so removing any single edge of a loop destroys it.'
+          });
+          // skip the duplicated intro frame's stat; just append
+          return s.concat(after);
+        }
+
+        var SCENARIOS = [scFind, scAcyclic, scBreak];
+        var SC_TTL = ['Cyclic · DFS finds a back edge','Acyclic · a tree has no back edge','Cyclic · cut one edge to break the loop','Cyclic · free play — your graph'];
+        var SC_S3 = ['on stack','on stack','on stack','on stack'];
+        var SC_S4 = ['result','result','result','result'];
+
+        var sc = 0, steps = [], idx = 0, playing = false, timer = null, freeMode = false;
+
+        var narrEl = document.getElementById('narration');
+        var narrText = document.getElementById('narr-text');
+        var narrStep = document.getElementById('narr-step');
+        var narrEvent = document.getElementById('narr-event');
+        var sideH = document.getElementById('side-h');
+        var sideRow = document.getElementById('side-row');
+        var sV = document.getElementById('s-v'), sE = document.getElementById('s-e'), sSum = document.getElementById('s-sum'), sCmp = document.getElementById('s-cmp');
+        var heroTtl = document.getElementById('hero-ttl');
+        var btnPrev = document.getElementById('btn-prev'), btnNext = document.getElementById('btn-next');
+        var btnPlay = document.getElementById('btn-play'), btnRestart = document.getElementById('btn-restart');
+        var playIcon = document.getElementById('play-icon'), playLabel = document.getElementById('play-label');
+        var speedEl = document.getElementById('speed');
+        var controls = document.getElementById('controls'), freeCard = document.getElementById('free-card');
+        var freeNote = document.getElementById('free-note');
+
+        function setSide(h, arr) {
+          sideH.textContent = h; sideRow.innerHTML = '';
+          if (!arr || arr.length === 0) { var em = document.createElement('span'); em.className='empty'; em.textContent='(empty)'; sideRow.appendChild(em); return; }
+          arr.forEach(function(it){ var c = document.createElement('span'); c.className='chip '+(it.cls||''); c.textContent = it.t; sideRow.appendChild(c); });
+        }
+        function setResult(txt) {
+          sCmp.textContent = txt;
+          sCmp.style.color = txt === 'Cyclic' ? 'var(--danger)' : txt === 'Acyclic' ? 'var(--success)' : 'var(--muted)';
+        }
+
+        function renderStep(st) {
+          NODES().forEach(function(n){
+            nodeEls[n].c.setAttribute('class','node-circ '+(st.nodeRole[n]||'dim'));
+            nodeEls[n].b.textContent = st.badge[n] || '';
+          });
+          Object.keys(edgeEls).forEach(function(k){
+            edgeEls[k].setAttribute('class','edge '+(st.edgeRole[k]||'dim'));
+          });
+          narrText.innerHTML = st.msg;
+          narrStep.textContent = 'Step ' + idx + ' / ' + (steps.length - 1);
+          narrEl.classList.remove('add','calc','path','cycle','done');
+          if (st.event) { narrEl.classList.add(st.event);
+            narrEvent.style.display = ''; narrEvent.className = 'badge event ' + st.event;
+            narrEvent.textContent = st.event === 'add' ? 'traverse' : st.event === 'calc' ? 'skip' : st.event === 'cycle' ? 'back edge' : st.event === 'path' ? 'traverse' : 'done';
+          } else narrEvent.style.display = 'none';
+          if (st.sideH) setSide(st.sideH, st.side);
+          sV.textContent = NODES().length;
+          sE.textContent = edges.length;
+          // on-stack depth = number of 'seen' (on-stack) nodes, plus the current 'active' one
+          var onStack = 0;
+          NODES().forEach(function(n){ var r = st.nodeRole[n]; if (r==='seen'||r==='active') onStack++; });
+          sSum.textContent = onStack;
+          if (st.stat4 !== undefined) setResult(st.stat4); else setResult('…');
+        }
+
+        function loadScenario(i) {
+          stop(); sc = i;
+          heroTtl.textContent = SC_TTL[i];
+          document.getElementById('s3-label').textContent = SC_S3[i];
+          document.getElementById('s4-label').textContent = SC_S4[i];
+          freeMode = (i === 3);
+          if (freeMode) {
+            controls.style.display = 'none'; freeCard.classList.add('show');
+            loadCycle(); buildSVG(); fpReset(); renderFree();
+          } else {
+            controls.style.display = 'flex'; freeCard.classList.remove('show');
+            steps = SCENARIOS[i](); idx = 0; renderStep(steps[0]);
+          }
+        }
+
+        function next(){ if (idx >= steps.length-1){ stop(); return false; } idx++; renderStep(steps[idx]); if (idx>=steps.length-1) stop(); return true; }
+        function prev(){ if (idx<=0) return; idx--; renderStep(steps[idx]); }
+        function delay(){ return 1150 - parseInt(speedEl.value,10)*95; }
+        function play(){ if (idx>=steps.length-1){ idx=0; renderStep(steps[0]); } playing=true; playLabel.textContent='Pause'; playIcon.className='ti ti-player-pause'; loop(); }
+        function loop(){ if(!playing) return; if(!next()){ stop(); return; } timer=setTimeout(loop, delay()); }
+        function stop(){ playing=false; if(timer){clearTimeout(timer);timer=null;} playLabel.textContent='Play'; playIcon.className='ti ti-player-play'; }
+
+        // ---- free play ----
+        var fpSel = null;
+        function fpReset(){ fpSel = null; }
+        function renderFree(extra) {
+          extra = extra || {};
+          NODES().forEach(function(n){
+            var role = 'dim';
+            if (fpSel === n) role = 'active';
+            else if (extra.cycleNodes && extra.cycleNodes.indexOf(n) >= 0) role = 'cycle';
+            nodeEls[n].c.setAttribute('class','node-circ '+role);
+            nodeEls[n].b.textContent = '';
+          });
+          Object.keys(edgeEls).forEach(function(k){
+            edgeEls[k].setAttribute('class','edge '+(extra.cycleEdges && extra.cycleEdges.indexOf(k)>=0 ? 'cycle' : 'tree'));
+          });
+          sV.textContent = NODES().length; sE.textContent = edges.length;
+          sSum.textContent = 0;
+          if (extra.result === 'Cyclic') setResult('Cyclic');
+          else if (extra.result === 'Acyclic') setResult('Acyclic');
+          else setResult('—');
+          setSide('Your graph', edges.length ? edges.map(function(e){ return {t:e[0]+'–'+e[1], cls:'i'}; }) : []);
+        }
+        function fpFlash(t){ freeNote.textContent = t; }
+
+        function nodeClickFree(id) {
+          if (fpSel === null) { fpSel = id; fpFlash('Selected '+id+'. Click another vertex to toggle the edge.'); }
+          else if (fpSel === id) { fpSel = null; fpFlash('Deselected.'); }
+          else {
+            var k = ekey(fpSel, id);
+            if (hasEdge(fpSel, id)) { edges = edges.filter(function(e){ return ekey(e[0],e[1])!==k; }); fpFlash('Removed edge {'+fpSel+', '+id+'}.'); }
+            else { edges.push([fpSel, id]); fpFlash('Added edge {'+fpSel+', '+id+'}. If '+fpSel+' and '+id+' were already connected, that just made a cycle.'); }
+            fpSel = null; buildSVG();
+          }
+          renderFree();
+        }
+
+        // ---- pointer handling (free play: click to select, drag to move) ----
+        var svg = document.getElementById('graph');
+        var drag = null;
+        function pt(ev){ var r = svg.getBoundingClientRect(); var cx = ev.touches?ev.touches[0].clientX:ev.clientX; var cy = ev.touches?ev.touches[0].clientY:ev.clientY; return { x:(cx-r.left)/r.width*560, y:(cy-r.top)/r.height*300 }; }
+        function down(ev){ if(!freeMode) return; var el = ev.target; if(el.dataset && el.dataset.id){ var id = el.dataset.id, p = pt(ev); drag = { id:id, moved:false, dx:p.x-pos[id][0], dy:p.y-pos[id][1] }; } }
+        function move(ev){ if(!drag) return; var p = pt(ev); var nx = Math.max(26,Math.min(534,p.x-drag.dx)), ny = Math.max(26,Math.min(274,p.y-drag.dy)); if(Math.abs(nx-pos[drag.id][0])>2||Math.abs(ny-pos[drag.id][1])>2) drag.moved=true; pos[drag.id]=[nx,ny]; positionSVG(); ev.preventDefault(); }
+        function up(){ if(!drag) return; if(!drag.moved) nodeClickFree(drag.id); drag=null; }
+        svg.addEventListener('mousedown',down); svg.addEventListener('touchstart',down,{passive:false});
+        window.addEventListener('mousemove',move); window.addEventListener('touchmove',move,{passive:false});
+        window.addEventListener('mouseup',up); window.addEventListener('touchend',up);
+
+        document.getElementById('f-detect').addEventListener('click', function(){
+          var r = detectCycle();
+          if (r.found) {
+            fpFlash('Cyclic — DFS found a back edge. Loop: ' + r.cycleNodes.concat(r.cycleNodes[0]).join(' → ') + '.');
+            renderFree({ cycleNodes: r.cycleNodes, cycleEdges: r.cycleEdges, result:'Cyclic' });
+          } else {
+            fpFlash('Acyclic — DFS found no back edge. No way to walk a loop in this graph.');
+            renderFree({ result:'Acyclic' });
+          }
+        });
+        document.getElementById('f-clear').addEventListener('click', function(){ edges=[]; fpSel=null; buildSVG(); fpFlash('All edges cleared — 6 isolated vertices, definitely acyclic.'); renderFree(); });
+        document.getElementById('f-reset').addEventListener('click', function(){ loadCycle(); fpSel=null; buildSVG(); fpFlash('Reset to the starting cyclic graph.'); renderFree(); });
+
+        document.querySelectorAll('.tab').forEach(function(tab){ tab.addEventListener('click', function(){
+          document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
+          tab.classList.add('active'); loadScenario(parseInt(tab.dataset.sc,10));
+        }); });
+        btnPlay.addEventListener('click', function(){ playing?stop():play(); });
+        btnNext.addEventListener('click', function(){ stop(); next(); });
+        btnPrev.addEventListener('click', function(){ stop(); prev(); });
+        btnRestart.addEventListener('click', function(){ stop(); idx=0; renderStep(steps[0]); });
+        window.addEventListener('keydown', function(e){ if(freeMode) return;
+          if(e.key==='ArrowLeft'){ stop(); prev(); } else if(e.key==='ArrowRight'){ stop(); next(); }
+          else if(e.key===' '){ e.preventDefault(); playing?stop():play(); } });
+
+        buildSVG();
+        loadScenario(0);
+
+        function postHeight(){ try { parent.postMessage({type:'prototype:height',height:document.body.scrollHeight},'*'); } catch(e){} }
+        new ResizeObserver(postHeight).observe(document.body);
+        postHeight();
+      })();
+    </script>
+  </body>
+</html>

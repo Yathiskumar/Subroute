@@ -118,6 +118,15 @@ import { bTree as tBTree } from "./trees/b-tree";
 import { bPlusTree as tBPlusTree } from "./trees/b-plus-tree";
 import { segmentTree as tSegmentTree } from "./trees/segment-tree";
 import { fenwickTree as tFenwickTree } from "./trees/fenwick-tree";
+import { graphTheoryTopic } from "./graph-theory/_topic";
+import { undirectedGraph as gtUndirected } from "./graph-theory/undirected-graph";
+import { directedGraph as gtDirected } from "./graph-theory/directed-graph";
+import { unweightedGraph as gtUnweighted } from "./graph-theory/unweighted-graph";
+import { weightedGraph as gtWeighted } from "./graph-theory/weighted-graph";
+import { completeGraph as gtComplete } from "./graph-theory/complete-graph";
+import { bipartiteGraph as gtBipartite } from "./graph-theory/bipartite-graph";
+import { cyclicGraph as gtCyclic } from "./graph-theory/cyclic-graph";
+import { dag as gtDag } from "./graph-theory/dag";
 
 // Indexed by `${topicSlug}/${conceptSlug}`
 const CONCEPT_CONTENT: Record<string, ConceptContent> = {
@@ -225,6 +234,14 @@ const CONCEPT_CONTENT: Record<string, ConceptContent> = {
   "trees/b-plus-tree": tBPlusTree,
   "trees/segment-tree": tSegmentTree,
   "trees/fenwick-tree": tFenwickTree,
+  "graph-theory/undirected-graph": gtUndirected,
+  "graph-theory/directed-graph": gtDirected,
+  "graph-theory/unweighted-graph": gtUnweighted,
+  "graph-theory/weighted-graph": gtWeighted,
+  "graph-theory/complete-graph": gtComplete,
+  "graph-theory/bipartite-graph": gtBipartite,
+  "graph-theory/cyclic-graph": gtCyclic,
+  "graph-theory/dag": gtDag,
 };
 
 // Indexed by topic slug
@@ -244,6 +261,7 @@ const TOPIC_CONTENT: Record<string, TopicContent> = {
   "sorting": sortingTopic,
   "graph-algorithms": graphAlgorithmsTopic,
   "trees": treesTopic,
+  "graph-theory": graphTheoryTopic,
 };
 
 export function getConceptContent(

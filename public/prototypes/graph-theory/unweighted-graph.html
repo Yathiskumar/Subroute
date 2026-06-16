@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Unweighted Graphs</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --success-bg: rgba(92,198,111,0.14); --success-bd: rgba(92,198,111,0.45);
+        --danger: #f06868;  --danger-bg: rgba(240,104,104,0.14); --danger-bd: rgba(240,104,104,0.45);
+        --warning: #f0b568; --warning-bg: rgba(240,181,104,0.14); --warning-bd: rgba(240,181,104,0.45);
+        --info: #5e9ff6;    --info-bg:    rgba(94,159,246,0.16); --info-bd:    rgba(94,159,246,0.45);
+        --purple: #a78bfa;  --purple-bg:  rgba(167,139,250,0.16); --purple-bd:  rgba(167,139,250,0.45);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --radius-lg: 14px; --radius-md: 8px; --radius-sm: 6px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body {
+        padding: 18px 18px 24px;
+        background-image:
+          radial-gradient(1200px 600px at 50% -200px, rgba(251,134,58,0.06), transparent),
+          linear-gradient(to right, rgba(255,255,255,0.020) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.020) 1px, transparent 1px);
+        background-size: auto, 40px 40px, 40px 40px;
+      }
+      .container { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; padding: 9px 12px; transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); color: var(--fg); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); color: #1a1003; }
+      button.ghost { background: transparent; }
+      button i { font-size: 14px; }
+      select { background: var(--elevated); color: var(--fg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px 9px; font: 500 12px var(--sans); }
+      input[type="range"] { accent-color: var(--accent); }
+
+      .tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+      .tab { background: var(--elevated); border: 1px solid var(--border); color: var(--muted); border-radius: 999px; padding: 7px 13px; font: 500 11.5px var(--sans); cursor: pointer; transition: all 150ms ease; }
+      .tab:hover { border-color: var(--border-strong); color: var(--fg); }
+      .tab.active { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+
+      .hero { background: linear-gradient(180deg, rgba(255,255,255,0.014), transparent), var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px 12px; position: relative; overflow: hidden; }
+      .hero::before { content: ""; position: absolute; inset: 0; background: radial-gradient(420px 240px at 50% 0%, rgba(94,159,246,0.05), transparent 60%); pointer-events: none; }
+      .hero-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; position: relative; z-index: 1; gap: 12px; flex-wrap: wrap; }
+      .ttl { font: 600 11.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .legend { font-size: 11px; color: var(--muted); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      .legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: -1px; margin-right: 4px; }
+
+      .graph-wrap { position: relative; z-index: 1; }
+      svg.graph { width: 100%; height: 290px; display: block; touch-action: none; }
+      .edge { stroke: var(--border-strong); stroke-width: 2.4; transition: stroke 220ms ease, stroke-width 220ms ease, opacity 220ms ease; }
+      .edge.active { stroke: var(--warning); stroke-width: 4; }
+      .edge.tree { stroke: var(--success); stroke-width: 3; }
+      .edge.path { stroke: var(--accent); stroke-width: 4.5; }
+      .edge.dim { opacity: 0.28; }
+      .edge.hit { stroke: transparent; stroke-width: 18; }
+      .node-circ { stroke-width: 2.4; transition: fill 220ms ease, stroke 220ms ease; }
+      .node-circ.dim { fill: var(--elevated); stroke: var(--border-strong); }
+      .node-circ.seen { fill: rgba(94,159,246,0.20); stroke: var(--info); }
+      .node-circ.active { fill: var(--warning); stroke: var(--warning); }
+      .node-circ.done { fill: rgba(92,198,111,0.22); stroke: var(--success); }
+      .node-circ.path { fill: rgba(251,134,58,0.22); stroke: var(--accent); }
+      .node-circ.pop { animation: pop 0.32s cubic-bezier(0.34, 1.56, 0.64, 1); }
+      @keyframes pop { from { transform: scale(0.92); } 50% { transform: scale(1.10); } to { transform: scale(1); } }
+      .node-lbl { font: 600 13px var(--mono); fill: var(--fg); text-anchor: middle; pointer-events: none; user-select: none; }
+      .node-badge { font: 600 10.5px var(--mono); fill: var(--purple); text-anchor: middle; pointer-events: none; }
+
+      .side { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; min-height: 56px; }
+      .side .h { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 7px; }
+      .side .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; min-height: 28px; }
+      .chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 6px; font: 600 11.5px var(--mono); border: 1px solid var(--border-strong); background: var(--elevated); color: var(--fg); }
+      .chip.v { background: rgba(92,198,111,0.18); color: var(--success); border-color: var(--success-bd); }
+      .chip.i { background: rgba(94,159,246,0.16); color: var(--info); border-color: var(--info-bd); }
+      .empty { font: 500 11.5px var(--mono); color: var(--subtle); }
+      .side .total { margin-left: auto; font: 600 12px var(--mono); color: var(--accent); }
+
+      .narration { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; position: relative; overflow: hidden; transition: border-color 350ms ease; }
+      .narration::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--border-strong); transition: background 350ms ease; }
+      .narration.add::before { background: var(--info); } .narration.add { border-color: rgba(94,159,246,0.30); }
+      .narration.calc::before { background: var(--purple); } .narration.calc { border-color: rgba(167,139,250,0.30); }
+      .narration.path::before { background: var(--accent); } .narration.path { border-color: rgba(251,134,58,0.32); }
+      .narration.done::before { background: var(--success); } .narration.done { border-color: rgba(92,198,111,0.45); }
+      .narr-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+      .badge { font: 600 10.5px var(--mono); padding: 4px 9px; border-radius: 999px; letter-spacing: 0.4px; text-transform: uppercase; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); color: var(--muted); background: var(--elevated); }
+      .badge.step { background: var(--elevated); border-color: var(--border-strong); color: var(--fg); }
+      .badge.event { background: transparent; }
+      .badge.event.add { color: var(--info); border-color: var(--info-bd); }
+      .badge.event.calc { color: var(--purple); border-color: var(--purple-bd); }
+      .badge.event.path { color: var(--accent); border-color: var(--warning-bd); }
+      .badge.event.done { color: var(--success); border-color: var(--success-bd); }
+      .narr-text { margin: 0; font-size: 14px; line-height: 1.55; color: var(--fg); }
+      .narr-text strong { color: var(--fg); font-weight: 600; }
+      .narr-text code { font-family: var(--mono); background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; color: var(--accent); font-size: 12px; }
+
+      .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+      .controls .spacer { flex: 1; }
+      .speed-wrap { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font: 500 11px var(--mono); }
+      .speed-wrap input[type="range"] { width: 80px; }
+      .kbd { font-family: var(--mono); font-size: 10.5px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); color: var(--muted); border: 1px solid var(--border); }
+      .hint { font: 11px var(--mono); color: var(--subtle); display: inline-flex; align-items: center; gap: 5px; }
+
+      .free-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; display: none; flex-direction: column; gap: 10px; }
+      .free-card.show { display: flex; }
+      .free-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+      .free-note { font: 11.5px var(--mono); color: var(--muted); }
+
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; }
+      .stat .label { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .stat .value { font: 600 22px var(--mono); margin-top: 4px; line-height: 1; }
+
+      @media (max-width: 540px) {
+        .stats { grid-template-columns: repeat(2, 1fr); }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2 class="sr-only">An unweighted graph: distance is hops, fewest hops wins, a shortcut shrinks distance, or build your own in free play.</h2>
+
+      <div class="tabs" id="tabs">
+        <button class="tab active" data-sc="0">Distance = hops</button>
+        <button class="tab" data-sc="1">Fewest hops wins</button>
+        <button class="tab" data-sc="2">A shortcut shrinks it</button>
+        <button class="tab" data-sc="3">Free play</button>
+      </div>
+
+      <div class="hero">
+        <div class="hero-head">
+          <span class="ttl" id="hero-ttl">Unweighted · distance counts hops</span>
+          <span class="legend">
+            <span><span class="sw" style="background:var(--elevated);border:1px solid var(--border-strong)"></span>vertex</span>
+            <span><span class="sw" style="background:var(--warning)"></span>active</span>
+            <span><span class="sw" style="background:rgba(94,159,246,0.25);border:1px solid var(--info-bd)"></span>seen <code style="font-size:10px;color:var(--muted)">d=k</code></span>
+            <span><span class="sw" style="background:rgba(251,134,58,0.25);border:1px solid var(--warning-bd)"></span>path</span>
+          </span>
+        </div>
+        <div class="graph-wrap">
+          <svg id="graph" class="graph" viewBox="0 0 560 300" aria-hidden="true">
+            <g id="edges"></g>
+            <g id="nodes"></g>
+          </svg>
+        </div>
+      </div>
+
+      <div class="side">
+        <div class="h" id="side-h">BFS queue (front → back)</div>
+        <div id="side-row" class="row"><span class="empty">—</span></div>
+      </div>
+
+      <div id="narration" class="narration">
+        <div class="narr-meta">
+          <span id="narr-step" class="badge step">Step 0 / 0</span>
+          <span id="narr-event" class="badge event" style="display:none"></span>
+        </div>
+        <p id="narr-text" class="narr-text"><strong>Press Play.</strong> Every edge counts as one hop, so a vertex's distance is just how many edges away it sits from the source.</p>
+      </div>
+
+      <div class="controls" id="controls">
+        <button id="btn-prev"><i class="ti ti-chevron-left"></i>Back</button>
+        <button id="btn-play" class="primary"><i id="play-icon" class="ti ti-player-play"></i><span id="play-label">Play</span></button>
+        <button id="btn-next"><i class="ti ti-chevron-right"></i>Step</button>
+        <button id="btn-restart" class="ghost"><i class="ti ti-refresh"></i>Restart</button>
+        <span class="spacer"></span>
+        <span class="speed-wrap"><span>Speed</span><input id="speed" type="range" min="1" max="10" step="1" value="5" /></span>
+      </div>
+
+      <div class="free-card" id="free-card">
+        <div class="free-row">
+          <button id="f-path"><i class="ti ti-route"></i>Find path</button>
+          <button id="f-clear" class="ghost"><i class="ti ti-eraser"></i>Clear edges</button>
+          <button id="f-reset" class="ghost"><i class="ti ti-refresh"></i>Reset graph</button>
+        </div>
+        <span class="free-note" id="free-note">Click a vertex to pick the source — every <code>d=k</code> label recomputes live. Click two other vertices to toggle an edge; drag to move.</span>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="label">vertices</div><div id="s-v" class="value" style="color:var(--info)">0</div></div>
+        <div class="stat"><div class="label">edges</div><div id="s-e" class="value" style="color:var(--accent)">0</div></div>
+        <div class="stat"><div class="label" id="s3-label">max distance</div><div id="s-sum" class="value" style="color:var(--purple)">0</div></div>
+        <div class="stat"><div class="label" id="s4-label">reachable</div><div id="s-cmp" class="value" style="color:var(--success)">0</div></div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        var BASE_POS = { A:[70,150], B:[210,72], C:[360,72], D:[490,150], E:[210,238], F:[360,238], G:[300,150] };
+        var BASE_EDGES = [["A","B"],["B","C"],["C","D"],["A","E"],["E","F"],["F","D"],["B","G"]];
+
+        var pos = {}, edges = [];
+        function loadBase() {
+          pos = {}; Object.keys(BASE_POS).forEach(function(k){ pos[k] = BASE_POS[k].slice(); });
+          edges = BASE_EDGES.map(function(e){ return e.slice(); });
+        }
+        loadBase();
+
+        var SRC = 'A';
+        var NODES = function(){ return Object.keys(pos); };
+        function ekey(a,b){ return [a,b].sort().join('-'); }
+        function hasEdge(a,b){ return edges.some(function(e){ return ekey(e[0],e[1])===ekey(a,b); }); }
+        function adjacency(eds) {
+          eds = eds || edges;
+          var adj = {}; NODES().forEach(function(n){ adj[n]=[]; });
+          eds.forEach(function(e){ adj[e[0]].push(e[1]); adj[e[1]].push(e[0]); });
+          NODES().forEach(function(n){ adj[n].sort(); });
+          return adj;
+        }
+        // hop-distance from a source over a given edge set
+        function distances(src, eds) {
+          var adj = adjacency(eds), dist = {}; dist[src] = 0;
+          var q = [src];
+          while (q.length) { var u = q.shift(); adj[u].forEach(function(v){ if(!(v in dist)){ dist[v]=dist[u]+1; q.push(v); } }); }
+          return dist;
+        }
+        function maxDist(src, eds) {
+          var d = distances(src, eds), m = 0;
+          Object.keys(d).forEach(function(k){ if (d[k] > m) m = d[k]; });
+          return m;
+        }
+        function reachableCount(src, eds) { return Object.keys(distances(src, eds)).length; }
+        function bfsPath(s, t, eds) {
+          var adj = adjacency(eds), q = [s], prev = {}; prev[s] = null;
+          while (q.length) { var u = q.shift(); if (u===t) break; adj[u].forEach(function(v){ if(!(v in prev)){ prev[v]=u; q.push(v);} }); }
+          if (!(t in prev)) return null;
+          var path = [], c = t; while (c!==null){ path.unshift(c); c = prev[c]; } return path;
+        }
+
+        var nodesG = document.getElementById('nodes');
+        var edgesG = document.getElementById('edges');
+        var nodeEls = {}, edgeEls = {}, edgeHit = {};
+
+        function buildSVG() {
+          edgesG.innerHTML = ''; nodesG.innerHTML = ''; nodeEls = {}; edgeEls = {}; edgeHit = {};
+          edges.forEach(function(e){
+            var k = ekey(e[0],e[1]);
+            var hit = document.createElementNS('http://www.w3.org/2000/svg','line');
+            hit.setAttribute('class','edge hit'); edgeHit[k] = hit; edgesG.appendChild(hit);
+            var ln = document.createElementNS('http://www.w3.org/2000/svg','line');
+            ln.setAttribute('class','edge'); edgeEls[k] = ln; edgesG.appendChild(ln);
+          });
+          NODES().forEach(function(n){
+            var c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+            c.setAttribute('r', 22); c.setAttribute('class','node-circ dim');
+            c.dataset.id = n;
+            var t = document.createElementNS('http://www.w3.org/2000/svg','text');
+            t.setAttribute('class','node-lbl'); t.textContent = n; t.dataset.id = n;
+            var b = document.createElementNS('http://www.w3.org/2000/svg','text');
+            b.setAttribute('class','node-badge');
+            nodesG.appendChild(c); nodesG.appendChild(t); nodesG.appendChild(b);
+            nodeEls[n] = { c: c, t: t, b: b };
+          });
+          positionSVG();
+        }
+        function positionSVG() {
+          Object.keys(edgeEls).forEach(function(k){
+            var p = k.split('-'); var a = pos[p[0]], b = pos[p[1]];
+            [edgeEls[k], edgeHit[k]].forEach(function(ln){
+              ln.setAttribute('x1',a[0]); ln.setAttribute('y1',a[1]);
+              ln.setAttribute('x2',b[0]); ln.setAttribute('y2',b[1]);
+            });
+          });
+          NODES().forEach(function(n){
+            var x = pos[n][0], y = pos[n][1];
+            nodeEls[n].c.setAttribute('cx',x); nodeEls[n].c.setAttribute('cy',y);
+            nodeEls[n].t.setAttribute('x',x); nodeEls[n].t.setAttribute('y',y+5);
+            nodeEls[n].b.setAttribute('x',x); nodeEls[n].b.setAttribute('y',y-30);
+          });
+        }
+
+        // ---- scripted scenarios produce arrays of step snapshots ----
+        function snap(o){
+          return { nodeRole: o.nodeRole||{}, edgeRole: o.edgeRole||{}, badge: o.badge||{},
+                   side: o.side||null, sideH: o.sideH||null, msg: o.msg, event: o.event||null,
+                   stat3: o.stat3, stat4: o.stat4, eds: o.eds };
+        }
+
+        // (1) Distance = hops — BFS from the source, ring by ring, queue in side panel.
+        function scDistance() {
+          var s = [], src = SRC, adj = adjacency();
+          var allTree = {}; Object.keys(edgeEls).forEach(function(k){ allTree[k]='tree'; });
+          s.push(snap({ msg:'Every edge here is <strong>weight 1</strong> — a hop is a hop. Start a breadth-first search from source <strong>'+src+'</strong>: give it <code>d=0</code> and put it in the queue. BFS will sweep outward in rings.', event:'add', edgeRole: allTree, sideH:'BFS queue (front → back)', side:[{t:src+' (d=0)', cls:'i'}], stat3:0, stat4:1 }));
+          var dist = {}; dist[src] = 0; var q = [src]; var done = [];
+          var maxSeen = 0;
+          while (q.length) {
+            var u = q.shift(); done.push(u); maxSeen = Math.max(maxSeen, dist[u]);
+            var newly = [];
+            adj[u].forEach(function(v){ if(!(v in dist)){ dist[v]=dist[u]+1; q.push(v); newly.push(v); } });
+            var nr = {}, bb = {};
+            done.forEach(function(v){ nr[v]='done'; bb[v]='d='+dist[v]; });
+            q.forEach(function(v){ nr[v]='seen'; bb[v]='d='+dist[v]; });
+            nr[u] = 'active';
+            var er = {};
+            done.forEach(function(p){ adj[p].forEach(function(v){ if (v in dist && dist[v]===dist[p]+1) er[ekey(p,v)]='tree'; }); });
+            newly.forEach(function(v){ er[ekey(u,v)]='active'; });
+            var msg = newly.length
+              ? 'Dequeue <strong>'+u+'</strong> (<code>d='+dist[u]+'</code>). New neighbours '+newly.map(function(v){return '<strong>'+v+'</strong>';}).join(', ')+' are first seen now, so each gets <code>d='+(dist[u]+1)+'</code> — first sighting <em>is</em> the shortest distance, because every edge adds exactly 1.'
+              : 'Dequeue <strong>'+u+'</strong> (<code>d='+dist[u]+'</code>). All its neighbours were already seen on an earlier ring, so nothing new is queued.';
+            s.push(snap({ msg: msg, event:'calc', nodeRole: nr, edgeRole: er, badge: bb,
+              sideH:'BFS queue (front → back)', side: q.length ? q.map(function(v){ return {t:v+' (d='+dist[v]+')', cls:'i'}; }) : [],
+              stat3: maxSeen, stat4: done.length + q.length }));
+          }
+          var nrAll = {}, bbAll = {}, erAll = {};
+          done.forEach(function(v){ nrAll[v]='done'; bbAll[v]='d='+dist[v]; });
+          Object.keys(adj).forEach(function(p){ adj[p].forEach(function(v){ if (dist[v]===dist[p]+1) erAll[ekey(p,v)]='tree'; }); });
+          var mx = maxDist(src);
+          s.push(snap({ msg:'<strong>Queue empty.</strong> Every reachable vertex now carries its hop-distance <code>d=k</code> as a ring number. The farthest sits <code>'+mx+'</code> hops out — that is the graph’s <em>max distance</em> from '+src+'. No weights, no priority queue: BFS just counted edges.', event:'done', nodeRole: nrAll, edgeRole: erAll, badge: bbAll,
+            sideH:'Final distances', side: done.map(function(v){ return {t:v+'='+dist[v], cls:'v'}; }), stat3: mx, stat4: done.length }));
+          return s;
+        }
+
+        // (2) Fewest hops wins — pick start & target, highlight the fewest-edge path.
+        function scFewest() {
+          var s = [], src = 'A', dst = 'F', adj = adjacency();
+          s.push(snap({ msg:'Find the shortest path from <strong>'+src+'</strong> to <strong>'+dst+'</strong>. With every edge equal there is nothing to optimise but the <em>count</em> — "shortest" simply means <strong>fewest hops</strong>. We BFS from '+src+' and stop when '+dst+' is reached.', event:'path', sideH:'BFS queue (front → back)', side:[{t:src+' (d=0)', cls:'i'}], stat3:0, stat4:1 }));
+          var dist = {}; dist[src]=0; var prev = {}; prev[src]=null; var q=[src]; var done=[]; var maxSeen=0; var hit=false;
+          while (q.length) {
+            var u = q.shift(); done.push(u); maxSeen = Math.max(maxSeen, dist[u]);
+            if (u === dst) { hit = true; }
+            var newly = [];
+            if (!hit) adj[u].forEach(function(v){ if(!(v in dist)){ dist[v]=dist[u]+1; prev[v]=u; q.push(v); newly.push(v); } });
+            var nr = {}, bb = {};
+            done.forEach(function(v){ nr[v]='done'; bb[v]='d='+dist[v]; });
+            q.forEach(function(v){ nr[v]='seen'; bb[v]='d='+dist[v]; });
+            nr[u]='active';
+            var er = {}; Object.keys(prev).forEach(function(v){ if(prev[v]!==null) er[ekey(prev[v],v)]='tree'; });
+            var msg = hit
+              ? 'Reached the target <strong>'+dst+'</strong> at <code>d='+dist[dst]+'</code>. Because BFS hands vertices out in non-decreasing distance order, this is the fewest-hops route — stop here.'
+              : 'Visit <strong>'+u+'</strong> (<code>d='+dist[u]+'</code>)'+(newly.length?', recording '+newly.map(function(v){return '<strong>'+v+'</strong>';}).join(', ')+' as one hop farther and noting how we got there.':'; no new neighbours.');
+            s.push(snap({ msg: msg, event:'path', nodeRole: nr, edgeRole: er, badge: bb,
+              sideH:'BFS queue (front → back)', side: q.length ? q.map(function(v){ return {t:v+' (d='+dist[v]+')', cls:'i'}; }) : [],
+              stat3: maxSeen, stat4: done.length + q.length }));
+            if (hit) break;
+          }
+          var path = []; var c = dst; while (c!==undefined && c!==null){ path.unshift(c); c = prev[c]; } if (path[0]!==src) path.unshift(src);
+          var er2 = {}; for (var i=0;i<path.length-1;i++) er2[ekey(path[i],path[i+1])]='path';
+          var nr2 = {}, bb2 = {}; path.forEach(function(v){ nr2[v]='path'; bb2[v]='d='+dist[v]; });
+          s.push(snap({ msg:'<strong>Shortest path:</strong> '+path.join(' → ')+' — <code>'+(path.length-1)+'</code> edges, the only number that matters here. There may be other '+(path.length-1)+'-hop routes; the model has no reason to prefer one, because all hops cost the same.', event:'done', nodeRole: nr2, edgeRole: er2, badge: bb2,
+            sideH:'Path '+src+' → '+dst+' ('+(path.length-1)+' hops)', side: path.map(function(v){ return {t:v, cls:'i'}; }), stat3: path.length-1, stat4: reachableCount(src) }));
+          return s;
+        }
+
+        // (3) A shortcut shrinks it — 3-hop path, add a shortcut edge, re-run, distance drops to 2.
+        function scShortcut() {
+          var s = [], src = 'A', dst = 'D';
+          var p1 = bfsPath(src, dst, BASE_EDGES);
+          var er1 = {}; for (var i=0;i<p1.length-1;i++) er1[ekey(p1[i],p1[i+1])]='path';
+          var nr1 = {}, bb1 = {}; var d1 = distances(src, BASE_EDGES);
+          p1.forEach(function(v){ nr1[v]='path'; }); Object.keys(d1).forEach(function(v){ bb1[v]='d='+d1[v]; });
+          s.push(snap({ msg:'BFS the fewest-hops path from <strong>'+src+'</strong> to <strong>'+dst+'</strong>: '+p1.join(' → ')+' — a <strong>'+(p1.length-1)+'-hop</strong> route. Right now that is the best you can do; '+dst+' sits at <code>d='+(p1.length-1)+'</code>.', event:'path', nodeRole: nr1, edgeRole: er1, badge: bb1,
+            sideH:'Before — distance to '+dst, side:[{t:dst+' = '+(p1.length-1)+' hops', cls:'i'}], stat3: maxDist(src, BASE_EDGES), stat4: reachableCount(src, BASE_EDGES), eds: BASE_EDGES }));
+
+          var shortcut = ['B','D'];
+          var eds2 = BASE_EDGES.concat([shortcut]);
+          var erAdd = {}; for (var j=0;j<p1.length-1;j++) erAdd[ekey(p1[j],p1[j+1])]='path'; erAdd[ekey(shortcut[0],shortcut[1])]='active';
+          s.push(snap({ msg:'Add one <strong>shortcut edge</strong> <code>{'+shortcut[0]+', '+shortcut[1]+'}</code> (the warning-coloured line). Adding an edge gives a new possible path without removing any old one — so no distance can grow, it can only stay the same or <em>shrink</em>.', event:'add', nodeRole: nr1, edgeRole: erAdd, badge: bb1,
+            sideH:'New edge added', side:[{t:'{'+shortcut[0]+', '+shortcut[1]+'}', cls:'i'}], stat3: maxDist(src, BASE_EDGES), stat4: reachableCount(src, BASE_EDGES), eds: eds2 }));
+
+          var p2 = bfsPath(src, dst, eds2);
+          var d2 = distances(src, eds2);
+          var er2 = {}; for (var k=0;k<p2.length-1;k++) er2[ekey(p2[k],p2[k+1])]='path';
+          var nr2 = {}, bb2 = {}; p2.forEach(function(v){ nr2[v]='path'; }); Object.keys(d2).forEach(function(v){ bb2[v]='d='+d2[v]; });
+          s.push(snap({ msg:'Re-run BFS. The path is now '+p2.join(' → ')+' — just <strong>'+(p2.length-1)+' hops</strong>. The distance to '+dst+' dropped from <code>'+(p1.length-1)+'</code> to <code>'+(p2.length-1)+'</code> the instant the edge appeared. Distance is purely structural: it tracks the edge set, nothing else.', event:'done', nodeRole: nr2, edgeRole: er2, badge: bb2,
+            sideH:'After — distance to '+dst, side:[{t:dst+' = '+(p2.length-1)+' hops', cls:'v'},{t:'was '+(p1.length-1), cls:''}], stat3: maxDist(src, eds2), stat4: reachableCount(src, eds2), eds: eds2 }));
+          return s;
+        }
+
+        var SCENARIOS = [scDistance, scFewest, scShortcut];
+        var SC_TTL = ['Unweighted · distance counts hops','Unweighted · fewest hops wins','Unweighted · a shortcut shrinks distance','Unweighted · free play — your graph'];
+        var SC_S3 = ['max distance','max distance','max distance','max distance'];
+        var SC_S4 = ['reachable','reachable','reachable','reachable'];
+
+        var sc = 0, steps = [], idx = 0, playing = false, timer = null, freeMode = false;
+
+        var narrEl = document.getElementById('narration');
+        var narrText = document.getElementById('narr-text');
+        var narrStep = document.getElementById('narr-step');
+        var narrEvent = document.getElementById('narr-event');
+        var sideH = document.getElementById('side-h');
+        var sideRow = document.getElementById('side-row');
+        var sV = document.getElementById('s-v'), sE = document.getElementById('s-e'), sSum = document.getElementById('s-sum'), sCmp = document.getElementById('s-cmp');
+        var heroTtl = document.getElementById('hero-ttl');
+        var btnPrev = document.getElementById('btn-prev'), btnNext = document.getElementById('btn-next');
+        var btnPlay = document.getElementById('btn-play'), btnRestart = document.getElementById('btn-restart');
+        var playIcon = document.getElementById('play-icon'), playLabel = document.getElementById('play-label');
+        var speedEl = document.getElementById('speed');
+        var controls = document.getElementById('controls'), freeCard = document.getElementById('free-card');
+        var freeNote = document.getElementById('free-note');
+
+        function setSide(h, arr) {
+          sideH.textContent = h; sideRow.innerHTML = '';
+          if (!arr || arr.length === 0) { var em = document.createElement('span'); em.className='empty'; em.textContent='—'; sideRow.appendChild(em); return; }
+          arr.forEach(function(it){ var c = document.createElement('span'); c.className='chip '+(it.cls||''); c.textContent = it.t; sideRow.appendChild(c); });
+        }
+
+        function renderStep(st) {
+          // some scenarios (shortcut) mutate the visible edge set per step
+          if (st.eds) {
+            var want = st.eds.map(function(e){ return ekey(e[0],e[1]); }).sort().join('|');
+            var have = edges.map(function(e){ return ekey(e[0],e[1]); }).sort().join('|');
+            if (want !== have) { edges = st.eds.map(function(e){ return e.slice(); }); buildSVG(); }
+          }
+          NODES().forEach(function(n){
+            nodeEls[n].c.setAttribute('class','node-circ '+(st.nodeRole[n]||'dim'));
+            nodeEls[n].b.textContent = st.badge[n] || '';
+          });
+          Object.keys(edgeEls).forEach(function(k){
+            edgeEls[k].setAttribute('class','edge '+(st.edgeRole[k]||'dim'));
+          });
+          narrText.innerHTML = st.msg;
+          narrStep.textContent = 'Step ' + idx + ' / ' + (steps.length - 1);
+          narrEl.classList.remove('add','calc','path','done');
+          if (st.event) { narrEl.classList.add(st.event);
+            narrEvent.style.display = ''; narrEvent.className = 'badge event ' + st.event;
+            narrEvent.textContent = st.event === 'add' ? 'edge' : st.event === 'calc' ? 'bfs ring' : st.event === 'path' ? 'shortest' : 'done';
+          } else narrEvent.style.display = 'none';
+          if (st.sideH) setSide(st.sideH, st.side);
+          sV.textContent = NODES().length;
+          sE.textContent = edges.length;
+          sSum.textContent = (st.stat3 !== undefined ? st.stat3 : maxDist(SRC));
+          sCmp.textContent = (st.stat4 !== undefined ? st.stat4 : reachableCount(SRC));
+        }
+
+        function loadScenario(i) {
+          stop(); sc = i;
+          heroTtl.textContent = SC_TTL[i];
+          document.getElementById('s3-label').textContent = SC_S3[i];
+          document.getElementById('s4-label').textContent = SC_S4[i];
+          freeMode = (i === 3);
+          if (freeMode) {
+            controls.style.display = 'none'; freeCard.classList.add('show');
+            loadBase(); fpSrc = 'A'; buildSVG(); renderFree();
+          } else {
+            controls.style.display = 'flex'; freeCard.classList.remove('show');
+            loadBase(); buildSVG();
+            steps = SCENARIOS[i](); idx = 0; renderStep(steps[0]);
+          }
+        }
+
+        function next(){ if (idx >= steps.length-1){ stop(); return false; } idx++; renderStep(steps[idx]); if (idx>=steps.length-1) stop(); return true; }
+        function prev(){ if (idx<=0) return; idx--; renderStep(steps[idx]); }
+        function delay(){ return 1150 - parseInt(speedEl.value,10)*95; }
+        function play(){ if (idx>=steps.length-1){ idx=0; renderStep(steps[0]); } playing=true; playLabel.textContent='Pause'; playIcon.className='ti ti-player-pause'; loop(); }
+        function loop(){ if(!playing) return; if(!next()){ stop(); return; } timer=setTimeout(loop, delay()); }
+        function stop(){ playing=false; if(timer){clearTimeout(timer);timer=null;} playLabel.textContent='Play'; playIcon.className='ti ti-player-play'; }
+
+        // ---- free play ----
+        var fpSrc = 'A', fpSel = null, fpPathMode = false, fpPathPick = [];
+        function renderFree(extra) {
+          extra = extra || {};
+          var dist = distances(fpSrc);
+          NODES().forEach(function(n){
+            var role = 'dim';
+            if (extra.path && extra.path.indexOf(n) >= 0) role = 'path';
+            else if (fpSel === n) role = 'active';
+            else if (n === fpSrc) role = 'done';
+            else if (n in dist) role = 'seen';
+            nodeEls[n].c.setAttribute('class','node-circ '+role);
+            nodeEls[n].b.textContent = (n in dist) ? 'd='+dist[n] : 'd=∞';
+          });
+          Object.keys(edgeEls).forEach(function(k){
+            edgeEls[k].setAttribute('class','edge '+(extra.pathEdges && extra.pathEdges.indexOf(k)>=0 ? 'path' : 'tree'));
+          });
+          sV.textContent = NODES().length; sE.textContent = edges.length;
+          sSum.textContent = maxDist(fpSrc); sCmp.textContent = reachableCount(fpSrc);
+          setSide('Distances from source '+fpSrc, NODES().map(function(n){ return {t:n+'='+((n in dist)?dist[n]:'∞'), cls:(n in dist?'v':'')}; }));
+        }
+        function fpFlash(t){ freeNote.textContent = t; }
+
+        function nodeClickFree(id) {
+          if (fpPathMode) {
+            if (fpPathPick.length === 0 || fpPathPick.length === 2) { fpPathPick = [id]; fpFlash('Path start: '+id+'. Click a destination vertex.'); renderFree(); }
+            else if (fpPathPick[0] === id) { fpPathPick = []; fpFlash('Cleared. Click a start vertex.'); renderFree(); }
+            else {
+              fpPathPick.push(id);
+              var p = bfsPath(fpPathPick[0], fpPathPick[1]);
+              if (p) { var pe = []; for (var i=0;i<p.length-1;i++) pe.push(ekey(p[i],p[i+1])); fpFlash('Fewest-hops path '+fpPathPick[0]+'→'+fpPathPick[1]+': '+p.join(' → ')+' ('+(p.length-1)+' hops).'); renderFree({path:p, pathEdges:pe}); }
+              else { fpFlash('No path: '+fpPathPick[0]+' and '+fpPathPick[1]+' are in different components.'); renderFree(); }
+            }
+            return;
+          }
+          // edit mode: 1st click after a "set source" picks source; toggle edges between two picks
+          if (fpSel === null) { fpSel = id; fpFlash('Picked '+id+'. Click it again to make it the source, or click another vertex to toggle their edge.'); renderFree(); }
+          else if (fpSel === id) { fpSrc = id; fpSel = null; fpFlash('Source set to '+id+' — every d=k recomputed. Max distance = '+maxDist(fpSrc)+'.'); renderFree(); }
+          else {
+            var k = ekey(fpSel, id);
+            if (hasEdge(fpSel, id)) { edges = edges.filter(function(e){ return ekey(e[0],e[1])!==k; }); fpFlash('Removed edge {'+fpSel+', '+id+'} — distances recomputed.'); }
+            else { edges.push([fpSel, id]); fpFlash('Added edge {'+fpSel+', '+id+'} — distances recomputed.'); }
+            fpSel = null; buildSVG(); renderFree();
+          }
+        }
+
+        // ---- pointer handling (free play: click to select, drag to move) ----
+        var svg = document.getElementById('graph');
+        var drag = null;
+        function pt(ev){ var r = svg.getBoundingClientRect(); var cx = ev.touches?ev.touches[0].clientX:ev.clientX; var cy = ev.touches?ev.touches[0].clientY:ev.clientY; return { x:(cx-r.left)/r.width*560, y:(cy-r.top)/r.height*300 }; }
+        function down(ev){ if(!freeMode) return; var el = ev.target; if(el.dataset && el.dataset.id){ var id = el.dataset.id, p = pt(ev); drag = { id:id, moved:false, dx:p.x-pos[id][0], dy:p.y-pos[id][1] }; } }
+        function move(ev){ if(!drag) return; var p = pt(ev); var nx = Math.max(26,Math.min(534,p.x-drag.dx)), ny = Math.max(26,Math.min(274,p.y-drag.dy)); if(Math.abs(nx-pos[drag.id][0])>2||Math.abs(ny-pos[drag.id][1])>2) drag.moved=true; pos[drag.id]=[nx,ny]; positionSVG(); ev.preventDefault(); }
+        function up(){ if(!drag) return; if(!drag.moved) nodeClickFree(drag.id); drag=null; }
+        svg.addEventListener('mousedown',down); svg.addEventListener('touchstart',down,{passive:false});
+        window.addEventListener('mousemove',move); window.addEventListener('touchmove',move,{passive:false});
+        window.addEventListener('mouseup',up); window.addEventListener('touchend',up);
+
+        document.getElementById('f-path').addEventListener('click', function(){ fpPathMode = !fpPathMode; fpPathPick=[]; fpSel=null; this.classList.toggle('primary', fpPathMode); fpFlash(fpPathMode?'Find-path mode: click a start vertex, then a destination.':'Edit mode: click a vertex twice to set the source, or click two vertices to toggle their edge.'); renderFree(); });
+        document.getElementById('f-clear').addEventListener('click', function(){ edges=[]; fpSel=null; fpPathPick=[]; buildSVG(); fpFlash('All edges cleared — only the source '+fpSrc+' is reachable.'); renderFree(); });
+        document.getElementById('f-reset').addEventListener('click', function(){ loadBase(); fpSrc='A'; fpSel=null; fpPathPick=[]; fpPathMode=false; document.getElementById('f-path').classList.remove('primary'); buildSVG(); fpFlash('Reset to the starting graph, source A.'); renderFree(); });
+
+        document.querySelectorAll('.tab').forEach(function(tab){ tab.addEventListener('click', function(){
+          document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
+          tab.classList.add('active'); loadScenario(parseInt(tab.dataset.sc,10));
+        }); });
+        btnPlay.addEventListener('click', function(){ playing?stop():play(); });
+        btnNext.addEventListener('click', function(){ stop(); next(); });
+        btnPrev.addEventListener('click', function(){ stop(); prev(); });
+        btnRestart.addEventListener('click', function(){ stop(); idx=0; renderStep(steps[0]); });
+        window.addEventListener('keydown', function(e){ if(freeMode) return;
+          if(e.key==='ArrowLeft'){ stop(); prev(); } else if(e.key==='ArrowRight'){ stop(); next(); }
+          else if(e.key===' '){ e.preventDefault(); playing?stop():play(); } });
+
+        buildSVG();
+        loadScenario(0);
+
+        function postHeight(){ try { parent.postMessage({type:'prototype:height',height:document.body.scrollHeight},'*'); } catch(e){} }
+        new ResizeObserver(postHeight).observe(document.body);
+        postHeight();
+      })();
+    </script>
+  </body>
+</html>
