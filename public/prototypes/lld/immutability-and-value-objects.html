@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Immutability & Value Objects — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.32);
+        --success: #5cc66f;
+        --info: #5e9ff6;
+        --danger: #f06868;
+        --violet: #a78bfa;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      .lab { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+
+      /* ---- Mode toggle ---- */
+      .mode-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+      .mode-bar .ml { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--subtle); }
+      .seg { display: inline-flex; background: var(--elevated); border: 1px solid var(--border); border-radius: 999px; padding: 3px; }
+      .seg button { background: none; border: none; color: var(--muted); font: 600 12px/1 var(--sans); padding: 7px 14px; border-radius: 999px; cursor: pointer; transition: color .15s, background .15s; }
+      .seg button.on { color: var(--fg); }
+      .seg button.on[data-mode="mutable"] { background: rgba(240,104,104,0.18); color: #ffb4b4; }
+      .seg button.on[data-mode="immutable"] { background: rgba(92,198,111,0.16); color: #9fe6ab; }
+      .mode-note { font-size: 12px; color: var(--muted); margin-left: auto; }
+      .mode-note b { color: var(--fg); }
+
+      .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); }
+
+      /* ---- Scene: aliases + boxes ---- */
+      .scene { padding: 18px 16px 20px; }
+      .scene-grid { display: grid; grid-template-columns: 150px 1fr; gap: 14px 20px; align-items: center; }
+      @media (max-width: 700px) { .scene-grid { grid-template-columns: 1fr; gap: 10px; } }
+
+      .alias { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--border); background: var(--elevated); border-radius: var(--r-md); }
+      .alias .nm { font-family: var(--mono); font-size: 13px; font-weight: 600; }
+      .alias .nm.a { color: var(--accent); }
+      .alias .nm.b { color: var(--info); }
+      .alias .ref { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--subtle); }
+
+      /* arrow column */
+      .arrows { position: relative; }
+      .arrowlbl { font-family: var(--mono); font-size: 10px; color: var(--subtle); padding: 2px 0; }
+      .arrowlbl b.a { color: var(--accent); }
+      .arrowlbl b.b { color: var(--info); }
+
+      /* boxes */
+      .boxes { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; }
+      .mbox { position: relative; min-width: 150px; border: 1px solid var(--border-strong); background: var(--elevated); border-radius: var(--r-lg); padding: 12px 14px; transition: box-shadow .2s, border-color .2s, background .2s; animation: pop .28s ease; }
+      @keyframes pop { from { opacity: 0; transform: translateY(8px) scale(.96); } to { opacity: 1; transform: none; } }
+      .mbox .box-lab { font-family: var(--mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--subtle); margin-bottom: 7px; }
+      .mbox .amt { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
+      .mbox .cur { font-family: var(--mono); font-size: 13px; color: var(--muted); margin-left: 4px; }
+      .mbox .ptrs { margin-top: 9px; display: flex; gap: 6px; flex-wrap: wrap; min-height: 20px; }
+      .ptr { font-family: var(--mono); font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 999px; border: 1px solid var(--border); }
+      .ptr.a { color: var(--accent); border-color: var(--accent-border); background: var(--accent-soft); }
+      .ptr.b { color: var(--info); border-color: rgba(94,159,246,0.32); background: rgba(94,159,246,0.12); }
+      .mbox.stale { opacity: 0.62; border-style: dashed; }
+      .mbox.flash-bad { border-color: var(--danger); background: rgba(240,104,104,0.16); box-shadow: 0 0 0 1px var(--danger), 0 0 22px rgba(240,104,104,0.35); }
+      .mbox.flash-good { border-color: var(--success); background: rgba(92,198,111,0.14); box-shadow: 0 0 0 1px var(--success), 0 0 22px rgba(92,198,111,0.3); }
+      .mbox .swing { font-family: var(--mono); font-size: 9px; color: var(--success); margin-top: 6px; }
+
+      /* ---- Controls ---- */
+      .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
+      @media (max-width: 700px) { .controls { grid-template-columns: 1fr; } }
+      .ctl { border: 1px solid var(--border); background: var(--surface); border-radius: var(--r-md); padding: 12px; }
+      .ctl .ct { font-family: var(--mono); font-size: 11px; margin-bottom: 4px; }
+      .ctl .cd { font-size: 11px; color: var(--muted); margin-bottom: 10px; line-height: 1.5; }
+      .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+      input[type="number"] { width: 78px; background: var(--elevated); color: var(--fg); border: 1px solid var(--border); border-radius: var(--r-md); padding: 8px 10px; font: 13px var(--mono); }
+      input[type="number"]:focus { outline: none; border-color: var(--accent-border); }
+
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 12px; cursor: pointer; transition: filter .15s, transform .1s, border-color .15s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .btn.primary { background: var(--accent); color: #1a1003; border-color: transparent; width: 100%; padding: 11px; font-size: 13px; }
+      .btn.primary:hover { filter: brightness(1.06); }
+      .btn.sm { padding: 7px 9px; font-size: 11px; }
+      .btn.danger { border-color: rgba(240,104,104,0.4); color: #ffb4b4; }
+      .btn.danger:hover { border-color: var(--danger); }
+      .btn.good { border-color: rgba(92,198,111,0.4); color: #9fe6ab; }
+      .btn.good:hover { border-color: var(--success); }
+      .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+      .eqbar { margin-top: 14px; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); background: var(--elevated); border-radius: var(--r-md); flex-wrap: wrap; }
+      .eqbar .eqcode { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+      .eqbar .eqres { font-family: var(--mono); font-size: 12px; font-weight: 700; }
+      .eqbar .eqres.t { color: var(--success); }
+
+      /* ---- Console ---- */
+      .console { margin-top: 16px; }
+      .console-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+      .console-bar .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+      .log { background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px 12px; font-family: var(--mono); font-size: 11.5px; line-height: 1.7; min-height: 92px; max-height: 150px; overflow-y: auto; }
+      .log .ln { white-space: pre-wrap; }
+      .log .muted { color: var(--subtle); }
+      .log .c-accent { color: var(--accent); }
+      .log .c-info { color: var(--info); }
+      .log .c-success { color: var(--success); }
+      .log .c-danger { color: var(--danger); }
+      .log .c-fg { color: var(--fg); }
+
+      .hint { margin-top: 12px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <div class="mode-bar">
+      <span class="ml">mode</span>
+      <div class="seg" id="seg">
+        <button data-mode="mutable" class="on" onclick="setMode('mutable')">Mutable</button>
+        <button data-mode="immutable" onclick="setMode('immutable')">Immutable</button>
+      </div>
+      <span class="mode-note" id="mode-note"><b>Mutable:</b> setters edit the shared box in place.</span>
+    </div>
+
+    <div class="card scene">
+      <div class="scene-grid">
+        <!-- aliases -->
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div class="alias"><span class="nm a">aliasA</span><span class="ref" id="ref-a">→ #1</span></div>
+          <div class="alias"><span class="nm b">aliasB</span><span class="ref" id="ref-b">→ #1</span></div>
+        </div>
+        <!-- boxes -->
+        <div class="boxes" id="boxes"></div>
+      </div>
+
+      <div class="controls">
+        <div class="ctl">
+          <div class="ct" id="op-title"><span class="c-accent">aliasA</span>.setAmount(<span id="op-arg">0</span>)</div>
+          <div class="cd" id="op-desc">Mutate the shared box in place. Both references point at it, so aliasB changes too.</div>
+          <div class="row">
+            <input type="number" id="amt-in" value="0" />
+            <button class="btn danger" id="op-btn" onclick="doOp()">aliasA.setAmount(…)</button>
+          </div>
+        </div>
+        <div class="ctl">
+          <div class="ct"><span class="c-accent">aliasA</span>.equals(<span class="c-info">aliasB</span>)</div>
+          <div class="cd">Value objects compare by value. Two separate <span class="c-fg">Money(100,"USD")</span> are equal.</div>
+          <div class="row">
+            <button class="btn" onclick="checkEquals()">aliasA.equals(aliasB)</button>
+            <button class="btn sm" onclick="resetAll()" style="margin-left:auto">Reset</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="eqbar">
+        <span class="eqcode" id="eq-code">aliasA.equals(aliasB)</span>
+        <span class="muted">→</span>
+        <span class="eqres" id="eq-res">press equals()</span>
+      </div>
+    </div>
+
+    <div class="console">
+      <div class="console-bar">
+        <span class="dot"></span>
+        <span class="lab">console</span>
+      </div>
+      <div class="log" id="log"></div>
+      <div class="hint">
+        <span class="b">▸</span>
+        <span>Same action, two outcomes. In <b style="color:#ffb4b4">Mutable</b> mode one setter corrupts both references; in <b style="color:#9fe6ab">Immutable</b> mode <b style="color:var(--fg)">plus()</b> builds a new box and only aliasA moves.</span>
+      </div>
+    </div>
+
+    <script>
+      // ---- state ----
+      var mode = "mutable";
+      var nextId = 1;
+      var boxes = [];          // { id, amount, currency, stale, isNew }
+      var refA = null;         // box id aliasA points at
+      var refB = null;         // box id aliasB points at
+
+      function newBox(amount, currency) {
+        var b = { id: nextId++, amount: amount, currency: currency, stale: false, isNew: false };
+        boxes.push(b);
+        return b;
+      }
+      function boxById(id) {
+        for (var i = 0; i < boxes.length; i++) if (boxes[i].id === id) return boxes[i];
+        return null;
+      }
+
+      function flash(id, kind) {
+        var node = document.querySelector('[data-box="' + id + '"]');
+        if (!node) return;
+        var cls = kind === "good" ? "flash-good" : "flash-bad";
+        node.classList.add(cls);
+        setTimeout(function () { node.classList.remove(cls); }, 700);
+      }
+
+      function log(html, cls) {
+        var box = document.getElementById("log");
+        var line = document.createElement("div");
+        line.className = "ln" + (cls ? " " + cls : "");
+        line.innerHTML = html;
+        box.appendChild(line);
+        while (box.children.length > 9) box.removeChild(box.firstChild);
+        box.scrollTop = box.scrollHeight;
+      }
+
+      function setMode(m) {
+        if (m === mode) return;
+        mode = m;
+        Array.prototype.forEach.call(document.getElementById("seg").children, function (btn) {
+          btn.classList.toggle("on", btn.getAttribute("data-mode") === m);
+        });
+        resetAll(true);
+        var note = document.getElementById("mode-note");
+        var btn = document.getElementById("op-btn");
+        var title = document.getElementById("op-title");
+        var desc = document.getElementById("op-desc");
+        if (m === "mutable") {
+          note.innerHTML = '<b>Mutable:</b> setters edit the shared box in place.';
+          btn.className = "btn danger";
+          btn.textContent = "aliasA.setAmount(…)";
+          title.innerHTML = '<span class="c-accent">aliasA</span>.setAmount(<span id="op-arg">' + amtVal() + '</span>)';
+          desc.textContent = "Mutate the shared box in place. Both references point at it, so aliasB changes too.";
+          log('<span class="muted">// switched to MUTABLE — Money has a setter; both aliases share one box</span>');
+        } else {
+          note.innerHTML = '<b>Immutable:</b> plus() returns a NEW box; only aliasA re-points.';
+          btn.className = "btn good";
+          btn.textContent = "aliasA = aliasA.plus(…)";
+          title.innerHTML = '<span class="c-accent">aliasA</span> = <span class="c-accent">aliasA</span>.plus(<span id="op-arg">' + amtVal() + '</span>)';
+          desc.textContent = "plus() constructs a NEW box and re-points only aliasA. The original (aliasB's box) is untouched.";
+          log('<span class="muted">// switched to IMMUTABLE — no setters; "changes" build a new Money</span>');
+        }
+      }
+
+      function amtVal() {
+        var v = parseInt(document.getElementById("amt-in").value, 10);
+        return isNaN(v) ? 0 : v;
+      }
+
+      function doOp() {
+        if (mode === "mutable") return mutateOp();
+        return immutableOp();
+      }
+
+      // MUTABLE: edit the shared box; aliasB is corrupted
+      function mutateOp() {
+        var box = boxById(refA);
+        if (!box) return;
+        var arg = amtVal();
+        var before = box.amount;
+        box.amount = arg;        // <-- mutation of the SHARED object
+        render();
+        flash(box.id, "bad");
+        log('<span class="c-accent">aliasA</span>.<span class="c-danger">setAmount</span>(' + arg + ') <span class="muted">→ box #' + box.id + ' amount ' + before + '→' + arg + '</span>');
+        log('⚠ <span class="c-danger">aliasB unexpectedly changed!</span> <span class="muted">aliasB.amount is now ' + box.amount + ' — same object, two names (aliasing bug)</span>', "c-danger");
+      }
+
+      // IMMUTABLE: plus() builds a new box; only aliasA re-points
+      function immutableOp() {
+        var oldBox = boxById(refA);
+        if (!oldBox) return;
+        var arg = amtVal();
+        oldBox.stale = (refB !== oldBox.id) ? oldBox.stale : oldBox.stale; // keep flag logic simple
+        var fresh = newBox(oldBox.amount + arg, oldBox.currency);
+        fresh.isNew = true;
+        // the previous aliasA box becomes "stale" only if nobody else points at it
+        boxes.forEach(function (b) { b.stale = false; });
+        refA = fresh.id;          // swing only aliasA's arrow
+        render();
+        flash(fresh.id, "good");
+        log('<span class="c-accent">aliasA</span> = <span class="c-accent">aliasA</span>.<span class="c-success">plus</span>(' + arg + ') <span class="muted">→ new box #' + fresh.id + ' = Money(' + fresh.amount + ',"' + fresh.currency + '")</span>');
+        log('✓ <span class="c-success">aliasB safe — original unchanged</span> <span class="muted">aliasB still → box #' + refB + ' = Money(' + boxById(refB).amount + ',"' + boxById(refB).currency + '")</span>', "c-success");
+        setTimeout(function () { fresh.isNew = false; }, 50);
+      }
+
+      function checkEquals() {
+        var a = boxById(refA), b = boxById(refB);
+        var eq = !!a && !!b && a.amount === b.amount && a.currency === b.currency;
+        var el = document.getElementById("eq-res");
+        el.textContent = eq ? "true" : "false";
+        el.className = "eqres" + (eq ? " t" : "");
+        document.getElementById("eq-code").innerHTML =
+          'Money(' + a.amount + ',"' + a.currency + '").equals(Money(' + b.amount + ',"' + b.currency + '"))';
+        if (eq) {
+          log('<span class="c-accent">aliasA</span>.equals(<span class="c-info">aliasB</span>) <span class="muted">→</span> <span class="c-success">true</span> <span class="muted">— equal by VALUE (different instances, same fields)</span>', "");
+        } else {
+          log('<span class="c-accent">aliasA</span>.equals(<span class="c-info">aliasB</span>) <span class="muted">→</span> <span class="c-danger">false</span> <span class="muted">— the fields differ now</span>', "");
+        }
+      }
+
+      function render() {
+        // refs
+        document.getElementById("ref-a").textContent = "→ #" + refA;
+        document.getElementById("ref-b").textContent = "→ #" + refB;
+        // boxes (show only boxes that a reference points at, plus keep order)
+        var visible = boxes.filter(function (b) { return b.id === refA || b.id === refB; });
+        var host = document.getElementById("boxes");
+        host.innerHTML = visible.map(function (b) {
+          var ptrs = "";
+          if (refA === b.id) ptrs += '<span class="ptr a">aliasA</span>';
+          if (refB === b.id) ptrs += '<span class="ptr b">aliasB</span>';
+          var stale = (refA !== b.id && refB === b.id && mode === "immutable") ? "" : "";
+          var newlbl = b.isNew ? '<div class="swing">↩ aliasA swung to this new box</div>' : "";
+          return (
+            '<div class="mbox" data-box="' + b.id + '">' +
+              '<div class="box-lab">Money · box #' + b.id + '</div>' +
+              '<div><span class="amt">' + b.amount + '</span><span class="cur">' + b.currency + '</span></div>' +
+              '<div class="ptrs">' + (ptrs || '<span class="ptr" style="color:var(--subtle)">(no refs)</span>') + '</div>' +
+              newlbl +
+            '</div>'
+          );
+        }).join("");
+      }
+
+      function resetAll(keepLog) {
+        boxes = [];
+        nextId = 1;
+        var box = newBox(100, "USD");
+        refA = box.id;
+        refB = box.id;
+        document.getElementById("amt-in").value = (mode === "mutable") ? 0 : 50;
+        document.getElementById("eq-res").textContent = "press equals()";
+        document.getElementById("eq-res").className = "eqres";
+        document.getElementById("eq-code").textContent = "aliasA.equals(aliasB)";
+        render();
+        if (!keepLog) {
+          document.getElementById("log").innerHTML = "";
+          log('<span class="muted">// aliasA and aliasB both point at one box #1 = Money(100,"USD")</span>');
+        }
+      }
+
+      // keep the op-arg label in sync as you type
+      document.getElementById("amt-in").addEventListener("input", function () {
+        var arg = document.getElementById("op-arg");
+        if (arg) arg.textContent = amtVal();
+      });
+
+      // seed: Mutable mode, both aliases on one 100 box
+      resetAll();
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

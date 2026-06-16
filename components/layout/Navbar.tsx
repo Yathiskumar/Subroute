@@ -10,7 +10,7 @@ import { MobileMenu } from "./MobileMenu";
 
 const NAV_ITEMS = [
   { href: "/topics", label: "Topics" },
-  { href: "/playground", label: "Playground" },
+  { href: "/roadmaps", label: "Roadmaps" },
   { href: "/blog", label: "Blog" },
   { href: "/about", label: "About" },
 ];

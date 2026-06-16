@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Access Modifiers — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.32);
+        --success: #5cc66f;
+        --info: #5e9ff6;
+        --danger: #f06868;
+        --violet: #a78bfa;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      .lab { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+
+      .wrap { max-width: 700px; margin: 0 auto; }
+
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 12px; cursor: pointer; transition: filter .15s, transform .1s, border-color .15s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .btn.primary { background: var(--accent); color: #1a1003; border-color: transparent; width: 100%; padding: 11px; font-size: 13px; }
+      .btn.primary:hover { filter: brightness(1.06); }
+      .btn.sm { padding: 7px 9px; font-size: 11px; }
+
+      /* ---- Context selector ---- */
+      .ctx-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 14px 16px; margin-bottom: 16px; }
+      .ctx-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px; }
+      .ctx-head .ttl { font-size: 13px; font-weight: 600; }
+      .ctx-head .sub { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+      .ctx-options { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+      @media (max-width: 560px) { .ctx-options { grid-template-columns: repeat(2, 1fr); } }
+
+      .ctx { text-align: left; background: var(--elevated); color: var(--fg); border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px 11px; cursor: pointer; transition: border-color .15s, background .15s, transform .1s; }
+      .ctx:hover { border-color: var(--border-strong); }
+      .ctx:active { transform: scale(0.98); }
+      .ctx.on { border-color: var(--accent-border); background: var(--accent-soft); }
+      .ctx .nm { display: block; font-size: 12px; font-weight: 600; margin-bottom: 3px; }
+      .ctx.on .nm { color: var(--accent); }
+      .ctx .who { display: block; font-family: var(--mono); font-size: 9.5px; line-height: 1.35; color: var(--subtle); }
+
+      /* ---- Class card / matrix ---- */
+      .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; }
+      .class-bar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--elevated); }
+      .class-bar .kw { font-family: var(--mono); font-size: 12px; color: var(--accent); }
+      .class-bar .nm { font-family: var(--mono); font-size: 13px; font-weight: 600; }
+      .class-bar .tag { margin-left: auto; white-space: nowrap; font-family: var(--mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--subtle); border: 1px solid var(--border); border-radius: 999px; padding: 2px 8px; }
+      .class-body { padding: 10px 12px 12px; }
+
+      .matrix-head { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; padding: 4px 10px 8px; }
+      .matrix-head span { font-family: var(--mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--subtle); }
+      .matrix-head .h-acc { text-align: right; }
+
+      .row { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; padding: 9px 10px; border-radius: var(--r-md); border: 1px solid transparent; margin-bottom: 6px; cursor: pointer; transition: background .18s, border-color .18s; }
+      .row .mem { font-family: var(--mono); font-size: 12.5px; display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+      .row .mem .nm { font-weight: 600; }
+      .row .mem .ty { color: var(--info); font-size: 11px; }
+      .row .lvl { font-family: var(--mono); font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; border-radius: 999px; padding: 2px 7px; border: 1px solid var(--border-strong); color: var(--muted); white-space: nowrap; }
+      .row .acc { font-family: var(--mono); font-size: 12px; font-weight: 700; white-space: nowrap; text-align: right; }
+
+      .row.ok { background: rgba(92,198,111,0.10); border-color: rgba(92,198,111,0.30); }
+      .row.ok .acc { color: var(--success); }
+      .row.no { background: rgba(240,104,104,0.07); border-color: rgba(240,104,104,0.22); }
+      .row.no .acc { color: var(--danger); }
+      .row.no .mem .nm, .row.no .mem .ty { opacity: 0.62; }
+      .row:hover { border-color: var(--border-strong); }
+
+      .level-private { color: var(--danger); border-color: rgba(240,104,104,0.4); }
+      .level-package { color: var(--violet); border-color: rgba(167,139,250,0.4); }
+      .level-protected { color: var(--info); border-color: rgba(94,159,246,0.4); }
+      .level-public { color: var(--success); border-color: rgba(92,198,111,0.4); }
+
+      .explain { display: flex; gap: 8px; align-items: flex-start; margin-top: 12px; padding: 11px 12px; background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r-md); font-size: 12.5px; line-height: 1.55; color: var(--muted); }
+      .explain .b { color: var(--accent); flex: none; }
+      .explain b { color: var(--fg); font-weight: 600; }
+      .explain .grn { color: var(--success); font-weight: 600; }
+      .explain .red { color: var(--danger); font-weight: 600; }
+
+      /* ---- Console ---- */
+      .console { margin-top: 16px; }
+      .console-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+      .console-bar .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+      .log { background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px 12px; font-family: var(--mono); font-size: 11.5px; line-height: 1.7; min-height: 78px; max-height: 150px; overflow-y: auto; }
+      .log .ln { white-space: pre-wrap; }
+      .log .muted { color: var(--subtle); }
+      .log .c-accent { color: var(--accent); }
+      .log .c-info { color: var(--info); }
+      .log .c-success { color: var(--success); }
+      .log .c-danger { color: var(--danger); }
+      .log .c-fg { color: var(--fg); }
+
+      .hint { margin-top: 12px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <!-- CALLER CONTEXT -->
+      <div class="ctx-card">
+        <div class="ctx-head">
+          <span class="ttl">Caller context</span>
+          <span class="sub">— who is trying to reach <b style="color:var(--fg)">Account</b>'s members?</span>
+        </div>
+        <div class="ctx-options" id="ctx-options"></div>
+      </div>
+
+      <!-- THE CLASS / MATRIX -->
+      <div class="card">
+        <div class="class-bar">
+          <span class="kw">class</span>
+          <span class="nm">Account</span>
+          <span class="tag" id="ctx-tag">from: outside world</span>
+        </div>
+        <div class="class-body">
+          <div class="matrix-head">
+            <span>member</span>
+            <span>level</span>
+            <span class="h-acc">access</span>
+          </div>
+          <div id="matrix"></div>
+          <div class="explain">
+            <span class="b">▸</span>
+            <span id="explain"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- CONSOLE -->
+      <div class="console">
+        <div class="console-bar">
+          <span class="dot"></span>
+          <span class="lab">console</span>
+          <button class="btn sm" style="margin-left:auto" onclick="clearLog()">Clear</button>
+        </div>
+        <div class="log" id="log"></div>
+        <div class="hint">
+          <span class="b">▸</span>
+          <span>Switch the <b style="color:var(--fg)">caller context</b> to recolor the matrix. Click any <b style="color:var(--danger)">red</b> row to log exactly why it's blocked.</span>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // ----- model -----
+      // levels, tightest → widest
+      var MEMBERS = [
+        { key: "id",         label: "id",           type: "string",   level: "public",  isMethod: false },
+        { key: "getBalance", label: "getBalance()", type: "method",   level: "public",  isMethod: true  },
+        { key: "auditLog",   label: "auditLog",     type: "string[]", level: "protected", isMethod: false },
+        { key: "region",     label: "region",       type: "string",   level: "package", isMethod: false },
+        { key: "balance",    label: "balance",      type: "number",   level: "private", isMethod: false }
+      ];
+
+      var LEVEL_LABEL = {
+        public: "public",
+        protected: "protected",
+        package: "package-private",
+        private: "private"
+      };
+
+      // caller contexts
+      var CONTEXTS = [
+        { key: "class",   nm: "Inside the same class", who: "sees everything",        tag: "from: inside the class" },
+        { key: "sub",     nm: "A subclass",            who: "another package",        tag: "from: a subclass" },
+        { key: "package", nm: "Same package",          who: "not a subclass",         tag: "from: same package" },
+        { key: "outside", nm: "Outside world",         who: "different package",      tag: "from: outside world" }
+      ];
+
+      // can context C see a member of LEVEL?
+      function canAccess(ctx, level) {
+        if (ctx === "class") return true; // same class sees all four
+        if (ctx === "sub") return level === "public" || level === "protected";
+        if (ctx === "package") return level === "public" || level === "protected" || level === "package";
+        if (ctx === "outside") return level === "public";
+        return false;
+      }
+
+      // human summary per context
+      function summary(ctx) {
+        if (ctx === "class")
+          return "From <b>inside the same class</b> you can see <span class=\"grn\">everything</span> — public, protected, package-private, and private. The class is the one place with full access to its own members.";
+        if (ctx === "sub")
+          return "From <b>a subclass</b> (in another package) you can see <span class=\"grn\">public + protected</span>, but <span class=\"red\">not private and not package-private</span>. Inheritance opens the protected door; the rest stay shut.";
+        if (ctx === "package")
+          return "From the <b>same package</b> (not a subclass) you can see <span class=\"grn\">public, protected, and package-private</span>, but <span class=\"red\">not private</span>. Private stays sealed inside its own class.";
+        return "From the <b>outside world</b> (different package, not a subclass) you can see <span class=\"grn\">public only</span>. <span class=\"red\">Protected, package-private, and private are all locked.</span>";
+      }
+
+      var current = "outside"; // seed: outside world
+
+      // ----- render -----
+      function buildContexts() {
+        var host = document.getElementById("ctx-options");
+        host.innerHTML = "";
+        CONTEXTS.forEach(function (c) {
+          var b = document.createElement("button");
+          b.className = "ctx" + (c.key === current ? " on" : "");
+          b.setAttribute("data-ctx", c.key);
+          b.innerHTML = '<span class="nm">' + c.nm + '</span><span class="who">' + c.who + '</span>';
+          b.onclick = function () { setContext(c.key); };
+          host.appendChild(b);
+        });
+      }
+
+      function renderMatrix() {
+        var host = document.getElementById("matrix");
+        host.innerHTML = "";
+        MEMBERS.forEach(function (m) {
+          var ok = canAccess(current, m.level);
+          var row = document.createElement("div");
+          row.className = "row " + (ok ? "ok" : "no");
+          row.setAttribute("data-key", m.key);
+
+          var tyHtml = m.isMethod ? "" : '<span class="ty">: ' + m.type + "</span>";
+          var accHtml = ok ? "✓ visible" : "🔒 blocked";
+
+          row.innerHTML =
+            '<span class="mem"><span class="nm">' + m.label + "</span>" + tyHtml + "</span>" +
+            '<span class="lvl level-' + m.level + '">' + LEVEL_LABEL[m.level] + "</span>" +
+            '<span class="acc">' + accHtml + "</span>";
+
+          row.onclick = function () { clickRow(m, ok); };
+          host.appendChild(row);
+        });
+        document.getElementById("explain").innerHTML = summary(current);
+      }
+
+      function setContext(key) {
+        if (key === current) return;
+        current = key;
+        var ctx = ctxByKey(key);
+        Array.prototype.forEach.call(
+          document.querySelectorAll(".ctx"),
+          function (el) {
+            el.className = "ctx" + (el.getAttribute("data-ctx") === key ? " on" : "");
+          }
+        );
+        document.getElementById("ctx-tag").textContent = ctx.tag;
+        renderMatrix();
+        log('caller is now <span class="c-accent">' + ctx.nm + '</span> <span class="muted">— matrix recolored</span>');
+      }
+
+      function ctxByKey(key) {
+        for (var i = 0; i < CONTEXTS.length; i++) if (CONTEXTS[i].key === key) return CONTEXTS[i];
+        return CONTEXTS[0];
+      }
+
+      function clickRow(m, ok) {
+        var ctxNm = ctxByKey(current).nm;
+        if (ok) {
+          log(
+            '<span class="c-success">✓</span> <span class="c-fg">' + m.label +
+            '</span> is <span class="c-success">' + LEVEL_LABEL[m.level] +
+            '</span> <span class="muted">— visible from ' + ctxNm + "</span>",
+            "c-success"
+          );
+        } else {
+          log(
+            '<span class="c-danger">✗ ' + m.label +
+            '</span> is <span class="c-danger">' + LEVEL_LABEL[m.level] +
+            '</span> <span class="muted">— not visible from ' + ctxNm + "</span>",
+            "c-danger"
+          );
+        }
+      }
+
+      // ----- console -----
+      function log(html, cls) {
+        var box = document.getElementById("log");
+        var line = document.createElement("div");
+        line.className = "ln" + (cls ? " " + cls : "");
+        line.innerHTML = html;
+        box.appendChild(line);
+        while (box.children.length > 9) box.removeChild(box.firstChild);
+        box.scrollTop = box.scrollHeight;
+      }
+
+      function clearLog() {
+        document.getElementById("log").innerHTML = "";
+        log('<span class="muted">// click a member row to test access from the current context</span>');
+      }
+
+      // ----- init -----
+      buildContexts();
+      renderMatrix();
+      log('<span class="muted">// caller starts as <b style="color:var(--fg)">Outside world</b> — only public members are green</span>');
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

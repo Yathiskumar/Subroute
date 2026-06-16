@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Coupling & Cohesion — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.32);
+        --success: #5cc66f;
+        --info: #5e9ff6;
+        --danger: #f06868;
+        --violet: #a78bfa;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      .lab { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+
+      .toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+      .toolbar .spacer { flex: 1; }
+
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 12px; cursor: pointer; transition: filter .15s, transform .1s, border-color .15s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .btn.primary { background: var(--accent); color: #1a1003; border-color: transparent; }
+      .btn.primary:hover { filter: brightness(1.06); }
+      .btn.ghost { background: transparent; }
+      .btn.sm { padding: 7px 9px; font-size: 11px; }
+
+      /* ---- Metrics ---- */
+      .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+      @media (max-width: 700px) { .metrics { grid-template-columns: 1fr; } }
+      .metric { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 12px 14px; }
+      .metric-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 9px; }
+      .metric-name { font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+      .metric-val { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
+      .metric-val .sub { font-size: 12px; font-weight: 500; color: var(--subtle); margin-left: 4px; }
+      .bar { height: 8px; border-radius: 999px; background: var(--elevated); overflow: hidden; }
+      .bar > span { display: block; height: 100%; border-radius: 999px; transition: width .45s cubic-bezier(.22,.61,.36,1), background .3s; }
+      .metric-note { margin-top: 8px; font-size: 11px; color: var(--subtle); }
+
+      /* ---- Board ---- */
+      .board { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+      @media (max-width: 700px) { .board { grid-template-columns: 1fr; } }
+
+      .module { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 12px; min-height: 92px; transition: border-color .2s, box-shadow .2s; }
+      .module.unsorted { grid-column: 1 / -1; border-style: dashed; border-color: var(--border-strong); }
+      .module.flash { box-shadow: 0 0 0 1px var(--accent-border); }
+      .module-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+      .module-dot { width: 9px; height: 9px; border-radius: 3px; flex: none; }
+      .module-name { font-family: var(--mono); font-size: 12px; font-weight: 600; }
+      .module-meta { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--subtle); }
+      .module-empty { font-size: 12px; color: var(--subtle); font-style: italic; padding: 4px 2px; }
+
+      .fns { display: flex; flex-wrap: wrap; gap: 7px; }
+      .fn { font-family: var(--mono); font-size: 11.5px; padding: 6px 9px; border-radius: var(--r-md); border: 1px solid var(--border); background: var(--elevated); color: var(--fg); cursor: pointer; transition: transform .1s, border-color .15s, background .15s; display: inline-flex; align-items: center; gap: 6px; }
+      .fn:hover { border-color: var(--accent-border); transform: translateY(-1px); }
+      .fn:active { transform: scale(0.97); }
+      .fn .tag { width: 7px; height: 7px; border-radius: 50%; flex: none; opacity: .85; }
+      .fn.home { border-color: rgba(92,198,111,0.4); }
+      .fn.wrong { border-color: rgba(240,104,104,0.35); }
+      .fn.pulse { animation: fpulse .5s ease; }
+      @keyframes fpulse { 0% { background: var(--accent-soft); } 100% { background: var(--elevated); } }
+
+      /* move picker */
+      .picker-back { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 20; padding: 18px; }
+      .picker-back.on { display: flex; }
+      .picker { background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--r-lg); padding: 16px; width: 100%; max-width: 320px; }
+      .picker h4 { margin: 0 0 4px; font-size: 14px; }
+      .picker p { margin: 0 0 12px; font-size: 12px; color: var(--muted); }
+      .picker p b { color: var(--accent); font-family: var(--mono); }
+      .picker-opts { display: grid; gap: 8px; }
+      .picker-opt { display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; background: var(--elevated); border: 1px solid var(--border); color: var(--fg); border-radius: var(--r-md); padding: 10px 12px; cursor: pointer; font: 600 13px var(--sans); transition: border-color .15s; }
+      .picker-opt:hover { border-color: var(--accent-border); }
+      .picker-opt .pd { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+      .picker-opt .hint { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--subtle); }
+      .picker-cancel { margin-top: 10px; width: 100%; }
+
+      /* ---- Console ---- */
+      .console { margin-top: 4px; }
+      .console-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+      .console-bar .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+      .log { background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px 12px; font-family: var(--mono); font-size: 11.5px; line-height: 1.7; min-height: 92px; max-height: 150px; overflow-y: auto; }
+      .log .ln { white-space: pre-wrap; }
+      .log .muted { color: var(--subtle); }
+      .log .c-accent { color: var(--accent); }
+      .log .c-info { color: var(--info); }
+      .log .c-success { color: var(--success); }
+      .log .c-danger { color: var(--danger); }
+      .log .c-fg { color: var(--fg); }
+
+      .hint { margin-top: 12px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <div class="toolbar">
+      <button class="btn primary" onclick="autoRefactor()">⤷ Auto-refactor</button>
+      <button class="btn ghost" onclick="tangle()">⤬ Tangle it</button>
+      <span class="spacer"></span>
+      <span class="lab" id="status">tangled — move functions to their module</span>
+    </div>
+
+    <!-- METRICS -->
+    <div class="metrics">
+      <div class="metric">
+        <div class="metric-top">
+          <span class="metric-name">Coupling · cross-module edges</span>
+          <span class="metric-val"><span id="coupling-val">0</span><span class="sub" id="coupling-max">/ 0</span></span>
+        </div>
+        <div class="bar"><span id="coupling-bar" style="width:100%;background:var(--danger)"></span></div>
+        <div class="metric-note">lower is better — fewer dependency lines crossing boundaries</div>
+      </div>
+      <div class="metric">
+        <div class="metric-top">
+          <span class="metric-name">Cohesion · members in right home</span>
+          <span class="metric-val"><span id="cohesion-val">0</span><span class="sub">%</span></span>
+        </div>
+        <div class="bar"><span id="cohesion-bar" style="width:0%;background:var(--success)"></span></div>
+        <div class="metric-note">higher is better — related work grouped into focused modules</div>
+      </div>
+    </div>
+
+    <!-- BOARD -->
+    <div class="board" id="board"></div>
+
+    <!-- CONSOLE -->
+    <div class="console">
+      <div class="console-bar">
+        <span class="dot"></span>
+        <span class="lab">console</span>
+        <button class="btn sm" style="margin-left:auto" onclick="reset()">Reset</button>
+      </div>
+      <div class="log" id="log"></div>
+      <div class="hint">
+        <span class="b">▸</span>
+        <span>Click a <b style="color:var(--fg)">function</b> and send it to its module. Group related work together → cross-boundary edges drop, <b style="color:var(--fg)">coupling falls</b> and <b style="color:var(--fg)">cohesion rises</b>.</span>
+      </div>
+    </div>
+
+    <div class="picker-back" id="picker-back">
+      <div class="picker">
+        <h4>Move this function</h4>
+        <p>Send <b id="picker-fn">fn</b> to which module?</p>
+        <div class="picker-opts" id="picker-opts"></div>
+        <button class="btn ghost picker-cancel" onclick="closePicker()">Cancel</button>
+      </div>
+    </div>
+
+    <script>
+      // Each function: which module it BELONGS to (home), and which functions it calls.
+      // Edges are undirected for the coupling count (a call between two functions).
+      var MODULES = [
+        { id: "orders",  name: "Orders",        color: "#5e9ff6" },
+        { id: "billing", name: "Billing",       color: "#fb863a" },
+        { id: "notify",  name: "Notifications", color: "#a78bfa" },
+      ];
+      function modColor(id) {
+        if (id === "unsorted") return "#6b7280";
+        for (var i = 0; i < MODULES.length; i++) if (MODULES[i].id === id) return MODULES[i].color;
+        return "#6b7280";
+      }
+      function modName(id) {
+        if (id === "unsorted") return "Unsorted";
+        for (var i = 0; i < MODULES.length; i++) if (MODULES[i].id === id) return MODULES[i].name;
+        return "Unsorted";
+      }
+
+      // calls mostly stay WITHIN a home module; one honest cross edge (sendEmail needs the invoice).
+      var FUNCS = [
+        { id: "validateOrder", home: "orders",  calls: ["loadUser", "saveOrder"] },
+        { id: "saveOrder",     home: "orders",  calls: ["loadUser"] },
+        { id: "loadUser",      home: "orders",  calls: [] },
+        { id: "calcTax",       home: "billing", calls: [] },
+        { id: "chargeCard",    home: "billing", calls: ["calcTax"] },
+        { id: "formatInvoice", home: "billing", calls: ["calcTax", "chargeCard"] },
+        { id: "sendEmail",     home: "notify",  calls: ["formatInvoice", "logEvent"] },
+        { id: "logEvent",      home: "notify",  calls: [] },
+      ];
+
+      // build the undirected edge list once
+      var EDGES = [];
+      (function () {
+        var seen = {};
+        FUNCS.forEach(function (f) {
+          f.calls.forEach(function (c) {
+            var key = [f.id, c].sort().join("|");
+            if (!seen[key]) { seen[key] = true; EDGES.push([f.id, c]); }
+          });
+        });
+      })();
+
+      var current = {}; // fnId -> moduleId
+
+      function placeAllIn(modId) {
+        FUNCS.forEach(function (f) { current[f.id] = modId; });
+      }
+
+      function crossingEdges() {
+        // An edge "crosses a boundary" when its two functions aren't grouped in the
+        // same real module. A function still sitting in the Unsorted pile isn't grouped
+        // with anything, so any edge touching it counts as crossing.
+        var n = 0;
+        EDGES.forEach(function (e) {
+          var a = current[e[0]], b = current[e[1]];
+          if (a === "unsorted" || b === "unsorted" || a !== b) n++;
+        });
+        return n;
+      }
+
+      function cohesionPct() {
+        // share of functions that sit in their true home module
+        var right = 0;
+        FUNCS.forEach(function (f) { if (current[f.id] === f.home) right++; });
+        return Math.round((right / FUNCS.length) * 100);
+      }
+
+      function lerpColor(t) {
+        // t=0 → danger (red), t=1 → success (green), midway → accent-ish
+        var stops = [[240,104,104],[251,134,58],[92,198,111]];
+        var seg = t < 0.5 ? 0 : 1;
+        var lt = t < 0.5 ? t / 0.5 : (t - 0.5) / 0.5;
+        var a = stops[seg], b = stops[seg + 1];
+        var r = Math.round(a[0] + (b[0] - a[0]) * lt);
+        var g = Math.round(a[1] + (b[1] - a[1]) * lt);
+        var bl = Math.round(a[2] + (b[2] - a[2]) * lt);
+        return "rgb(" + r + "," + g + "," + bl + ")";
+      }
+
+      function updateMetrics() {
+        var cross = crossingEdges();
+        var coh = cohesionPct();
+        document.getElementById("coupling-val").textContent = cross;
+        document.getElementById("coupling-max").textContent = "/ " + EDGES.length;
+        document.getElementById("cohesion-val").textContent = coh;
+
+        var couplingT = EDGES.length ? cross / EDGES.length : 0; // 0 good, 1 bad
+        var cBar = document.getElementById("coupling-bar");
+        cBar.style.width = (couplingT * 100).toFixed(1) + "%";
+        cBar.style.background = lerpColor(1 - couplingT); // green when low
+
+        var hBar = document.getElementById("cohesion-bar");
+        hBar.style.width = coh + "%";
+        hBar.style.background = lerpColor(coh / 100);
+
+        var done = coh === 100;
+        document.getElementById("status").textContent = done
+          ? "✓ high cohesion · coupling down to " + cross + " (one honest cross-module call)"
+          : "coupling " + cross + " · cohesion " + coh + "% — keep grouping";
+      }
+
+      function log(html, cls) {
+        var box = document.getElementById("log");
+        var line = document.createElement("div");
+        line.className = "ln" + (cls ? " " + cls : "");
+        line.innerHTML = html;
+        box.appendChild(line);
+        while (box.children.length > 9) box.removeChild(box.firstChild);
+        box.scrollTop = box.scrollHeight;
+      }
+
+      function render() {
+        var board = document.getElementById("board");
+        board.innerHTML = "";
+
+        // unsorted pile first (full width), then the three target modules
+        var order = [{ id: "unsorted", name: "Unsorted", color: "#6b7280" }].concat(MODULES);
+
+        order.forEach(function (mod) {
+          var members = FUNCS.filter(function (f) { return current[f.id] === mod.id; });
+          if (mod.id === "unsorted" && members.length === 0) return; // hide when emptied
+
+          var el = document.createElement("div");
+          el.className = "module" + (mod.id === "unsorted" ? " unsorted" : "");
+          el.setAttribute("data-mod", mod.id);
+
+          var inHome = members.filter(function (f) { return f.home === mod.id; }).length;
+          var meta = mod.id === "unsorted"
+            ? members.length + " unsorted"
+            : inHome + "/" + members.length + " in home";
+
+          var head =
+            '<div class="module-head">' +
+              '<span class="module-dot" style="background:' + mod.color + '"></span>' +
+              '<span class="module-name">' + mod.name + '</span>' +
+              '<span class="module-meta">' + meta + '</span>' +
+            '</div>';
+
+          var body;
+          if (members.length === 0) {
+            body = '<div class="module-empty">empty — click a function to move it here</div>';
+          } else {
+            body = '<div class="fns">';
+            members.forEach(function (f) {
+              var cls = "fn";
+              if (mod.id !== "unsorted") cls += f.home === mod.id ? " home" : " wrong";
+              body +=
+                '<button class="' + cls + '" data-fn="' + f.id + '" onclick="openPicker(\'' + f.id + '\')">' +
+                  '<span class="tag" style="background:' + modColor(f.home) + '"></span>' +
+                  f.id + '()' +
+                '</button>';
+            });
+            body += '</div>';
+          }
+          el.innerHTML = head + body;
+          board.appendChild(el);
+        });
+
+        updateMetrics();
+      }
+
+      // ---- move picker ----
+      var pendingFn = null;
+      function openPicker(fnId) {
+        pendingFn = fnId;
+        document.getElementById("picker-fn").textContent = fnId + "()";
+        var opts = document.getElementById("picker-opts");
+        opts.innerHTML = "";
+        MODULES.forEach(function (m) {
+          var b = document.createElement("button");
+          b.className = "picker-opt";
+          var here = current[fnId] === m.id;
+          b.innerHTML =
+            '<span class="pd" style="background:' + m.color + '"></span>' + m.name +
+            '<span class="hint">' + (here ? "already here" : "move →") + '</span>';
+          b.onclick = function () { moveTo(fnId, m.id); };
+          opts.appendChild(b);
+        });
+        document.getElementById("picker-back").classList.add("on");
+      }
+      function closePicker() {
+        document.getElementById("picker-back").classList.remove("on");
+        pendingFn = null;
+      }
+      document.getElementById("picker-back").addEventListener("click", function (e) {
+        if (e.target === this) closePicker();
+      });
+
+      function moveTo(fnId, modId) {
+        if (current[fnId] === modId) { closePicker(); return; }
+        var beforeC = crossingEdges();
+        var from = current[fnId];
+        current[fnId] = modId;
+        var afterC = crossingEdges();
+        closePicker();
+        render();
+
+        // pulse the moved chip
+        var chip = document.querySelector('.fn[data-fn="' + fnId + '"]');
+        if (chip) { chip.classList.add("pulse"); setTimeout(function () { chip.classList.remove("pulse"); }, 500); }
+        var modEl = document.querySelector('.module[data-mod="' + modId + '"]');
+        if (modEl) { modEl.classList.add("flash"); setTimeout(function () { modEl.classList.remove("flash"); }, 400); }
+
+        var fn = lookup(fnId);
+        var couplingNote = afterC === beforeC
+          ? '<span class="muted">coupling ' + beforeC + ' (no change)</span>'
+          : '<span class="' + (afterC < beforeC ? "c-success" : "c-danger") + '">coupling ' + beforeC + '→' + afterC + '</span>';
+        var homeNote = fn.home === modId
+          ? ' <span class="c-success">✓ home</span>'
+          : (modId === "unsorted" ? "" : ' <span class="c-danger">⚠ not its home</span>');
+        log(
+          'moved <span class="c-fg">' + fnId + '</span> ' +
+          '<span class="muted">' + modName(from) + ' →</span> <span class="c-accent">' + modName(modId) + '</span>: ' +
+          couplingNote + homeNote
+        );
+      }
+
+      function lookup(id) { for (var i = 0; i < FUNCS.length; i++) if (FUNCS[i].id === id) return FUNCS[i]; return null; }
+
+      function autoRefactor() {
+        FUNCS.forEach(function (f) { current[f.id] = f.home; });
+        render();
+        log('<span class="c-success">auto-refactor</span> <span class="muted">→</span> every function snapped to its home · <span class="c-success">coupling ' + crossingEdges() + ' · cohesion 100%</span>');
+      }
+
+      function tangle() {
+        placeAllIn("unsorted");
+        render();
+        log('<span class="c-danger">tangled</span> <span class="muted">→</span> all 8 functions dumped into one module · <span class="c-danger">coupling ' + crossingEdges() + ' · cohesion ' + cohesionPct() + '%</span>');
+      }
+
+      function reset() {
+        seed();
+        document.getElementById("log").innerHTML = "";
+        log('<span class="muted">// reset — start tangled, then untangle into Orders / Billing / Notifications</span>');
+      }
+
+      function seed() {
+        placeAllIn("unsorted");
+        render();
+      }
+
+      // seed: tangled state on load
+      seed();
+      log('<span class="muted">// 8 responsibilities crammed into one module — low cohesion, high coupling</span>');
+      log('<span class="muted">// click a function and move it to where it belongs</span>');
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

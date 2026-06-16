@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Object Lifecycle — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.32);
+        --success: #5cc66f;
+        --info: #5e9ff6;
+        --danger: #f06868;
+        --violet: #a78bfa;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      .lab { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+
+      /* ---- top control bar ---- */
+      .topbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+      .stat { display: flex; align-items: baseline; gap: 7px; padding: 7px 12px; border: 1px solid var(--accent-border); background: var(--accent-soft); border-radius: var(--r-md); transition: background .2s; }
+      .stat.flash { background: rgba(251,134,58,0.28); }
+      .stat .sk { font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+      .stat .sv { font-family: var(--mono); font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+      .topbar .spacer { flex: 1 1 auto; }
+
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 12px; cursor: pointer; transition: filter .15s, transform .1s, border-color .15s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .btn.primary { background: var(--accent); color: #1a1003; border-color: transparent; }
+      .btn.primary:hover { filter: brightness(1.06); }
+      .btn.ghost { background: transparent; }
+      .btn.sm { padding: 7px 9px; font-size: 11px; }
+      .btn .kw { font-family: var(--mono); font-weight: 600; }
+
+      /* ---- lanes ---- */
+      .lanes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; align-items: stretch; }
+      @media (max-width: 720px) { .lanes { grid-template-columns: 1fr; } }
+
+      .lane { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); display: flex; flex-direction: column; min-height: 220px; }
+      .lane-head { display: flex; align-items: center; gap: 7px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+      .lane-head .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+      .lane-head .nm { font-family: var(--mono); font-size: 12px; font-weight: 600; }
+      .lane-head .ct { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--subtle); font-variant-numeric: tabular-nums; }
+      .lane-head .step { font-family: var(--mono); font-size: 9px; letter-spacing: 0.1em; color: var(--subtle); }
+      .lane-body { padding: 10px; display: flex; flex-direction: column; gap: 9px; flex: 1; }
+
+      .l-constructed .dot { background: var(--info); }
+      .l-active .dot { background: var(--success); }
+      .l-unreachable .dot { background: var(--danger); }
+      .l-reclaimed .dot { background: var(--subtle); }
+
+      .lane-empty { color: var(--subtle); font-size: 11px; text-align: center; padding: 18px 6px; border: 1px dashed var(--border); border-radius: var(--r-md); font-family: var(--mono); }
+
+      /* ---- object card ---- */
+      .obj { background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px; animation: pop .28s ease; }
+      @keyframes pop { from { opacity: 0; transform: translateY(6px) scale(.97); } to { opacity: 1; transform: none; } }
+      .obj.pulse { animation: pulse .4s ease; }
+      @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(92,198,111,0.5); } 100% { box-shadow: 0 0 0 8px rgba(92,198,111,0); } }
+      .obj.dying { animation: fade .6s ease forwards; }
+      @keyframes fade { to { opacity: 0; transform: translateY(-6px) scale(.95); } }
+
+      .obj-top { display: flex; align-items: center; gap: 7px; margin-bottom: 8px; }
+      .obj-name { font-family: var(--mono); font-size: 12px; font-weight: 600; }
+      .obj-name .hash { color: var(--accent); }
+      .obj-tag { margin-left: auto; font-family: var(--mono); font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--subtle); border: 1px solid var(--border); border-radius: 999px; padding: 1px 7px; }
+
+      .refrow { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 9px; }
+      .refrow .rk { font-family: var(--mono); font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--subtle); }
+      .refrow .rv { font-family: var(--mono); font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+      .refrow .rv.zero { color: var(--danger); }
+
+      .obj-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+
+      .quiet { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+      /* ---- console ---- */
+      .console { margin-top: 16px; }
+      .console-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+      .console-bar .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+      .log { background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px 12px; font-family: var(--mono); font-size: 11.5px; line-height: 1.7; min-height: 92px; max-height: 160px; overflow-y: auto; }
+      .log .ln { white-space: pre-wrap; }
+      .log .muted { color: var(--subtle); }
+      .log .c-accent { color: var(--accent); }
+      .log .c-info { color: var(--info); }
+      .log .c-success { color: var(--success); }
+      .log .c-danger { color: var(--danger); }
+      .log .c-fg { color: var(--fg); }
+
+      .hint { margin-top: 12px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+      .hint b { color: var(--fg); }
+    </style>
+  </head>
+  <body>
+    <!-- CONTROL BAR -->
+    <div class="topbar">
+      <button class="btn primary" onclick="construct()">+ new Object() &nbsp;<span class="kw">new Conn()</span></button>
+      <button class="btn" onclick="runGC()">↻ Run GC</button>
+      <div class="stat" id="live-stat">
+        <span class="sk">live objects</span>
+        <span class="sv" id="live-count">0</span>
+      </div>
+      <div class="spacer"></div>
+      <button class="btn ghost sm" onclick="resetAll()">Reset</button>
+    </div>
+
+    <!-- LANES -->
+    <div class="lanes">
+      <div class="lane l-constructed">
+        <div class="lane-head">
+          <span class="dot"></span>
+          <span class="nm">Constructed</span>
+          <span class="ct" id="ct-constructed">0</span>
+        </div>
+        <div class="lane-body" id="lane-constructed">
+          <div class="step">1 · constructor runs</div>
+        </div>
+      </div>
+
+      <div class="lane l-active">
+        <div class="lane-head">
+          <span class="dot"></span>
+          <span class="nm">Active</span>
+          <span class="ct" id="ct-active">0</span>
+        </div>
+        <div class="lane-body" id="lane-active">
+          <div class="step">2 · in use · referenced</div>
+        </div>
+      </div>
+
+      <div class="lane l-unreachable">
+        <div class="lane-head">
+          <span class="dot"></span>
+          <span class="nm">Unreachable</span>
+          <span class="ct" id="ct-unreachable">0</span>
+        </div>
+        <div class="lane-body" id="lane-unreachable">
+          <div class="step">3 · 0 refs · garbage</div>
+        </div>
+      </div>
+
+      <div class="lane l-reclaimed">
+        <div class="lane-head">
+          <span class="dot"></span>
+          <span class="nm">Reclaimed</span>
+          <span class="ct" id="ct-reclaimed">0</span>
+        </div>
+        <div class="lane-body" id="lane-reclaimed">
+          <div class="step">4 · finalized · freed</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONSOLE -->
+    <div class="console">
+      <div class="console-bar">
+        <span class="dot"></span>
+        <span class="lab">console</span>
+        <span class="quiet" id="gc-note" style="margin-left:auto">auto-GC sweeps every 5s</span>
+      </div>
+      <div class="log" id="log"></div>
+      <div class="hint">
+        <span class="b">▸</span>
+        <span>An object is <b>born</b> (constructor), <b>lives</b> while referenced, becomes <b>unreachable</b> at 0 refs, and is <b>reclaimed</b> by the GC. Drop a reference to 0, then run the collector.</span>
+      </div>
+    </div>
+
+    <script>
+      var objs = [];        // all objects not yet reclaimed
+      var reclaimed = 0;    // count of finalized objects
+      var nextId = 1;
+
+      function log(html, cls) {
+        var box = document.getElementById("log");
+        var line = document.createElement("div");
+        line.className = "ln" + (cls ? " " + cls : "");
+        line.innerHTML = html;
+        box.appendChild(line);
+        while (box.children.length > 9) box.removeChild(box.firstChild);
+        box.scrollTop = box.scrollHeight;
+      }
+
+      function flashStat() {
+        var s = document.getElementById("live-stat");
+        s.classList.add("flash");
+        setTimeout(function () { s.classList.remove("flash"); }, 300);
+      }
+
+      function objById(id) {
+        for (var i = 0; i < objs.length; i++) if (objs[i].id === id) return objs[i];
+        return null;
+      }
+
+      // 1 · construct → lands in Constructed, then advances to Active
+      function construct() {
+        var o = { id: nextId++, refs: 1, stage: "constructed" };
+        objs.push(o);
+        render();
+        log('<span class="c-accent">new Conn</span>() <span class="muted">→</span> Conn#' + o.id +
+            ' <span class="c-info">constructed</span> <span class="muted">(constructor ran, 1 ref)</span>', "c-info");
+        flashStat();
+        // advance to Active after a beat so the journey is visible
+        setTimeout(function () {
+          var cur = objById(o.id);
+          if (cur && cur.stage === "constructed") { cur.stage = "active"; render(); }
+        }, 650);
+      }
+
+      // 2a · use() — pulse + log a method call
+      function use(id) {
+        var o = objById(id);
+        if (!o || o.stage !== "active") return;
+        var node = document.querySelector('[data-id="' + id + '"]');
+        if (node) { node.classList.remove("pulse"); void node.offsetWidth; node.classList.add("pulse"); }
+        log('Conn#' + id + '.<span class="c-success">use()</span> <span class="muted">→</span> query executed', "c-success");
+      }
+
+      // 2b · drop reference — decrement; at 0 → Unreachable
+      function dropRef(id) {
+        var o = objById(id);
+        if (!o || o.stage !== "active") return;
+        o.refs--;
+        if (o.refs <= 0) {
+          o.refs = 0;
+          o.stage = "unreachable";
+          render();
+          log('Conn#' + id + ' <span class="c-danger">reference dropped → 0 refs</span> ' +
+              '<span class="muted">— unreachable, eligible for GC</span>', "c-danger");
+        } else {
+          render();
+          log('Conn#' + id + ' reference dropped <span class="muted">→ ' + o.refs + ' ref' +
+              (o.refs === 1 ? "" : "s") + ' left, still reachable</span>');
+        }
+      }
+
+      // 3 → 4 · garbage collection sweep
+      function runGC() {
+        var dead = objs.filter(function (o) { return o.stage === "unreachable"; });
+        if (dead.length === 0) {
+          log('<span class="muted">GC: swept — nothing unreachable to reclaim</span>');
+          return;
+        }
+        dead.forEach(function (o) {
+          o.stage = "reclaimed";
+          var node = document.querySelector('[data-id="' + o.id + '"]');
+          if (node) node.classList.add("dying");
+          log('GC: Conn#' + o.id + ' <span class="c-danger">finalized</span> &amp; ' +
+              '<span class="muted">reclaimed (memory freed)</span>', "c-danger");
+        });
+        // remove after the fade
+        setTimeout(function () {
+          objs = objs.filter(function (o) { return o.stage !== "reclaimed"; });
+          reclaimed += dead.length;
+          render();
+          flashStat();
+        }, 560);
+      }
+
+      function liveCount() {
+        // "live" = still existing (not yet reclaimed): everything in objs
+        return objs.length;
+      }
+
+      function laneHtml(o) {
+        var refClass = o.refs === 0 ? "rv zero" : "rv";
+        var actions = "";
+        if (o.stage === "active") {
+          actions =
+            '<div class="obj-actions">' +
+              '<button class="btn sm" onclick="use(' + o.id + ')">use()</button>' +
+              '<button class="btn sm" onclick="dropRef(' + o.id + ')">drop reference</button>' +
+            '</div>';
+        }
+        var tag = { constructed: "init", active: "in use", unreachable: "garbage", reclaimed: "freed" }[o.stage];
+        return (
+          '<div class="obj' + (o.stage === "reclaimed" ? " dying" : "") + '" data-id="' + o.id + '">' +
+            '<div class="obj-top">' +
+              '<span class="obj-name">Conn<span class="hash">#' + o.id + '</span></span>' +
+              '<span class="obj-tag">' + tag + '</span>' +
+            '</div>' +
+            '<div class="refrow">' +
+              '<span class="rk">refs</span>' +
+              '<span class="' + refClass + '">' + o.refs + '</span>' +
+            '</div>' +
+            actions +
+          '</div>'
+        );
+      }
+
+      function fillLane(stage, hostId, stepHtml) {
+        var host = document.getElementById(hostId);
+        var here = objs.filter(function (o) { return o.stage === stage; });
+        var html = '<div class="step">' + stepHtml + '</div>';
+        if (here.length === 0) {
+          html += '<div class="lane-empty">—</div>';
+        } else {
+          here.forEach(function (o) { html += laneHtml(o); });
+        }
+        host.innerHTML = html;
+        return here.length;
+      }
+
+      function render() {
+        var nc = fillLane("constructed", "lane-constructed", "1 · constructor runs");
+        var na = fillLane("active", "lane-active", "2 · in use · referenced");
+        var nu = fillLane("unreachable", "lane-unreachable", "3 · 0 refs · garbage");
+
+        // Reclaimed lane: just a running total (cards faded out already)
+        var host = document.getElementById("lane-reclaimed");
+        host.innerHTML = '<div class="step">4 · finalized · freed</div>' +
+          (reclaimed === 0
+            ? '<div class="lane-empty">—</div>'
+            : '<div class="obj" style="text-align:center"><div class="quiet">' + reclaimed +
+              ' object' + (reclaimed === 1 ? "" : "s") + '<br/>finalized &amp; freed</div></div>');
+
+        document.getElementById("ct-constructed").textContent = nc;
+        document.getElementById("ct-active").textContent = na;
+        document.getElementById("ct-unreachable").textContent = nu;
+        document.getElementById("ct-reclaimed").textContent = reclaimed;
+        document.getElementById("live-count").textContent = liveCount();
+      }
+
+      function resetAll() {
+        objs = [];
+        reclaimed = 0;
+        nextId = 1;
+        document.getElementById("log").innerHTML = "";
+        render();
+        log('<span class="muted">// reset — no objects in any lane</span>');
+        construct();
+      }
+
+      // automatic GC sweep every 5s
+      setInterval(runGC, 5000);
+
+      // seed one object so the idea is visible immediately
+      construct();
+      log('<span class="muted">// tip: use() it, then drop reference to 0 and Run GC</span>');
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>
