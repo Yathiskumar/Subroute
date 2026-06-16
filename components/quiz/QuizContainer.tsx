@@ -12,6 +12,18 @@ import { cn } from "@/lib/utils/cn";
 import type { QuizItem } from "@/lib/types";
 import { QuizQuestion } from "./QuizQuestion";
 
+/** Fisher–Yates shuffle of each question's options (answer position varies). */
+function shuffleOptions(list: QuizItem[]): QuizItem[] {
+  return list.map((it) => {
+    const opts = [...it.options];
+    for (let i = opts.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [opts[i], opts[j]] = [opts[j], opts[i]];
+    }
+    return { ...it, options: opts };
+  });
+}
+
 export function QuizContainer({
   items,
   className,
@@ -22,6 +34,12 @@ export function QuizContainer({
   const [open, setOpen] = React.useState(true);
   const [selections, setSelections] = React.useState<Record<string, string>>({});
   const [submitted, setSubmitted] = React.useState(false);
+  // Render the authored order on the server, then shuffle on the client so the
+  // correct answer never sits in a fixed slot (and reshuffles each visit/reset).
+  const [displayItems, setDisplayItems] = React.useState<QuizItem[]>(items);
+  React.useEffect(() => {
+    setDisplayItems(shuffleOptions(items));
+  }, [items]);
 
   const allAnswered = items.every((it) => selections[it.id]);
   const correctCount = items.filter(
@@ -60,7 +78,7 @@ export function QuizContainer({
         </CollapsibleTrigger>
         <CollapsibleContent>
           <div className="flex flex-col gap-4 p-6">
-            {items.map((item, idx) => (
+            {displayItems.map((item, idx) => (
               <QuizQuestion
                 key={item.id}
                 item={item}
@@ -87,6 +105,7 @@ export function QuizContainer({
                   onClick={() => {
                     setSelections({});
                     setSubmitted(false);
+                    setDisplayItems(shuffleOptions(items));
                   }}
                 >
                   <RotateCcw className="h-3.5 w-3.5" /> Reset

@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Abstraction — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.32);
+        --success: #5cc66f;
+        --info: #5e9ff6;
+        --danger: #f06868;
+        --violet: #a78bfa;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      .lab { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+
+      .stage { display: grid; grid-template-columns: 300px 1fr; gap: 16px; align-items: start; }
+      @media (max-width: 700px) { .stage { grid-template-columns: 1fr; } }
+
+      .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); }
+
+      /* ---- The machine / control panel ---- */
+      .machine { overflow: hidden; }
+      .machine-bar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--elevated); }
+      .machine-bar .kw { font-family: var(--mono); font-size: 12px; color: var(--accent); }
+      .machine-bar .nm { font-family: var(--mono); font-size: 13px; font-weight: 600; }
+      .panel-tag { margin-left: auto; white-space: nowrap; font-family: var(--mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--subtle); border: 1px solid var(--border); border-radius: 999px; padding: 2px 8px; }
+      .machine-body { padding: 14px; }
+
+      .section-lab { font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--subtle); margin: 4px 0 8px; }
+
+      /* the public surface */
+      .surface { padding: 12px; border: 1px solid var(--accent-border); background: var(--accent-soft); border-radius: var(--r-md); margin-bottom: 12px; }
+      .surface .surf-lab { font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin-bottom: 9px; }
+      .readout { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 52px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); margin-bottom: 11px; font-size: 20px; transition: background .2s; }
+      .readout.flash { background: rgba(92,198,111,0.14); }
+      .readout .rtxt { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+      .readout .rtxt b { color: var(--fg); font-weight: 600; }
+
+      .ctl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 12px; cursor: pointer; transition: filter .15s, transform .1s, border-color .15s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .btn.primary { background: var(--accent); color: #1a1003; border-color: transparent; padding: 11px; font-size: 13px; }
+      .btn.primary:hover { filter: brightness(1.06); }
+      .btn.sm { padding: 7px 9px; font-size: 11px; }
+      .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; filter: none; }
+      .btn .mono { font-family: var(--mono); font-weight: 600; }
+
+      .divider { height: 1px; background: var(--border); margin: 13px 0; }
+
+      /* toggle */
+      .toggle-row { display: flex; align-items: center; gap: 10px; }
+      .toggle-row .tlab { font-size: 12px; color: var(--muted); }
+      .toggle-row .tlab b { color: var(--fg); }
+      .switch { margin-left: auto; position: relative; width: 40px; height: 22px; flex: none; }
+      .switch input { opacity: 0; width: 0; height: 0; }
+      .slider { position: absolute; inset: 0; background: var(--border-strong); border-radius: 999px; cursor: pointer; transition: background .18s; }
+      .slider::before { content: ""; position: absolute; height: 16px; width: 16px; left: 3px; top: 3px; background: var(--fg); border-radius: 50%; transition: transform .18s; }
+      .switch input:checked + .slider { background: var(--accent); }
+      .switch input:checked + .slider::before { transform: translateX(18px); background: #1a1003; }
+
+      /* ---- internals pipeline ---- */
+      .internals { margin-top: 12px; }
+      .internals.hidden { display: none; }
+      .internals-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+      .internals-head .ttl { font-size: 12px; font-weight: 600; }
+      .internals-head .sub { font-family: var(--mono); font-size: 10px; color: var(--subtle); margin-left: auto; }
+
+      .steps { display: flex; flex-direction: column; gap: 7px; }
+      .step { display: flex; align-items: center; gap: 10px; padding: 9px 11px; border: 1px solid var(--border); background: var(--elevated); border-radius: var(--r-md); transition: border-color .2s, background .2s; }
+      .step .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--border-strong); flex: none; transition: background .2s, box-shadow .2s; }
+      .step .nm { font-family: var(--mono); font-size: 12px; color: var(--muted); transition: color .2s; }
+      .step .nm small { color: var(--subtle); font-weight: 400; }
+      .step .tick { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--subtle); }
+      .step.active { border-color: var(--accent-border); background: var(--accent-soft); }
+      .step.active .dot { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+      .step.active .nm { color: var(--fg); }
+      .step.done .dot { background: var(--success); }
+      .step.done .nm { color: var(--fg); }
+      .step.done .tick { color: var(--success); }
+      .step.milk { border-style: dashed; }
+
+      .curtain { padding: 18px 14px; text-align: center; color: var(--muted); font-size: 12px; border: 1px dashed var(--border-strong); border-radius: var(--r-md); }
+      .curtain b { color: var(--fg); }
+
+      /* ---- right column: caller's view ---- */
+      .obs-head-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+      .obs-head-row .ttl { font-size: 13px; font-weight: 600; }
+      .obs-head-row .arrow { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--subtle); letter-spacing: 0.06em; }
+
+      .caller-card { padding: 14px; }
+      .caller-card .cc-lab { font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--subtle); margin-bottom: 8px; }
+      .caller-code { font-family: var(--mono); font-size: 12px; line-height: 1.9; color: var(--muted); }
+      .caller-code .c-accent { color: var(--accent); }
+      .caller-code .c-fg { color: var(--fg); }
+      .caller-code .c-comment { color: var(--subtle); }
+
+      /* ---- Console ---- */
+      .console { margin-top: 16px; }
+      .console-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+      .console-bar .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+      .log { background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px 12px; font-family: var(--mono); font-size: 11.5px; line-height: 1.7; min-height: 92px; max-height: 160px; overflow-y: auto; }
+      .log .ln { white-space: pre-wrap; }
+      .log .muted { color: var(--subtle); }
+      .log .c-accent { color: var(--accent); }
+      .log .c-info { color: var(--info); }
+      .log .c-success { color: var(--success); }
+      .log .c-danger { color: var(--danger); }
+      .log .c-fg { color: var(--fg); }
+
+      .hint { margin-top: 12px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <div class="stage">
+      <!-- THE MACHINE -->
+      <div class="card machine">
+        <div class="machine-bar">
+          <span class="kw">class</span>
+          <span class="nm">CoffeeMachine</span>
+          <span class="panel-tag">control panel</span>
+        </div>
+        <div class="machine-body">
+          <div class="surface">
+            <div class="surf-lab">public interface · all the caller sees</div>
+            <div class="readout" id="readout">
+              <span class="rtxt" id="readout-txt">idle</span>
+            </div>
+            <div class="ctl-grid">
+              <button class="btn primary" id="btn-espresso" onclick="brew('espresso')">
+                <span class="mono">makeEspresso()</span>
+              </button>
+              <button class="btn primary" id="btn-latte" onclick="brew('latte')">
+                <span class="mono">makeLatte()</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="toggle-row">
+            <span class="tlab">Show <b>internals</b></span>
+            <label class="switch">
+              <input type="checkbox" id="reveal" onchange="toggleReveal()" />
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="internals hidden" id="internals">
+            <div class="internals-head">
+              <span class="ttl">Hidden pipeline</span>
+              <span class="sub" id="pipe-sub">private · not part of the interface</span>
+            </div>
+            <div class="steps" id="steps"></div>
+          </div>
+          <div class="curtain" id="curtain">
+            The machinery is <b>behind the panel</b>.<br />Flip <b>Show internals</b> to peek at the hidden steps.
+          </div>
+        </div>
+      </div>
+
+      <!-- THE CALLER'S VIEW -->
+      <div>
+        <div class="obs-head-row">
+          <span class="ttl">The caller</span>
+          <span class="arrow">presses one button →</span>
+        </div>
+        <div class="card caller-card">
+          <div class="cc-lab">what the caller's code looks like</div>
+          <div class="caller-code">
+            <span class="c-comment">// no idea how coffee is made.</span><br />
+            <span class="c-accent">const</span> machine = <span class="c-accent">new</span> <span class="c-fg">CoffeeMachine</span>();<br />
+            machine.<span class="c-fg" id="call-line">makeEspresso</span>();<br />
+            <span class="c-comment">// → just waits for "ready" ☕</span>
+          </div>
+        </div>
+
+        <div class="console">
+          <div class="console-bar">
+            <span class="dot"></span>
+            <span class="lab">external log · what the world sees</span>
+            <button class="btn sm" style="margin-left:auto" onclick="resetAll()">Reset</button>
+          </div>
+          <div class="log" id="log"></div>
+          <div class="hint">
+            <span class="b">▸</span>
+            <span>One <b style="color:var(--fg)">button</b> on the surface, a whole <b style="color:var(--fg)">pipeline</b> behind it. The caller presses <em>makeEspresso()</em> and only ever sees <em>ready</em> — that's abstraction.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      var PIPELINE = {
+        espresso: [
+          { key: "grind",    label: "grind beans",    detail: "18g, fine" },
+          { key: "heat",     label: "heat water",     detail: "93°C" },
+          { key: "pressure", label: "build pressure", detail: "9 bar" },
+          { key: "extract",  label: "extract shot",   detail: "25s" },
+          { key: "pour",     label: "pour",           detail: "into cup" },
+        ],
+        latte: [
+          { key: "grind",    label: "grind beans",    detail: "18g, fine" },
+          { key: "heat",     label: "heat water",     detail: "93°C" },
+          { key: "pressure", label: "build pressure", detail: "9 bar" },
+          { key: "extract",  label: "extract shot",   detail: "25s" },
+          { key: "milk",     label: "steam milk",     detail: "+ extra step", milk: true },
+          { key: "pour",     label: "pour",           detail: "shot + milk" },
+        ],
+      };
+
+      var STEP_MS = 520;
+      var revealed = false;
+      var brewing = false;
+
+      function el(id) { return document.getElementById(id); }
+
+      function log(html, cls) {
+        var box = el("log");
+        var line = document.createElement("div");
+        line.className = "ln" + (cls ? " " + cls : "");
+        line.innerHTML = html;
+        box.appendChild(line);
+        while (box.children.length > 9) box.removeChild(box.firstChild);
+        box.scrollTop = box.scrollHeight;
+      }
+
+      function setButtons(disabled) {
+        el("btn-espresso").disabled = disabled;
+        el("btn-latte").disabled = disabled;
+      }
+
+      function toggleReveal() {
+        revealed = el("reveal").checked;
+        el("internals").classList.toggle("hidden", !revealed);
+        el("curtain").style.display = revealed ? "none" : "";
+        if (revealed && !brewing) {
+          log('<span class="muted">// internals revealed — they were running all along, just hidden</span>');
+        }
+      }
+
+      function renderSteps(kind, activeIndex, doneUpTo) {
+        var steps = PIPELINE[kind];
+        var host = el("steps");
+        var html = "";
+        steps.forEach(function (s, i) {
+          var cls = "step";
+          if (s.milk) cls += " milk";
+          if (i < doneUpTo) cls += " done";
+          else if (i === activeIndex) cls += " active";
+          var tick = i < doneUpTo ? "✓" : (i === activeIndex ? "•••" : "");
+          html +=
+            '<div class="' + cls + '">' +
+              '<span class="dot"></span>' +
+              '<span class="nm">' + s.label + ' <small>' + s.detail + '</small></span>' +
+              '<span class="tick">' + tick + '</span>' +
+            '</div>';
+        });
+        host.innerHTML = html;
+        el("pipe-sub").textContent = steps.length + " private steps · hidden from caller";
+      }
+
+      function brew(kind) {
+        if (brewing) return; // guard against double-clicks while brewing
+        brewing = true;
+        setButtons(true);
+
+        var drink = kind === "latte" ? "latte" : "espresso";
+        var icon = drink === "latte" ? "🥛" : "☕";
+        var steps = PIPELINE[drink];
+
+        // the caller-side view: one simple call
+        el("call-line").textContent = drink === "latte" ? "makeLatte" : "makeEspresso";
+        el("readout-txt").innerHTML = '<b>brewing…</b>';
+        log('machine.<span class="c-accent">' + (drink === "latte" ? "makeLatte" : "makeEspresso") + '</span>() <span class="muted">→ called (caller waits)</span>', "c-accent");
+
+        if (revealed) renderSteps(drink, 0, 0);
+
+        var i = 0;
+        function nextStep() {
+          if (revealed) renderSteps(drink, i, i);
+          if (i >= steps.length) return finish(drink, icon);
+          i++;
+          setTimeout(nextStep, STEP_MS);
+        }
+        nextStep();
+      }
+
+      function finish(drink, icon) {
+        if (revealed) renderSteps(drink, -1, PIPELINE[drink].length);
+        var read = el("readout");
+        el("readout-txt").innerHTML = icon + ' &nbsp;<b>' + drink + ' ready</b>';
+        read.classList.add("flash");
+        setTimeout(function () { read.classList.remove("flash"); }, 600);
+        log('<span class="muted">→</span> ' + icon + ' <span class="c-success">' + drink + ' ready</span> <span class="muted">— that\'s all the caller sees</span>', "c-success");
+        brewing = false;
+        setButtons(false);
+      }
+
+      function resetAll() {
+        brewing = false;
+        setButtons(false);
+        el("readout-txt").innerHTML = "idle";
+        el("readout").classList.remove("flash");
+        el("steps").innerHTML = "";
+        el("log").innerHTML = "";
+        log('<span class="muted">// idle — press a button. one call in, one result out.</span>');
+      }
+
+      // seed: machine idle, internals hidden, with a hint
+      log('<span class="muted">// machine idle. press </span><span class="c-accent">makeEspresso()</span><span class="muted"> — you only see the result, not the steps.</span>');
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

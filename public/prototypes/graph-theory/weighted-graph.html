@@ -1,0 +1,569 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Weighted Graphs</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --success-bg: rgba(92,198,111,0.14); --success-bd: rgba(92,198,111,0.45);
+        --danger: #f06868;  --danger-bg: rgba(240,104,104,0.14); --danger-bd: rgba(240,104,104,0.45);
+        --warning: #f0b568; --warning-bg: rgba(240,181,104,0.14); --warning-bd: rgba(240,181,104,0.45);
+        --info: #5e9ff6;    --info-bg:    rgba(94,159,246,0.16); --info-bd:    rgba(94,159,246,0.45);
+        --purple: #a78bfa;  --purple-bg:  rgba(167,139,250,0.16); --purple-bd:  rgba(167,139,250,0.45);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --radius-lg: 14px; --radius-md: 8px; --radius-sm: 6px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body {
+        padding: 18px 18px 24px;
+        background-image:
+          radial-gradient(1200px 600px at 50% -200px, rgba(251,134,58,0.06), transparent),
+          linear-gradient(to right, rgba(255,255,255,0.020) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.020) 1px, transparent 1px);
+        background-size: auto, 40px 40px, 40px 40px;
+      }
+      .container { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; padding: 9px 12px; transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); color: var(--fg); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); color: #1a1003; }
+      button.ghost { background: transparent; }
+      button i { font-size: 14px; }
+      select { background: var(--elevated); color: var(--fg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px 9px; font: 500 12px var(--sans); }
+      input[type="range"] { accent-color: var(--accent); }
+
+      .tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+      .tab { background: var(--elevated); border: 1px solid var(--border); color: var(--muted); border-radius: 999px; padding: 7px 13px; font: 500 11.5px var(--sans); cursor: pointer; transition: all 150ms ease; }
+      .tab:hover { border-color: var(--border-strong); color: var(--fg); }
+      .tab.active { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+
+      .hero { background: linear-gradient(180deg, rgba(255,255,255,0.014), transparent), var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px 12px; position: relative; overflow: hidden; }
+      .hero::before { content: ""; position: absolute; inset: 0; background: radial-gradient(420px 240px at 50% 0%, rgba(94,159,246,0.05), transparent 60%); pointer-events: none; }
+      .hero-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; position: relative; z-index: 1; gap: 12px; flex-wrap: wrap; }
+      .ttl { font: 600 11.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .legend { font-size: 11px; color: var(--muted); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      .legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: -1px; margin-right: 4px; }
+
+      .graph-wrap { position: relative; z-index: 1; }
+      svg.graph { width: 100%; height: 290px; display: block; touch-action: none; }
+      .edge { stroke: var(--border-strong); stroke-width: 2.4; transition: stroke 220ms ease, stroke-width 220ms ease, opacity 220ms ease; }
+      .edge.active { stroke: var(--warning); stroke-width: 4; }
+      .edge.tree { stroke: var(--success); stroke-width: 3; }
+      .edge.path { stroke: var(--accent); stroke-width: 4.5; }
+      .edge.dim { opacity: 0.28; }
+      .edge.hit { stroke: transparent; stroke-width: 18; }
+      .node-circ { stroke-width: 2.4; transition: fill 220ms ease, stroke 220ms ease; }
+      .node-circ.dim { fill: var(--elevated); stroke: var(--border-strong); }
+      .node-circ.seen { fill: rgba(94,159,246,0.20); stroke: var(--info); }
+      .node-circ.active { fill: var(--warning); stroke: var(--warning); }
+      .node-circ.done { fill: rgba(92,198,111,0.22); stroke: var(--success); }
+      .node-circ.path { fill: rgba(251,134,58,0.22); stroke: var(--accent); }
+      .node-circ.pop { animation: pop 0.32s cubic-bezier(0.34, 1.56, 0.64, 1); }
+      @keyframes pop { from { transform: scale(0.92); } 50% { transform: scale(1.10); } to { transform: scale(1); } }
+      .node-lbl { font: 600 13px var(--mono); fill: var(--fg); text-anchor: middle; pointer-events: none; user-select: none; }
+      .node-badge { font: 600 10.5px var(--mono); fill: var(--purple); text-anchor: middle; pointer-events: none; }
+
+      .side { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; min-height: 56px; }
+      .side .h { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 7px; }
+      .side .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; min-height: 28px; }
+      .chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 6px; font: 600 11.5px var(--mono); border: 1px solid var(--border-strong); background: var(--elevated); color: var(--fg); }
+      .chip.v { background: rgba(92,198,111,0.18); color: var(--success); border-color: var(--success-bd); }
+      .chip.i { background: rgba(94,159,246,0.16); color: var(--info); border-color: var(--info-bd); }
+      .empty { font: 500 11.5px var(--mono); color: var(--subtle); }
+      .side .total { margin-left: auto; font: 600 12px var(--mono); color: var(--accent); }
+
+      .narration { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; position: relative; overflow: hidden; transition: border-color 350ms ease; }
+      .narration::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--border-strong); transition: background 350ms ease; }
+      .narration.add::before { background: var(--info); } .narration.add { border-color: rgba(94,159,246,0.30); }
+      .narration.calc::before { background: var(--purple); } .narration.calc { border-color: rgba(167,139,250,0.30); }
+      .narration.path::before { background: var(--accent); } .narration.path { border-color: rgba(251,134,58,0.32); }
+      .narration.done::before { background: var(--success); } .narration.done { border-color: rgba(92,198,111,0.45); }
+      .narr-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+      .badge { font: 600 10.5px var(--mono); padding: 4px 9px; border-radius: 999px; letter-spacing: 0.4px; text-transform: uppercase; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); color: var(--muted); background: var(--elevated); }
+      .badge.step { background: var(--elevated); border-color: var(--border-strong); color: var(--fg); }
+      .badge.event { background: transparent; }
+      .badge.event.add { color: var(--info); border-color: var(--info-bd); }
+      .badge.event.calc { color: var(--purple); border-color: var(--purple-bd); }
+      .badge.event.path { color: var(--accent); border-color: var(--warning-bd); }
+      .badge.event.done { color: var(--success); border-color: var(--success-bd); }
+      .narr-text { margin: 0; font-size: 14px; line-height: 1.55; color: var(--fg); }
+      .narr-text strong { color: var(--fg); font-weight: 600; }
+      .narr-text code { font-family: var(--mono); background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; color: var(--accent); font-size: 12px; }
+
+      .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+      .controls .spacer { flex: 1; }
+      .speed-wrap { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font: 500 11px var(--mono); }
+      .speed-wrap input[type="range"] { width: 80px; }
+      .kbd { font-family: var(--mono); font-size: 10.5px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); color: var(--muted); border: 1px solid var(--border); }
+      .hint { font: 11px var(--mono); color: var(--subtle); display: inline-flex; align-items: center; gap: 5px; }
+
+      .free-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; display: none; flex-direction: column; gap: 10px; }
+      .free-card.show { display: flex; }
+      .free-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+      .free-note { font: 11.5px var(--mono); color: var(--muted); }
+
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; }
+      .stat .label { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .stat .value { font: 600 22px var(--mono); margin-top: 4px; line-height: 1; }
+
+      @media (max-width: 540px) {
+        .stats { grid-template-columns: repeat(2, 1fr); }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2 class="sr-only">A weighted graph: step through how weights change the goal, see why the cheapest route isn't the fewest hops, watch Dijkstra grow a frontier, or build your own in free play.</h2>
+
+      <div class="tabs" id="tabs">
+        <button class="tab active" data-sc="0">Weights change the goal</button>
+        <button class="tab" data-sc="1">Cheapest &ne; fewest hops</button>
+        <button class="tab" data-sc="2">Dijkstra grows a frontier</button>
+        <button class="tab" data-sc="3">Free play</button>
+      </div>
+
+      <div class="hero">
+        <div class="hero-head">
+          <span class="ttl" id="hero-ttl">Weighted · edges carry a cost</span>
+          <span class="legend">
+            <span><span class="sw" style="background:var(--elevated);border:1px solid var(--border-strong)"></span>vertex</span>
+            <span><span class="sw" style="background:var(--warning)"></span>current</span>
+            <span><span class="sw" style="background:rgba(92,198,111,0.25);border:1px solid var(--success-bd)"></span>settled</span>
+            <span><span class="sw" style="background:rgba(251,134,58,0.25);border:1px solid var(--warning-bd)"></span>cheapest path</span>
+          </span>
+        </div>
+        <div class="graph-wrap">
+          <svg id="graph" class="graph" viewBox="0 0 560 300" aria-hidden="true">
+            <g id="edges"></g>
+            <g id="weights"></g>
+            <g id="nodes"></g>
+          </svg>
+        </div>
+      </div>
+
+      <div class="side">
+        <div class="h" id="side-h">Path cost</div>
+        <div id="side-row" class="row"><span class="empty">&mdash;</span></div>
+      </div>
+
+      <div id="narration" class="narration">
+        <div class="narr-meta">
+          <span id="narr-step" class="badge step">Step 0 / 0</span>
+          <span id="narr-event" class="badge event" style="display:none"></span>
+        </div>
+        <p id="narr-text" class="narr-text"><strong>Press Play.</strong> Each edge now carries a cost, so the cheapest route is not always the one with the fewest hops.</p>
+      </div>
+
+      <div class="controls" id="controls">
+        <button id="btn-prev"><i class="ti ti-chevron-left"></i>Back</button>
+        <button id="btn-play" class="primary"><i id="play-icon" class="ti ti-player-play"></i><span id="play-label">Play</span></button>
+        <button id="btn-next"><i class="ti ti-chevron-right"></i>Step</button>
+        <button id="btn-restart" class="ghost"><i class="ti ti-refresh"></i>Restart</button>
+        <span class="spacer"></span>
+        <span class="speed-wrap"><span>Speed</span><input id="speed" type="range" min="1" max="10" step="1" value="5" /></span>
+      </div>
+
+      <div class="free-card" id="free-card">
+        <div class="free-row">
+          <button id="f-path"><i class="ti ti-route"></i>Pick path</button>
+          <button id="f-clear" class="ghost"><i class="ti ti-eraser"></i>Clear edges</button>
+          <button id="f-reset" class="ghost"><i class="ti ti-refresh"></i>Reset graph</button>
+        </div>
+        <span class="free-note" id="free-note">Click two vertices to toggle an edge. Click an edge to cycle its weight (1&rarr;2&rarr;3&rarr;5&rarr;9&rarr;1). Drag a vertex to move it.</span>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="label">vertices</div><div id="s-v" class="value" style="color:var(--info)">0</div></div>
+        <div class="stat"><div class="label">edges</div><div id="s-e" class="value" style="color:var(--purple)">0</div></div>
+        <div class="stat"><div class="label" id="s3-label">path cost</div><div id="s-cost" class="value" style="color:var(--accent)">&mdash;</div></div>
+        <div class="stat"><div class="label" id="s4-label">hops</div><div id="s-hops" class="value" style="color:var(--success)">&mdash;</div></div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        var BASE_POS = { A:[80,80], B:[265,58], C:[460,92], D:[92,235], E:[275,238], F:[470,222] };
+        // [a, b, weight] — A–C direct is expensive (9); A–B(2)–C(3) detour is cheaper (5).
+        var BASE_EDGES = [["A","B",2],["A","C",9],["B","C",3],["B","E",4],["C","F",2],["D","E",5],["E","F",1],["A","D",6]];
+        var WEIGHT_CYCLE = [1,2,3,5,9,1];
+
+        var pos = {}, edges = [];
+        function loadBase() {
+          pos = {}; Object.keys(BASE_POS).forEach(function(k){ pos[k] = BASE_POS[k].slice(); });
+          edges = BASE_EDGES.map(function(e){ return e.slice(); });
+        }
+        loadBase();
+
+        var NODES = function(){ return Object.keys(pos); };
+        function ekey(a,b){ return [a,b].sort().join('-'); }
+        function findEdge(a,b){ var k = ekey(a,b); for (var i=0;i<edges.length;i++){ if (ekey(edges[i][0],edges[i][1])===k) return edges[i]; } return null; }
+        function hasEdge(a,b){ return !!findEdge(a,b); }
+        function weightOf(a,b){ var e = findEdge(a,b); return e ? e[2] : null; }
+        function nextWeight(w){ var i = WEIGHT_CYCLE.indexOf(w); return WEIGHT_CYCLE[(i<0?0:i)+1]; }
+        function adjacency() {
+          var adj = {}; NODES().forEach(function(n){ adj[n]=[]; });
+          edges.forEach(function(e){ adj[e[0]].push({to:e[1],w:e[2]}); adj[e[1]].push({to:e[0],w:e[2]}); });
+          NODES().forEach(function(n){ adj[n].sort(function(a,b){ return a.to<b.to?-1:1; }); });
+          return adj;
+        }
+        // Dijkstra: cheapest path by SUM OF WEIGHTS. Returns {cost, path}.
+        function dijkstra(s,t) {
+          var adj = adjacency(), dist = {}, prev = {}, settled = {};
+          NODES().forEach(function(n){ dist[n] = Infinity; }); dist[s] = 0; prev[s] = null;
+          while (true) {
+            var u = null, best = Infinity;
+            NODES().forEach(function(n){ if (!settled[n] && dist[n] < best){ best = dist[n]; u = n; } });
+            if (u === null) break;
+            settled[u] = true;
+            if (u === t) break;
+            adj[u].forEach(function(nb){ var alt = dist[u] + nb.w; if (alt < dist[nb.to]){ dist[nb.to] = alt; prev[nb.to] = u; } });
+          }
+          if (dist[t] === Infinity) return { cost: Infinity, path: null };
+          var path = [], c = t; while (c !== null && c !== undefined){ path.unshift(c); c = prev[c]; }
+          return { cost: dist[t], path: path };
+        }
+
+        var nodesG = document.getElementById('nodes');
+        var edgesG = document.getElementById('edges');
+        var weightsG = document.getElementById('weights');
+        var nodeEls = {}, edgeEls = {}, edgeHit = {}, weightEls = {};
+
+        function buildSVG() {
+          edgesG.innerHTML = ''; nodesG.innerHTML = ''; weightsG.innerHTML = '';
+          nodeEls = {}; edgeEls = {}; edgeHit = {}; weightEls = {};
+          edges.forEach(function(e){
+            var k = ekey(e[0],e[1]);
+            var hit = document.createElementNS('http://www.w3.org/2000/svg','line');
+            hit.setAttribute('class','edge hit'); edgeHit[k] = hit; edgesG.appendChild(hit);
+            var ln = document.createElementNS('http://www.w3.org/2000/svg','line');
+            ln.setAttribute('class','edge'); edgeEls[k] = ln; edgesG.appendChild(ln);
+            // weight label: rounded bg + text at edge midpoint
+            var bg = document.createElementNS('http://www.w3.org/2000/svg','rect');
+            bg.setAttribute('rx',5); bg.setAttribute('width',20); bg.setAttribute('height',16);
+            bg.setAttribute('fill','var(--bg)'); bg.setAttribute('stroke','var(--border-strong)'); bg.setAttribute('stroke-width','1');
+            var wt = document.createElementNS('http://www.w3.org/2000/svg','text');
+            wt.setAttribute('class','node-badge'); wt.setAttribute('fill','var(--fg)');
+            weightsG.appendChild(bg); weightsG.appendChild(wt);
+            weightEls[k] = { bg: bg, t: wt };
+          });
+          NODES().forEach(function(n){
+            var c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+            c.setAttribute('r', 22); c.setAttribute('class','node-circ dim');
+            c.dataset.id = n;
+            var t = document.createElementNS('http://www.w3.org/2000/svg','text');
+            t.setAttribute('class','node-lbl'); t.textContent = n; t.dataset.id = n;
+            var b = document.createElementNS('http://www.w3.org/2000/svg','text');
+            b.setAttribute('class','node-badge');
+            nodesG.appendChild(c); nodesG.appendChild(t); nodesG.appendChild(b);
+            nodeEls[n] = { c: c, t: t, b: b };
+          });
+          positionSVG();
+        }
+        function positionSVG() {
+          edges.forEach(function(e){
+            var k = ekey(e[0],e[1]); var a = pos[e[0]], b = pos[e[1]];
+            [edgeEls[k], edgeHit[k]].forEach(function(ln){
+              ln.setAttribute('x1',a[0]); ln.setAttribute('y1',a[1]);
+              ln.setAttribute('x2',b[0]); ln.setAttribute('y2',b[1]);
+            });
+            var mx = (a[0]+b[0])/2, my = (a[1]+b[1])/2;
+            var we = weightEls[k];
+            we.bg.setAttribute('x', mx-10); we.bg.setAttribute('y', my-8);
+            we.t.setAttribute('x', mx); we.t.setAttribute('y', my+4); we.t.textContent = e[2];
+          });
+          NODES().forEach(function(n){
+            var x = pos[n][0], y = pos[n][1];
+            nodeEls[n].c.setAttribute('cx',x); nodeEls[n].c.setAttribute('cy',y);
+            nodeEls[n].t.setAttribute('x',x); nodeEls[n].t.setAttribute('y',y+5);
+            nodeEls[n].b.setAttribute('x',x); nodeEls[n].b.setAttribute('y',y-30);
+          });
+        }
+
+        // ---- scripted scenarios produce arrays of step snapshots ----
+        function snap(o){
+          return { nodeRole: o.nodeRole||{}, edgeRole: o.edgeRole||{}, badge: o.badge||{},
+                   side: o.side||null, sideH: o.sideH||null, msg: o.msg, event: o.event||null,
+                   stat3: o.stat3, stat4: o.stat4 };
+        }
+
+        // Scenario 0 — Weights change the goal: introduce edges as costs, total one path.
+        function scWeights() {
+          var s = [];
+          s.push(snap({ msg:'Same six vertices, but now every <strong>edge carries a cost</strong> — shown as a number at its midpoint. A path\'s length is no longer the hop count; it is the <strong>sum of the weights</strong> along it.', event:'add', sideH:'Edges (with cost)', side:[], stat3:'—' }));
+          var added = [];
+          BASE_EDGES.forEach(function(e){
+            var k = ekey(e[0],e[1]); added.push(e);
+            var er = {}; added.forEach(function(ee){ er[ekey(ee[0],ee[1])]='tree'; });
+            var nr = {}; nr[e[0]]='done'; nr[e[1]]='done';
+            s.push(snap({ msg:'Add edge <code>'+e[0]+'–'+e[1]+'</code> with cost <code>'+e[2]+'</code>. Undirected, so it costs the same either way. Crossing it adds <code>'+e[2]+'</code> to whatever path uses it.', event:'add', edgeRole: er, nodeRole: nr, sideH:'Edges (with cost)', side: added.map(function(ee){ return {t:ee[0]+'–'+ee[1]+':'+ee[2], cls:'i'}; }) }));
+          });
+          // total up A -> B -> C
+          var route = ['A','B','C'];
+          var running = 0, sideArr = [];
+          var erBase = {}; edges.forEach(function(e){ erBase[ekey(e[0],e[1])]='dim'; });
+          var nr0 = {}; nr0['A']='active';
+          s.push(snap({ msg:'Let us total one route: <code>A → B → C</code>. Start at <strong>A</strong> with a running cost of <code>0</code>.', event:'calc', edgeRole: Object.assign({}, erBase), nodeRole: nr0, sideH:'Running cost of A → B → C', side:[{t:'A', cls:'v'}], stat3:0 }));
+          for (var i=0;i<route.length-1;i++){
+            var w = weightOf(route[i], route[i+1]); running += w;
+            var er = Object.assign({}, erBase);
+            for (var j=0;j<=i;j++) er[ekey(route[j],route[j+1])]='path';
+            var nr = {}; for (var j2=0;j2<=i+1;j2++) nr[route[j2]]='path';
+            sideArr = []; for (var j3=0;j3<=i+1;j3++) sideArr.push({t:route[j3]+(j3>0?'(+'+weightOf(route[j3-1],route[j3])+')':''), cls:'v'});
+            s.push(snap({ msg:'Cross <code>'+route[i]+'–'+route[i+1]+'</code> (cost <code>'+w+'</code>). Running cost → <code>'+running+'</code>.', event:'calc', edgeRole: er, nodeRole: nr, sideH:'Running cost of A → B → C', side: sideArr.slice(), stat3: running }));
+          }
+          var erF = Object.assign({}, erBase); erF[ekey('A','B')]='path'; erF[ekey('B','C')]='path';
+          var nrF = {A:'path',B:'path',C:'path'};
+          s.push(snap({ msg:'<strong>Path cost A → B → C = '+running+'</strong> (2 + 3), across <code>2</code> hops. Notice the cost is a <em>sum of weights</em>, not the number of edges — that distinction is the whole point of a weighted graph.', event:'done', edgeRole: erF, nodeRole: nrF, sideH:'Total cost', side:[{t:'cost '+running, cls:'i'},{t:'2 hops', cls:'v'}], stat3: running }));
+          return s;
+        }
+
+        // Scenario 1 — Cheapest != fewest hops.
+        function scCompare() {
+          var s = [];
+          var erBase = {}; edges.forEach(function(e){ erBase[ekey(e[0],e[1])]='dim'; });
+          s.push(snap({ msg:'Goal: get from <strong>A</strong> to <strong>C</strong> as cheaply as possible. There are two obvious routes — a direct edge, and a detour. Watch which one wins.', event:'path', sideH:'Routes A → C', side:[], stat3:'—' }));
+          // direct
+          var erDirect = Object.assign({}, erBase); erDirect[ekey('A','C')]='active';
+          s.push(snap({ msg:'The <strong>fewest-hops</strong> route is the direct edge <code>A → C</code>: just <code>1</code> hop. But its cost is <code>9</code> — this is an <em>expensive</em> connection.', event:'path', edgeRole: erDirect, nodeRole:{A:'active',C:'active'}, sideH:'Routes A → C', side:[{t:'A→C : 1 hop, cost 9', cls:'i'}], stat3:9 }));
+          // detour
+          var erDetour = Object.assign({}, erBase); erDetour[ekey('A','B')]='path'; erDetour[ekey('B','C')]='path';
+          s.push(snap({ msg:'The detour <code>A → B → C</code> takes <code>2</code> hops — <em>more</em> hops — but costs only <code>2 + 3 = 5</code>. More steps, less money.', event:'path', edgeRole: erDetour, nodeRole:{A:'path',B:'path',C:'path'}, sideH:'Routes A → C', side:[{t:'A→C : 1 hop, cost 9', cls:'i'},{t:'A→B→C : 2 hops, cost 5', cls:'v'}], stat3:5 }));
+          // verdict
+          var erWin = Object.assign({}, erBase); erWin[ekey('A','C')]='active'; erWin[ekey('A','B')]='path'; erWin[ekey('B','C')]='path';
+          s.push(snap({ msg:'<strong>Cheapest wins, fewest-hops loses.</strong> The 2-hop detour (cost <code>5</code>) beats the 1-hop direct edge (cost <code>9</code>). A plain BFS would count edges and pick the 9 — wrong. This gap is exactly why weighted graphs need <strong>Dijkstra</strong>.', event:'done', edgeRole: erWin, nodeRole:{A:'path',B:'path',C:'path'}, sideH:'Verdict', side:[{t:'cheapest = A→B→C (5)', cls:'v'},{t:'fewest hops = A→C (9)', cls:'i'}], stat3:5 }));
+          return s;
+        }
+
+        // Scenario 2 — Dijkstra grows a frontier from A.
+        function scDijkstra() {
+          var s = [];
+          var src = 'A', dst = 'C';
+          var adj = adjacency();
+          var dist = {}, prev = {}, settled = {};
+          NODES().forEach(function(n){ dist[n] = Infinity; }); dist[src] = 0; prev[src] = null;
+
+          function distChips(){ return NODES().map(function(n){ return {t:n+':'+(dist[n]===Infinity?'∞':dist[n])+(settled[n]?' ✓':''), cls: settled[n]?'v':(dist[n]===Infinity?'':'i')}; }); }
+          function settledEdges(){ var er = {}; edges.forEach(function(e){ er[ekey(e[0],e[1])]='dim'; }); return er; }
+          function nodeRoles(cur, relaxed){ var nr = {}; NODES().forEach(function(n){ if (settled[n]) nr[n]='done'; }); if (relaxed) nr[relaxed]='seen'; if (cur) nr[cur]='active'; return nr; }
+
+          s.push(snap({ msg:'<strong>Dijkstra from A.</strong> Set <code>dist[A]=0</code> and every other vertex to <code>∞</code> (unknown). We grow a frontier outward by <em>accumulated cost</em>, always settling the cheapest unsettled vertex next.', event:'calc', edgeRole: settledEdges(), nodeRole: nodeRoles(src,null), sideH:'Tentative distances', side: distChips(), stat3:0 }));
+
+          var loops = 0;
+          while (loops++ < 20) {
+            var u = null, best = Infinity;
+            NODES().forEach(function(n){ if (!settled[n] && dist[n] < best){ best = dist[n]; u = n; } });
+            if (u === null) break;
+            settled[u] = true;
+            s.push(snap({ msg:'Settle <strong>'+u+'</strong> — the cheapest unsettled vertex (<code>dist='+best+'</code>). With non-negative weights its distance is now <em>final</em>; it can never get cheaper.', event:'calc', edgeRole: settledEdges(), nodeRole: nodeRoles(u,null), sideH:'Tentative distances', side: distChips(), stat3: best }));
+            if (u === dst) break;
+            adj[u].forEach(function(nb){
+              if (settled[nb.to]) return;
+              var alt = dist[u] + nb.w, old = dist[nb.to];
+              var er = settledEdges(); er[ekey(u,nb.to)]='active';
+              if (alt < old) {
+                dist[nb.to] = alt; prev[nb.to] = u;
+                s.push(snap({ msg:'Relax <code>'+u+'→'+nb.to+'</code> (weight '+nb.w+'): <code>'+dist[u]+' + '+nb.w+' = '+alt+'</code> &lt; '+(old===Infinity?'∞':old)+'. Cheaper! Lower <code>dist['+nb.to+']='+alt+'</code> (via '+u+').', event:'calc', edgeRole: er, nodeRole: nodeRoles(u,nb.to), sideH:'Tentative distances', side: distChips(), stat3: dist[u] }));
+              } else {
+                s.push(snap({ msg:'Relax <code>'+u+'→'+nb.to+'</code> (weight '+nb.w+'): <code>'+dist[u]+' + '+nb.w+' = '+alt+'</code> ≥ '+(old===Infinity?'∞':old)+'. No improvement — keep <code>'+nb.to+'='+(old===Infinity?'∞':old)+'</code>.', event:'calc', edgeRole: er, nodeRole: nodeRoles(u,null), sideH:'Tentative distances', side: distChips(), stat3: dist[u] }));
+              }
+            });
+          }
+          // reconstruct
+          var path = [], c = dst; while (c !== null && c !== undefined){ path.unshift(c); c = prev[c]; }
+          var er = {}; edges.forEach(function(e){ er[ekey(e[0],e[1])]='dim'; });
+          for (var i=0;i<path.length-1;i++) er[ekey(path[i],path[i+1])]='path';
+          var nr = {}; path.forEach(function(v){ nr[v]='path'; });
+          s.push(snap({ msg:'<strong>Cheapest path A → C: '+path.join(' → ')+', cost '+dist[dst]+'.</strong> Note <code>C</code> first got the tentative <code>9</code> from the direct edge, then improved to <code>5</code> once <code>B</code> was settled. The frontier grew by cost, not by hops.', event:'done', edgeRole: er, nodeRole: nr, sideH:'Cheapest path', side: path.map(function(v){return {t:v,cls:'i'};}).concat([{t:'cost '+dist[dst], cls:'v'}]), stat3: dist[dst], stat4: path.length-1 }));
+          return s;
+        }
+
+        var SCENARIOS = [scWeights, scCompare, scDijkstra];
+        var SC_TTL = ['Weighted · edges carry a cost','Weighted · cheapest ≠ fewest hops','Weighted · Dijkstra grows a frontier','Weighted · free play — your graph'];
+        var SC_S3 = ['path cost','path cost','dist[A]','path cost'];
+        var SC_S4 = ['hops','hops','hops','hops'];
+
+        var sc = 0, steps = [], idx = 0, playing = false, timer = null, freeMode = false;
+
+        var narrEl = document.getElementById('narration');
+        var narrText = document.getElementById('narr-text');
+        var narrStep = document.getElementById('narr-step');
+        var narrEvent = document.getElementById('narr-event');
+        var sideH = document.getElementById('side-h');
+        var sideRow = document.getElementById('side-row');
+        var sV = document.getElementById('s-v'), sE = document.getElementById('s-e'), sCost = document.getElementById('s-cost'), sHops = document.getElementById('s-hops');
+        var heroTtl = document.getElementById('hero-ttl');
+        var btnPrev = document.getElementById('btn-prev'), btnNext = document.getElementById('btn-next');
+        var btnPlay = document.getElementById('btn-play'), btnRestart = document.getElementById('btn-restart');
+        var playIcon = document.getElementById('play-icon'), playLabel = document.getElementById('play-label');
+        var speedEl = document.getElementById('speed');
+        var controls = document.getElementById('controls'), freeCard = document.getElementById('free-card');
+        var freeNote = document.getElementById('free-note');
+
+        function setSide(h, arr) {
+          sideH.textContent = h; sideRow.innerHTML = '';
+          if (!arr || arr.length === 0) { var em = document.createElement('span'); em.className='empty'; em.textContent='—'; sideRow.appendChild(em); return; }
+          arr.forEach(function(it){ var c = document.createElement('span'); c.className='chip '+(it.cls||''); c.textContent = it.t; sideRow.appendChild(c); });
+        }
+
+        function renderStep(st) {
+          NODES().forEach(function(n){
+            nodeEls[n].c.setAttribute('class','node-circ '+(st.nodeRole[n]||'dim'));
+            nodeEls[n].b.textContent = st.badge[n] || '';
+          });
+          Object.keys(edgeEls).forEach(function(k){
+            edgeEls[k].setAttribute('class','edge '+(st.edgeRole[k]||'dim'));
+          });
+          narrText.innerHTML = st.msg;
+          narrStep.textContent = 'Step ' + idx + ' / ' + (steps.length - 1);
+          narrEl.classList.remove('add','calc','path','done');
+          if (st.event) { narrEl.classList.add(st.event);
+            narrEvent.style.display = ''; narrEvent.className = 'badge event ' + st.event;
+            narrEvent.textContent = st.event === 'add' ? 'add edge' : st.event === 'calc' ? 'relax' : st.event === 'path' ? 'compare' : 'done';
+          } else narrEvent.style.display = 'none';
+          if (st.sideH) setSide(st.sideH, st.side);
+          sV.textContent = NODES().length;
+          sE.textContent = edges.length;
+          sCost.textContent = (st.stat3 !== undefined ? st.stat3 : '—');
+          sHops.textContent = (st.stat4 !== undefined ? st.stat4 : '—');
+        }
+
+        function loadScenario(i) {
+          stop(); sc = i;
+          heroTtl.textContent = SC_TTL[i];
+          document.getElementById('s3-label').textContent = SC_S3[i];
+          document.getElementById('s4-label').textContent = SC_S4[i];
+          freeMode = (i === 3);
+          if (freeMode) {
+            controls.style.display = 'none'; freeCard.classList.add('show');
+            loadBase(); buildSVG(); renderFree();
+          } else {
+            controls.style.display = 'flex'; freeCard.classList.remove('show');
+            loadBase(); buildSVG();
+            steps = SCENARIOS[i](); idx = 0; renderStep(steps[0]);
+          }
+        }
+
+        function next(){ if (idx >= steps.length-1){ stop(); return false; } idx++; renderStep(steps[idx]); if (idx>=steps.length-1) stop(); return true; }
+        function prev(){ if (idx<=0) return; idx--; renderStep(steps[idx]); }
+        function delay(){ return 1150 - parseInt(speedEl.value,10)*95; }
+        function play(){ if (idx>=steps.length-1){ idx=0; renderStep(steps[0]); } playing=true; playLabel.textContent='Pause'; playIcon.className='ti ti-player-pause'; loop(); }
+        function loop(){ if(!playing) return; if(!next()){ stop(); return; } timer=setTimeout(loop, delay()); }
+        function stop(){ playing=false; if(timer){clearTimeout(timer);timer=null;} playLabel.textContent='Play'; playIcon.className='ti ti-player-play'; }
+
+        // ---- free play ----
+        var fpSel = null, fpPathMode = false, fpPathPick = [];
+        function renderFree(extra) {
+          extra = extra || {};
+          NODES().forEach(function(n){
+            var role = 'dim';
+            if (fpSel === n) role = 'active';
+            else if (extra.path && extra.path.indexOf(n) >= 0) role = 'path';
+            else if (fpPathPick.indexOf(n) >= 0) role = 'seen';
+            nodeEls[n].c.setAttribute('class','node-circ '+role);
+            nodeEls[n].b.textContent = '';
+          });
+          Object.keys(edgeEls).forEach(function(k){
+            edgeEls[k].setAttribute('class','edge '+(extra.pathEdges && extra.pathEdges.indexOf(k)>=0 ? 'path' : 'tree'));
+          });
+          sV.textContent = NODES().length; sE.textContent = edges.length;
+          sCost.textContent = (extra.cost !== undefined ? extra.cost : '—');
+          sHops.textContent = (extra.hops !== undefined ? extra.hops : '—');
+          if (extra.side) setSide(extra.sideH || 'Free play', extra.side);
+          else setSide('Edges (with cost)', edges.map(function(e){ return {t:e[0]+'–'+e[1]+':'+e[2], cls:'i'}; }));
+        }
+        function fpFlash(t){ freeNote.textContent = t; }
+
+        function recomputePath() {
+          if (fpPathPick.length < 2) { renderFree(); return; }
+          var r = dijkstra(fpPathPick[0], fpPathPick[1]);
+          if (!r.path) {
+            fpFlash('No route: '+fpPathPick[0]+' and '+fpPathPick[1]+' are in different components.');
+            renderFree({ side:[{t:'unreachable', cls:''}], sideH:'Path '+fpPathPick[0]+' → '+fpPathPick[1] });
+            return;
+          }
+          var pe = []; for (var i=0;i<r.path.length-1;i++) pe.push(ekey(r.path[i],r.path[i+1]));
+          var hops = r.path.length-1;
+          fpFlash('Cheapest '+fpPathPick[0]+'→'+fpPathPick[1]+': '+r.path.join(' → ')+' — cost '+r.cost+' across '+hops+' hop'+(hops===1?'':'s')+'.');
+          renderFree({ path:r.path, pathEdges:pe, cost:r.cost, hops:hops, sideH:'Cheapest path '+fpPathPick[0]+' → '+fpPathPick[1], side:[{t:'cost '+r.cost, cls:'v'},{t:hops+' hop'+(hops===1?'':'s'), cls:'i'}] });
+        }
+
+        function nodeClickFree(id) {
+          if (fpPathMode) {
+            if (fpPathPick.length === 0 || fpPathPick.length === 2) { fpPathPick = [id]; fpFlash('Source: '+id+'. Click a target vertex.'); renderFree(); }
+            else if (fpPathPick[0] === id) { fpPathPick = []; fpFlash('Cleared. Click a source vertex.'); renderFree(); }
+            else { fpPathPick.push(id); recomputePath(); }
+            return;
+          }
+          if (fpSel === null) { fpSel = id; fpFlash('Selected '+id+'. Click another vertex to toggle an edge.'); }
+          else if (fpSel === id) { fpSel = null; fpFlash('Deselected.'); }
+          else {
+            var k = ekey(fpSel, id);
+            if (hasEdge(fpSel, id)) { edges = edges.filter(function(e){ return ekey(e[0],e[1])!==k; }); fpFlash('Removed edge '+fpSel+'–'+id+'.'); }
+            else { edges.push([fpSel, id, 1]); fpFlash('Added edge '+fpSel+'–'+id+' (cost 1). Click it to raise the weight.'); }
+            fpSel = null; buildSVG();
+          }
+          renderFree();
+        }
+
+        function edgeClickFree(a,b) {
+          var e = findEdge(a,b); if (!e) return;
+          e[2] = nextWeight(e[2]); positionSVG();
+          fpFlash('Edge '+a+'–'+b+' weight → '+e[2]+'. Cycle: 1→2→3→5→9→1.');
+          if (fpPathPick.length === 2) recomputePath(); else renderFree();
+        }
+
+        // ---- pointer handling (free play: click to select, drag to move) ----
+        var svg = document.getElementById('graph');
+        var drag = null;
+        function pt(ev){ var r = svg.getBoundingClientRect(); var cx = ev.touches?ev.touches[0].clientX:ev.clientX; var cy = ev.touches?ev.touches[0].clientY:ev.clientY; return { x:(cx-r.left)/r.width*560, y:(cy-r.top)/r.height*300 }; }
+        function down(ev){ if(!freeMode) return; var el = ev.target;
+          if(el.dataset && el.dataset.id){ var id = el.dataset.id, p = pt(ev); drag = { id:id, moved:false, dx:p.x-pos[id][0], dy:p.y-pos[id][1] }; return; }
+          // edge weight click: find nearest edge to the pointer
+          var p2 = pt(ev), best = null, bestD = 16;
+          edges.forEach(function(e){ var a = pos[e[0]], b = pos[e[1]]; var mx=(a[0]+b[0])/2, my=(a[1]+b[1])/2; var d = Math.hypot(p2.x-mx, p2.y-my); if (d < bestD){ bestD = d; best = e; } });
+          if (best){ edgeClickFree(best[0], best[1]); }
+        }
+        function move(ev){ if(!drag) return; var p = pt(ev); var nx = Math.max(26,Math.min(534,p.x-drag.dx)), ny = Math.max(26,Math.min(274,p.y-drag.dy)); if(Math.abs(nx-pos[drag.id][0])>2||Math.abs(ny-pos[drag.id][1])>2) drag.moved=true; pos[drag.id]=[nx,ny]; positionSVG(); ev.preventDefault(); }
+        function up(){ if(!drag) return; if(!drag.moved) nodeClickFree(drag.id); drag=null; }
+        svg.addEventListener('mousedown',down); svg.addEventListener('touchstart',down,{passive:false});
+        window.addEventListener('mousemove',move); window.addEventListener('touchmove',move,{passive:false});
+        window.addEventListener('mouseup',up); window.addEventListener('touchend',up);
+
+        document.getElementById('f-path').addEventListener('click', function(){ fpPathMode = !fpPathMode; fpPathPick=[]; fpSel=null; this.classList.toggle('primary', fpPathMode); fpFlash(fpPathMode?'Pick-path mode: click a source vertex, then a target. We show cheapest cost vs hop count.':'Edit mode: click two vertices to toggle an edge; click an edge to cycle its weight.'); renderFree(); });
+        document.getElementById('f-clear').addEventListener('click', function(){ edges=[]; fpSel=null; fpPathPick=[]; buildSVG(); fpFlash('All edges cleared — 6 isolated vertices.'); renderFree(); });
+        document.getElementById('f-reset').addEventListener('click', function(){ loadBase(); fpSel=null; fpPathPick=[]; fpPathMode=false; document.getElementById('f-path').classList.remove('primary'); buildSVG(); fpFlash('Reset to the starting weighted graph.'); renderFree(); });
+
+        document.querySelectorAll('.tab').forEach(function(tab){ tab.addEventListener('click', function(){
+          document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
+          tab.classList.add('active'); loadScenario(parseInt(tab.dataset.sc,10));
+        }); });
+        btnPlay.addEventListener('click', function(){ playing?stop():play(); });
+        btnNext.addEventListener('click', function(){ stop(); next(); });
+        btnPrev.addEventListener('click', function(){ stop(); prev(); });
+        btnRestart.addEventListener('click', function(){ stop(); idx=0; renderStep(steps[0]); });
+        window.addEventListener('keydown', function(e){ if(freeMode) return;
+          if(e.key==='ArrowLeft'){ stop(); prev(); } else if(e.key==='ArrowRight'){ stop(); next(); }
+          else if(e.key===' '){ e.preventDefault(); playing?stop():play(); } });
+
+        buildSVG();
+        loadScenario(0);
+
+        function postHeight(){ try { parent.postMessage({type:'prototype:height',height:document.body.scrollHeight},'*'); } catch(e){} }
+        new ResizeObserver(postHeight).observe(document.body);
+        postHeight();
+      })();
+    </script>
+  </body>
+</html>

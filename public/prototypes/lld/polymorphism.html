@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Polymorphism — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.32);
+        --success: #5cc66f;
+        --info: #5e9ff6;
+        --danger: #f06868;
+        --violet: #a78bfa;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      .lab { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+      .wrap { max-width: 700px; margin: 0 auto; }
+      .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); }
+
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 12px; cursor: pointer; transition: filter .15s, transform .1s, border-color .15s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .btn:disabled { opacity: .5; cursor: not-allowed; }
+      .btn.primary { background: var(--accent); color: #1a1003; border-color: transparent; }
+      .btn.primary:hover { filter: brightness(1.06); }
+      .btn.sm { padding: 7px 9px; font-size: 11px; }
+
+      /* ---- Top: interface + method toggle ---- */
+      .topbar { display: flex; align-items: center; gap: 12px; padding: 11px 14px; margin-bottom: 10px; flex-wrap: wrap; }
+      .iface { font-family: var(--mono); font-size: 11px; color: var(--subtle); }
+      .iface b { color: var(--accent); font-weight: 600; }
+      .seg { display: inline-flex; margin-left: auto; border: 1px solid var(--border); border-radius: var(--r-md); overflow: hidden; }
+      .seg button { background: var(--elevated); color: var(--muted); border: none; border-left: 1px solid var(--border); padding: 7px 13px; font: 600 11px var(--mono); cursor: pointer; transition: background .15s, color .15s; }
+      .seg button:first-child { border-left: none; }
+      .seg button.on { background: var(--accent-soft); color: var(--accent); }
+
+      /* ---- The dispatch bar (the star of the show) ---- */
+      .callbar { display: flex; align-items: center; gap: 10px 12px; flex-wrap: wrap; padding: 13px 16px; margin-bottom: 12px; }
+      .callbar .lbl { font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--subtle); }
+      .callbar .call { font-family: var(--mono); font-size: 15px; font-weight: 600; color: var(--fg); }
+      .callbar .call .ref { color: var(--info); }
+      .callbar .call .m { color: var(--accent); }
+      .callbar .arrow { color: var(--subtle); font-size: 16px; }
+      .callbar .dispatch { font-family: var(--mono); font-size: 14px; color: var(--subtle); transition: color .15s; }
+      .callbar .dispatch.hot { color: var(--fg); }
+      .callbar .dispatch .impl { color: var(--accent); font-weight: 600; }
+      .callbar .dispatch .val { color: var(--success); font-weight: 600; }
+
+      .instruct { font-size: 12.5px; color: var(--muted); margin: 0 0 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .instruct code { font-family: var(--mono); font-size: 12px; color: var(--fg); background: var(--elevated); border: 1px solid var(--border); border-radius: 5px; padding: 1px 5px; }
+
+      /* ---- Shapes ---- */
+      .row-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px; }
+      .row-head .ttl { font-size: 13px; font-weight: 600; }
+      .row-head .cnt { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+      .row-head .note { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--subtle); letter-spacing: 0.04em; }
+
+      .shapes { display: flex; flex-wrap: wrap; gap: 12px; }
+      .shape {
+        flex: 1 1 150px; min-width: 150px;
+        background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r-lg);
+        padding: 12px; cursor: pointer; position: relative;
+        animation: pop .25s ease;
+        transition: border-color .18s, box-shadow .18s, transform .18s;
+      }
+      @keyframes pop { from { opacity: 0; transform: translateY(6px) scale(.98); } to { opacity: 1; transform: none; } }
+      .shape:hover { border-color: var(--accent-border); transform: translateY(-2px); }
+      .shape.active { border-color: var(--accent-border); box-shadow: 0 0 0 1px var(--accent-border), 0 0 18px rgba(251,134,58,0.18); }
+
+      .shape-top { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+      .glyph { width: 34px; height: 34px; flex: none; display: block; transition: transform .18s; }
+      .shape:hover .glyph { transform: scale(1.06); }
+      .shape-name { font-family: var(--mono); font-size: 12px; font-weight: 600; }
+      .shape-name .lc { color: var(--muted); font-weight: 400; }
+      .x { margin-left: auto; background: none; border: none; color: var(--subtle); font-size: 16px; line-height: 1; cursor: pointer; padding: 0 2px; }
+      .x:hover { color: var(--danger); }
+
+      .params { font-family: var(--mono); font-size: 11px; color: var(--info); margin-bottom: 7px; }
+      .formula { font-family: var(--mono); font-size: 11px; color: var(--subtle); min-height: 15px; }
+
+      .result { margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--border); display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+      .result .k { font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--subtle); }
+      .result .v { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+      .result .v.blank { color: var(--subtle); font-size: 14px; font-weight: 500; }
+      .result .v.filled { color: var(--accent); }
+      .result .v.pulse { animation: pulse .4s ease; }
+      @keyframes pulse { 0% { transform: scale(1); } 40% { transform: scale(1.18); } 100% { transform: scale(1); } }
+
+      .tap { margin-top: 8px; font-family: var(--mono); font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--subtle); display: flex; align-items: center; gap: 5px; }
+      .tap .cursor { color: var(--accent); }
+
+      /* ---- Console ---- */
+      .console { margin-top: 16px; }
+      .console-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+      .console-bar .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+      .log { background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px 12px; font-family: var(--mono); font-size: 11.5px; line-height: 1.7; min-height: 96px; max-height: 170px; overflow-y: auto; }
+      .log .ln { white-space: pre-wrap; }
+      .log .muted { color: var(--subtle); }
+      .log .c-accent { color: var(--accent); }
+      .log .c-info { color: var(--info); }
+      .log .c-success { color: var(--success); }
+      .log .c-violet { color: var(--violet); }
+      .log .c-danger { color: var(--danger); }
+      .log .c-fg { color: var(--fg); }
+
+      .controls { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; align-items: center; }
+      .hint { margin-top: 12px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+      .hint b { color: var(--fg); }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <!-- INTERFACE + METHOD TOGGLE -->
+      <div class="card topbar">
+        <span class="iface">interface <b>Shape</b> { area(); perimeter(); }</span>
+        <div class="seg" id="seg">
+          <button class="on" data-m="area" onclick="setMethod('area')">area()</button>
+          <button data-m="perimeter" onclick="setMethod('perimeter')">perimeter()</button>
+        </div>
+      </div>
+
+      <!-- THE DISPATCH BAR -->
+      <div class="card callbar">
+        <div>
+          <div class="lbl">you call</div>
+          <div class="call"><span class="ref">shape</span>.<span class="m" id="call-m">area</span>()</div>
+        </div>
+        <span class="arrow">→</span>
+        <div>
+          <div class="lbl">it runs</div>
+          <div class="dispatch" id="dispatch">click a shape…</div>
+        </div>
+      </div>
+
+      <p class="instruct">
+        <span><b style="color:var(--fg)">Click any shape</b> — it's the exact same call <code id="inline-call">shape.area()</code>, yet each shape runs <em>its own</em> version.</span>
+        <button class="btn primary sm" id="run-btn" onclick="runAll()" style="margin-left:auto">▶ Run on all</button>
+      </p>
+
+      <!-- SHAPES -->
+      <div class="row-head">
+        <span class="ttl">shapes</span>
+        <span class="cnt" id="count">0</span>
+        <span class="note">one interface · many forms</span>
+      </div>
+      <div class="shapes" id="shapes"></div>
+
+      <div class="controls">
+        <button class="btn" id="add-btn" onclick="addShape()">+ Add shape</button>
+        <button class="btn sm" onclick="resetAll()">Reset</button>
+        <span class="lab" id="add-hint">add a new type → it just works, no caller changes</span>
+      </div>
+
+      <!-- CONSOLE -->
+      <div class="console">
+        <div class="console-bar">
+          <span class="dot"></span>
+          <span class="lab">console</span>
+        </div>
+        <div class="log" id="log"></div>
+      </div>
+
+      <div class="hint">
+        <span class="b">▸</span>
+        <span>One call site, <b>shape.area()</b>, dispatches to whichever shape you clicked — the caller never checks the type. That's <b>polymorphism</b> (dynamic dispatch).</span>
+      </div>
+    </div>
+
+    <script>
+      var COLORS = {
+        circle: "#fb863a", square: "#5e9ff6", rectangle: "#a78bfa",
+        triangle: "#5cc66f", pentagon: "#f06868", hexagon: "#e8c84a",
+      };
+
+      // Each shape type implements the SAME two methods its own way.
+      var TYPES = {
+        circle: {
+          label: "Circle", mk: function () { return { r: 6 }; },
+          paramsText: function (p) { return "r = " + p.r; },
+          area:      { formula: "π·r²",  expr: function (p) { return "π·" + p.r + "²"; },         fn: function (p) { return Math.PI * p.r * p.r; } },
+          perimeter: { formula: "2·π·r", expr: function (p) { return "2·π·" + p.r; },              fn: function (p) { return 2 * Math.PI * p.r; } },
+          glyph: function (c) { return '<circle cx="17" cy="17" r="14" fill="none" stroke="' + c + '" stroke-width="2.5"/>'; },
+        },
+        square: {
+          label: "Square", mk: function () { return { s: 5 }; },
+          paramsText: function (p) { return "s = " + p.s; },
+          area:      { formula: "s²",  expr: function (p) { return p.s + "²"; },     fn: function (p) { return p.s * p.s; } },
+          perimeter: { formula: "4·s", expr: function (p) { return "4·" + p.s; },    fn: function (p) { return 4 * p.s; } },
+          glyph: function (c) { return '<rect x="4" y="4" width="26" height="26" rx="2" fill="none" stroke="' + c + '" stroke-width="2.5"/>'; },
+        },
+        rectangle: {
+          label: "Rectangle", mk: function () { return { w: 6, h: 3 }; },
+          paramsText: function (p) { return "w = " + p.w + ", h = " + p.h; },
+          area:      { formula: "w·h",      expr: function (p) { return p.w + "·" + p.h; },             fn: function (p) { return p.w * p.h; } },
+          perimeter: { formula: "2·(w+h)",  expr: function (p) { return "2·(" + p.w + "+" + p.h + ")"; }, fn: function (p) { return 2 * (p.w + p.h); } },
+          glyph: function (c) { return '<rect x="3" y="9" width="28" height="16" rx="2" fill="none" stroke="' + c + '" stroke-width="2.5"/>'; },
+        },
+        triangle: {
+          label: "Triangle", mk: function () { return { s: 6 }; },
+          paramsText: function (p) { return "s = " + p.s + " (equilateral)"; },
+          area:      { formula: "(√3/4)·s²", expr: function (p) { return "0.433·" + p.s + "²"; }, fn: function (p) { return (Math.sqrt(3) / 4) * p.s * p.s; } },
+          perimeter: { formula: "3·s",       expr: function (p) { return "3·" + p.s; },          fn: function (p) { return 3 * p.s; } },
+          glyph: function (c) { return '<path d="M17 4 L31 29 L3 29 Z" fill="none" stroke="' + c + '" stroke-width="2.5" stroke-linejoin="round"/>'; },
+        },
+        pentagon: {
+          label: "Pentagon", mk: function () { return { s: 4 }; },
+          paramsText: function (p) { return "s = " + p.s + " (regular)"; },
+          area:      { formula: "1.720·s²", expr: function (p) { return "1.720·" + p.s + "²"; }, fn: function (p) { return 1.7204774 * p.s * p.s; } },
+          perimeter: { formula: "5·s",      expr: function (p) { return "5·" + p.s; },           fn: function (p) { return 5 * p.s; } },
+          glyph: function (c) { return '<path d="M17 3 L31 14 L25 31 L9 31 L3 14 Z" fill="none" stroke="' + c + '" stroke-width="2.5" stroke-linejoin="round"/>'; },
+        },
+        hexagon: {
+          label: "Hexagon", mk: function () { return { s: 4 }; },
+          paramsText: function (p) { return "s = " + p.s + " (regular)"; },
+          area:      { formula: "2.598·s²", expr: function (p) { return "2.598·" + p.s + "²"; }, fn: function (p) { return 2.5980762 * p.s * p.s; } },
+          perimeter: { formula: "6·s",      expr: function (p) { return "6·" + p.s; },           fn: function (p) { return 6 * p.s; } },
+          glyph: function (c) { return '<path d="M9 4 L25 4 L33 17 L25 30 L9 30 L1 17 Z" fill="none" stroke="' + c + '" stroke-width="2.5" stroke-linejoin="round"/>'; },
+        },
+      };
+
+      var EXTRA_ORDER = ["pentagon", "hexagon"];
+      var shapes = [];
+      var nextId = 1;
+      var extraIdx = 0;
+      var method = "area";
+      var running = false;
+
+      function makeShape(kind) { return { id: nextId++, kind: kind, params: TYPES[kind].mk(), val: null }; }
+
+      function seed() {
+        shapes = [makeShape("circle"), makeShape("square"), makeShape("rectangle"), makeShape("triangle")];
+        extraIdx = 0;
+      }
+
+      function log(html, cls) {
+        var box = document.getElementById("log");
+        var line = document.createElement("div");
+        line.className = "ln" + (cls ? " " + cls : "");
+        line.innerHTML = html;
+        box.appendChild(line);
+        while (box.children.length > 11) box.removeChild(box.firstChild);
+        box.scrollTop = box.scrollHeight;
+      }
+
+      function fmt(n) { return (Math.round(n * 100) / 100).toFixed(2); }
+      function shapeById(id) { for (var i = 0; i < shapes.length; i++) if (shapes[i].id === id) return shapes[i]; return null; }
+
+      function methodLabel() { return method + "()"; }
+
+      function setCallBar() {
+        document.getElementById("call-m").textContent = method;
+        document.getElementById("inline-call").textContent = "shape." + method + "()";
+      }
+
+      function setDispatch(html, hot) {
+        var d = document.getElementById("dispatch");
+        d.innerHTML = html;
+        d.className = "dispatch" + (hot ? " hot" : "");
+      }
+
+      function render() {
+        var host = document.getElementById("shapes");
+        document.getElementById("count").textContent = shapes.length + (shapes.length === 1 ? " object" : " objects");
+        var html = "";
+        shapes.forEach(function (sh) {
+          var t = TYPES[sh.kind], c = COLORS[sh.kind], m = t[method];
+          var resultHtml = sh.val === null
+            ? '<span class="v blank">— tap —</span>'
+            : '<span class="v filled">' + fmt(sh.val) + '</span>';
+          html +=
+            '<div class="shape" data-id="' + sh.id + '" onclick="callOne(' + sh.id + ')">' +
+              '<div class="shape-top">' +
+                '<svg class="glyph" viewBox="0 0 34 34">' + t.glyph(c) + '</svg>' +
+                '<span class="shape-name">' + t.label + ' <span class="lc">#' + sh.id + '</span></span>' +
+                '<button class="x" title="remove" onclick="event.stopPropagation(); removeShape(' + sh.id + ')">×</button>' +
+              '</div>' +
+              '<div class="params">' + t.paramsText(sh.params) + '</div>' +
+              '<div class="formula">' + method + '() = ' + m.formula + '</div>' +
+              '<div class="result"><span class="k">' + methodLabel() + '</span>' + resultHtml + '</div>' +
+              '<div class="tap"><span class="cursor">☞</span> click to call ' + method + '()</div>' +
+            '</div>';
+        });
+        host.innerHTML = html;
+      }
+
+      function setActive(id) {
+        Array.prototype.forEach.call(document.querySelectorAll(".shape"), function (n) {
+          n.classList.toggle("active", n.getAttribute("data-id") === String(id));
+        });
+      }
+      function clearActive() {
+        Array.prototype.forEach.call(document.querySelectorAll(".shape"), function (n) { n.classList.remove("active"); });
+      }
+      function fillResult(sh, pulse) {
+        var node = document.querySelector('.shape[data-id="' + sh.id + '"] .v');
+        if (node) { node.textContent = fmt(sh.val); node.className = "v filled" + (pulse ? " pulse" : ""); }
+      }
+
+      // Click ONE shape → the same call shape.<method>() dispatches to its own impl.
+      function callOne(id) {
+        if (running) return;
+        var sh = shapeById(id);
+        if (!sh) return;
+        var t = TYPES[sh.kind], m = t[method];
+        sh.val = m.fn(sh.params);
+        setActive(id);
+        fillResult(sh, true);
+        setDispatch(
+          '<span class="impl">' + t.label + '.' + method + '()</span> = <span class="val">' + fmt(sh.val) + '</span>',
+          true
+        );
+        log(
+          '<span class="c-info">' + sh.kind + ' #' + sh.id + '</span>.<span class="c-accent">' + method + '()</span> ' +
+          '<span class="muted">→</span> ' + m.expr(sh.params) + ' = <span class="c-fg">' + fmt(sh.val) + '</span> ' +
+          '<span class="muted">(ran ' + t.label + '’s version)</span>'
+        );
+      }
+
+      function runAll() {
+        if (running || shapes.length === 0) return;
+        running = true;
+        document.getElementById("run-btn").disabled = true;
+        document.getElementById("add-btn").disabled = true;
+        shapes.forEach(function (sh) { sh.val = null; });
+        render();
+        log('<span class="muted">// for (const s of shapes) s.' + method + '()  — same call, every object</span>');
+        var total = 0, i = 0;
+        function step() {
+          if (i >= shapes.length) {
+            clearActive();
+            setDispatch('<span class="impl">' + shapes.length + ' shapes</span> · total <span class="val">' + fmt(total) + '</span>', true);
+            log('<span class="c-accent">total ' + method + '</span> <span class="muted">=</span> <span class="c-fg">' + fmt(total) + '</span> <span class="muted">— one polymorphic loop, zero type checks</span>');
+            running = false;
+            document.getElementById("run-btn").disabled = false;
+            document.getElementById("add-btn").disabled = false;
+            return;
+          }
+          var sh = shapes[i], t = TYPES[sh.kind], m = t[method];
+          setActive(sh.id);
+          sh.val = m.fn(sh.params);
+          total += sh.val;
+          fillResult(sh, true);
+          setDispatch('<span class="impl">' + t.label + '.' + method + '()</span> = <span class="val">' + fmt(sh.val) + '</span>', true);
+          log('<span class="c-info">' + sh.kind + '</span>.<span class="c-accent">' + method + '()</span> <span class="muted">→</span> ' + m.expr(sh.params) + ' = <span class="c-fg">' + fmt(sh.val) + '</span>');
+          i++;
+          setTimeout(step, 600);
+        }
+        setTimeout(step, 160);
+      }
+
+      function setMethod(m) {
+        if (running || m === method) return;
+        method = m;
+        Array.prototype.forEach.call(document.querySelectorAll("#seg button"), function (b) {
+          b.classList.toggle("on", b.getAttribute("data-m") === m);
+        });
+        shapes.forEach(function (sh) { sh.val = null; });
+        setCallBar();
+        setDispatch("click a shape…", false);
+        clearActive();
+        render();
+        log('<span class="muted">// switched the call to shape.' + m + '() — every shape adapts its own way</span>');
+      }
+
+      function addShape() {
+        if (running) return;
+        var kind = EXTRA_ORDER[extraIdx % EXTRA_ORDER.length];
+        extraIdx++;
+        shapes.push(makeShape(kind));
+        render();
+        log('<span class="c-violet">+ new ' + TYPES[kind].label + '()</span> <span class="muted">— click it (or Run on all); the caller needs NO changes (open/closed)</span>');
+        if (extraIdx >= EXTRA_ORDER.length) {
+          document.getElementById("add-btn").disabled = true;
+          document.getElementById("add-hint").textContent = "all types added — click any shape, or Run on all";
+        }
+      }
+
+      function removeShape(id) {
+        if (running) return;
+        var sh = shapeById(id);
+        shapes = shapes.filter(function (s) { return s.id !== id; });
+        render();
+        if (sh) log('<span class="c-danger">− removed ' + TYPES[sh.kind].label + ' #' + id + '</span> <span class="muted">— the caller doesn’t care which types remain</span>');
+      }
+
+      function resetAll() {
+        running = false;
+        method = "area";
+        extraIdx = 0;
+        Array.prototype.forEach.call(document.querySelectorAll("#seg button"), function (b) {
+          b.classList.toggle("on", b.getAttribute("data-m") === "area");
+        });
+        document.getElementById("run-btn").disabled = false;
+        document.getElementById("add-btn").disabled = false;
+        document.getElementById("add-hint").textContent = "add a new type → it just works, no caller changes";
+        document.getElementById("log").innerHTML = "";
+        setCallBar();
+        setDispatch("click a shape…", false);
+        seed();
+        render();
+        log('<span class="muted">// 4 shapes, different types. Click any one to call ' + method + '() on it.</span>');
+      }
+
+      // init
+      setCallBar();
+      seed();
+      render();
+      log('<span class="muted">// a mixed list of Shape objects. Click a shape to dispatch the call.</span>');
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Generics & Templates — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.32);
+        --success: #5cc66f;
+        --info: #5e9ff6;
+        --danger: #f06868;
+        --violet: #a78bfa;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      .lab { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+
+      .stage { display: grid; grid-template-columns: 300px 1fr; gap: 16px; align-items: start; }
+      @media (max-width: 700px) { .stage { grid-template-columns: 1fr; } }
+
+      .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); }
+
+      /* ---- Control panel ---- */
+      .panel { overflow: hidden; }
+      .panel-bar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--elevated); }
+      .panel-bar .kw { font-family: var(--mono); font-size: 12px; color: var(--accent); }
+      .panel-bar .nm { font-family: var(--mono); font-size: 13px; font-weight: 600; }
+      .panel-tag { margin-left: auto; white-space: nowrap; font-family: var(--mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--subtle); border: 1px solid var(--border); border-radius: 999px; padding: 2px 8px; }
+      .panel-body { padding: 12px 14px 14px; }
+
+      .section-lab { font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--subtle); margin: 4px 0 6px; }
+      .ctor .section-lab { margin-top: 0; }
+
+      select, input[type="text"] { width: 100%; background: var(--elevated); color: var(--fg); border: 1px solid var(--border); border-radius: var(--r-md); padding: 8px 10px; font: 13px var(--sans); margin-bottom: 10px; }
+      select:focus, input[type="text"]:focus { outline: none; border-color: var(--accent-border); }
+      input.mono { font-family: var(--mono); font-size: 13px; }
+
+      .sig { font-family: var(--mono); font-size: 13px; padding: 9px 10px; margin-bottom: 12px; border: 1px solid var(--accent-border); background: var(--accent-soft); border-radius: var(--r-md); display: flex; align-items: center; gap: 4px; flex-wrap: wrap; transition: background .2s; }
+      .sig.flash { background: rgba(251,134,58,0.28); }
+      .sig .gen { color: var(--accent); }
+      .sig .ty { color: var(--info); }
+
+      .divider { height: 1px; background: var(--border); margin: 12px 0; }
+
+      /* toggle */
+      .toggle-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--r-md); margin-bottom: 2px; cursor: pointer; transition: border-color .15s, background .15s; }
+      .toggle-row:hover { border-color: var(--border-strong); }
+      .toggle-row.on { border-color: var(--danger); background: rgba(240,104,104,0.08); }
+      .switch { position: relative; width: 34px; height: 19px; border-radius: 999px; background: var(--border-strong); flex: none; transition: background .2s; }
+      .toggle-row.on .switch { background: var(--danger); }
+      .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 15px; height: 15px; border-radius: 50%; background: var(--fg); transition: left .2s; }
+      .toggle-row.on .switch::after { left: 17px; }
+      .toggle-txt { font-family: var(--mono); font-size: 11.5px; }
+      .toggle-txt b { color: var(--fg); }
+      .toggle-sub { font-size: 11px; color: var(--muted); margin: 6px 2px 0; line-height: 1.5; }
+
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 12px; cursor: pointer; transition: filter .15s, transform .1s, border-color .15s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .btn.primary { background: var(--accent); color: #1a1003; border-color: transparent; width: 100%; padding: 11px; font-size: 13px; }
+      .btn.primary:hover { filter: brightness(1.06); }
+      .btn.sm { padding: 7px 9px; font-size: 11px; }
+
+      /* ---- Box / right side ---- */
+      .box-head-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+      .box-head-row .ttl { font-size: 13px; font-weight: 600; }
+      .box-head-row .cnt { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+      .box-head-row .arrow { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--subtle); letter-spacing: 0.06em; }
+
+      /* banner under the head */
+      .banner { border-radius: var(--r-md); padding: 9px 12px; margin-bottom: 10px; font-family: var(--mono); font-size: 11.5px; line-height: 1.5; border: 1px solid; display: none; }
+      .banner.show { display: block; animation: pop .2s ease; }
+      .banner.err { color: var(--danger); border-color: rgba(240,104,104,0.4); background: rgba(240,104,104,0.1); }
+      .banner.ok { color: var(--success); border-color: rgba(92,198,111,0.4); background: rgba(92,198,111,0.1); }
+      .banner.runtime { color: var(--danger); border-color: rgba(240,104,104,0.55); background: rgba(240,104,104,0.16); }
+
+      .box-shell { border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--elevated); padding: 12px; transition: border-color .2s; }
+      .box-shell.raw { border-color: rgba(240,104,104,0.45); border-style: dashed; }
+      .box-shell.flash-ok { border-color: var(--success); }
+      .box-label { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+      .box-label .lk { color: var(--accent); }
+      .box-label .lt { color: var(--info); }
+      .box-shell.raw .box-label .lt { color: var(--danger); }
+
+      .items { display: flex; flex-direction: column; gap: 7px; min-height: 54px; }
+      .items.empty-state { align-items: center; justify-content: center; }
+      .empty { color: var(--subtle); font-size: 12px; font-family: var(--mono); text-align: center; }
+      .item { display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md); padding: 8px 10px; animation: pop .25s ease; }
+      @keyframes pop { from { opacity: 0; transform: translateY(6px) scale(.98); } to { opacity: 1; transform: none; } }
+      .item.top { border-color: var(--accent-border); }
+      .item .ival { font-family: var(--mono); font-size: 13px; color: var(--fg); }
+      .item .itype { margin-left: auto; font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--subtle); border: 1px solid var(--border); border-radius: 999px; padding: 2px 7px; }
+      .item .peek-tag { font-family: var(--mono); font-size: 9px; color: var(--accent); letter-spacing: 0.08em; }
+
+      .box-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 12px; }
+      .box-actions .full { grid-column: 1 / -1; }
+
+      /* ---- Console ---- */
+      .console { margin-top: 16px; }
+      .console-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+      .console-bar .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+      .log { background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px 12px; font-family: var(--mono); font-size: 11.5px; line-height: 1.7; min-height: 92px; max-height: 160px; overflow-y: auto; }
+      .log .ln { white-space: pre-wrap; }
+      .log .muted { color: var(--subtle); }
+      .log .c-accent { color: var(--accent); }
+      .log .c-info { color: var(--info); }
+      .log .c-success { color: var(--success); }
+      .log .c-danger { color: var(--danger); }
+      .log .c-fg { color: var(--fg); }
+
+      .hint { margin-top: 12px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <div class="stage">
+      <!-- CONTROL PANEL -->
+      <div class="card panel">
+        <div class="panel-bar">
+          <span class="kw">class</span>
+          <span class="nm">Box&lt;T&gt;</span>
+          <span class="panel-tag">generic</span>
+        </div>
+        <div class="panel-body">
+          <div class="ctor">
+            <div class="section-lab">choose the type parameter T</div>
+            <select id="type-select">
+              <option value="number">Box&lt;number&gt;</option>
+              <option value="string">Box&lt;string&gt;</option>
+              <option value="User">Box&lt;User&gt;</option>
+            </select>
+
+            <div class="sig" id="sig">
+              <span class="gen">new</span>&nbsp;<span class="gen">Box</span>&lt;<span class="ty" id="sig-type">number</span>&gt;()
+            </div>
+
+            <div class="section-lab">value to push</div>
+            <input type="text" class="mono" id="value-input" placeholder="e.g. 42" autocomplete="off" />
+            <button class="btn primary" onclick="tryPush()">box.push(value)</button>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="section-lab">contrast: drop type safety</div>
+          <div class="toggle-row" id="raw-toggle" onclick="toggleRaw()">
+            <span class="switch"></span>
+            <span class="toggle-txt">Use raw <b>Box&lt;any&gt;</b></span>
+          </div>
+          <div class="toggle-sub">A raw box accepts <em>anything</em> — no compile check. The bug surfaces later, at runtime.</div>
+        </div>
+      </div>
+
+      <!-- THE BOX -->
+      <div>
+        <div class="box-head-row">
+          <span class="ttl">The box</span>
+          <span class="cnt" id="size-count">1 item</span>
+          <span class="arrow" id="mode-tag">← typed: errors caught early</span>
+        </div>
+
+        <div class="banner" id="banner"></div>
+
+        <div class="box-shell" id="box-shell">
+          <div class="box-label">
+            <span class="lk">Box</span>&lt;<span class="lt" id="box-label-type">number</span>&gt;
+          </div>
+          <div class="items" id="items"></div>
+          <div class="box-actions">
+            <button class="btn" onclick="doPeek()">peek()</button>
+            <button class="btn" onclick="doPop()">pop()</button>
+            <button class="btn full" id="use-btn" onclick="useItem()">use item — .toFixed()</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONSOLE -->
+    <div class="console">
+      <div class="console-bar">
+        <span class="dot"></span>
+        <span class="lab">console</span>
+        <button class="btn sm" style="margin-left:auto" onclick="resetAll()">Reset</button>
+      </div>
+      <div class="log" id="log"></div>
+      <div class="hint">
+        <span class="b">▸</span>
+        <span>A <b style="color:var(--fg)">typed</b> box rejects the wrong type <em>before it runs</em>. The <b style="color:var(--fg)">raw</b> box accepts anything, then crashes at <em>runtime</em>. Generics move the error earlier.</span>
+      </div>
+    </div>
+
+    <script>
+      // --- state ---
+      var TYPES = {
+        number: { label: "number", placeholder: "e.g. 42", sample: "42" },
+        string: { label: "string", placeholder: 'e.g. "hello"', sample: '"hi"' },
+        User:   { label: "User",   placeholder: "e.g. User#7", sample: "User#7" }
+      };
+      var boxType = "number";   // current T
+      var raw = false;          // Box<any> mode?
+      var items = [];           // { val, type } — bottom..top
+
+      var sel = document.getElementById("type-select");
+      var input = document.getElementById("value-input");
+
+      // --- helpers ---
+      function log(html, cls) {
+        var box = document.getElementById("log");
+        var line = document.createElement("div");
+        line.className = "ln" + (cls ? " " + cls : "");
+        line.innerHTML = html;
+        box.appendChild(line);
+        while (box.children.length > 9) box.removeChild(box.firstChild);
+        box.scrollTop = box.scrollHeight;
+      }
+
+      function flashSig() {
+        var s = document.getElementById("sig");
+        s.classList.add("flash");
+        setTimeout(function () { s.classList.remove("flash"); }, 320);
+      }
+
+      function showBanner(text, kind) {
+        var b = document.getElementById("banner");
+        b.className = "banner show " + kind;
+        b.textContent = text;
+      }
+      function hideBanner() {
+        document.getElementById("banner").className = "banner";
+      }
+
+      // Infer what type the user's raw input string looks like.
+      function inferType(s) {
+        var t = s.trim();
+        if (t === "") return "empty";
+        // a quoted thing or User#... → not a number
+        if (/^-?\d+(\.\d+)?$/.test(t)) return "number";
+        if (/^User#?\d*$/i.test(t)) return "User";
+        return "string";
+      }
+
+      function typeOfStored(v) { return v.type; }
+
+      // --- render ---
+      function render() {
+        document.getElementById("sig-type").textContent = raw ? "any" : TYPES[boxType].label;
+        document.getElementById("box-label-type").textContent = raw ? "any" : TYPES[boxType].label;
+        input.placeholder = TYPES[boxType].placeholder;
+
+        var shell = document.getElementById("box-shell");
+        shell.className = "box-shell" + (raw ? " raw" : "");
+        document.getElementById("mode-tag").textContent = raw
+          ? "← raw: errors slip to runtime"
+          : "← typed: errors caught early";
+
+        document.getElementById("size-count").textContent =
+          items.length + (items.length === 1 ? " item" : " items");
+
+        var host = document.getElementById("items");
+        if (items.length === 0) {
+          host.className = "items empty-state";
+          host.innerHTML = '<div class="empty">// box is empty — pop() returns undefined</div>';
+          return;
+        }
+        host.className = "items";
+        var html = "";
+        // show top of stack first
+        for (var i = items.length - 1; i >= 0; i--) {
+          var it = items[i];
+          var isTop = i === items.length - 1;
+          html +=
+            '<div class="item' + (isTop ? " top" : "") + '">' +
+              (isTop ? '<span class="peek-tag">▲ top</span>' : "") +
+              '<span class="ival">' + escapeHtml(it.val) + "</span>" +
+              '<span class="itype">' + it.type + "</span>" +
+            "</div>";
+        }
+        host.innerHTML = html;
+      }
+
+      function escapeHtml(s) {
+        return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      }
+
+      // --- actions ---
+      function tryPush() {
+        var rawVal = input.value;
+        var inferred = inferType(rawVal);
+        if (inferred === "empty") {
+          showBanner("⚠ Type a value first.", "err");
+          return;
+        }
+        var stored = { val: rawVal.trim(), type: inferred };
+
+        if (raw) {
+          // Box<any>: accept anything, no compile-time check.
+          items.push(stored);
+          hideBanner();
+          flashSig();
+          render();
+          log(
+            'rawBox.<span class="c-info">push</span>(<span class="c-fg">' + escapeHtml(stored.val) +
+            "</span>) <span class=\"muted\">→</span> accepted " +
+            '<span class="c-danger">(no type check — Box&lt;any&gt;)</span>',
+            "c-danger"
+          );
+          return;
+        }
+
+        // Typed Box<T>: enforce T at "compile time".
+        var want = TYPES[boxType].label;
+        if (inferred === boxType) {
+          items.push(stored);
+          showBanner("✓ box.push(" + stored.val + "): ok", "ok");
+          flashSig();
+          var shell = document.getElementById("box-shell");
+          shell.classList.add("flash-ok");
+          setTimeout(function () { shell.classList.remove("flash-ok"); }, 350);
+          render();
+          log(
+            'box.<span class="c-info">push</span>(<span class="c-fg">' + escapeHtml(stored.val) +
+            '</span>): <span class="c-success">ok</span>',
+            "c-success"
+          );
+        } else {
+          // wrong type → simulated compile error, NOT added.
+          showBanner(
+            "✗ Compile error: Argument of type '" + inferred +
+            "' is not assignable to '" + want + "'",
+            "err"
+          );
+          render();
+          log(
+            'box.<span class="c-info">push</span>(<span class="c-fg">' + escapeHtml(stored.val) +
+            '</span>) <span class="muted">→</span> ' +
+            '<span class="c-danger">✗ compile error: \'' + inferred + "' not assignable to '" + want + "'</span> " +
+            '<span class="muted">(caught before running — nothing added)</span>',
+            "c-danger"
+          );
+        }
+        input.value = "";
+        input.focus();
+      }
+
+      function doPeek() {
+        if (items.length === 0) {
+          showBanner("box.peek() → undefined (empty)", "err");
+          log('box.<span class="c-info">peek</span>() <span class="muted">→</span> undefined');
+          return;
+        }
+        var top = items[items.length - 1];
+        hideBanner();
+        log('box.<span class="c-info">peek</span>() <span class="muted">→</span> <span class="c-fg">' + escapeHtml(top.val) + '</span> <span class="muted">(' + top.type + ', stays in box)</span>');
+      }
+
+      function doPop() {
+        if (items.length === 0) {
+          showBanner("box.pop() → undefined (empty)", "err");
+          log('box.<span class="c-info">pop</span>() <span class="muted">→</span> undefined');
+          render();
+          return;
+        }
+        var top = items.pop();
+        hideBanner();
+        render();
+        log('box.<span class="c-info">pop</span>() <span class="muted">→</span> <span class="c-fg">' + escapeHtml(top.val) + '</span> <span class="muted">(removed; typed as ' + (raw ? "any" : TYPES[boxType].label) + ')</span>');
+      }
+
+      // "use" the top item as a number → .toFixed(). In a typed Box<number>
+      // this is always safe. In a raw box, a string sneaks in and crashes.
+      function useItem() {
+        if (items.length === 0) {
+          showBanner("Nothing to use — box is empty.", "err");
+          return;
+        }
+        var top = items[items.length - 1];
+        if (top.type === "number") {
+          var n = parseFloat(top.val);
+          hideBanner();
+          log('top.<span class="c-info">toFixed</span>(2) <span class="muted">→</span> <span class="c-success">"' + n.toFixed(2) + '"</span> <span class="muted">(ok — it really is a number)</span>', "c-success");
+          showBanner("✓ " + top.val + ".toFixed(2) = " + n.toFixed(2), "ok");
+        } else {
+          // RUNTIME failure — only possible because the raw box let it in.
+          showBanner(
+            "✗ Runtime error: " + JSON.stringify(top.val) + ".toFixed is not a function",
+            "runtime"
+          );
+          log(
+            'top.<span class="c-info">toFixed</span>(2) <span class="muted">→</span> ' +
+            '<span class="c-danger">✗ TypeError at RUNTIME: \'' + escapeHtml(top.val) + "'." +
+            'toFixed is not a function</span> <span class="muted">(a typed Box&lt;number&gt; would have blocked this at compile time)</span>',
+            "c-danger"
+          );
+        }
+      }
+
+      // --- mode changes ---
+      sel.onchange = function () {
+        boxType = sel.value;
+        items = [];           // a fresh box of the newly chosen type
+        hideBanner();
+        render();
+        log('<span class="muted">// new Box&lt;</span><span class="c-accent">' + TYPES[boxType].label + '</span><span class="muted">&gt;() — empty box of the chosen type</span>');
+        input.value = "";
+        input.focus();
+      };
+
+      function toggleRaw() {
+        raw = !raw;
+        document.getElementById("raw-toggle").className = "toggle-row" + (raw ? " on" : "");
+        sel.disabled = raw;
+        items = [];
+        hideBanner();
+        render();
+        if (raw) {
+          log('<span class="muted">// switched to </span><span class="c-danger">Box&lt;any&gt;</span><span class="muted"> — no compile-time type checking</span>', "c-danger");
+        } else {
+          log('<span class="muted">// back to typed </span><span class="c-accent">Box&lt;' + TYPES[boxType].label + '&gt;</span><span class="muted"> — safety restored</span>');
+        }
+        input.focus();
+      }
+
+      function resetAll() {
+        boxType = "number";
+        raw = false;
+        sel.value = "number";
+        sel.disabled = false;
+        document.getElementById("raw-toggle").className = "toggle-row";
+        document.getElementById("log").innerHTML = "";
+        hideBanner();
+        seed();
+      }
+
+      input.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") tryPush();
+      });
+
+      // --- seed: Box<number> with one item ---
+      function seed() {
+        items = [{ val: "42", type: "number" }];
+        render();
+        log('<span class="muted">// seeded </span><span class="c-accent">new Box&lt;number&gt;()</span><span class="muted"> with one item: 42</span>');
+        log('<span class="muted">// try pushing a word — it\'s rejected at compile time</span>');
+      }
+      seed();
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

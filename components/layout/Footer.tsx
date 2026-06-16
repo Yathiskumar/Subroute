@@ -6,7 +6,7 @@ const SECTIONS = [
     title: "Explore",
     links: [
       { href: "/topics", label: "All topics" },
-      { href: "/playground", label: "Playground" },
+      { href: "/roadmaps", label: "Roadmaps" },
       { href: "/topics/rate-limiting", label: "Rate Limiting" },
     ],
   },

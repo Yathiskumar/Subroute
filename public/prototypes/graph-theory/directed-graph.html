@@ -1,0 +1,546 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Directed Graphs</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --success-bg: rgba(92,198,111,0.14); --success-bd: rgba(92,198,111,0.45);
+        --danger: #f06868;  --danger-bg: rgba(240,104,104,0.14); --danger-bd: rgba(240,104,104,0.45);
+        --warning: #f0b568; --warning-bg: rgba(240,181,104,0.14); --warning-bd: rgba(240,181,104,0.45);
+        --info: #5e9ff6;    --info-bg:    rgba(94,159,246,0.16); --info-bd:    rgba(94,159,246,0.45);
+        --purple: #a78bfa;  --purple-bg:  rgba(167,139,250,0.16); --purple-bd:  rgba(167,139,250,0.45);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --radius-lg: 14px; --radius-md: 8px; --radius-sm: 6px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body {
+        padding: 18px 18px 24px;
+        background-image:
+          radial-gradient(1200px 600px at 50% -200px, rgba(251,134,58,0.06), transparent),
+          linear-gradient(to right, rgba(255,255,255,0.020) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.020) 1px, transparent 1px);
+        background-size: auto, 40px 40px, 40px 40px;
+      }
+      .container { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; padding: 9px 12px; transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); color: var(--fg); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); color: #1a1003; }
+      button.ghost { background: transparent; }
+      button i { font-size: 14px; }
+      select { background: var(--elevated); color: var(--fg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px 9px; font: 500 12px var(--sans); }
+      input[type="range"] { accent-color: var(--accent); }
+
+      .tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+      .tab { background: var(--elevated); border: 1px solid var(--border); color: var(--muted); border-radius: 999px; padding: 7px 13px; font: 500 11.5px var(--sans); cursor: pointer; transition: all 150ms ease; }
+      .tab:hover { border-color: var(--border-strong); color: var(--fg); }
+      .tab.active { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+
+      .hero { background: linear-gradient(180deg, rgba(255,255,255,0.014), transparent), var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px 12px; position: relative; overflow: hidden; }
+      .hero::before { content: ""; position: absolute; inset: 0; background: radial-gradient(420px 240px at 50% 0%, rgba(94,159,246,0.05), transparent 60%); pointer-events: none; }
+      .hero-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; position: relative; z-index: 1; gap: 12px; flex-wrap: wrap; }
+      .ttl { font: 600 11.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .legend { font-size: 11px; color: var(--muted); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      .legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: -1px; margin-right: 4px; }
+
+      .graph-wrap { position: relative; z-index: 1; }
+      svg.graph { width: 100%; height: 290px; display: block; touch-action: none; }
+      .edge { stroke: var(--border-strong); stroke-width: 2.4; transition: stroke 220ms ease, stroke-width 220ms ease, opacity 220ms ease; }
+      .edge.active { stroke: var(--warning); stroke-width: 4; }
+      .edge.tree { stroke: var(--info); stroke-width: 3; }
+      .edge.path { stroke: var(--accent); stroke-width: 4.5; }
+      .edge.dim { opacity: 0.28; }
+      .edge.hit { stroke: transparent; stroke-width: 18; }
+      .node-circ { stroke-width: 2.4; transition: fill 220ms ease, stroke 220ms ease; }
+      .node-circ.dim { fill: var(--elevated); stroke: var(--border-strong); }
+      .node-circ.seen { fill: rgba(94,159,246,0.20); stroke: var(--info); }
+      .node-circ.active { fill: var(--warning); stroke: var(--warning); }
+      .node-circ.done { fill: rgba(92,198,111,0.22); stroke: var(--success); }
+      .node-circ.path { fill: rgba(251,134,58,0.22); stroke: var(--accent); }
+      .node-circ.source { fill: rgba(167,139,250,0.22); stroke: var(--purple); }
+      .node-circ.sink { fill: rgba(240,104,104,0.20); stroke: var(--danger); }
+      .node-circ.pop { animation: pop 0.32s cubic-bezier(0.34, 1.56, 0.64, 1); }
+      @keyframes pop { from { transform: scale(0.92); } 50% { transform: scale(1.10); } to { transform: scale(1); } }
+      .node-lbl { font: 600 13px var(--mono); fill: var(--fg); text-anchor: middle; pointer-events: none; user-select: none; }
+      .node-badge { font: 600 9.5px var(--mono); fill: var(--muted); text-anchor: middle; pointer-events: none; }
+
+      .side { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; min-height: 56px; }
+      .side .h { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 7px; }
+      .side .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; min-height: 28px; }
+      .chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 6px; font: 600 11.5px var(--mono); border: 1px solid var(--border-strong); background: var(--elevated); color: var(--fg); }
+      .chip.v { background: rgba(92,198,111,0.18); color: var(--success); border-color: var(--success-bd); }
+      .chip.i { background: rgba(94,159,246,0.16); color: var(--info); border-color: var(--info-bd); }
+      .chip.p { background: rgba(167,139,250,0.16); color: var(--purple); border-color: var(--purple-bd); }
+      .chip.d { background: rgba(240,104,104,0.16); color: var(--danger); border-color: var(--danger-bd); }
+      .empty { font: 500 11.5px var(--mono); color: var(--subtle); }
+      .side .total { margin-left: auto; font: 600 12px var(--mono); color: var(--accent); }
+
+      .narration { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; position: relative; overflow: hidden; transition: border-color 350ms ease; }
+      .narration::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--border-strong); transition: background 350ms ease; }
+      .narration.add::before { background: var(--info); } .narration.add { border-color: rgba(94,159,246,0.30); }
+      .narration.calc::before { background: var(--purple); } .narration.calc { border-color: rgba(167,139,250,0.30); }
+      .narration.path::before { background: var(--accent); } .narration.path { border-color: rgba(251,134,58,0.32); }
+      .narration.done::before { background: var(--success); } .narration.done { border-color: rgba(92,198,111,0.45); }
+      .narration.warn::before { background: var(--danger); } .narration.warn { border-color: rgba(240,104,104,0.42); }
+      .narr-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+      .badge { font: 600 10.5px var(--mono); padding: 4px 9px; border-radius: 999px; letter-spacing: 0.4px; text-transform: uppercase; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); color: var(--muted); background: var(--elevated); }
+      .badge.step { background: var(--elevated); border-color: var(--border-strong); color: var(--fg); }
+      .badge.event { background: transparent; }
+      .badge.event.add { color: var(--info); border-color: var(--info-bd); }
+      .badge.event.calc { color: var(--purple); border-color: var(--purple-bd); }
+      .badge.event.path { color: var(--accent); border-color: var(--warning-bd); }
+      .badge.event.done { color: var(--success); border-color: var(--success-bd); }
+      .badge.event.warn { color: var(--danger); border-color: var(--danger-bd); }
+      .narr-text { margin: 0; font-size: 14px; line-height: 1.55; color: var(--fg); }
+      .narr-text strong { color: var(--fg); font-weight: 600; }
+      .narr-text code { font-family: var(--mono); background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; color: var(--accent); font-size: 12px; }
+
+      .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+      .controls .spacer { flex: 1; }
+      .speed-wrap { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font: 500 11px var(--mono); }
+      .speed-wrap input[type="range"] { width: 80px; }
+      .kbd { font-family: var(--mono); font-size: 10.5px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); color: var(--muted); border: 1px solid var(--border); }
+      .hint { font: 11px var(--mono); color: var(--subtle); display: inline-flex; align-items: center; gap: 5px; }
+
+      .free-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; display: none; flex-direction: column; gap: 10px; }
+      .free-card.show { display: flex; }
+      .free-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+      .free-note { font: 11.5px var(--mono); color: var(--muted); }
+
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; }
+      .stat .label { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .stat .value { font: 600 22px var(--mono); margin-top: 4px; line-height: 1; }
+
+      @media (max-width: 540px) {
+        .stats { grid-template-columns: repeat(2, 1fr); }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2 class="sr-only">A directed graph: step through one-way edges, reachability, sources and sinks, or build your own digraph in free play.</h2>
+
+      <div class="tabs" id="tabs">
+        <button class="tab active" data-sc="0">One-way edges</button>
+        <button class="tab" data-sc="1">Reachability</button>
+        <button class="tab" data-sc="2">Sources &amp; sinks</button>
+        <button class="tab" data-sc="3">Free play</button>
+      </div>
+
+      <div class="hero">
+        <div class="hero-head">
+          <span class="ttl" id="hero-ttl">Directed · one-way arrows</span>
+          <span class="legend">
+            <span><span class="sw" style="background:var(--elevated);border:1px solid var(--border-strong)"></span>vertex</span>
+            <span><span class="sw" style="background:var(--warning)"></span>active</span>
+            <span><span class="sw" style="background:rgba(94,159,246,0.25);border:1px solid var(--info-bd)"></span>reached</span>
+            <span><span class="sw" style="background:rgba(167,139,250,0.25);border:1px solid var(--purple-bd)"></span>source</span>
+            <span><span class="sw" style="background:rgba(240,104,104,0.25);border:1px solid var(--danger-bd)"></span>sink</span>
+          </span>
+        </div>
+        <div class="graph-wrap">
+          <svg id="graph" class="graph" viewBox="0 0 560 300" aria-hidden="true">
+            <defs>
+              <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 z" fill="#5e9ff6"></path>
+              </marker>
+              <marker id="ah-dim" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 z" fill="#2d333d"></path>
+              </marker>
+              <marker id="ah-hot" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 z" fill="#fb863a"></path>
+              </marker>
+              <marker id="ah-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 z" fill="#f0b568"></path>
+              </marker>
+            </defs>
+            <g id="edges"></g>
+            <g id="nodes"></g>
+          </svg>
+        </div>
+      </div>
+
+      <div class="side">
+        <div class="h" id="side-h">Arrows added</div>
+        <div id="side-row" class="row"><span class="empty">—</span></div>
+      </div>
+
+      <div id="narration" class="narration">
+        <div class="narr-meta">
+          <span id="narr-step" class="badge step">Step 0 / 0</span>
+          <span id="narr-event" class="badge event" style="display:none"></span>
+        </div>
+        <p id="narr-text" class="narr-text"><strong>Press Play.</strong> In a directed graph each edge is a one-way arrow from a source vertex to a target.</p>
+      </div>
+
+      <div class="controls" id="controls">
+        <button id="btn-prev"><i class="ti ti-chevron-left"></i>Back</button>
+        <button id="btn-play" class="primary"><i id="play-icon" class="ti ti-player-play"></i><span id="play-label">Play</span></button>
+        <button id="btn-next"><i class="ti ti-chevron-right"></i>Step</button>
+        <button id="btn-restart" class="ghost"><i class="ti ti-refresh"></i>Restart</button>
+        <span class="spacer"></span>
+        <span class="speed-wrap"><span>Speed</span><input id="speed" type="range" min="1" max="10" step="1" value="5" /></span>
+      </div>
+
+      <div class="free-card" id="free-card">
+        <div class="free-row">
+          <button id="f-reach"><i class="ti ti-arrow-guide"></i>Reachable from</button>
+          <button id="f-clear" class="ghost"><i class="ti ti-eraser"></i>Clear arrows</button>
+          <button id="f-reset" class="ghost"><i class="ti ti-refresh"></i>Reset graph</button>
+        </div>
+        <span class="free-note" id="free-note">Click a source vertex then a target to add a one-way arrow. Click the same pair again to remove it. Drag a vertex to move it.</span>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="label">vertices</div><div id="s-v" class="value" style="color:var(--info)">0</div></div>
+        <div class="stat"><div class="label">arrows</div><div id="s-e" class="value" style="color:var(--accent)">0</div></div>
+        <div class="stat"><div class="label" id="s3-label">Σ in = Σ out</div><div id="s-sum" class="value" style="color:var(--purple)">0</div></div>
+        <div class="stat"><div class="label" id="s4-label">sources</div><div id="s-cmp" class="value" style="color:var(--success)">0</div></div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        var BASE_POS = { A:[78,72], B:[280,56], C:[482,92], D:[88,238], E:[290,242], F:[480,232] };
+        // Directed edges [source, target]. A is a source (in-deg 0); F is a sink (out-deg 0).
+        var BASE_EDGES = [["A","B"],["A","D"],["B","C"],["B","E"],["C","F"],["E","C"],["D","E"]];
+
+        var pos = {}, edges = [];
+        function loadBase() {
+          pos = {}; Object.keys(BASE_POS).forEach(function(k){ pos[k] = BASE_POS[k].slice(); });
+          edges = BASE_EDGES.map(function(e){ return e.slice(); });
+        }
+        loadBase();
+
+        var NODES = function(){ return Object.keys(pos); };
+        function dkey(a,b){ return a + '>' + b; }                 // directed: order matters
+        function hasEdge(a,b){ return edges.some(function(e){ return e[0]===a && e[1]===b; }); }
+        function outDeg(n){ return edges.reduce(function(d,e){ return d + (e[0]===n?1:0); }, 0); }
+        function inDeg(n){ return edges.reduce(function(d,e){ return d + (e[1]===n?1:0); }, 0); }
+        function sources(){ return NODES().filter(function(n){ return inDeg(n)===0; }); }
+        function sinks(){ return NODES().filter(function(n){ return outDeg(n)===0; }); }
+        function adjacency() {
+          var adj = {}; NODES().forEach(function(n){ adj[n]=[]; });
+          edges.forEach(function(e){ adj[e[0]].push(e[1]); });   // one-way only
+          NODES().forEach(function(n){ adj[n].sort(); });
+          return adj;
+        }
+        // BFS following arrow direction; returns prev-map + ordered levels.
+        function bfsReach(s) {
+          var adj = adjacency(), q = [s], prev = {}; prev[s] = null;
+          var levels = [[s]], depth = {}; depth[s] = 0;
+          while (q.length) {
+            var u = q.shift();
+            adj[u].forEach(function(v){
+              if (!(v in prev)) { prev[v] = u; depth[v] = depth[u]+1;
+                (levels[depth[v]] = levels[depth[v]] || []).push(v); q.push(v); }
+            });
+          }
+          return { prev: prev, levels: levels, depth: depth };
+        }
+        function bfsPath(s,t) {
+          var r = bfsReach(s);
+          if (!(t in r.prev)) return null;
+          var path = [], c = t; while (c!==null){ path.unshift(c); c = r.prev[c]; } return path;
+        }
+        function reachSet(s) { return Object.keys(bfsReach(s).prev); }
+
+        var nodesG = document.getElementById('nodes');
+        var edgesG = document.getElementById('edges');
+        var nodeEls = {}, edgeEls = {}, edgeHit = {};
+
+        function buildSVG() {
+          edgesG.innerHTML = ''; nodesG.innerHTML = ''; nodeEls = {}; edgeEls = {}; edgeHit = {};
+          edges.forEach(function(e){
+            var k = dkey(e[0],e[1]);
+            var hit = document.createElementNS('http://www.w3.org/2000/svg','line');
+            hit.setAttribute('class','edge hit'); edgeHit[k] = hit; edgesG.appendChild(hit);
+            var ln = document.createElementNS('http://www.w3.org/2000/svg','line');
+            ln.setAttribute('class','edge'); ln.setAttribute('marker-end','url(#ah-dim)'); ln.setAttribute('stroke-linecap','round');
+            edgeEls[k] = ln; edgesG.appendChild(ln);
+          });
+          NODES().forEach(function(n){
+            var c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+            c.setAttribute('r', 22); c.setAttribute('class','node-circ dim');
+            c.dataset.id = n;
+            var t = document.createElementNS('http://www.w3.org/2000/svg','text');
+            t.setAttribute('class','node-lbl'); t.textContent = n; t.dataset.id = n;
+            var b = document.createElementNS('http://www.w3.org/2000/svg','text');
+            b.setAttribute('class','node-badge');
+            nodesG.appendChild(c); nodesG.appendChild(t); nodesG.appendChild(b);
+            nodeEls[n] = { c: c, t: t, b: b };
+          });
+          positionSVG();
+        }
+        // shorten the line so the arrowhead lands on the target circle's edge, not its centre;
+        // nudge bidirectional A<->B pairs apart so both arrows are visible.
+        function geom(a,b){
+          var p1 = pos[a], p2 = pos[b], R = 22;
+          var dx = p2[0]-p1[0], dy = p2[1]-p1[1]; var len = Math.hypot(dx,dy) || 1;
+          var ux = dx/len, uy = dy/len, ox = 0, oy = 0;
+          if (hasEdge(b,a)) { ox = -uy*7; oy = ux*7; }
+          return { x1: p1[0]+ux*R+ox, y1: p1[1]+uy*R+oy, x2: p2[0]-ux*(R+7)+ox, y2: p2[1]-uy*(R+7)+oy };
+        }
+        function positionSVG() {
+          Object.keys(edgeEls).forEach(function(k){
+            var p = k.split('>'); var g = geom(p[0],p[1]);
+            [edgeEls[k], edgeHit[k]].forEach(function(ln){
+              ln.setAttribute('x1',g.x1); ln.setAttribute('y1',g.y1);
+              ln.setAttribute('x2',g.x2); ln.setAttribute('y2',g.y2);
+            });
+          });
+          NODES().forEach(function(n){
+            var x = pos[n][0], y = pos[n][1];
+            nodeEls[n].c.setAttribute('cx',x); nodeEls[n].c.setAttribute('cy',y);
+            nodeEls[n].t.setAttribute('x',x); nodeEls[n].t.setAttribute('y',y+5);
+            nodeEls[n].b.setAttribute('x',x); nodeEls[n].b.setAttribute('y',y-30);
+          });
+        }
+        function markerFor(role){
+          return role === 'path' ? 'url(#ah-hot)' : role === 'active' ? 'url(#ah-warn)' :
+                 role === 'tree' ? 'url(#ah)' : 'url(#ah-dim)';
+        }
+
+        // ---- scripted scenarios produce arrays of step snapshots ----
+        function snap(o){
+          return { nodeRole: o.nodeRole||{}, edgeRole: o.edgeRole||{}, badge: o.badge||{},
+                   side: o.side||null, sideH: o.sideH||null, msg: o.msg, event: o.event||null,
+                   stat3: o.stat3, stat4: o.stat4 };
+        }
+
+        function scOneWay() {
+          var s = [];
+          s.push(snap({ msg:'Six vertices, <strong>A through F</strong>, with no arrows yet. In a <strong>directed graph</strong> every edge is a one-way arrow <code>u → v</code>: it says "u points to v", not the other way round.', event:'add', sideH:'Arrows added', side:[] }));
+          var added = [];
+          BASE_EDGES.forEach(function(e){
+            var k = dkey(e[0],e[1]); added.push(e.slice());
+            var er = {}; added.forEach(function(ee){ er[dkey(ee[0],ee[1])]='tree'; });
+            var nr = {}; nr[e[0]]='active'; nr[e[1]]='seen';
+            var bb = {}; bb[e[0]] = 'out+1'; bb[e[1]] = 'in+1';
+            s.push(snap({ msg:'Add arrow <code>'+e[0]+' → '+e[1]+'</code>. It raises <strong>'+e[0]+'’s out-degree</strong> and <strong>'+e[1]+'’s in-degree</strong> — and <em>only</em> those two. There is no implied '+e[1]+' → '+e[0]+'.', event:'add', edgeRole: er, nodeRole: nr, badge: bb, sideH:'Arrows added', side: added.map(function(ee){ return {t:ee[0]+'→'+ee[1], cls:'i'}; }) }));
+          });
+          var allTree = {}; Object.keys(edgeEls).forEach(function(k){ allTree[k]='tree'; });
+          var deg = {}; NODES().forEach(function(n){ deg[n] = inDeg(n) + '/' + outDeg(n); });
+          var bb2 = {}; NODES().forEach(function(n){ bb2[n] = 'in '+inDeg(n)+' out '+outDeg(n); });
+          s.push(snap({ msg:'All <strong>7 arrows</strong> placed. Each vertex now carries two separate counts: its <strong>in-degree</strong> (arrows landing on it) and <strong>out-degree</strong> (arrows leaving it). Note <strong>A</strong> has in-degree <code>0</code> and <strong>F</strong> has out-degree <code>0</code>.', event:'done', edgeRole: allTree, badge: bb2, sideH:'in / out per vertex', side: NODES().map(function(n){ return {t:n+': '+deg[n], cls:'v'}; }) }));
+          return s;
+        }
+
+        function scReach() {
+          var s = [];
+          var src = 'A';
+          s.push(snap({ msg:'<strong>Reachability follows the arrows.</strong> Starting at <strong>'+src+'</strong>, which vertices can we reach if we may only travel in the arrow direction? We run a BFS that never walks an arrow backwards.', event:'path', nodeRole:(function(){var o={};o[src]='active';return o;})(), sideH:'Reachable from '+src, side:[{t:src, cls:'p'}] }));
+          var r = bfsReach(src);
+          var reached = [src];
+          for (var lv = 0; lv < r.levels.length; lv++) {
+            var ring = r.levels[lv];
+            var nr = {}; reached.forEach(function(v){ nr[v]='done'; });
+            var er = {};
+            // light up the arrows that discovered this ring
+            if (lv > 0) ring.forEach(function(v){ er[dkey(r.prev[v], v)] = 'path'; });
+            ring.forEach(function(v){ nr[v] = lv===0 ? 'active' : 'path'; });
+            reached = reached.concat(lv===0 ? [] : ring);
+            // accumulate path edges discovered so far
+            reached.forEach(function(v){ if (r.prev[v]) er[dkey(r.prev[v], v)] = 'path'; });
+            var msg = lv === 0
+              ? 'Ring 0: the source <strong>'+src+'</strong> itself, <code>0</code> hops away.'
+              : 'Ring '+lv+': follow every arrow leaving the previous ring. We reach <strong>'+ring.join(', ')+'</strong> — each <code>'+lv+'</code> hop'+(lv>1?'s':'')+' from '+src+'.';
+            s.push(snap({ msg: msg, event:'path', nodeRole: nr, edgeRole: er, sideH:'Reachable from '+src, side: reached.map(function(v){ return {t:v, cls: v===src?'p':'i'}; }), stat4: reached.length }));
+          }
+          // final asymmetry point: A reaches F, but F reaches nothing back to A
+          var allReached = reachSet(src);
+          var fromF = reachSet('F');
+          var nrFin = {}; allReached.forEach(function(v){ nrFin[v]='done'; });
+          nrFin['A'] = 'source'; nrFin['F'] = 'sink';
+          var erFin = {};
+          var pathAF = bfsPath('A','F');
+          for (var i=0;i<pathAF.length-1;i++) erFin[dkey(pathAF[i],pathAF[i+1])] = 'path';
+          s.push(snap({ msg:'<strong>'+src+' reaches all 6 vertices</strong> — including F via <code>'+pathAF.join(' → ')+'</code>. But direction is <strong>not symmetric</strong>: from <strong>F</strong> you can reach only <code>{F}</code> — there is no arrow path back to A. "A reaches B" does <em>not</em> imply "B reaches A".', event:'done', nodeRole: nrFin, edgeRole: erFin, sideH:'Reachable from F', side: fromF.map(function(v){ return {t:v, cls:'d'}; }), stat4: allReached.length }));
+          return s;
+        }
+
+        function scSources() {
+          var s = [];
+          var srcs = sources(), snk = sinks();
+          var bb = {}; NODES().forEach(function(n){ bb[n] = 'in '+inDeg(n)+' out '+outDeg(n); });
+          s.push(snap({ msg:'A vertex’s <strong>in-degree</strong> is how many arrows point at it; its <strong>out-degree</strong> is how many leave. Two special kinds fall out of these counts.', event:'calc', badge: bb, sideH:'in / out per vertex', side: NODES().map(function(n){ return {t:n+': in '+inDeg(n)+' out '+outDeg(n), cls:'v'}; }) }));
+          var nrS = {}; srcs.forEach(function(n){ nrS[n]='source'; });
+          var erS = {}; edges.forEach(function(e){ if (srcs.indexOf(e[0])>=0) erS[dkey(e[0],e[1])]='active'; });
+          s.push(snap({ msg:'A <strong>source</strong> has <strong>in-degree 0</strong> — nothing points to it, so nothing reaches it from elsewhere. Here that is <strong>'+srcs.join(', ')+'</strong>. Sources are where you start a traversal or feed data in.', event:'calc', nodeRole: nrS, edgeRole: erS, sideH:'Sources (in-degree 0)', side: srcs.map(function(n){ return {t:n, cls:'p'}; }), stat3: srcs.length }));
+          var nrK = {}; snk.forEach(function(n){ nrK[n]='sink'; });
+          var erK = {}; edges.forEach(function(e){ if (snk.indexOf(e[1])>=0) erK[dkey(e[0],e[1])]='active'; });
+          s.push(snap({ msg:'A <strong>sink</strong> has <strong>out-degree 0</strong> — arrows arrive but none leave, so once you land you are stuck. Here that is <strong>'+snk.join(', ')+'</strong>. Sinks are final states, terminal nodes, dead ends.', event:'calc', nodeRole: nrK, edgeRole: erK, sideH:'Sinks (out-degree 0)', side: snk.map(function(n){ return {t:n, cls:'d'}; }), stat3: snk.length }));
+          var nrBoth = {}; srcs.forEach(function(n){ nrBoth[n]='source'; }); snk.forEach(function(n){ nrBoth[n]='sink'; });
+          s.push(snap({ msg:'<strong>'+srcs.length+' source'+(srcs.length===1?'':'s')+'</strong> ('+srcs.join(', ')+') and <strong>'+snk.length+' sink'+(snk.length===1?'':'s')+'</strong> ('+snk.join(', ')+'). Every finite directed graph with no cycle must have at least one of each — that fact is what makes a topological order possible.', event:'done', nodeRole: nrBoth, sideH:'Sources / sinks', side: [].concat(srcs.map(function(n){ return {t:n+' src', cls:'p'}; }), snk.map(function(n){ return {t:n+' sink', cls:'d'}; })), stat3: srcs.length, stat4: snk.length }));
+          return s;
+        }
+
+        var SCENARIOS = [scOneWay, scReach, scSources];
+        var SC_TTL = ['Directed · one-way arrows','Directed · reachability follows arrows','Directed · sources & sinks','Directed · free play — your digraph'];
+        var SC_S3 = ['Σ in = Σ out','Σ in = Σ out','sources','Σ in = Σ out'];
+        var SC_S4 = ['sinks','reached','sinks','sinks'];
+
+        var sc = 0, steps = [], idx = 0, playing = false, timer = null, freeMode = false;
+
+        var narrEl = document.getElementById('narration');
+        var narrText = document.getElementById('narr-text');
+        var narrStep = document.getElementById('narr-step');
+        var narrEvent = document.getElementById('narr-event');
+        var sideH = document.getElementById('side-h');
+        var sideRow = document.getElementById('side-row');
+        var sV = document.getElementById('s-v'), sE = document.getElementById('s-e'), sSum = document.getElementById('s-sum'), sCmp = document.getElementById('s-cmp');
+        var heroTtl = document.getElementById('hero-ttl');
+        var btnPrev = document.getElementById('btn-prev'), btnNext = document.getElementById('btn-next');
+        var btnPlay = document.getElementById('btn-play'), btnRestart = document.getElementById('btn-restart');
+        var playIcon = document.getElementById('play-icon'), playLabel = document.getElementById('play-label');
+        var speedEl = document.getElementById('speed');
+        var controls = document.getElementById('controls'), freeCard = document.getElementById('free-card');
+        var freeNote = document.getElementById('free-note');
+
+        function setSide(h, arr) {
+          sideH.textContent = h; sideRow.innerHTML = '';
+          if (!arr || arr.length === 0) { var em = document.createElement('span'); em.className='empty'; em.textContent='—'; sideRow.appendChild(em); return; }
+          arr.forEach(function(it){ var c = document.createElement('span'); c.className='chip '+(it.cls||''); c.textContent = it.t; sideRow.appendChild(c); });
+        }
+
+        function renderStep(st) {
+          NODES().forEach(function(n){
+            nodeEls[n].c.setAttribute('class','node-circ '+(st.nodeRole[n]||'dim'));
+            nodeEls[n].b.textContent = st.badge[n] || ('in '+inDeg(n)+' out '+outDeg(n));
+          });
+          Object.keys(edgeEls).forEach(function(k){
+            var role = st.edgeRole[k] || 'dim';
+            edgeEls[k].setAttribute('class','edge '+role);
+            edgeEls[k].setAttribute('marker-end', markerFor(role));
+          });
+          narrText.innerHTML = st.msg;
+          narrStep.textContent = 'Step ' + idx + ' / ' + (steps.length - 1);
+          narrEl.classList.remove('add','calc','path','done','warn');
+          if (st.event) { narrEl.classList.add(st.event);
+            narrEvent.style.display = ''; narrEvent.className = 'badge event ' + st.event;
+            narrEvent.textContent = st.event === 'add' ? 'add arrow' : st.event === 'calc' ? 'count' : st.event === 'path' ? 'traverse' : st.event === 'warn' ? 'note' : 'done';
+          } else narrEvent.style.display = 'none';
+          if (st.sideH) setSide(st.sideH, st.side);
+          sV.textContent = NODES().length;
+          sE.textContent = edges.length;
+          sSum.textContent = (st.stat3 !== undefined ? st.stat3 : edges.length);
+          sCmp.textContent = (st.stat4 !== undefined ? st.stat4 : sinks().length);
+        }
+
+        function loadScenario(i) {
+          stop(); sc = i;
+          heroTtl.textContent = SC_TTL[i];
+          document.getElementById('s3-label').textContent = SC_S3[i];
+          document.getElementById('s4-label').textContent = SC_S4[i];
+          freeMode = (i === 3);
+          if (freeMode) {
+            controls.style.display = 'none'; freeCard.classList.add('show');
+            loadBase(); buildSVG(); renderFree();
+          } else {
+            controls.style.display = 'flex'; freeCard.classList.remove('show');
+            loadBase(); buildSVG();
+            steps = SCENARIOS[i](); idx = 0; renderStep(steps[0]);
+          }
+        }
+
+        function next(){ if (idx >= steps.length-1){ stop(); return false; } idx++; renderStep(steps[idx]); if (idx>=steps.length-1) stop(); return true; }
+        function prev(){ if (idx<=0) return; idx--; renderStep(steps[idx]); }
+        function delay(){ return 1150 - parseInt(speedEl.value,10)*95; }
+        function play(){ if (idx>=steps.length-1){ idx=0; renderStep(steps[0]); } playing=true; playLabel.textContent='Pause'; playIcon.className='ti ti-player-pause'; loop(); }
+        function loop(){ if(!playing) return; if(!next()){ stop(); return; } timer=setTimeout(loop, delay()); }
+        function stop(){ playing=false; if(timer){clearTimeout(timer);timer=null;} playLabel.textContent='Play'; playIcon.className='ti ti-player-play'; }
+
+        // ---- free play ----
+        var fpSel = null, fpReachMode = false, fpReachPick = null;
+        function renderFree(extra) {
+          extra = extra || {};
+          var reach = extra.reach || null;
+          NODES().forEach(function(n){
+            var role = 'dim';
+            if (fpSel === n) role = 'active';
+            else if (reach && n === fpReachPick) role = 'source';
+            else if (reach && reach.indexOf(n) >= 0) role = 'path';
+            nodeEls[n].c.setAttribute('class','node-circ '+role);
+            nodeEls[n].b.textContent = 'in '+inDeg(n)+' out '+outDeg(n);
+          });
+          Object.keys(edgeEls).forEach(function(k){
+            var role = (extra.reachEdges && extra.reachEdges.indexOf(k)>=0) ? 'path' : 'tree';
+            edgeEls[k].setAttribute('class','edge '+role);
+            edgeEls[k].setAttribute('marker-end', markerFor(role));
+          });
+          sV.textContent = NODES().length; sE.textContent = edges.length;
+          sSum.textContent = edges.length; sCmp.textContent = sinks().length;
+          setSide('Live in / out', NODES().map(function(n){ return {t:n+': in '+inDeg(n)+' out '+outDeg(n), cls:'v'}; }));
+        }
+        function fpFlash(t){ freeNote.textContent = t; }
+
+        function nodeClickFree(id) {
+          if (fpReachMode) {
+            fpReachPick = id;
+            var rs = reachSet(id);
+            var re = [];
+            var r = bfsReach(id);
+            Object.keys(r.prev).forEach(function(v){ if (r.prev[v]) re.push(dkey(r.prev[v], v)); });
+            fpFlash('Reachable from '+id+' (following arrows): '+rs.sort().join(', ')+' — '+rs.length+' of '+NODES().length+' vertices.');
+            renderFree({ reach: rs, reachEdges: re });
+            return;
+          }
+          if (fpSel === null) { fpSel = id; fpFlash('Source: '+id+'. Click a target vertex — the arrow points '+id+' → target.'); renderFree(); }
+          else if (fpSel === id) { fpSel = null; fpFlash('Deselected. Click a source vertex.'); renderFree(); }
+          else {
+            if (hasEdge(fpSel, id)) { var k = dkey(fpSel, id); edges = edges.filter(function(e){ return dkey(e[0],e[1])!==k; }); fpFlash('Removed arrow '+fpSel+' → '+id+'.'); }
+            else { edges.push([fpSel, id]); fpFlash('Added arrow '+fpSel+' → '+id+' (one-way).'); }
+            fpSel = null; buildSVG(); renderFree();
+          }
+        }
+
+        // ---- pointer handling (free play: click to select, drag to move) ----
+        var svg = document.getElementById('graph');
+        var drag = null;
+        function pt(ev){ var r = svg.getBoundingClientRect(); var cx = ev.touches?ev.touches[0].clientX:ev.clientX; var cy = ev.touches?ev.touches[0].clientY:ev.clientY; return { x:(cx-r.left)/r.width*560, y:(cy-r.top)/r.height*300 }; }
+        function down(ev){ if(!freeMode) return; var el = ev.target; if(el.dataset && el.dataset.id){ var id = el.dataset.id, p = pt(ev); drag = { id:id, moved:false, dx:p.x-pos[id][0], dy:p.y-pos[id][1] }; } }
+        function move(ev){ if(!drag) return; var p = pt(ev); var nx = Math.max(26,Math.min(534,p.x-drag.dx)), ny = Math.max(26,Math.min(274,p.y-drag.dy)); if(Math.abs(nx-pos[drag.id][0])>2||Math.abs(ny-pos[drag.id][1])>2) drag.moved=true; pos[drag.id]=[nx,ny]; positionSVG(); ev.preventDefault(); }
+        function up(){ if(!drag) return; if(!drag.moved) nodeClickFree(drag.id); drag=null; }
+        svg.addEventListener('mousedown',down); svg.addEventListener('touchstart',down,{passive:false});
+        window.addEventListener('mousemove',move); window.addEventListener('touchmove',move,{passive:false});
+        window.addEventListener('mouseup',up); window.addEventListener('touchend',up);
+
+        document.getElementById('f-reach').addEventListener('click', function(){ fpReachMode = !fpReachMode; fpReachPick=null; fpSel=null; this.classList.toggle('primary', fpReachMode); fpFlash(fpReachMode?'Reachable-from mode: click any vertex to light up everything it can reach following arrows.':'Edit mode: click a source then a target to add a one-way arrow.'); renderFree(); });
+        document.getElementById('f-clear').addEventListener('click', function(){ edges=[]; fpSel=null; fpReachPick=null; buildSVG(); fpFlash('All arrows cleared — 6 isolated vertices.'); renderFree(); });
+        document.getElementById('f-reset').addEventListener('click', function(){ loadBase(); fpSel=null; fpReachPick=null; fpReachMode=false; document.getElementById('f-reach').classList.remove('primary'); buildSVG(); fpFlash('Reset to the starting digraph.'); renderFree(); });
+
+        document.querySelectorAll('.tab').forEach(function(tab){ tab.addEventListener('click', function(){
+          document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
+          tab.classList.add('active'); loadScenario(parseInt(tab.dataset.sc,10));
+        }); });
+        btnPlay.addEventListener('click', function(){ playing?stop():play(); });
+        btnNext.addEventListener('click', function(){ stop(); next(); });
+        btnPrev.addEventListener('click', function(){ stop(); prev(); });
+        btnRestart.addEventListener('click', function(){ stop(); idx=0; renderStep(steps[0]); });
+        window.addEventListener('keydown', function(e){ if(freeMode) return;
+          if(e.key==='ArrowLeft'){ stop(); prev(); } else if(e.key==='ArrowRight'){ stop(); next(); }
+          else if(e.key===' '){ e.preventDefault(); playing?stop():play(); } });
+
+        buildSVG();
+        loadScenario(0);
+
+        function postHeight(){ try { parent.postMessage({type:'prototype:height',height:document.body.scrollHeight},'*'); } catch(e){} }
+        new ResizeObserver(postHeight).observe(document.body);
+        postHeight();
+      })();
+    </script>
+  </body>
+</html>

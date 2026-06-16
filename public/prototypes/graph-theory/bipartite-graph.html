@@ -1,0 +1,582 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bipartite Graphs</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --success-bg: rgba(92,198,111,0.14); --success-bd: rgba(92,198,111,0.45);
+        --danger: #f06868;  --danger-bg: rgba(240,104,104,0.14); --danger-bd: rgba(240,104,104,0.45);
+        --warning: #f0b568; --warning-bg: rgba(240,181,104,0.14); --warning-bd: rgba(240,181,104,0.45);
+        --info: #5e9ff6;    --info-bg:    rgba(94,159,246,0.16); --info-bd:    rgba(94,159,246,0.45);
+        --purple: #a78bfa;  --purple-bg:  rgba(167,139,250,0.16); --purple-bd:  rgba(167,139,250,0.45);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --radius-lg: 14px; --radius-md: 8px; --radius-sm: 6px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body {
+        padding: 18px 18px 24px;
+        background-image:
+          radial-gradient(1200px 600px at 50% -200px, rgba(251,134,58,0.06), transparent),
+          linear-gradient(to right, rgba(255,255,255,0.020) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.020) 1px, transparent 1px);
+        background-size: auto, 40px 40px, 40px 40px;
+      }
+      .container { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; padding: 9px 12px; transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); color: var(--fg); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); color: #1a1003; }
+      button.ghost { background: transparent; }
+      button i { font-size: 14px; }
+      select { background: var(--elevated); color: var(--fg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px 9px; font: 500 12px var(--sans); }
+      input[type="range"] { accent-color: var(--accent); }
+
+      .tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+      .tab { background: var(--elevated); border: 1px solid var(--border); color: var(--muted); border-radius: 999px; padding: 7px 13px; font: 500 11.5px var(--sans); cursor: pointer; transition: all 150ms ease; }
+      .tab:hover { border-color: var(--border-strong); color: var(--fg); }
+      .tab.active { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+
+      .hero { background: linear-gradient(180deg, rgba(255,255,255,0.014), transparent), var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px 12px; position: relative; overflow: hidden; }
+      .hero::before { content: ""; position: absolute; inset: 0; background: radial-gradient(420px 240px at 50% 0%, rgba(94,159,246,0.05), transparent 60%); pointer-events: none; }
+      .hero-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; position: relative; z-index: 1; gap: 12px; flex-wrap: wrap; }
+      .ttl { font: 600 11.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .legend { font-size: 11px; color: var(--muted); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      .legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: -1px; margin-right: 4px; }
+
+      .graph-wrap { position: relative; z-index: 1; }
+      svg.graph { width: 100%; height: 290px; display: block; touch-action: none; }
+      .edge { stroke: var(--border-strong); stroke-width: 2.4; transition: stroke 220ms ease, stroke-width 220ms ease, opacity 220ms ease; }
+      .edge.active { stroke: var(--warning); stroke-width: 4; }
+      .edge.tree { stroke: var(--success); stroke-width: 3; }
+      .edge.path { stroke: var(--accent); stroke-width: 4.5; }
+      .edge.cross { stroke: var(--border-strong); stroke-width: 2.6; }
+      .edge.ok { stroke: var(--info); stroke-width: 3; }
+      .edge.conflict { stroke: var(--danger); stroke-width: 5; }
+      .edge.dim { opacity: 0.28; }
+      .edge.hit { stroke: transparent; stroke-width: 18; }
+      .node-circ { stroke-width: 2.4; transition: fill 220ms ease, stroke 220ms ease; }
+      .node-circ.dim { fill: var(--elevated); stroke: var(--border-strong); }
+      .node-circ.seen { fill: rgba(94,159,246,0.20); stroke: var(--info); }
+      .node-circ.active { fill: var(--warning); stroke: var(--warning); }
+      .node-circ.done { fill: rgba(92,198,111,0.22); stroke: var(--success); }
+      .node-circ.path { fill: rgba(251,134,58,0.22); stroke: var(--accent); }
+      .node-circ.g0 { fill: rgba(94,159,246,0.22); stroke: var(--info); }
+      .node-circ.g1 { fill: rgba(167,139,250,0.22); stroke: var(--purple); }
+      .node-circ.g0.cur { fill: rgba(94,159,246,0.42); stroke: var(--info); }
+      .node-circ.g1.cur { fill: rgba(167,139,250,0.42); stroke: var(--purple); }
+      .node-circ.conflict { fill: var(--danger); stroke: var(--danger); }
+      .node-circ.pop { animation: pop 0.32s cubic-bezier(0.34, 1.56, 0.64, 1); }
+      @keyframes pop { from { transform: scale(0.92); } 50% { transform: scale(1.10); } to { transform: scale(1); } }
+      .node-lbl { font: 600 13px var(--mono); fill: var(--fg); text-anchor: middle; pointer-events: none; user-select: none; }
+      .node-badge { font: 600 10.5px var(--mono); fill: var(--muted); text-anchor: middle; pointer-events: none; }
+
+      .side { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; min-height: 56px; }
+      .side .h { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 7px; }
+      .side .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; min-height: 28px; }
+      .chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 6px; font: 600 11.5px var(--mono); border: 1px solid var(--border-strong); background: var(--elevated); color: var(--fg); }
+      .chip.v { background: rgba(92,198,111,0.18); color: var(--success); border-color: var(--success-bd); }
+      .chip.i { background: rgba(94,159,246,0.16); color: var(--info); border-color: var(--info-bd); }
+      .chip.g0 { background: rgba(94,159,246,0.16); color: var(--info); border-color: var(--info-bd); }
+      .chip.g1 { background: rgba(167,139,250,0.16); color: var(--purple); border-color: var(--purple-bd); }
+      .chip.bad { background: rgba(240,104,104,0.16); color: var(--danger); border-color: var(--danger-bd); }
+      .empty { font: 500 11.5px var(--mono); color: var(--subtle); }
+      .side .total { margin-left: auto; font: 600 12px var(--mono); color: var(--accent); }
+
+      .narration { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; position: relative; overflow: hidden; transition: border-color 350ms ease; }
+      .narration::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--border-strong); transition: background 350ms ease; }
+      .narration.add::before { background: var(--info); } .narration.add { border-color: rgba(94,159,246,0.30); }
+      .narration.calc::before { background: var(--purple); } .narration.calc { border-color: rgba(167,139,250,0.30); }
+      .narration.path::before { background: var(--accent); } .narration.path { border-color: rgba(251,134,58,0.32); }
+      .narration.fail::before { background: var(--danger); } .narration.fail { border-color: rgba(240,104,104,0.45); }
+      .narration.done::before { background: var(--success); } .narration.done { border-color: rgba(92,198,111,0.45); }
+      .narr-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+      .badge { font: 600 10.5px var(--mono); padding: 4px 9px; border-radius: 999px; letter-spacing: 0.4px; text-transform: uppercase; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); color: var(--muted); background: var(--elevated); }
+      .badge.step { background: var(--elevated); border-color: var(--border-strong); color: var(--fg); }
+      .badge.event { background: transparent; }
+      .badge.event.add { color: var(--info); border-color: var(--info-bd); }
+      .badge.event.calc { color: var(--purple); border-color: var(--purple-bd); }
+      .badge.event.path { color: var(--accent); border-color: var(--warning-bd); }
+      .badge.event.fail { color: var(--danger); border-color: var(--danger-bd); }
+      .badge.event.done { color: var(--success); border-color: var(--success-bd); }
+      .narr-text { margin: 0; font-size: 14px; line-height: 1.55; color: var(--fg); }
+      .narr-text strong { color: var(--fg); font-weight: 600; }
+      .narr-text code { font-family: var(--mono); background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; color: var(--accent); font-size: 12px; }
+
+      .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+      .controls .spacer { flex: 1; }
+      .speed-wrap { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font: 500 11px var(--mono); }
+      .speed-wrap input[type="range"] { width: 80px; }
+      .kbd { font-family: var(--mono); font-size: 10.5px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); color: var(--muted); border: 1px solid var(--border); }
+      .hint { font: 11px var(--mono); color: var(--subtle); display: inline-flex; align-items: center; gap: 5px; }
+
+      .free-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; display: none; flex-direction: column; gap: 10px; }
+      .free-card.show { display: flex; }
+      .free-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+      .free-note { font: 11.5px var(--mono); color: var(--muted); }
+
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; }
+      .stat .label { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .stat .value { font: 600 22px var(--mono); margin-top: 4px; line-height: 1; }
+
+      @media (max-width: 540px) {
+        .stats { grid-template-columns: repeat(2, 1fr); }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2 class="sr-only">A bipartite graph: two-colour it, watch an odd cycle break it, split it into two sides, or build and test your own in free play.</h2>
+
+      <div class="tabs" id="tabs">
+        <button class="tab active" data-sc="0">Two-colour it</button>
+        <button class="tab" data-sc="1">An odd cycle breaks it</button>
+        <button class="tab" data-sc="2">Split into two sides</button>
+        <button class="tab" data-sc="3">Free play</button>
+      </div>
+
+      <div class="hero">
+        <div class="hero-head">
+          <span class="ttl" id="hero-ttl">Bipartite · two sides, crossing edges</span>
+          <span class="legend">
+            <span><span class="sw" style="background:rgba(94,159,246,0.5);border:1px solid var(--info-bd)"></span>group 0</span>
+            <span><span class="sw" style="background:rgba(167,139,250,0.5);border:1px solid var(--purple-bd)"></span>group 1</span>
+            <span><span class="sw" style="background:var(--warning)"></span>checking</span>
+            <span><span class="sw" style="background:var(--danger)"></span>conflict</span>
+          </span>
+        </div>
+        <div class="graph-wrap">
+          <svg id="graph" class="graph" viewBox="0 0 560 300" aria-hidden="true">
+            <g id="edges"></g>
+            <g id="nodes"></g>
+          </svg>
+        </div>
+      </div>
+
+      <div class="side">
+        <div class="h" id="side-h">The two groups</div>
+        <div id="side-row" class="row"><span class="empty">—</span></div>
+      </div>
+
+      <div id="narration" class="narration">
+        <div class="narr-meta">
+          <span id="narr-step" class="badge step">Step 0 / 0</span>
+          <span id="narr-event" class="badge event" style="display:none"></span>
+        </div>
+        <p id="narr-text" class="narr-text"><strong>Press Play.</strong> A bipartite graph splits into two sides; we will prove it by painting every vertex the opposite colour of its neighbour.</p>
+      </div>
+
+      <div class="controls" id="controls">
+        <button id="btn-prev"><i class="ti ti-chevron-left"></i>Back</button>
+        <button id="btn-play" class="primary"><i id="play-icon" class="ti ti-player-play"></i><span id="play-label">Play</span></button>
+        <button id="btn-next"><i class="ti ti-chevron-right"></i>Step</button>
+        <button id="btn-restart" class="ghost"><i class="ti ti-refresh"></i>Restart</button>
+        <span class="spacer"></span>
+        <span class="speed-wrap"><span>Speed</span><input id="speed" type="range" min="1" max="10" step="1" value="5" /></span>
+      </div>
+
+      <div class="free-card" id="free-card">
+        <div class="free-row">
+          <button id="f-path"><i class="ti ti-palette"></i>Test bipartite</button>
+          <button id="f-clear" class="ghost"><i class="ti ti-eraser"></i>Clear edges</button>
+          <button id="f-reset" class="ghost"><i class="ti ti-refresh"></i>Reset graph</button>
+        </div>
+        <span class="free-note" id="free-note">Click two vertices to toggle an edge between them. Drag a vertex to move it. Then Test bipartite to 2-colour your graph.</span>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="label">vertices</div><div id="s-v" class="value" style="color:var(--info)">0</div></div>
+        <div class="stat"><div class="label">edges</div><div id="s-e" class="value" style="color:var(--accent)">0</div></div>
+        <div class="stat"><div class="label" id="s3-label">group sizes</div><div id="s-sum" class="value" style="color:var(--purple)">—</div></div>
+        <div class="stat"><div class="label" id="s4-label">bipartite?</div><div id="s-cmp" class="value" style="color:var(--muted);font-size:16px">—</div></div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        // --- two presets ---
+        // Bipartite: left {A,B,C} / right {D,E,F}, edges only cross.
+        var BIP_POS = { A:[110,70], B:[110,150], C:[110,230], D:[450,70], E:[450,150], F:[450,230] };
+        var BIP_EDGES = [["A","D"],["A","E"],["B","D"],["B","F"],["C","E"],["C","F"]];
+        // Non-bipartite: contains a triangle A-B-C.
+        var ODD_POS = { A:[150,60], B:[90,210], C:[270,210], D:[430,80], E:[470,210], F:[300,90] };
+        var ODD_EDGES = [["A","B"],["B","C"],["C","A"],["C","D"],["D","E"],["A","F"]];
+
+        var pos = {}, edges = [];
+        function loadPreset(which) {
+          var P = which === 'odd' ? ODD_POS : BIP_POS;
+          var E = which === 'odd' ? ODD_EDGES : BIP_EDGES;
+          pos = {}; Object.keys(P).forEach(function(k){ pos[k] = P[k].slice(); });
+          edges = E.map(function(e){ return e.slice(); });
+        }
+        loadPreset('bip');
+
+        var NODES = function(){ return Object.keys(pos); };
+        function ekey(a,b){ return [a,b].sort().join('-'); }
+        function hasEdge(a,b){ return edges.some(function(e){ return ekey(e[0],e[1])===ekey(a,b); }); }
+        function adjacency() {
+          var adj = {}; NODES().forEach(function(n){ adj[n]=[]; });
+          edges.forEach(function(e){ adj[e[0]].push(e[1]); adj[e[1]].push(e[0]); });
+          NODES().forEach(function(n){ adj[n].sort(); });
+          return adj;
+        }
+
+        // 2-colour via BFS. Returns { color:{}, ok:bool, conflict:[u,v]|null }.
+        function twoColour() {
+          var adj = adjacency(), color = {}, ok = true, conflict = null;
+          NODES().forEach(function(s){
+            if (color[s] !== undefined || !ok) return;
+            color[s] = 0; var q = [s];
+            while (q.length && ok) {
+              var u = q.shift();
+              for (var i=0;i<adj[u].length;i++) {
+                var v = adj[u][i];
+                if (color[v] === undefined) { color[v] = 1 - color[u]; q.push(v); }
+                else if (color[v] === color[u]) { ok = false; conflict = [u,v]; break; }
+              }
+            }
+          });
+          return { color: color, ok: ok, conflict: conflict };
+        }
+
+        var nodesG = document.getElementById('nodes');
+        var edgesG = document.getElementById('edges');
+        var nodeEls = {}, edgeEls = {}, edgeHit = {};
+
+        function buildSVG() {
+          edgesG.innerHTML = ''; nodesG.innerHTML = ''; nodeEls = {}; edgeEls = {}; edgeHit = {};
+          edges.forEach(function(e){
+            var k = ekey(e[0],e[1]);
+            var hit = document.createElementNS('http://www.w3.org/2000/svg','line');
+            hit.setAttribute('class','edge hit'); edgeHit[k] = hit; edgesG.appendChild(hit);
+            var ln = document.createElementNS('http://www.w3.org/2000/svg','line');
+            ln.setAttribute('class','edge'); edgeEls[k] = ln; edgesG.appendChild(ln);
+          });
+          NODES().forEach(function(n){
+            var c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+            c.setAttribute('r', 22); c.setAttribute('class','node-circ dim');
+            c.dataset.id = n;
+            var t = document.createElementNS('http://www.w3.org/2000/svg','text');
+            t.setAttribute('class','node-lbl'); t.textContent = n; t.dataset.id = n;
+            var b = document.createElementNS('http://www.w3.org/2000/svg','text');
+            b.setAttribute('class','node-badge');
+            nodesG.appendChild(c); nodesG.appendChild(t); nodesG.appendChild(b);
+            nodeEls[n] = { c: c, t: t, b: b };
+          });
+          positionSVG();
+        }
+        function positionSVG() {
+          Object.keys(edgeEls).forEach(function(k){
+            var p = k.split('-'); var a = pos[p[0]], b = pos[p[1]];
+            [edgeEls[k], edgeHit[k]].forEach(function(ln){
+              ln.setAttribute('x1',a[0]); ln.setAttribute('y1',a[1]);
+              ln.setAttribute('x2',b[0]); ln.setAttribute('y2',b[1]);
+            });
+          });
+          NODES().forEach(function(n){
+            var x = pos[n][0], y = pos[n][1];
+            nodeEls[n].c.setAttribute('cx',x); nodeEls[n].c.setAttribute('cy',y);
+            nodeEls[n].t.setAttribute('x',x); nodeEls[n].t.setAttribute('y',y+5);
+            nodeEls[n].b.setAttribute('x',x); nodeEls[n].b.setAttribute('y',y-30);
+          });
+        }
+
+        // ---- scripted scenarios produce arrays of step snapshots ----
+        function snap(o){
+          return { nodeRole: o.nodeRole||{}, edgeRole: o.edgeRole||{}, badge: o.badge||{},
+                   side: o.side||null, sideH: o.sideH||null, msg: o.msg, event: o.event||null,
+                   posOverride: o.posOverride||null, stat3: o.stat3, stat4: o.stat4, stat4color: o.stat4color };
+        }
+        function colName(c){ return c===0 ? 'blue (group 0)' : 'purple (group 1)'; }
+        function groupChips(color){
+          return NODES().map(function(n){
+            if (color[n]===0) return {t:n, cls:'g0'};
+            if (color[n]===1) return {t:n, cls:'g1'};
+            return {t:n, cls:''};
+          });
+        }
+
+        // Tab 0 — two-colour the bipartite preset (succeeds).
+        function scColour() {
+          var s = [], adj = adjacency();
+          var color = {}, order = [];
+          s.push(snap({ msg:'A <strong>bipartite</strong> graph splits into two sides. We prove it by <strong>2-colouring</strong>: paint every vertex the OPPOSITE colour of each neighbour. Two colours only — blue is group 0, purple is group 1.', event:'calc', sideH:'Colours so far', side:[], stat3:'—' }));
+          color['A'] = 0; var q = ['A']; order.push('A');
+          s.push(snap({ msg:'Start at <strong>A</strong>. Paint it <strong>blue (group 0)</strong> and explore outward from it.', event:'calc', nodeRole: roleFromColor(color, 'A'), sideH:'Colours so far', side: groupChips(color).filter(function(c){return c.cls;}), stat3:'—' }));
+          while (q.length) {
+            var u = q.shift();
+            s.push(snap({ msg:'At <strong>'+u+'</strong> ('+colName(color[u])+'). Every neighbour of '+u+' must be the OTHER colour.', event:'calc', nodeRole: roleFromColor(color, u), sideH:'Colours so far', side: groupChips(color).filter(function(c){return c.cls;}), stat3:'—' }));
+            adj[u].forEach(function(v){
+              if (color[v] === undefined) {
+                color[v] = 1 - color[u]; q.push(v); order.push(v);
+                var nr = roleFromColor(color, u);
+                var er = {}; er[ekey(u,v)] = 'active';
+                s.push(snap({ msg:'Edge <code>'+u+'–'+v+'</code>: paint <strong>'+v+'</strong> the opposite of '+u+' → <strong>'+colName(color[v])+'</strong>. The edge crosses between the two sides — exactly what we want.', event:'calc', nodeRole: nr, edgeRole: er, sideH:'Colours so far', side: groupChips(color).filter(function(c){return c.cls;}), stat3:'—' }));
+              } else {
+                var nr2 = roleFromColor(color, u);
+                var er2 = {}; er2[ekey(u,v)] = 'ok';
+                s.push(snap({ msg:'Edge <code>'+u+'–'+v+'</code>: <strong>'+v+'</strong> is already '+colName(color[v])+' — the opposite of '+u+'. Consistent, no clash.', event:'calc', nodeRole: nr2, edgeRole: er2, sideH:'Colours so far', side: groupChips(color).filter(function(c){return c.cls;}), stat3:'—' }));
+              }
+            });
+          }
+          var g0 = NODES().filter(function(n){return color[n]===0;});
+          var g1 = NODES().filter(function(n){return color[n]===1;});
+          var allOk = {}; Object.keys(edgeEls).forEach(function(k){ allOk[k]='ok'; });
+          var side = g0.map(function(n){return {t:n,cls:'g0'};}).concat(g1.map(function(n){return {t:n,cls:'g1'};}));
+          s.push(snap({ msg:'<strong>Done — no edge ever joined two same-coloured vertices.</strong> The graph IS bipartite. Group 0 (blue): {'+g0.join(', ')+'}. Group 1 (purple): {'+g1.join(', ')+'}.', event:'done', nodeRole: roleAll(color), edgeRole: allOk, sideH:'The two sides', side: side, stat3: g0.length+' + '+g1.length, stat4:'Yes ✓', stat4color:'var(--success)' }));
+          return s;
+        }
+
+        // Tab 1 — same procedure on the odd-cycle preset (fails).
+        function scOdd() {
+          var s = [], adj = adjacency();
+          var color = {}, conflict = null;
+          s.push(snap({ msg:'Same 2-colouring procedure — but this graph hides a <strong>triangle</strong> (A–B–C). Let us watch the two colours run out.', event:'calc', sideH:'Colours so far', side:[], stat3:'—' }));
+          color['A'] = 0; var q = ['A'];
+          s.push(snap({ msg:'Start at <strong>A</strong>, paint it <strong>blue (group 0)</strong>.', event:'calc', nodeRole: roleFromColor(color,'A'), sideH:'Colours so far', side: groupChips(color).filter(function(c){return c.cls;}), stat3:'—' }));
+          var done = false;
+          while (q.length && !done) {
+            var u = q.shift();
+            s.push(snap({ msg:'At <strong>'+u+'</strong> ('+colName(color[u])+'). Check its neighbours.', event:'calc', nodeRole: roleFromColor(color,u), sideH:'Colours so far', side: groupChips(color).filter(function(c){return c.cls;}), stat3:'—' }));
+            for (var i=0;i<adj[u].length;i++) {
+              var v = adj[u][i];
+              if (color[v] === undefined) {
+                color[v] = 1 - color[u]; q.push(v);
+                var nr = roleFromColor(color,u); var er = {}; er[ekey(u,v)]='active';
+                s.push(snap({ msg:'Paint <strong>'+v+'</strong> the opposite of '+u+' → <strong>'+colName(color[v])+'</strong>.', event:'calc', nodeRole: nr, edgeRole: er, sideH:'Colours so far', side: groupChips(color).filter(function(c){return c.cls;}), stat3:'—' }));
+              } else if (color[v] === color[u]) {
+                conflict = [u,v]; done = true;
+                var nrc = roleFromColor(color,u); nrc[u]='conflict'; nrc[v]='conflict';
+                var erc = {}; erc[ekey(u,v)]='conflict';
+                s.push(snap({ msg:'<strong>CONFLICT.</strong> Edge <code>'+u+'–'+v+'</code> joins two vertices that are BOTH '+colName(color[u])+'. Two colours cannot satisfy this — we have walked an <strong>odd cycle</strong> (the triangle A–B–C).', event:'fail', nodeRole: nrc, edgeRole: erc, sideH:'The conflict', side:[{t:u+'='+color[u], cls:'bad'},{t:v+'='+color[v], cls:'bad'},{t:'edge '+u+'–'+v, cls:'bad'}], stat3:'—' }));
+                break;
+              } else {
+                var nr2 = roleFromColor(color,u); var er2 = {}; er2[ekey(u,v)]='ok';
+                s.push(snap({ msg:'Edge <code>'+u+'–'+v+'</code>: '+v+' already the opposite colour. Fine so far.', event:'calc', nodeRole: nr2, edgeRole: er2, sideH:'Colours so far', side: groupChips(color).filter(function(c){return c.cls;}), stat3:'—' }));
+              }
+            }
+          }
+          var nrf = roleFromColor(color, conflict[0]); nrf[conflict[0]]='conflict'; nrf[conflict[1]]='conflict';
+          var erf = {}; erf[ekey(conflict[0],conflict[1])]='conflict';
+          s.push(snap({ msg:'<strong>Not bipartite.</strong> An odd-length cycle can never be 2-coloured: walk it alternating blue, purple, blue… and the loop refuses to close. The single red edge is the proof.', event:'fail', nodeRole: nrf, edgeRole: erf, sideH:'The conflict', side:[{t:'odd cycle: '+conflict[0]+'–'+conflict[1], cls:'bad'}], stat3:'—', stat4:'No (odd cycle)', stat4color:'var(--danger)' }));
+          return s;
+        }
+
+        // Tab 2 — layout: animate splitting the bipartite preset into two columns.
+        function scSplit() {
+          var s = [], r = twoColour(), color = r.color;
+          var g0 = NODES().filter(function(n){return color[n]===0;});
+          var g1 = NODES().filter(function(n){return color[n]===1;});
+          var allOk = {}; Object.keys(edgeEls).forEach(function(k){ allOk[k]='ok'; });
+          s.push(snap({ msg:'This is the bipartite graph again, already 2-coloured. The two sides are tangled together visually — let us pull them apart.', event:'calc', nodeRole: roleAll(color), edgeRole: allOk, sideH:'The two sides', side: g0.map(function(n){return{t:n,cls:'g0'};}).concat(g1.map(function(n){return{t:n,cls:'g1'};})), stat3: g0.length+' + '+g1.length }));
+          // move group 0 to a left column, group 1 to a right column
+          var laid = {};
+          function column(arr, x){ var gap = 240/(arr.length+1); arr.forEach(function(n,i){ laid[n] = [x, 40 + gap*(i+1)]; }); }
+          column(g0, 130); column(g1, 430);
+          var pos1 = {}; NODES().forEach(function(n){ pos1[n] = (color[n]===0) ? laid[n] : pos[n].slice(); });
+          s.push(snap({ msg:'Slide every <strong>group 0 (blue)</strong> vertex into a clean column on the <strong>left</strong>.', event:'path', nodeRole: roleAll(color), edgeRole: allOk, posOverride: pos1, sideH:'Left side (group 0)', side: g0.map(function(n){return{t:n,cls:'g0'};}), stat3: g0.length+' + '+g1.length }));
+          var pos2 = {}; NODES().forEach(function(n){ pos2[n] = laid[n]; });
+          s.push(snap({ msg:'Now slide every <strong>group 1 (purple)</strong> vertex into a column on the <strong>right</strong>.', event:'path', nodeRole: roleAll(color), edgeRole: allOk, posOverride: pos2, sideH:'Right side (group 1)', side: g1.map(function(n){return{t:n,cls:'g1'};}), stat3: g0.length+' + '+g1.length }));
+          s.push(snap({ msg:'<strong>Every edge now crosses the gap from left to right.</strong> Not one edge stays within a column — that is what "bipartite" means, drawn literally. Left = group 0, right = group 1.', event:'done', nodeRole: roleAll(color), edgeRole: allOk, posOverride: pos2, sideH:'Two sides, all edges crossing', side: g0.map(function(n){return{t:n,cls:'g0'};}).concat(g1.map(function(n){return{t:n,cls:'g1'};})), stat3: g0.length+' + '+g1.length, stat4:'Yes ✓', stat4color:'var(--success)' }));
+          return s;
+        }
+
+        function roleFromColor(color, cur){
+          var nr = {};
+          NODES().forEach(function(n){
+            if (color[n]===0) nr[n] = (n===cur) ? 'g0 cur' : 'g0';
+            else if (color[n]===1) nr[n] = (n===cur) ? 'g1 cur' : 'g1';
+            else nr[n] = 'dim';
+          });
+          return nr;
+        }
+        function roleAll(color){
+          var nr = {};
+          NODES().forEach(function(n){ nr[n] = color[n]===0 ? 'g0' : color[n]===1 ? 'g1' : 'dim'; });
+          return nr;
+        }
+
+        var SCENARIOS = [scColour, scOdd, scSplit];
+        var SC_PRESET = ['bip','odd','bip'];
+        var SC_TTL = ['Bipartite · 2-colour the two sides','Bipartite · an odd cycle breaks it','Bipartite · split into two columns','Bipartite · free play — build & test'];
+        var SC_S3 = ['group sizes','group sizes','group sizes','group sizes'];
+        var SC_S4 = ['bipartite?','bipartite?','bipartite?','bipartite?'];
+
+        var sc = 0, steps = [], idx = 0, playing = false, timer = null, freeMode = false;
+
+        var narrEl = document.getElementById('narration');
+        var narrText = document.getElementById('narr-text');
+        var narrStep = document.getElementById('narr-step');
+        var narrEvent = document.getElementById('narr-event');
+        var sideH = document.getElementById('side-h');
+        var sideRow = document.getElementById('side-row');
+        var sV = document.getElementById('s-v'), sE = document.getElementById('s-e'), sSum = document.getElementById('s-sum'), sCmp = document.getElementById('s-cmp');
+        var heroTtl = document.getElementById('hero-ttl');
+        var btnPrev = document.getElementById('btn-prev'), btnNext = document.getElementById('btn-next');
+        var btnPlay = document.getElementById('btn-play'), btnRestart = document.getElementById('btn-restart');
+        var playIcon = document.getElementById('play-icon'), playLabel = document.getElementById('play-label');
+        var speedEl = document.getElementById('speed');
+        var controls = document.getElementById('controls'), freeCard = document.getElementById('free-card');
+        var freeNote = document.getElementById('free-note');
+
+        function setSide(h, arr) {
+          sideH.textContent = h; sideRow.innerHTML = '';
+          if (!arr || arr.length === 0) { var em = document.createElement('span'); em.className='empty'; em.textContent='—'; sideRow.appendChild(em); return; }
+          arr.forEach(function(it){ var c = document.createElement('span'); c.className='chip '+(it.cls||''); c.textContent = it.t; sideRow.appendChild(c); });
+        }
+
+        function renderStep(st) {
+          if (st.posOverride) { NODES().forEach(function(n){ if (st.posOverride[n]) pos[n] = st.posOverride[n].slice(); }); positionSVG(); }
+          NODES().forEach(function(n){
+            nodeEls[n].c.setAttribute('class','node-circ '+(st.nodeRole[n]||'dim'));
+            nodeEls[n].b.textContent = st.badge[n] || '';
+          });
+          Object.keys(edgeEls).forEach(function(k){
+            edgeEls[k].setAttribute('class','edge '+(st.edgeRole[k]||'cross'));
+          });
+          narrText.innerHTML = st.msg;
+          narrStep.textContent = 'Step ' + idx + ' / ' + (steps.length - 1);
+          narrEl.classList.remove('add','calc','path','fail','done');
+          if (st.event) { narrEl.classList.add(st.event);
+            narrEvent.style.display = ''; narrEvent.className = 'badge event ' + st.event;
+            narrEvent.textContent = st.event === 'add' ? 'add edge' : st.event === 'calc' ? 'colour' : st.event === 'path' ? 'arrange' : st.event === 'fail' ? 'conflict' : 'done';
+          } else narrEvent.style.display = 'none';
+          if (st.sideH) setSide(st.sideH, st.side);
+          sV.textContent = NODES().length;
+          sE.textContent = edges.length;
+          sSum.textContent = (st.stat3 !== undefined ? st.stat3 : '—');
+          if (st.stat4 !== undefined) { sCmp.textContent = st.stat4; sCmp.style.color = st.stat4color || 'var(--fg)'; }
+          else { sCmp.textContent = '…'; sCmp.style.color = 'var(--muted)'; }
+        }
+
+        function loadScenario(i) {
+          stop(); sc = i;
+          heroTtl.textContent = SC_TTL[i];
+          document.getElementById('s3-label').textContent = SC_S3[i];
+          document.getElementById('s4-label').textContent = SC_S4[i];
+          freeMode = (i === 3);
+          if (freeMode) {
+            controls.style.display = 'none'; freeCard.classList.add('show');
+            loadPreset('bip'); buildSVG(); resetRun(); renderFree();
+          } else {
+            controls.style.display = 'flex'; freeCard.classList.remove('show');
+            loadPreset(SC_PRESET[i]); buildSVG();
+            steps = SCENARIOS[i](); idx = 0; loadPreset(SC_PRESET[i]); buildSVG(); renderStep(steps[0]);
+          }
+        }
+
+        function next(){ if (idx >= steps.length-1){ stop(); return false; } idx++; renderStep(steps[idx]); if (idx>=steps.length-1) stop(); return true; }
+        function prev(){ if (idx<=0) return; idx--; renderStep(steps[idx]); }
+        function delay(){ return 1150 - parseInt(speedEl.value,10)*95; }
+        function play(){ if (idx>=steps.length-1){ idx=0; renderStep(steps[0]); } playing=true; playLabel.textContent='Pause'; playIcon.className='ti ti-player-pause'; loop(); }
+        function loop(){ if(!playing) return; if(!next()){ stop(); return; } timer=setTimeout(loop, delay()); }
+        function stop(){ playing=false; if(timer){clearTimeout(timer);timer=null;} playLabel.textContent='Play'; playIcon.className='ti ti-player-play'; }
+
+        // ---- free play ----
+        var fpSel = null, fpResult = null;
+        function renderFree() {
+          NODES().forEach(function(n){
+            var role = 'dim';
+            if (fpResult) { role = fpResult.color[n]===0 ? 'g0' : fpResult.color[n]===1 ? 'g1' : 'dim'; }
+            if (fpResult && !fpResult.ok && fpResult.conflict && fpResult.conflict.indexOf(n)>=0) role = 'conflict';
+            if (fpSel === n) role = 'active';
+            nodeEls[n].c.setAttribute('class','node-circ '+role);
+            nodeEls[n].b.textContent = (fpResult && fpResult.color[n]!==undefined) ? 'g'+fpResult.color[n] : '';
+          });
+          Object.keys(edgeEls).forEach(function(k){
+            var cls = 'cross';
+            if (fpResult && !fpResult.ok && fpResult.conflict && ekey(fpResult.conflict[0],fpResult.conflict[1])===k) cls = 'conflict';
+            else if (fpResult && fpResult.ok) cls = 'ok';
+            edgeEls[k].setAttribute('class','edge '+cls);
+          });
+          sV.textContent = NODES().length; sE.textContent = edges.length;
+          if (fpResult && fpResult.ok) {
+            var g0 = NODES().filter(function(n){return fpResult.color[n]===0;}).length;
+            var g1 = NODES().filter(function(n){return fpResult.color[n]===1;}).length;
+            sSum.textContent = g0+' + '+g1;
+            sCmp.textContent = 'Yes ✓'; sCmp.style.color = 'var(--success)';
+            setSide('The two sides', NODES().map(function(n){ return {t:n, cls: fpResult.color[n]===0?'g0':'g1'}; }));
+          } else if (fpResult && !fpResult.ok) {
+            sSum.textContent = '—';
+            sCmp.textContent = 'No'; sCmp.style.color = 'var(--danger)';
+            setSide('Conflict edge', [{t:fpResult.conflict[0]+'–'+fpResult.conflict[1], cls:'bad'}]);
+          } else {
+            sSum.textContent = '—';
+            sCmp.textContent = '—'; sCmp.style.color = 'var(--muted)';
+            setSide('Your graph', NODES().map(function(n){ return {t:n, cls:''}; }));
+          }
+        }
+        function fpFlash(t){ freeNote.textContent = t; }
+        function resetRun(){ fpResult = null; }
+
+        function nodeClickFree(id) {
+          if (fpSel === null) { fpSel = id; fpResult = null; fpFlash('Selected '+id+'. Click another vertex to toggle the edge.'); }
+          else if (fpSel === id) { fpSel = null; fpFlash('Deselected.'); }
+          else {
+            var k = ekey(fpSel, id);
+            if (hasEdge(fpSel, id)) { edges = edges.filter(function(e){ return ekey(e[0],e[1])!==k; }); fpFlash('Removed edge {'+fpSel+', '+id+'}. Test bipartite to re-check.'); }
+            else { edges.push([fpSel, id]); fpFlash('Added edge {'+fpSel+', '+id+'}. Test bipartite to re-check.'); }
+            fpSel = null; fpResult = null; buildSVG();
+          }
+          renderFree();
+        }
+
+        // ---- pointer handling (free play: click to select, drag to move) ----
+        var svg = document.getElementById('graph');
+        var drag = null;
+        function pt(ev){ var r = svg.getBoundingClientRect(); var cx = ev.touches?ev.touches[0].clientX:ev.clientX; var cy = ev.touches?ev.touches[0].clientY:ev.clientY; return { x:(cx-r.left)/r.width*560, y:(cy-r.top)/r.height*300 }; }
+        function down(ev){ if(!freeMode) return; var el = ev.target; if(el.dataset && el.dataset.id){ var id = el.dataset.id, p = pt(ev); drag = { id:id, moved:false, dx:p.x-pos[id][0], dy:p.y-pos[id][1] }; } }
+        function move(ev){ if(!drag) return; var p = pt(ev); var nx = Math.max(26,Math.min(534,p.x-drag.dx)), ny = Math.max(26,Math.min(274,p.y-drag.dy)); if(Math.abs(nx-pos[drag.id][0])>2||Math.abs(ny-pos[drag.id][1])>2) drag.moved=true; pos[drag.id]=[nx,ny]; positionSVG(); ev.preventDefault(); }
+        function up(){ if(!drag) return; if(!drag.moved) nodeClickFree(drag.id); drag=null; }
+        svg.addEventListener('mousedown',down); svg.addEventListener('touchstart',down,{passive:false});
+        window.addEventListener('mousemove',move); window.addEventListener('touchmove',move,{passive:false});
+        window.addEventListener('mouseup',up); window.addEventListener('touchend',up);
+
+        document.getElementById('f-path').addEventListener('click', function(){
+          fpSel = null; fpResult = twoColour();
+          if (fpResult.ok) {
+            var g0 = NODES().filter(function(n){return fpResult.color[n]===0;}).length;
+            var g1 = NODES().filter(function(n){return fpResult.color[n]===1;}).length;
+            fpFlash('Bipartite ✓ — split into '+g0+' + '+g1+'. Every edge crosses between the two colours.');
+          } else {
+            fpFlash('NOT bipartite — edge '+fpResult.conflict[0]+'–'+fpResult.conflict[1]+' joins two same-coloured vertices (an odd cycle).');
+          }
+          renderFree();
+        });
+        document.getElementById('f-clear').addEventListener('click', function(){ edges=[]; fpSel=null; fpResult=null; buildSVG(); fpFlash('All edges cleared — 6 isolated vertices. With no edges, the graph is trivially bipartite.'); renderFree(); });
+        document.getElementById('f-reset').addEventListener('click', function(){ loadPreset('bip'); fpSel=null; fpResult=null; buildSVG(); fpFlash('Reset to the starting bipartite graph. Click vertices to edit, then Test bipartite.'); renderFree(); });
+
+        document.querySelectorAll('.tab').forEach(function(tab){ tab.addEventListener('click', function(){
+          document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
+          tab.classList.add('active'); loadScenario(parseInt(tab.dataset.sc,10));
+        }); });
+        btnPlay.addEventListener('click', function(){ playing?stop():play(); });
+        btnNext.addEventListener('click', function(){ stop(); next(); });
+        btnPrev.addEventListener('click', function(){ stop(); prev(); });
+        btnRestart.addEventListener('click', function(){ stop(); loadPreset(SC_PRESET[sc]); buildSVG(); idx=0; renderStep(steps[0]); });
+        window.addEventListener('keydown', function(e){ if(freeMode) return;
+          if(e.key==='ArrowLeft'){ stop(); prev(); } else if(e.key==='ArrowRight'){ stop(); next(); }
+          else if(e.key===' '){ e.preventDefault(); playing?stop():play(); } });
+
+        buildSVG();
+        loadScenario(0);
+
+        function postHeight(){ try { parent.postMessage({type:'prototype:height',height:document.body.scrollHeight},'*'); } catch(e){} }
+        new ResizeObserver(postHeight).observe(document.body);
+        postHeight();
+      })();
+    </script>
+  </body>
+</html>

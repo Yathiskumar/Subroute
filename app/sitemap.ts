@@ -1,5 +1,7 @@
 import type { MetadataRoute } from "next";
 import { TOPICS } from "@/lib/data/topics";
+import { ROADMAPS } from "@/lib/data/roadmaps";
+import { getRoadmapLessonParams } from "@/lib/content/roadmap-lessons";
 import { getAllPostsMeta } from "@/lib/blog";
 import { SITE_URL } from "@/lib/site";
 
@@ -9,7 +11,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const staticRoutes = [
     "",
     "/topics",
-    "/playground",
+    "/roadmaps",
     "/blog",
     "/about",
     "/changelog",
@@ -40,6 +42,22 @@ export default function sitemap(): MetadataRoute.Sitemap {
     })),
   ]);
 
+  const roadmapRoutes = ROADMAPS.filter(
+    (roadmap) => roadmap.status === "available",
+  ).map((roadmap) => ({
+    url: `${SITE_URL}/roadmaps/${roadmap.slug}`,
+    lastModified: now,
+    changeFrequency: "weekly" as const,
+    priority: 0.7,
+  }));
+
+  const roadmapLessonRoutes = getRoadmapLessonParams().map((p) => ({
+    url: `${SITE_URL}/roadmaps/${p.roadmapSlug}/${p.topicSlug}`,
+    lastModified: now,
+    changeFrequency: "monthly" as const,
+    priority: 0.6,
+  }));
+
   const blogRoutes = getAllPostsMeta().map((post) => ({
     url: `${SITE_URL}/blog/${post.slug}`,
     lastModified: post.publishedAt ? new Date(post.publishedAt) : now,
@@ -47,5 +65,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.8,
   }));
 
-  return [...staticRoutes, ...topicRoutes, ...blogRoutes];
+  return [
+    ...staticRoutes,
+    ...topicRoutes,
+    ...roadmapRoutes,
+    ...roadmapLessonRoutes,
+    ...blogRoutes,
+  ];
 }

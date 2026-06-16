@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Association, Aggregation &amp; Composition — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.32);
+        --success: #5cc66f;
+        --info: #5e9ff6;
+        --danger: #f06868;
+        --violet: #a78bfa;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      .lab { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+
+      /* ---- buttons (verbatim from classes-and-objects) ---- */
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 12px; cursor: pointer; transition: filter .15s, transform .1s, border-color .15s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .btn.primary { background: var(--accent); color: #1a1003; border-color: transparent; width: 100%; padding: 11px; font-size: 13px; }
+      .btn.primary:hover { filter: brightness(1.06); }
+      .btn.sm { padding: 7px 9px; font-size: 11px; }
+      .btn.danger { background: rgba(240,104,104,0.12); border-color: rgba(240,104,104,0.4); color: #f7a3a3; width: 100%; }
+      .btn.danger:hover { filter: brightness(1.08); border-color: var(--danger); }
+      .btn:disabled { opacity: 0.4; cursor: not-allowed; filter: none; }
+
+      /* ---- layout ---- */
+      .stage { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; align-items: stretch; }
+      @media (max-width: 700px) { .stage { grid-template-columns: 1fr; } }
+
+      .scene { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); display: flex; flex-direction: column; overflow: hidden; }
+      .scene-bar { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border); background: var(--elevated); }
+      .scene-bar .nm { font-family: var(--mono); font-size: 12px; font-weight: 600; }
+      .scene-bar .tag { margin-left: auto; font-family: var(--mono); font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--subtle); border: 1px solid var(--border); border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+
+      .scene-body { padding: 12px 12px 14px; flex: 1; display: flex; flex-direction: column; }
+
+      .rel-row { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 84px; }
+      .rel-link { display: flex; align-items: center; gap: 4px; font-family: var(--mono); font-size: 16px; color: var(--subtle); }
+
+      /* a box represents a "whole" or a "part" */
+      .box { border: 1px solid var(--border-strong); background: var(--elevated); border-radius: var(--r-md); padding: 9px 11px; min-width: 64px; text-align: center; transition: opacity .5s ease, transform .5s ease; }
+      .box .bn { font-family: var(--mono); font-size: 12px; font-weight: 600; }
+      .box .bk { font-family: var(--mono); font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--subtle); margin-top: 2px; }
+      .box.whole { border-color: var(--accent-border); background: var(--accent-soft); }
+      .box.gone { opacity: 0; transform: scale(0.6); pointer-events: none; }
+
+      /* composition: rooms nested inside the house */
+      .house { border: 1px solid var(--accent-border); background: var(--accent-soft); border-radius: var(--r-md); padding: 10px; transition: opacity .55s ease, transform .55s ease; }
+      .house .htitle { font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--accent); margin-bottom: 8px; }
+      .house.gone { opacity: 0; transform: scale(0.55); pointer-events: none; }
+      .rooms { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+      .room { border: 1px solid var(--border-strong); background: var(--surface); border-radius: 6px; padding: 6px 4px; text-align: center; font-family: var(--mono); font-size: 10px; transition: opacity .55s ease, transform .55s ease; }
+
+      /* aggregation: shared player chips */
+      .chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+      .chip { border: 1px solid var(--info); background: rgba(94,159,246,0.12); color: #cfe2ff; border-radius: 999px; padding: 4px 10px; font-family: var(--mono); font-size: 11px; transition: opacity .5s ease, transform .55s cubic-bezier(.22,.61,.36,1); }
+
+      .team-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; transition: opacity .5s ease, transform .5s ease; }
+      .team-wrap.gone { opacity: 0; transform: scale(0.6); pointer-events: none; }
+      .diamond { font-family: var(--mono); font-size: 15px; color: var(--muted); }
+
+      /* free pool (aggregation outcome) */
+      .pool { margin-top: 10px; border: 1px dashed var(--border-strong); border-radius: var(--r-md); padding: 8px; min-height: 48px; display: flex; flex-direction: column; gap: 6px; }
+      .pool .pool-lab { font-family: var(--mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--subtle); }
+      .pool .pool-chips { display: flex; flex-wrap: wrap; gap: 6px; min-height: 22px; align-items: center; }
+      .pool .pool-empty { font-family: var(--mono); font-size: 10px; color: var(--subtle); }
+
+      .outcome { margin-top: 10px; font-family: var(--mono); font-size: 10.5px; line-height: 1.5; min-height: 30px; color: var(--muted); }
+      .outcome.show { color: var(--fg); }
+      .outcome .ok { color: var(--success); }
+      .outcome .bad { color: var(--danger); }
+
+      .scene-foot { margin-top: auto; padding-top: 12px; }
+
+      /* ---- console (verbatim styling) ---- */
+      .console { margin-top: 16px; }
+      .console-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+      .console-bar .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+      .log { background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px 12px; font-family: var(--mono); font-size: 11.5px; line-height: 1.7; min-height: 92px; max-height: 150px; overflow-y: auto; }
+      .log .ln { white-space: pre-wrap; }
+      .log .muted { color: var(--subtle); }
+      .log .c-accent { color: var(--accent); }
+      .log .c-info { color: var(--info); }
+      .log .c-success { color: var(--success); }
+      .log .c-danger { color: var(--danger); }
+      .log .c-fg { color: var(--fg); }
+
+      .hint { margin-top: 12px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <div class="stage">
+      <!-- ASSOCIATION -->
+      <div class="scene">
+        <div class="scene-bar">
+          <span class="nm">Association</span>
+          <span class="tag">uses-a · plain line</span>
+        </div>
+        <div class="scene-body">
+          <div class="rel-row" id="assoc-row">
+            <div class="box whole" id="driver-box">
+              <div class="bn">Driver</div>
+              <div class="bk">whole</div>
+            </div>
+            <div class="rel-link">———&rsaquo;</div>
+            <div class="box" id="car-box">
+              <div class="bn">Car</div>
+              <div class="bk">part</div>
+            </div>
+          </div>
+          <div class="outcome" id="assoc-out">Driver knows a Car. Neither owns the other.</div>
+          <div class="scene-foot">
+            <button class="btn danger" id="assoc-btn" onclick="destroyAssoc()">Destroy the whole</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- AGGREGATION -->
+      <div class="scene">
+        <div class="scene-bar">
+          <span class="nm">Aggregation</span>
+          <span class="tag">has-a · hollow ◇</span>
+        </div>
+        <div class="scene-body">
+          <div class="rel-row">
+            <div class="team-wrap" id="team-wrap">
+              <div class="box whole">
+                <div class="bn">Team</div>
+                <div class="bk">whole ◇</div>
+              </div>
+              <div class="diamond">◇————</div>
+              <div class="chips" id="team-chips"></div>
+            </div>
+          </div>
+          <div class="pool">
+            <span class="pool-lab">free pool — players that exist on their own</span>
+            <div class="pool-chips" id="pool-chips"><span class="pool-empty">(empty)</span></div>
+          </div>
+          <div class="outcome" id="aggr-out">Team has shared Players. They can outlive the team.</div>
+          <div class="scene-foot">
+            <button class="btn danger" id="aggr-btn" onclick="destroyAggr()">Destroy the whole</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- COMPOSITION -->
+      <div class="scene">
+        <div class="scene-bar">
+          <span class="nm">Composition</span>
+          <span class="tag">owns-a · filled ◆</span>
+        </div>
+        <div class="scene-body">
+          <div class="rel-row">
+            <div class="house" id="house">
+              <div class="htitle">House ◆————</div>
+              <div class="rooms" id="rooms"></div>
+            </div>
+          </div>
+          <div class="outcome" id="comp-out">House owns its Rooms. They're built inside it.</div>
+          <div class="scene-foot">
+            <button class="btn danger" id="comp-btn" onclick="destroyComp()">Destroy the whole</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONSOLE -->
+    <div class="console">
+      <div class="console-bar">
+        <span class="dot"></span>
+        <span class="lab">console</span>
+        <button class="btn sm" style="margin-left:auto" onclick="resetAll()">Reset</button>
+      </div>
+      <div class="log" id="log"></div>
+      <div class="hint">
+        <span class="b">▸</span>
+        <span>Ask one question: <b style="color:var(--fg)">what happens to the part when the whole is destroyed?</b> The car lives, the players escape, the rooms die.</span>
+      </div>
+    </div>
+
+    <script>
+      var PLAYERS = ["#10", "#7", "#23"];
+      var ROOMS = ["kitchen", "bedroom", "bath", "study"];
+
+      function log(html, cls) {
+        var box = document.getElementById("log");
+        var line = document.createElement("div");
+        line.className = "ln" + (cls ? " " + cls : "");
+        line.innerHTML = html;
+        box.appendChild(line);
+        while (box.children.length > 9) box.removeChild(box.firstChild);
+        box.scrollTop = box.scrollHeight;
+      }
+
+      function setOutcome(id, html) {
+        var el = document.getElementById(id);
+        el.innerHTML = html;
+        el.classList.add("show");
+      }
+
+      /* ---------- ASSOCIATION ---------- */
+      function destroyAssoc() {
+        document.getElementById("driver-box").classList.add("gone");
+        document.getElementById("assoc-btn").disabled = true;
+        setOutcome("assoc-out", '<span class="ok">Car still exists</span> — independent lifecycle.');
+        log('<span class="c-accent">destroy</span> Driver <span class="muted">→</span> <span class="c-success">Car still exists — independent lifecycle</span>', "c-success");
+      }
+
+      /* ---------- AGGREGATION ---------- */
+      function destroyAggr() {
+        var wrap = document.getElementById("team-wrap");
+        var chips = document.getElementById("team-chips");
+        var pool = document.getElementById("pool-chips");
+
+        // move each player chip from the team into the free pool
+        pool.innerHTML = "";
+        Array.prototype.forEach.call(chips.querySelectorAll(".chip"), function (c) {
+          var clone = document.createElement("span");
+          clone.className = "chip";
+          clone.textContent = c.textContent;
+          pool.appendChild(clone);
+        });
+
+        wrap.classList.add("gone");
+        document.getElementById("aggr-btn").disabled = true;
+        setOutcome("aggr-out", '<span class="ok">Players survive the team</span> — moved to the free pool.');
+        log('<span class="c-accent">destroy</span> Team <span class="muted">→</span> <span class="c-success">Players survive the team</span> <span class="muted">(now in free pool)</span>', "c-success");
+      }
+
+      /* ---------- COMPOSITION ---------- */
+      function destroyComp() {
+        var house = document.getElementById("house");
+        var rooms = house.querySelectorAll(".room");
+        // fade the rooms first, then the house — they die together
+        Array.prototype.forEach.call(rooms, function (r) {
+          r.style.opacity = "0";
+          r.style.transform = "scale(0.5)";
+        });
+        house.classList.add("gone");
+        document.getElementById("comp-btn").disabled = true;
+        setOutcome("comp-out", '<span class="bad">Rooms destroyed with the house</span> — exclusive, owned parts.');
+        log('<span class="c-accent">destroy</span> House <span class="muted">→</span> <span class="c-danger">Rooms destroyed with the house</span>', "c-danger");
+      }
+
+      /* ---------- BUILD / RESET ---------- */
+      function build() {
+        // association
+        document.getElementById("driver-box").classList.remove("gone");
+        document.getElementById("assoc-btn").disabled = false;
+        document.getElementById("assoc-out").className = "outcome";
+        document.getElementById("assoc-out").textContent = "Driver knows a Car. Neither owns the other.";
+
+        // aggregation
+        var wrap = document.getElementById("team-wrap");
+        wrap.classList.remove("gone");
+        var chips = document.getElementById("team-chips");
+        chips.innerHTML = "";
+        PLAYERS.forEach(function (p) {
+          var c = document.createElement("span");
+          c.className = "chip";
+          c.textContent = "Player " + p;
+          chips.appendChild(c);
+        });
+        var pool = document.getElementById("pool-chips");
+        pool.innerHTML = '<span class="pool-empty">(empty)</span>';
+        document.getElementById("aggr-btn").disabled = false;
+        document.getElementById("aggr-out").className = "outcome";
+        document.getElementById("aggr-out").textContent = "Team has shared Players. They can outlive the team.";
+
+        // composition
+        var house = document.getElementById("house");
+        house.classList.remove("gone");
+        house.style.opacity = "";
+        house.style.transform = "";
+        var rooms = document.getElementById("rooms");
+        rooms.innerHTML = "";
+        ROOMS.forEach(function (name) {
+          var r = document.createElement("div");
+          r.className = "room";
+          r.textContent = name;
+          rooms.appendChild(r);
+        });
+        document.getElementById("comp-btn").disabled = false;
+        document.getElementById("comp-out").className = "outcome";
+        document.getElementById("comp-out").textContent = "House owns its Rooms. They're built inside it.";
+      }
+
+      function resetAll() {
+        build();
+        document.getElementById("log").innerHTML = "";
+        log('<span class="muted">// all three rebuilt — destroy each whole and compare</span>');
+      }
+
+      // seed all three on load
+      build();
+      log('<span class="muted">// tip: press "Destroy the whole" on each — watch the part</span>');
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

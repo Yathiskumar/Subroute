@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Static vs Instance Members — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.32);
+        --success: #5cc66f;
+        --info: #5e9ff6;
+        --danger: #f06868;
+        --violet: #a78bfa;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      .lab { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+
+      .stage { display: grid; grid-template-columns: 280px 1fr; gap: 16px; align-items: start; }
+      @media (max-width: 700px) { .stage { grid-template-columns: 1fr; } }
+
+      .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); }
+
+      /* ---- Class card ---- */
+      .class { overflow: hidden; }
+      .class-bar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--elevated); }
+      .class-bar .kw { font-family: var(--mono); font-size: 12px; color: var(--accent); }
+      .class-bar .nm { font-family: var(--mono); font-size: 13px; font-weight: 600; }
+      .blueprint-tag { margin-left: auto; white-space: nowrap; font-family: var(--mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--subtle); border: 1px solid var(--border); border-radius: 999px; padding: 2px 8px; }
+      .class-body { padding: 12px 14px 14px; }
+
+      .section-lab { font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--subtle); margin: 4px 0 6px; }
+
+      /* the shared static box — highlighted as belonging to the class */
+      .static-box { padding: 9px 10px; margin-bottom: 8px; border: 1px solid var(--accent-border); background: var(--accent-soft); border-radius: var(--r-md); transition: background .2s; }
+      .static-box.flash { background: rgba(251,134,58,0.30); }
+      .static-box .srow { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+      .static-box .sk { font-family: var(--mono); font-size: 11px; color: var(--accent); }
+      .static-box .sv { font-family: var(--mono); font-size: 15px; font-weight: 700; }
+      .static-box .scap { display: block; margin-top: 4px; font-size: 10px; color: var(--muted); }
+
+      .static-row2 { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; margin-bottom: 12px; border: 1px solid var(--accent-border); background: var(--accent-soft); border-radius: var(--r-md); transition: background .2s; }
+      .static-row2.flash { background: rgba(251,134,58,0.30); }
+      .static-row2 .sk { font-family: var(--mono); font-size: 11px; color: var(--accent); }
+      .static-row2 .sv { font-family: var(--mono); font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+      .member { font-family: var(--mono); font-size: 12px; padding: 5px 8px; border-radius: 6px; color: var(--fg); display: flex; gap: 6px; align-items: baseline; }
+      .member .ty { color: var(--info); }
+
+      .divider { height: 1px; background: var(--border); margin: 12px 0; }
+
+      .rebrand { margin-top: 4px; }
+      .rebrand label { display: block; }
+      .input-row { display: flex; gap: 6px; margin: 6px 0 0; }
+      input[type="text"] { flex: 1; min-width: 0; background: var(--elevated); color: var(--fg); border: 1px solid var(--border); border-radius: var(--r-md); padding: 8px 10px; font: 13px var(--sans); }
+      input[type="text"]:focus { outline: none; border-color: var(--accent-border); }
+
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 12px; cursor: pointer; transition: filter .15s, transform .1s, border-color .15s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .btn.primary { background: var(--accent); color: #1a1003; border-color: transparent; width: 100%; padding: 11px; font-size: 13px; }
+      .btn.primary:hover { filter: brightness(1.06); }
+      .btn.sm { padding: 7px 9px; font-size: 11px; }
+
+      /* ---- Objects ---- */
+      .obj-head-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+      .obj-head-row .ttl { font-size: 13px; font-weight: 600; }
+      .obj-head-row .cnt { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+      .obj-head-row .arrow { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--subtle); letter-spacing: 0.06em; }
+
+      .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+      @media (max-width: 520px) { .grid { grid-template-columns: 1fr; } }
+
+      .empty { border: 1px dashed var(--border-strong); border-radius: var(--r-lg); padding: 28px 18px; text-align: center; color: var(--muted); font-size: 13px; }
+      .empty b { color: var(--fg); }
+
+      .obj { background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 12px; animation: pop .25s ease; }
+      @keyframes pop { from { opacity: 0; transform: translateY(6px) scale(.98); } to { opacity: 1; transform: none; } }
+      .obj.flash { box-shadow: 0 0 0 1px var(--accent-border); }
+      .obj-top { display: flex; align-items: center; gap: 7px; margin-bottom: 9px; }
+      .swatch { width: 12px; height: 12px; border-radius: 4px; flex: none; }
+      .obj-name { font-family: var(--mono); font-size: 12px; font-weight: 600; }
+      .x { margin-left: auto; background: none; border: none; color: var(--subtle); font-size: 16px; line-height: 1; cursor: pointer; padding: 0 2px; }
+      .x:hover { color: var(--danger); }
+
+      /* per-object boxes: company (shared, dimmed) + name + salary (own) */
+      .field { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 6px 8px; border-radius: 6px; margin-bottom: 6px; font-family: var(--mono); }
+      .field .fk { font-size: 10px; letter-spacing: 0.04em; color: var(--subtle); }
+      .field.own { background: var(--surface); border: 1px solid var(--border); }
+      .field.own .fk { color: var(--info); }
+      .field.shared { background: var(--accent-soft); border: 1px solid var(--accent-border); }
+      .field.shared .fk { color: var(--accent); }
+      .field .fv { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+      .field.flash { background: rgba(251,134,58,0.30); }
+
+      .obj-actions { margin-top: 8px; }
+      .obj-actions .btn { width: 100%; }
+
+      /* ---- Console ---- */
+      .console { margin-top: 16px; }
+      .console-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+      .console-bar .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+      .log { background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px 12px; font-family: var(--mono); font-size: 11.5px; line-height: 1.7; min-height: 92px; max-height: 150px; overflow-y: auto; }
+      .log .ln { white-space: pre-wrap; }
+      .log .muted { color: var(--subtle); }
+      .log .c-accent { color: var(--accent); }
+      .log .c-info { color: var(--info); }
+      .log .c-success { color: var(--success); }
+      .log .c-danger { color: var(--danger); }
+      .log .c-fg { color: var(--fg); }
+
+      .hint { margin-top: 12px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <div class="stage">
+      <!-- THE CLASS -->
+      <div class="card class">
+        <div class="class-bar">
+          <span class="kw">class</span>
+          <span class="nm">Employee</span>
+          <span class="blueprint-tag">the class</span>
+        </div>
+        <div class="class-body">
+          <div class="section-lab">static · one shared copy on the class</div>
+          <div class="static-box" id="static-company">
+            <div class="srow">
+              <span class="sk">Employee.company</span>
+              <span class="sv" id="company-val">"Acme"</span>
+            </div>
+            <span class="scap">one box, shared by every employee</span>
+          </div>
+          <div class="static-row2" id="static-headcount">
+            <span class="sk">Employee.headcount</span>
+            <span class="sv" id="headcount-val">0</span>
+          </div>
+
+          <div class="rebrand">
+            <div class="section-lab">static method · changes the shared box</div>
+            <div class="input-row">
+              <input type="text" id="rebrand-input" placeholder="Globex" maxlength="14" />
+              <button class="btn" onclick="rebrand()">Rebrand</button>
+            </div>
+            <div style="font-size:10px;color:var(--muted);margin-top:6px">↑ changes <b style="color:var(--accent);font-family:var(--mono)">Employee.company</b> for <em>all</em> employees at once</div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="section-lab">instance fields · one copy per object</div>
+          <div class="member"><span class="ty">name</span></div>
+          <div class="member"><span class="ty">salary</span></div>
+
+          <div class="divider"></div>
+
+          <button class="btn primary" onclick="hire()">+ Hire employee &nbsp;<span style="font-family:var(--mono);font-weight:600">new Employee()</span></button>
+        </div>
+      </div>
+
+      <!-- THE OBJECTS -->
+      <div>
+        <div class="obj-head-row">
+          <span class="ttl">Employees</span>
+          <span class="cnt" id="live-count">0 live</span>
+          <span class="arrow">← each has its own name & salary</span>
+        </div>
+        <div id="objects"></div>
+      </div>
+    </div>
+
+    <!-- CONSOLE -->
+    <div class="console">
+      <div class="console-bar">
+        <span class="dot"></span>
+        <span class="lab">console</span>
+        <button class="btn sm" style="margin-left:auto" onclick="resetAll()">Reset all</button>
+      </div>
+      <div class="log" id="log"></div>
+      <div class="hint">
+        <span class="b">▸</span>
+        <span>Give one employee a raise — only <em>their</em> <b style="color:var(--fg)">salary</b> box changes. Rebrand the company — the one shared <b style="color:var(--fg)">static</b> box updates and <em>every</em> card reflects it.</span>
+      </div>
+    </div>
+
+    <script>
+      var NAMES = ["Alice", "Bob", "Carol", "Dave", "Erin", "Frank", "Grace", "Hank"];
+      var SALARIES = [100, 90, 120, 80, 110];
+      var COLORS = ["#fb863a", "#5e9ff6", "#5cc66f", "#a78bfa", "#f06868"];
+
+      // STATIC members — one shared copy on the class
+      var company = "Acme";
+      var headcount = 0;
+
+      // INSTANCE objects — each with its own name & salary
+      var employees = [];
+      var nextSeed = 0;
+
+      function flash(el) {
+        if (!el) return;
+        el.classList.add("flash");
+        setTimeout(function () { el.classList.remove("flash"); }, 340);
+      }
+
+      function log(html, cls) {
+        var box = document.getElementById("log");
+        var line = document.createElement("div");
+        line.className = "ln" + (cls ? " " + cls : "");
+        line.innerHTML = html;
+        box.appendChild(line);
+        while (box.children.length > 9) box.removeChild(box.firstChild);
+        box.scrollTop = box.scrollHeight;
+      }
+
+      function empById(id) {
+        for (var i = 0; i < employees.length; i++) if (employees[i].id === id) return employees[i];
+        return null;
+      }
+
+      function hire() {
+        var idx = nextSeed % NAMES.length;
+        var e = {
+          id: nextSeed + 1,
+          name: NAMES[idx],
+          salary: SALARIES[idx % SALARIES.length],
+          color: COLORS[idx % COLORS.length],
+        };
+        nextSeed++;
+        employees.push(e);
+        headcount++;
+        document.getElementById("headcount-val").textContent = headcount;
+        flash(document.getElementById("static-headcount"));
+        renderObjects();
+        log(
+          '<span class="c-accent">new Employee</span>(<span class="c-fg">"' + e.name +
+          '"</span>, <span class="c-fg">' + e.salary + '</span>) ' +
+          '<span class="muted">→</span> hired #' + e.id +
+          ' <span class="muted">· static: Employee.headcount → ' + headcount + '</span>'
+        );
+      }
+
+      function giveRaise(id) {
+        var e = empById(id);
+        if (!e) return;
+        var before = e.salary;
+        e.salary += 10;
+        var node = document.querySelector('[data-id="' + id + '"]');
+        if (node) {
+          node.querySelector(".salary-val").textContent = e.salary;
+          flash(node.querySelector(".f-salary"));
+        }
+        log(
+          '<span class="c-info">instance:</span> ' + e.name.toLowerCase() +
+          '.salary ' + before + '<span class="muted">→</span>' + e.salary +
+          ' <span class="muted">(only ' + e.name.toLowerCase() + ')</span>',
+          "c-info"
+        );
+      }
+
+      function rebrand() {
+        var input = document.getElementById("rebrand-input");
+        var name = (input.value || "Globex").trim().replace(/"/g, "");
+        if (!name) name = "Globex";
+        company = name;
+        document.getElementById("company-val").textContent = '"' + company + '"';
+        flash(document.getElementById("static-company"));
+        // EVERY instance card reflects the new shared company at once
+        var cells = document.querySelectorAll(".company-cell");
+        for (var i = 0; i < cells.length; i++) {
+          cells[i].textContent = '"' + company + '"';
+          flash(cells[i].parentNode);
+        }
+        input.value = "";
+        log(
+          '<span class="c-accent">static:</span> Employee.company → <span class="c-fg">\'' + company + '\'</span> ' +
+          '<span class="muted">(all ' + employees.length + ' employee' + (employees.length === 1 ? "" : "s") + ' updated)</span>',
+          ""
+        );
+      }
+
+      function fire(id) {
+        var e = empById(id);
+        employees = employees.filter(function (c) { return c.id !== id; });
+        renderObjects();
+        if (e) log((e.name.toLowerCase()) + ' <span class="c-danger">removed</span> <span class="muted">— Employee.headcount stays ' + headcount + ' (it counts every hire)</span>');
+      }
+
+      function renderObjects() {
+        var host = document.getElementById("objects");
+        document.getElementById("live-count").textContent = employees.length + " live";
+        if (employees.length === 0) {
+          host.innerHTML =
+            '<div class="empty">No employees yet.<br/>Press <b>Hire employee</b> to stamp one from the class.</div>';
+          return;
+        }
+        var html = '<div class="grid">';
+        employees.forEach(function (e) {
+          html +=
+            '<div class="obj" data-id="' + e.id + '">' +
+              '<div class="obj-top">' +
+                '<span class="swatch" style="background:' + e.color + '"></span>' +
+                '<span class="obj-name">' + e.name + '</span>' +
+                '<button class="x" title="remove" onclick="fire(' + e.id + ')">×</button>' +
+              '</div>' +
+              '<div class="field shared">' +
+                '<span class="fk">company (shared)</span>' +
+                '<span class="fv company-cell">"' + company + '"</span>' +
+              '</div>' +
+              '<div class="field own">' +
+                '<span class="fk">this.name</span>' +
+                '<span class="fv">' + e.name + '</span>' +
+              '</div>' +
+              '<div class="field own f-salary">' +
+                '<span class="fk">this.salary</span>' +
+                '<span class="fv salary-val">' + e.salary + '</span>' +
+              '</div>' +
+              '<div class="obj-actions">' +
+                '<button class="btn" onclick="giveRaise(' + e.id + ')">give raise (+10)</button>' +
+              '</div>' +
+            '</div>';
+        });
+        html += '</div>';
+        host.innerHTML = html;
+      }
+
+      function resetAll() {
+        employees = [];
+        nextSeed = 0;
+        headcount = 0;
+        company = "Acme";
+        document.getElementById("company-val").textContent = '"Acme"';
+        document.getElementById("headcount-val").textContent = "0";
+        document.getElementById("log").innerHTML = "";
+        renderObjects();
+        seed();
+        log('<span class="muted">// reset — 2 employees seeded, Employee.company back to "Acme"</span>');
+      }
+
+      function seed() {
+        hire();
+        hire();
+      }
+
+      // seed 2 employees so the shared-vs-own idea is obvious immediately
+      seed();
+      log('<span class="muted">// tip: raise one salary (own box), then rebrand the company (shared box)</span>');
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

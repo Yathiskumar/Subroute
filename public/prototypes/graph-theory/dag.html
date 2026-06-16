@@ -1,0 +1,678 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Directed Acyclic Graphs</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --success-bg: rgba(92,198,111,0.14); --success-bd: rgba(92,198,111,0.45);
+        --danger: #f06868;  --danger-bg: rgba(240,104,104,0.14); --danger-bd: rgba(240,104,104,0.45);
+        --warning: #f0b568; --warning-bg: rgba(240,181,104,0.14); --warning-bd: rgba(240,181,104,0.45);
+        --info: #5e9ff6;    --info-bg:    rgba(94,159,246,0.16); --info-bd:    rgba(94,159,246,0.45);
+        --purple: #a78bfa;  --purple-bg:  rgba(167,139,250,0.16); --purple-bd:  rgba(167,139,250,0.45);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --radius-lg: 14px; --radius-md: 8px; --radius-sm: 6px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body {
+        padding: 18px 18px 24px;
+        background-image:
+          radial-gradient(1200px 600px at 50% -200px, rgba(251,134,58,0.06), transparent),
+          linear-gradient(to right, rgba(255,255,255,0.020) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.020) 1px, transparent 1px);
+        background-size: auto, 40px 40px, 40px 40px;
+      }
+      .container { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; padding: 9px 12px; transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); color: var(--fg); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); color: #1a1003; }
+      button.ghost { background: transparent; }
+      button i { font-size: 14px; }
+      select { background: var(--elevated); color: var(--fg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px 9px; font: 500 12px var(--sans); }
+      input[type="range"] { accent-color: var(--accent); }
+
+      .tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+      .tab { background: var(--elevated); border: 1px solid var(--border); color: var(--muted); border-radius: 999px; padding: 7px 13px; font: 500 11.5px var(--sans); cursor: pointer; transition: all 150ms ease; }
+      .tab:hover { border-color: var(--border-strong); color: var(--fg); }
+      .tab.active { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+
+      .hero { background: linear-gradient(180deg, rgba(255,255,255,0.014), transparent), var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px 12px; position: relative; overflow: hidden; }
+      .hero::before { content: ""; position: absolute; inset: 0; background: radial-gradient(420px 240px at 50% 0%, rgba(94,159,246,0.05), transparent 60%); pointer-events: none; }
+      .hero-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; position: relative; z-index: 1; gap: 12px; flex-wrap: wrap; }
+      .ttl { font: 600 11.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .legend { font-size: 11px; color: var(--muted); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      .legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: -1px; margin-right: 4px; }
+
+      .graph-wrap { position: relative; z-index: 1; }
+      svg.graph { width: 100%; height: 290px; display: block; touch-action: none; }
+      .edge { stroke: var(--border-strong); stroke-width: 2.4; transition: stroke 220ms ease, stroke-width 220ms ease, opacity 220ms ease; }
+      .edge.active { stroke: var(--warning); stroke-width: 4; }
+      .edge.tree { stroke: var(--success); stroke-width: 3; }
+      .edge.path { stroke: var(--accent); stroke-width: 4.5; }
+      .edge.cycle { stroke: var(--danger); stroke-width: 4; }
+      .edge.removed { opacity: 0.22; }
+      .edge.dim { opacity: 0.28; }
+      .edge.hit { stroke: transparent; stroke-width: 18; }
+      .node-circ { stroke-width: 2.4; transition: fill 220ms ease, stroke 220ms ease; }
+      .node-circ.dim { fill: var(--elevated); stroke: var(--border-strong); }
+      .node-circ.ready { fill: rgba(94,159,246,0.20); stroke: var(--info); }
+      .node-circ.seen { fill: rgba(94,159,246,0.20); stroke: var(--info); }
+      .node-circ.active { fill: var(--warning); stroke: var(--warning); }
+      .node-circ.done { fill: rgba(92,198,111,0.22); stroke: var(--success); }
+      .node-circ.path { fill: rgba(251,134,58,0.22); stroke: var(--accent); }
+      .node-circ.stuck { fill: var(--danger); stroke: var(--danger); }
+      .node-circ.pop { animation: pop 0.32s cubic-bezier(0.34, 1.56, 0.64, 1); }
+      @keyframes pop { from { transform: scale(0.92); } 50% { transform: scale(1.10); } to { transform: scale(1); } }
+      .node-lbl { font: 600 13px var(--mono); fill: var(--fg); text-anchor: middle; pointer-events: none; user-select: none; }
+      .node-badge { font: 600 10.5px var(--mono); fill: var(--purple); text-anchor: middle; pointer-events: none; }
+
+      .side { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; min-height: 56px; }
+      .side .h { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 7px; }
+      .side .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; min-height: 28px; }
+      .chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 6px; font: 600 11.5px var(--mono); border: 1px solid var(--border-strong); background: var(--elevated); color: var(--fg); }
+      .chip.v { background: rgba(92,198,111,0.18); color: var(--success); border-color: var(--success-bd); }
+      .chip.i { background: rgba(94,159,246,0.16); color: var(--info); border-color: var(--info-bd); }
+      .chip.w { background: rgba(240,181,104,0.16); color: var(--warning); border-color: var(--warning-bd); }
+      .chip.d { background: rgba(240,104,104,0.16); color: var(--danger); border-color: var(--danger-bd); }
+      .chip.head { box-shadow: 0 0 0 1.5px var(--warning); }
+      .empty { font: 500 11.5px var(--mono); color: var(--subtle); }
+      .side .total { margin-left: auto; font: 600 12px var(--mono); color: var(--accent); }
+      .side-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      .side-col .h { margin-bottom: 6px; }
+
+      .narration { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; position: relative; overflow: hidden; transition: border-color 350ms ease; }
+      .narration::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--border-strong); transition: background 350ms ease; }
+      .narration.add::before { background: var(--info); } .narration.add { border-color: rgba(94,159,246,0.30); }
+      .narration.calc::before { background: var(--purple); } .narration.calc { border-color: rgba(167,139,250,0.30); }
+      .narration.path::before { background: var(--accent); } .narration.path { border-color: rgba(251,134,58,0.32); }
+      .narration.done::before { background: var(--success); } .narration.done { border-color: rgba(92,198,111,0.45); }
+      .narration.fail::before { background: var(--danger); } .narration.fail { border-color: rgba(240,104,104,0.45); }
+      .narr-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+      .badge { font: 600 10.5px var(--mono); padding: 4px 9px; border-radius: 999px; letter-spacing: 0.4px; text-transform: uppercase; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); color: var(--muted); background: var(--elevated); }
+      .badge.step { background: var(--elevated); border-color: var(--border-strong); color: var(--fg); }
+      .badge.event { background: transparent; }
+      .badge.event.add { color: var(--info); border-color: var(--info-bd); }
+      .badge.event.calc { color: var(--purple); border-color: var(--purple-bd); }
+      .badge.event.path { color: var(--accent); border-color: var(--warning-bd); }
+      .badge.event.done { color: var(--success); border-color: var(--success-bd); }
+      .badge.event.fail { color: var(--danger); border-color: var(--danger-bd); }
+      .narr-text { margin: 0; font-size: 14px; line-height: 1.55; color: var(--fg); }
+      .narr-text strong { color: var(--fg); font-weight: 600; }
+      .narr-text code { font-family: var(--mono); background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; color: var(--accent); font-size: 12px; }
+
+      .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+      .controls .spacer { flex: 1; }
+      .speed-wrap { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font: 500 11px var(--mono); }
+      .speed-wrap input[type="range"] { width: 80px; }
+      .kbd { font-family: var(--mono); font-size: 10.5px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); color: var(--muted); border: 1px solid var(--border); }
+      .hint { font: 11px var(--mono); color: var(--subtle); display: inline-flex; align-items: center; gap: 5px; }
+
+      .free-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; display: none; flex-direction: column; gap: 10px; }
+      .free-card.show { display: flex; }
+      .free-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+      .free-note { font: 11.5px var(--mono); color: var(--muted); }
+
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; }
+      .stat .label { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .stat .value { font: 600 22px var(--mono); margin-top: 4px; line-height: 1; }
+      .stat .value.sm { font-size: 15px; }
+
+      @media (max-width: 540px) {
+        .stats { grid-template-columns: repeat(2, 1fr); }
+        .side-grid { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2 class="sr-only">A directed acyclic graph: run Kahn's algorithm to build a topological order, watch a back edge break it into a cycle, see that many valid orders exist, or build your own directed graph in free play.</h2>
+
+      <div class="tabs" id="tabs">
+        <button class="tab active" data-sc="0">Topological order</button>
+        <button class="tab" data-sc="1">Add a back edge &rarr; cycle</button>
+        <button class="tab" data-sc="2">Many valid orders</button>
+        <button class="tab" data-sc="3">Free play</button>
+      </div>
+
+      <div class="hero">
+        <div class="hero-head">
+          <span class="ttl" id="hero-ttl">DAG &middot; every arrow points forward</span>
+          <span class="legend">
+            <span><span class="sw" style="background:rgba(94,159,246,0.25);border:1px solid var(--info-bd)"></span>ready (in 0)</span>
+            <span><span class="sw" style="background:var(--warning)"></span>placing</span>
+            <span><span class="sw" style="background:rgba(92,198,111,0.25);border:1px solid var(--success-bd)"></span>placed</span>
+            <span><span class="sw" style="background:var(--danger)"></span>cycle</span>
+          </span>
+        </div>
+        <div class="graph-wrap">
+          <svg id="graph" class="graph" viewBox="0 0 560 300" aria-hidden="true">
+            <defs>
+              <marker id="arr" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2d333d"></path></marker>
+              <marker id="arr-a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#f0b568"></path></marker>
+              <marker id="arr-t" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5cc66f"></path></marker>
+              <marker id="arr-d" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#f06868"></path></marker>
+            </defs>
+            <g id="edges"></g>
+            <g id="nodes"></g>
+          </svg>
+        </div>
+      </div>
+
+      <div class="side">
+        <div class="side-grid">
+          <div class="side-col">
+            <div class="h" id="side-h">Ready queue (in-degree 0)</div>
+            <div id="side-row" class="row"><span class="empty">&mdash;</span></div>
+          </div>
+          <div class="side-col">
+            <div class="h" id="side-h2">Topological order</div>
+            <div id="side-row2" class="row"><span class="empty">&mdash;</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="narration" class="narration">
+        <div class="narr-meta">
+          <span id="narr-step" class="badge step">Step 0 / 0</span>
+          <span id="narr-event" class="badge event" style="display:none"></span>
+        </div>
+        <p id="narr-text" class="narr-text"><strong>Press Play.</strong> A DAG is a directed graph with no way to loop back &mdash; so its arrows can always be laid out in a single forward line.</p>
+      </div>
+
+      <div class="controls" id="controls">
+        <button id="btn-prev"><i class="ti ti-chevron-left"></i>Back</button>
+        <button id="btn-play" class="primary"><i id="play-icon" class="ti ti-player-play"></i><span id="play-label">Play</span></button>
+        <button id="btn-next"><i class="ti ti-chevron-right"></i>Step</button>
+        <button id="btn-restart" class="ghost"><i class="ti ti-refresh"></i>Restart</button>
+        <span class="spacer"></span>
+        <span class="speed-wrap"><span>Speed</span><input id="speed" type="range" min="1" max="10" step="1" value="5" /></span>
+      </div>
+
+      <div class="free-card" id="free-card">
+        <div class="free-row">
+          <button id="f-sort" class="primary"><i class="ti ti-sort-ascending"></i>Topological sort</button>
+          <button id="f-clear" class="ghost"><i class="ti ti-eraser"></i>Clear arrows</button>
+          <button id="f-reset" class="ghost"><i class="ti ti-refresh"></i>Reset graph</button>
+        </div>
+        <span class="free-note" id="free-note">Click a source vertex then a target to add a forward arrow. Drag a vertex to move it. Then run Topological sort.</span>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="label">vertices</div><div id="s-v" class="value" style="color:var(--info)">0</div></div>
+        <div class="stat"><div class="label">arrows</div><div id="s-e" class="value" style="color:var(--accent)">0</div></div>
+        <div class="stat"><div class="label" id="s3-label">placed</div><div id="s-placed" class="value" style="color:var(--purple)">0</div></div>
+        <div class="stat"><div class="label" id="s4-label">is a DAG?</div><div id="s-dag" class="value sm" style="color:var(--muted)">&mdash;</div></div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        // 6-vertex DAG laid out left→right roughly in dependency order.
+        var BASE_POS = { A:[70,80], B:[70,225], C:[230,70], D:[235,235], E:[410,120], F:[490,250] };
+        var DAG_EDGES   = [["A","C"],["B","C"],["B","D"],["C","E"],["D","E"],["D","F"],["E","F"]];
+        // Same graph + one back edge (F→B) that closes a loop B→D→F→B.
+        var CYCLE_EDGES = DAG_EDGES.concat([["F","B"]]);
+
+        var pos = {}, edges = [];
+        function setPos() { pos = {}; Object.keys(BASE_POS).forEach(function(k){ pos[k] = BASE_POS[k].slice(); }); }
+        function loadEdges(arr) { edges = arr.map(function(e){ return e.slice(); }); }
+        function loadDAG()   { setPos(); loadEdges(DAG_EDGES); }
+        function loadCycle() { setPos(); loadEdges(CYCLE_EDGES); }
+        loadDAG();
+
+        var NODES = function(){ return Object.keys(pos); };
+        function dkey(a,b){ return a + '>' + b; }
+        function hasEdge(a,b){ return edges.some(function(e){ return e[0]===a && e[1]===b; }); }
+        function inDegrees() {
+          var d = {}; NODES().forEach(function(n){ d[n]=0; });
+          edges.forEach(function(e){ d[e[1]]++; });
+          return d;
+        }
+        function outAdj() {
+          var o = {}; NODES().forEach(function(n){ o[n]=[]; });
+          edges.forEach(function(e){ o[e[0]].push(e[1]); });
+          NODES().forEach(function(n){ o[n].sort(); });
+          return o;
+        }
+        // Kahn's algorithm. Returns {order, ok}. order respects a tie-break fn.
+        function kahn(tie) {
+          var indeg = inDegrees(), out = outAdj();
+          var ready = NODES().filter(function(n){ return indeg[n]===0; });
+          if (tie) ready.sort(tie); else ready.sort();
+          var order = [];
+          while (ready.length) {
+            var u = ready.shift(); order.push(u);
+            out[u].forEach(function(v){ if (--indeg[v] === 0) ready.push(v); });
+            if (tie) ready.sort(tie); else ready.sort();
+          }
+          return { order: order, ok: order.length === NODES().length };
+        }
+
+        var nodesG = document.getElementById('nodes');
+        var edgesG = document.getElementById('edges');
+        var nodeEls = {}, edgeEls = {}, edgeHit = {};
+
+        var R = 22;
+        function geom(a, b) {
+          var p1 = pos[a], p2 = pos[b];
+          var dx = p2[0]-p1[0], dy = p2[1]-p1[1];
+          var len = Math.hypot(dx, dy) || 1;
+          var ux = dx/len, uy = dy/len, ox = 0, oy = 0;
+          if (hasEdge(b, a)) { ox = -uy*7; oy = ux*7; } // bow apart for 2-cycles
+          return { x1: p1[0]+ux*R+ox, y1: p1[1]+uy*R+oy,
+                   x2: p2[0]-ux*(R+7)+ox, y2: p2[1]-uy*(R+7)+oy };
+        }
+
+        function buildSVG() {
+          edgesG.innerHTML = ''; nodesG.innerHTML = ''; nodeEls = {}; edgeEls = {}; edgeHit = {};
+          edges.forEach(function(e){
+            var k = dkey(e[0], e[1]);
+            var hit = document.createElementNS('http://www.w3.org/2000/svg','line');
+            hit.setAttribute('class','edge hit'); edgeHit[k] = hit; edgesG.appendChild(hit);
+            var ln = document.createElementNS('http://www.w3.org/2000/svg','line');
+            ln.setAttribute('class','edge'); ln.setAttribute('marker-end','url(#arr)');
+            edgeEls[k] = ln; edgesG.appendChild(ln);
+          });
+          NODES().forEach(function(n){
+            var c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+            c.setAttribute('r', R); c.setAttribute('class','node-circ dim');
+            c.dataset.id = n;
+            var t = document.createElementNS('http://www.w3.org/2000/svg','text');
+            t.setAttribute('class','node-lbl'); t.textContent = n; t.dataset.id = n;
+            var b = document.createElementNS('http://www.w3.org/2000/svg','text');
+            b.setAttribute('class','node-badge');
+            nodesG.appendChild(c); nodesG.appendChild(t); nodesG.appendChild(b);
+            nodeEls[n] = { c: c, t: t, b: b };
+          });
+          positionSVG();
+        }
+        function positionSVG() {
+          Object.keys(edgeEls).forEach(function(k){
+            var p = k.split('>'); var g = geom(p[0], p[1]);
+            [edgeEls[k], edgeHit[k]].forEach(function(ln){
+              ln.setAttribute('x1',g.x1); ln.setAttribute('y1',g.y1);
+              ln.setAttribute('x2',g.x2); ln.setAttribute('y2',g.y2);
+            });
+          });
+          NODES().forEach(function(n){
+            var x = pos[n][0], y = pos[n][1];
+            nodeEls[n].c.setAttribute('cx',x); nodeEls[n].c.setAttribute('cy',y);
+            nodeEls[n].t.setAttribute('x',x); nodeEls[n].t.setAttribute('y',y+5);
+            nodeEls[n].b.setAttribute('x',x); nodeEls[n].b.setAttribute('y',y-30);
+          });
+        }
+
+        // ---- scripted scenarios produce arrays of step snapshots ----
+        function snap(o){
+          return { nodeRole: o.nodeRole||{}, edgeRole: o.edgeRole||{}, badge: o.badge||{},
+                   side: o.side||null, sideH: o.sideH||null,
+                   side2: o.side2||null, sideH2: o.sideH2||null,
+                   msg: o.msg, event: o.event||null,
+                   placed: o.placed, dag: o.dag };
+        }
+        function chips(arr, cls){ return arr.map(function(x){ return {t:x, cls:cls}; }); }
+
+        // ---- Scenario 0: Topological order (Kahn's on the DAG) ----
+        function scTopo() {
+          loadDAG(); buildSVG();
+          var s = [];
+          var indeg = inDegrees(), out = outAdj();
+          var ind = {}; NODES().forEach(function(n){ ind[n]=indeg[n]; });
+          // intro: show in-degrees
+          var nr0 = {}, bd0 = {};
+          NODES().forEach(function(n){ bd0[n]='in '+ind[n]; if(ind[n]===0) nr0[n]='ready'; });
+          var ready = NODES().filter(function(n){ return ind[n]===0; }).sort();
+          s.push(snap({ event:'calc', nodeRole:nr0, badge:bd0,
+            sideH:'Ready queue (in-degree 0)', side: chips(ready,'i'),
+            sideH2:'Topological order', side2:[],
+            placed:0,
+            msg:'<strong>Count each vertex\'s in-degree</strong> &mdash; how many arrows point <em>into</em> it. The ones with in-degree <code>0</code> have nothing before them, so they are <strong>ready</strong> to go first. Seed the queue with them: <code>['+ready.join(', ')+']</code>.' }));
+
+          var curIn = {}; NODES().forEach(function(n){ curIn[n]=ind[n]; });
+          var order = [], placedSet = {};
+          while (ready.length) {
+            var u = ready.shift();
+            order.push(u); placedSet[u] = order.length;
+            // place u
+            var nrP = {}; NODES().forEach(function(n){
+              if (placedSet[n]) nrP[n]='done'; else if (curIn[n]===0) nrP[n]='ready'; });
+            nrP[u]='active';
+            var bdP = {}; NODES().forEach(function(n){
+              if (placedSet[n]) bdP[n]='#'+placedSet[n]; else bdP[n]='in '+curIn[n]; });
+            var erP = {}; edges.forEach(function(e){ erP[dkey(e[0],e[1])] = placedSet[e[0]] ? 'removed' : 'dim'; });
+            s.push(snap({ event:'path', nodeRole:nrP, badge:bdP, edgeRole:erP,
+              sideH:'Ready queue (in-degree 0)', side: chips(ready,'i'),
+              sideH2:'Topological order', side2: order.map(function(o2,i){ return {t:o2+' #'+(i+1), cls:'v'}; }),
+              placed: order.length,
+              msg:'Pop <strong>'+u+'</strong> from the ready queue and place it at position <strong>#'+placedSet[u]+'</strong>. Every arrow out of '+u+' now gets &ldquo;used up.&rdquo;' }));
+            // relax successors
+            out[u].forEach(function(v){
+              curIn[v]--;
+              var nrR = {}; NODES().forEach(function(n){
+                if (placedSet[n]) nrR[n]='done'; else if (curIn[n]===0) nrR[n]='ready'; });
+              nrR[u]='done'; if (curIn[v]===0) nrR[v]='ready';
+              var bdR = {}; NODES().forEach(function(n){
+                if (placedSet[n]) bdR[n]='#'+placedSet[n]; else bdR[n]='in '+curIn[n]; });
+              var erR = {}; edges.forEach(function(e){
+                var kk = dkey(e[0],e[1]);
+                if (e[0]===u && e[1]===v) erR[kk]='active';
+                else erR[kk] = placedSet[e[0]] ? 'removed' : 'dim';
+              });
+              if (curIn[v]===0) ready.push(v);
+              var rcopy = ready.slice().sort();
+              s.push(snap({ event:'calc', nodeRole:nrR, badge:bdR, edgeRole:erR,
+                sideH:'Ready queue (in-degree 0)', side: chips(rcopy,'i'),
+                sideH2:'Topological order', side2: order.map(function(o2,i){ return {t:o2+' #'+(i+1), cls:'v'}; }),
+                placed: order.length,
+                msg: 'Decrement <strong>'+v+'</strong>\'s in-degree along <code>'+u+'&rarr;'+v+'</code> &rarr; <code>'+curIn[v]+'</code>.' + (curIn[v]===0 ? ' It hit <strong>0</strong>, so '+v+' is now ready &mdash; add it to the queue.' : ' Still waiting on '+curIn[v]+' more arrow'+(curIn[v]===1?'':'s')+'.') }));
+              ready.sort();
+            });
+          }
+          var allDone = {}; NODES().forEach(function(n){ allDone[n]='done'; });
+          var bdF = {}; NODES().forEach(function(n){ bdF[n]='#'+placedSet[n]; });
+          var erF = {}; edges.forEach(function(e){ erF[dkey(e[0],e[1])]='tree'; });
+          s.push(snap({ event:'done', nodeRole:allDone, badge:bdF, edgeRole:erF,
+            sideH:'Ready queue (in-degree 0)', side: [],
+            sideH2:'Topological order', side2: order.map(function(o2,i){ return {t:o2+' #'+(i+1), cls:'v'}; }),
+            placed: order.length, dag: true,
+            msg:'<strong>All 6 placed.</strong> Order <code>'+order.join(' &rarr; ')+'</code>. Read it left to right: <em>every arrow points forward</em> in this line. That is exactly what a topological order is &mdash; and a DAG always has one.' }));
+          return s;
+        }
+
+        // ---- Scenario 1: Add a back edge → cycle (Kahn's on cyclic preset) ----
+        function scCycle() {
+          loadCycle(); buildSVG();
+          var s = [];
+          var indeg = inDegrees(), out = outAdj();
+          var ind = {}; NODES().forEach(function(n){ ind[n]=indeg[n]; });
+          var erBack = {}; edges.forEach(function(e){ erBack[dkey(e[0],e[1])] = (e[0]==='F'&&e[1]==='B')?'cycle':'dim'; });
+          s.push(snap({ event:'add', edgeRole:erBack,
+            sideH:'Ready queue (in-degree 0)', side:[], sideH2:'Topological order', side2:[],
+            placed:0,
+            msg:'Same graph, but we added one <strong>back edge</strong> <code>F&rarr;B</code> (highlighted). Now there is a loop: <code>B&rarr;D&rarr;F&rarr;B</code>. Watch Kahn\'s algorithm run into it.' }));
+          var bd0 = {}, nr0 = {};
+          NODES().forEach(function(n){ bd0[n]='in '+ind[n]; if(ind[n]===0) nr0[n]='ready'; });
+          var ready = NODES().filter(function(n){ return ind[n]===0; }).sort();
+          s.push(snap({ event:'calc', nodeRole:nr0, badge:bd0,
+            sideH:'Ready queue (in-degree 0)', side: chips(ready,'i'), sideH2:'Topological order', side2:[],
+            placed:0,
+            msg:'Count in-degrees again. Because <code>F&rarr;B</code> now points into B, B\'s in-degree is no longer 0. Only <code>['+ready.join(', ')+']</code> start ready &mdash; <strong>B is trapped in the loop</strong>.' }));
+
+          var curIn = {}; NODES().forEach(function(n){ curIn[n]=ind[n]; });
+          var order = [], placedSet = {};
+          while (ready.length) {
+            var u = ready.shift(); order.push(u); placedSet[u]=order.length;
+            out[u].forEach(function(v){ if (--curIn[v]===0) ready.push(v); });
+            ready.sort();
+            var nrP = {}; NODES().forEach(function(n){
+              if (placedSet[n]) nrP[n]='done'; else if (curIn[n]===0) nrP[n]='ready'; });
+            var bdP = {}; NODES().forEach(function(n){
+              if (placedSet[n]) bdP[n]='#'+placedSet[n]; else bdP[n]='in '+curIn[n]; });
+            var erP = {}; edges.forEach(function(e){ erP[dkey(e[0],e[1])] = placedSet[e[0]] ? 'removed' : 'dim'; });
+            s.push(snap({ event:'path', nodeRole:nrP, badge:bdP, edgeRole:erP,
+              sideH:'Ready queue (in-degree 0)', side: chips(ready,'i'),
+              sideH2:'Topological order', side2: order.map(function(o2,i){ return {t:o2+' #'+(i+1), cls:'v'}; }),
+              placed: order.length,
+              msg:'Place <strong>'+u+'</strong> at <strong>#'+placedSet[u]+'</strong> and relax its successors. Queue is now <code>['+ready.join(', ')+']</code>.' }));
+          }
+          var stuck = NODES().filter(function(n){ return !placedSet[n]; });
+          var nrS = {}; NODES().forEach(function(n){ if (placedSet[n]) nrS[n]='done'; });
+          stuck.forEach(function(n){ nrS[n]='stuck'; });
+          var bdS = {}; NODES().forEach(function(n){ bdS[n] = placedSet[n] ? '#'+placedSet[n] : 'in '+curIn[n]; });
+          var erS = {}; edges.forEach(function(e){
+            var inLoop = stuck.indexOf(e[0])>=0 && stuck.indexOf(e[1])>=0;
+            erS[dkey(e[0],e[1])] = inLoop ? 'cycle' : 'removed';
+          });
+          s.push(snap({ event:'fail', nodeRole:nrS, badge:bdS, edgeRole:erS,
+            sideH:'Ready queue (in-degree 0)', side: [],
+            sideH2:'Stuck in a cycle', side2: chips(stuck,'d'),
+            placed: order.length, dag: false,
+            msg:'<strong>Queue empty, but '+stuck.join(', ')+' were never placed.</strong> Each still has an incoming arrow from inside the loop, so none can ever reach in-degree 0. There is <strong>no topological order</strong> &mdash; this is <em>not</em> a DAG.' }));
+          return s;
+        }
+
+        // ---- Scenario 2: Many valid orders ----
+        function scMany() {
+          loadDAG(); buildSVG();
+          var s = [];
+          var erAll = {}; edges.forEach(function(e){ erAll[dkey(e[0],e[1])]='tree'; });
+          // Order A: alphabetical tie-break (default Kahn).
+          var orderA = kahn(function(a,b){ return a<b?-1:1; }).order;
+          // Order B: reverse alphabetical tie-break — a different valid order.
+          var orderB = kahn(function(a,b){ return a<b?1:-1; }).order;
+          s.push(snap({ event:'calc', edgeRole:erAll,
+            sideH:'Order A', side:[], sideH2:'Order B', side2:[],
+            placed:0,
+            msg:'This is the same valid DAG. A topological order is <strong>not unique</strong> &mdash; whenever two vertices are both ready, you may take either one first. Watch two different runs build two different valid orders.' }));
+          // build A
+          var nrA = {}, bdA = {};
+          orderA.forEach(function(n,i){ nrA[n]='done'; bdA[n]='#'+(i+1); });
+          s.push(snap({ event:'path', nodeRole:nrA, badge:bdA, edgeRole:erAll,
+            sideH:'Order A', side: orderA.map(function(o2,i){ return {t:o2+' #'+(i+1), cls:'i'}; }),
+            sideH2:'Order B', side2:[],
+            placed: orderA.length,
+            msg:'<strong>Order A</strong> (break ties by smallest letter): <code>'+orderA.join(' &rarr; ')+'</code>. Trace any arrow &mdash; its tail always comes before its head in this line.' }));
+          // build B
+          var nrB = {}, bdB = {};
+          orderB.forEach(function(n,i){ nrB[n]='done'; bdB[n]='#'+(i+1); });
+          s.push(snap({ event:'path', nodeRole:nrB, badge:bdB, edgeRole:erAll,
+            sideH:'Order A', side: orderA.map(function(o2,i){ return {t:o2+' #'+(i+1), cls:'i'}; }),
+            sideH2:'Order B', side2: orderB.map(function(o2,i){ return {t:o2+' #'+(i+1), cls:'v'}; }),
+            placed: orderB.length,
+            msg:'<strong>Order B</strong> (break ties by largest letter): <code>'+orderB.join(' &rarr; ')+'</code> &mdash; a <em>different</em> line, but every arrow still points forward. Both are correct.' }));
+          var allDone = {}; NODES().forEach(function(n){ allDone[n]='done'; });
+          s.push(snap({ event:'done', nodeRole:allDone, edgeRole:erAll,
+            sideH:'Order A', side: orderA.map(function(o2,i){ return {t:o2+' #'+(i+1), cls:'i'}; }),
+            sideH2:'Order B', side2: orderB.map(function(o2,i){ return {t:o2+' #'+(i+1), cls:'v'}; }),
+            placed: NODES().length, dag: true,
+            msg:'A DAG defines only a <strong>partial order</strong>: it fixes the order of vertices joined by a chain of arrows, and leaves <em>incomparable</em> vertices free to swap. Any line that respects every arrow is a valid topological sort.' }));
+          return s;
+        }
+
+        var SCENARIOS = [scTopo, scCycle, scMany];
+        var SC_TTL = ['DAG · Kahn’s topological sort','DAG · a back edge breaks it','DAG · the order is not unique','DAG · free play — your graph'];
+        var SC_S3 = ['placed','placed','placed','placed'];
+        var SC_S4 = ['is a DAG?','is a DAG?','is a DAG?','is a DAG?'];
+
+        var sc = 0, steps = [], idx = 0, playing = false, timer = null, freeMode = false;
+
+        var narrEl = document.getElementById('narration');
+        var narrText = document.getElementById('narr-text');
+        var narrStep = document.getElementById('narr-step');
+        var narrEvent = document.getElementById('narr-event');
+        var sideH = document.getElementById('side-h');
+        var sideRow = document.getElementById('side-row');
+        var sideH2 = document.getElementById('side-h2');
+        var sideRow2 = document.getElementById('side-row2');
+        var sV = document.getElementById('s-v'), sE = document.getElementById('s-e');
+        var sPlaced = document.getElementById('s-placed'), sDag = document.getElementById('s-dag');
+        var heroTtl = document.getElementById('hero-ttl');
+        var btnPrev = document.getElementById('btn-prev'), btnNext = document.getElementById('btn-next');
+        var btnPlay = document.getElementById('btn-play'), btnRestart = document.getElementById('btn-restart');
+        var playIcon = document.getElementById('play-icon'), playLabel = document.getElementById('play-label');
+        var speedEl = document.getElementById('speed');
+        var controls = document.getElementById('controls'), freeCard = document.getElementById('free-card');
+        var freeNote = document.getElementById('free-note');
+
+        function setSideEl(hEl, rowEl, h, arr) {
+          hEl.textContent = h; rowEl.innerHTML = '';
+          if (!arr || arr.length === 0) { var em = document.createElement('span'); em.className='empty'; em.textContent='—'; rowEl.appendChild(em); return; }
+          arr.forEach(function(it, i){
+            var c = document.createElement('span');
+            c.className = 'chip ' + (it.cls||'') + (i===0 && it.head ? ' head' : '');
+            c.textContent = it.t; rowEl.appendChild(c);
+          });
+        }
+
+        function setDag(state) {
+          if (state === true) { sDag.textContent = 'Yes ✓'; sDag.style.color = 'var(--success)'; }
+          else if (state === false) { sDag.textContent = 'No (cycle)'; sDag.style.color = 'var(--danger)'; }
+          else { sDag.textContent = '…'; sDag.style.color = 'var(--muted)'; }
+        }
+
+        function renderStep(st) {
+          NODES().forEach(function(n){
+            nodeEls[n].c.setAttribute('class','node-circ '+(st.nodeRole[n]||'dim'));
+            nodeEls[n].b.textContent = st.badge[n] || '';
+          });
+          Object.keys(edgeEls).forEach(function(k){
+            var role = st.edgeRole[k] || 'dim';
+            edgeEls[k].setAttribute('class','edge '+role);
+            var mk = role==='active' ? 'url(#arr-a)' : role==='tree' ? 'url(#arr-t)' : role==='cycle' ? 'url(#arr-d)' : 'url(#arr)';
+            edgeEls[k].setAttribute('marker-end', mk);
+          });
+          narrText.innerHTML = st.msg;
+          narrStep.textContent = 'Step ' + idx + ' / ' + (steps.length - 1);
+          narrEl.classList.remove('add','calc','path','done','fail');
+          if (st.event) { narrEl.classList.add(st.event);
+            narrEvent.style.display = ''; narrEvent.className = 'badge event ' + st.event;
+            narrEvent.textContent = st.event === 'add' ? 'back edge' : st.event === 'calc' ? 'count' : st.event === 'path' ? 'place' : st.event === 'fail' ? 'cycle' : 'done';
+          } else narrEvent.style.display = 'none';
+          if (st.sideH) setSideEl(sideH, sideRow, st.sideH, st.side);
+          if (st.sideH2) setSideEl(sideH2, sideRow2, st.sideH2, st.side2);
+          sV.textContent = NODES().length;
+          sE.textContent = edges.length;
+          sPlaced.textContent = (st.placed !== undefined ? st.placed : 0);
+          setDag(st.dag);
+        }
+
+        function loadScenario(i) {
+          stop(); sc = i;
+          heroTtl.textContent = SC_TTL[i];
+          document.getElementById('s3-label').textContent = SC_S3[i];
+          document.getElementById('s4-label').textContent = SC_S4[i];
+          freeMode = (i === 3);
+          if (freeMode) {
+            controls.style.display = 'none'; freeCard.classList.add('show');
+            loadDAG(); buildSVG(); renderFree();
+          } else {
+            controls.style.display = 'flex'; freeCard.classList.remove('show');
+            steps = SCENARIOS[i](); idx = 0; renderStep(steps[0]);
+          }
+        }
+
+        function next(){ if (idx >= steps.length-1){ stop(); return false; } idx++; renderStep(steps[idx]); if (idx>=steps.length-1) stop(); return true; }
+        function prev(){ if (idx<=0) return; idx--; renderStep(steps[idx]); }
+        function delay(){ return 1150 - parseInt(speedEl.value,10)*95; }
+        function play(){ if (idx>=steps.length-1){ idx=0; renderStep(steps[0]); } playing=true; playLabel.textContent='Pause'; playIcon.className='ti ti-player-pause'; loop(); }
+        function loop(){ if(!playing) return; if(!next()){ stop(); return; } timer=setTimeout(loop, delay()); }
+        function stop(){ playing=false; if(timer){clearTimeout(timer);timer=null;} playLabel.textContent='Play'; playIcon.className='ti ti-player-play'; }
+
+        // ---- free play ----
+        var fpSel = null, fpResult = null;
+        function renderFree() {
+          var indeg = inDegrees();
+          NODES().forEach(function(n){
+            var role = 'dim';
+            if (fpSel === n) role = 'active';
+            else if (fpResult && fpResult.ok && fpResult.placedSet[n]) role = 'done';
+            else if (fpResult && !fpResult.ok && fpResult.stuck.indexOf(n)>=0) role = 'stuck';
+            else if (fpResult && !fpResult.ok && fpResult.placedSet[n]) role = 'done';
+            nodeEls[n].c.setAttribute('class','node-circ '+role);
+            if (fpResult && fpResult.placedSet[n]) nodeEls[n].b.textContent = '#'+fpResult.placedSet[n];
+            else nodeEls[n].b.textContent = 'in '+indeg[n];
+          });
+          Object.keys(edgeEls).forEach(function(k){
+            var role = 'tree';
+            if (fpResult && !fpResult.ok) {
+              var p = k.split('>');
+              role = (fpResult.stuck.indexOf(p[0])>=0 && fpResult.stuck.indexOf(p[1])>=0) ? 'cycle' : 'tree';
+            }
+            edgeEls[k].setAttribute('class','edge '+role);
+            edgeEls[k].setAttribute('marker-end', role==='cycle' ? 'url(#arr-d)' : 'url(#arr-t)');
+          });
+          sV.textContent = NODES().length; sE.textContent = edges.length;
+          sPlaced.textContent = fpResult ? fpResult.order.length : 0;
+          setDag(fpResult ? fpResult.ok : null);
+          if (fpResult) {
+            if (fpResult.ok) setSideEl(sideH, sideRow, 'Topological order', fpResult.order.map(function(o2,i){ return {t:o2+' #'+(i+1), cls:'v'}; }));
+            else setSideEl(sideH, sideRow, 'Stuck in a cycle', chips(fpResult.stuck,'d'));
+          } else {
+            setSideEl(sideH, sideRow, 'In-degree of each vertex', NODES().map(function(n){ return {t:n+':'+indeg[n], cls: indeg[n]===0?'i':''}; }));
+          }
+          setSideEl(sideH2, sideRow2, 'Arrows (source → target)',
+            edges.length ? edges.map(function(e){ return {t:e[0]+'→'+e[1], cls:'w'}; }) : []);
+        }
+        function fpFlash(t){ freeNote.textContent = t; }
+
+        function nodeClickFree(id) {
+          fpResult = null;
+          if (fpSel === null) { fpSel = id; fpFlash('Source = '+id+'. Click a target vertex — the arrow points source → target.'); }
+          else if (fpSel === id) { fpSel = null; fpFlash('Deselected.'); }
+          else {
+            if (hasEdge(fpSel, id)) { fpFlash('Arrow '+fpSel+'→'+id+' already exists.'); }
+            else if (hasEdge(id, fpSel)) { fpFlash('Refused '+fpSel+'→'+id+': the reverse arrow '+id+'→'+fpSel+' exists (that would make a 2-cycle). Run Topological sort on a cycle to see it fail.'); }
+            else { edges.push([fpSel, id]); fpFlash('Arrow '+fpSel+'→'+id+' added.'); buildSVG(); }
+            fpSel = null;
+          }
+          renderFree();
+        }
+
+        function fpSort() {
+          var indeg = inDegrees(), out = outAdj();
+          var curIn = {}; NODES().forEach(function(n){ curIn[n]=indeg[n]; });
+          var ready = NODES().filter(function(n){ return curIn[n]===0; }).sort();
+          var order = [], placedSet = {};
+          while (ready.length) {
+            var u = ready.shift(); order.push(u); placedSet[u]=order.length;
+            out[u].forEach(function(v){ if (--curIn[v]===0) ready.push(v); });
+            ready.sort();
+          }
+          var ok = order.length === NODES().length;
+          var stuck = NODES().filter(function(n){ return !placedSet[n]; });
+          fpResult = { order: order, placedSet: placedSet, ok: ok, stuck: stuck };
+          if (ok) fpFlash('Topological order: '+order.join(' → ')+'. Every arrow points forward — this is a DAG.');
+          else fpFlash('Cycle — not a DAG. '+stuck.join(', ')+' depend on each other in a loop, so no valid order exists.');
+          renderFree();
+        }
+
+        // ---- pointer handling (free play: click to select, drag to move) ----
+        var svg = document.getElementById('graph');
+        var drag = null;
+        function pt(ev){ var r = svg.getBoundingClientRect(); var cx = ev.touches?ev.touches[0].clientX:ev.clientX; var cy = ev.touches?ev.touches[0].clientY:ev.clientY; return { x:(cx-r.left)/r.width*560, y:(cy-r.top)/r.height*300 }; }
+        function down(ev){ if(!freeMode) return; var el = ev.target; if(el.dataset && el.dataset.id){ var id = el.dataset.id, p = pt(ev); drag = { id:id, moved:false, dx:p.x-pos[id][0], dy:p.y-pos[id][1] }; } }
+        function move(ev){ if(!drag) return; var p = pt(ev); var nx = Math.max(26,Math.min(534,p.x-drag.dx)), ny = Math.max(26,Math.min(274,p.y-drag.dy)); if(Math.abs(nx-pos[drag.id][0])>2||Math.abs(ny-pos[drag.id][1])>2) drag.moved=true; pos[drag.id]=[nx,ny]; positionSVG(); ev.preventDefault(); }
+        function up(){ if(!drag) return; if(!drag.moved) nodeClickFree(drag.id); drag=null; }
+        svg.addEventListener('mousedown',down); svg.addEventListener('touchstart',down,{passive:false});
+        window.addEventListener('mousemove',move); window.addEventListener('touchmove',move,{passive:false});
+        window.addEventListener('mouseup',up); window.addEventListener('touchend',up);
+
+        document.getElementById('f-sort').addEventListener('click', function(){ fpSort(); });
+        document.getElementById('f-clear').addEventListener('click', function(){ edges=[]; fpSel=null; fpResult=null; buildSVG(); fpFlash('All arrows cleared — 6 isolated vertices (each is its own valid order).'); renderFree(); });
+        document.getElementById('f-reset').addEventListener('click', function(){ loadDAG(); fpSel=null; fpResult=null; buildSVG(); fpFlash('Reset to the starting DAG.'); renderFree(); });
+
+        document.querySelectorAll('.tab').forEach(function(tab){ tab.addEventListener('click', function(){
+          document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
+          tab.classList.add('active'); loadScenario(parseInt(tab.dataset.sc,10));
+        }); });
+        btnPlay.addEventListener('click', function(){ playing?stop():play(); });
+        btnNext.addEventListener('click', function(){ stop(); next(); });
+        btnPrev.addEventListener('click', function(){ stop(); prev(); });
+        btnRestart.addEventListener('click', function(){ stop(); idx=0; renderStep(steps[0]); });
+        window.addEventListener('keydown', function(e){ if(freeMode) return;
+          if(e.key==='ArrowLeft'){ stop(); prev(); } else if(e.key==='ArrowRight'){ stop(); next(); }
+          else if(e.key===' '){ e.preventDefault(); playing?stop():play(); } });
+
+        buildSVG();
+        loadScenario(0);
+
+        function postHeight(){ try { parent.postMessage({type:'prototype:height',height:document.body.scrollHeight},'*'); } catch(e){} }
+        new ResizeObserver(postHeight).observe(document.body);
+        postHeight();
+      })();
+    </script>
+  </body>
+</html>

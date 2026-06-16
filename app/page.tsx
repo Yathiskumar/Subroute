@@ -17,7 +17,18 @@ import { TOPICS } from "@/lib/data/topics";
 import { getContentStats } from "@/lib/content";
 
 // Home page features the original six topics; newer topics live under /topics.
-const FEATURED = TOPICS.slice(0, 6);
+// Pinned by slug (not array position) so reordering /topics never disturbs the home page.
+const FEATURED_SLUGS = [
+  "rate-limiting",
+  "cache-write",
+  "cache-eviction",
+  "garbage-collection",
+  "memory-allocation",
+  "load-balancing",
+] as const;
+const FEATURED = FEATURED_SLUGS.map(
+  (slug) => TOPICS.find((t) => t.slug === slug)!,
+);
 
 const STEPS = [
   {

@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Enums & Constants — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.32);
+        --success: #5cc66f;
+        --info: #5e9ff6;
+        --danger: #f06868;
+        --violet: #a78bfa;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      .lab { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+
+      .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); }
+
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 12px; cursor: pointer; transition: filter .15s, transform .1s, border-color .15s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .btn.primary { background: var(--accent); color: #1a1003; border-color: transparent; padding: 11px; font-size: 13px; }
+      .btn.primary:hover { filter: brightness(1.06); }
+      .btn.sm { padding: 7px 9px; font-size: 11px; }
+      .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+      .btn:disabled:hover { border-color: var(--border); filter: none; }
+
+      /* ---- top bar ---- */
+      .topline { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+      .topline .kw { font-family: var(--mono); font-size: 12px; color: var(--accent); }
+      .topline .nm { font-family: var(--mono); font-size: 13px; font-weight: 600; }
+      .topline .tag { margin-left: auto; white-space: nowrap; font-family: var(--mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--subtle); border: 1px solid var(--border); border-radius: 999px; padding: 2px 8px; }
+
+      /* ---- state machine card ---- */
+      .sm-card { padding: 16px; margin-bottom: 16px; }
+      .section-lab { font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--subtle); margin: 0 0 10px; }
+
+      .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+      .chip { position: relative; display: flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: 12px; padding: 8px 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--elevated); color: var(--muted); transition: all .2s; }
+      .chip .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--subtle); flex: none; transition: background .2s; }
+      .chip.current { color: var(--fg); border-color: var(--accent-border); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent-border); }
+      .chip.done { color: var(--subtle); border-style: dashed; }
+      .chip.terminal { opacity: 0.55; }
+      .chip.flash { background: rgba(251,134,58,0.28); }
+      .chip-arrow { align-self: center; color: var(--subtle); font-family: var(--mono); font-size: 11px; }
+
+      .current-panel { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--elevated); margin-bottom: 14px; }
+      .current-panel .swatch { width: 36px; height: 36px; border-radius: 8px; flex: none; box-shadow: 0 0 0 1px rgba(0,0,0,0.3); }
+      .current-panel .cp-meta { min-width: 0; }
+      .current-panel .cp-k { font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--subtle); }
+      .current-panel .cp-name { font-family: var(--mono); font-size: 16px; font-weight: 700; color: var(--fg); }
+      .current-panel .cp-label { font-size: 12px; color: var(--muted); }
+
+      .sm-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+      .sm-actions .grow { flex: 1; min-width: 130px; }
+
+      /* ---- contrast panel ---- */
+      .contrast { padding: 16px; }
+      .input-row { display: flex; gap: 8px; margin-bottom: 14px; }
+      .input-row input { flex: 1; background: var(--elevated); color: var(--fg); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 12px; font: 13px var(--mono); }
+      .input-row input:focus { outline: none; border-color: var(--accent-border); }
+
+      .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      @media (max-width: 560px) { .compare { grid-template-columns: 1fr; } }
+
+      .panel { border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 14px; background: var(--elevated); }
+      .panel .ph { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; }
+      .panel .ph .pn { font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--fg); }
+      .panel .ph .badge { margin-left: auto; font-family: var(--mono); font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; }
+      .badge.loose { color: var(--danger); border: 1px solid rgba(240,104,104,0.4); background: rgba(240,104,104,0.1); }
+      .badge.strict { color: var(--success); border: 1px solid rgba(92,198,111,0.4); background: rgba(92,198,111,0.1); }
+      .panel .pv { font-family: var(--mono); font-size: 13px; min-height: 22px; }
+      .panel .pstate { margin-top: 8px; font-size: 12px; line-height: 1.5; }
+      .pstate.bad { color: var(--danger); }
+      .pstate.ok { color: var(--success); }
+      .pstate.idle { color: var(--subtle); }
+
+      /* ---- console ---- */
+      .console { margin-top: 16px; }
+      .console-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+      .console-bar .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+      .log { background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px 12px; font-family: var(--mono); font-size: 11.5px; line-height: 1.7; min-height: 92px; max-height: 150px; overflow-y: auto; }
+      .log .ln { white-space: pre-wrap; }
+      .log .muted { color: var(--subtle); }
+      .log .c-accent { color: var(--accent); }
+      .log .c-info { color: var(--info); }
+      .log .c-success { color: var(--success); }
+      .log .c-danger { color: var(--danger); }
+      .log .c-fg { color: var(--fg); }
+
+      .hint { margin-top: 12px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <div class="topline">
+      <span class="kw">enum</span>
+      <span class="nm">OrderStatus</span>
+      <span class="tag">fixed set · 5 members</span>
+    </div>
+
+    <!-- STATE MACHINE -->
+    <div class="card sm-card">
+      <div class="section-lab">the enum's only members — current value highlighted</div>
+      <div class="chips" id="chips"></div>
+
+      <div class="current-panel">
+        <div class="swatch" id="cp-swatch"></div>
+        <div class="cp-meta">
+          <div class="cp-k">current value · data carried by this constant</div>
+          <div class="cp-name" id="cp-name">PENDING</div>
+          <div class="cp-label" id="cp-label">Awaiting payment</div>
+        </div>
+      </div>
+
+      <div class="sm-actions">
+        <button class="btn primary grow" id="btn-next" onclick="advance()">status.next() →</button>
+        <button class="btn" id="btn-cancel" onclick="cancel()">Cancel order</button>
+        <button class="btn sm" onclick="resetSM()">Reset</button>
+      </div>
+    </div>
+
+    <!-- CONTRAST -->
+    <div class="card contrast">
+      <div class="section-lab">magic string vs enum — type a status, then Set it both ways</div>
+      <div class="input-row">
+        <input id="typed" type="text" placeholder="try: shipped … or shippd … or frozen" value="shippd" />
+        <button class="btn primary" onclick="setBoth()">Set →</button>
+      </div>
+      <div class="compare">
+        <div class="panel">
+          <div class="ph">
+            <span class="pn">status: string</span>
+            <span class="badge loose">magic value</span>
+          </div>
+          <div class="pv" id="loose-val"><span class="muted">—</span></div>
+          <div class="pstate idle" id="loose-state">No value set yet.</div>
+        </div>
+        <div class="panel">
+          <div class="ph">
+            <span class="pn">status: OrderStatus</span>
+            <span class="badge strict">enum</span>
+          </div>
+          <div class="pv" id="strict-val"><span class="muted">—</span></div>
+          <div class="pstate idle" id="strict-state">No value set yet.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONSOLE -->
+    <div class="console">
+      <div class="console-bar">
+        <span class="dot"></span>
+        <span class="lab">console</span>
+      </div>
+      <div class="log" id="log"></div>
+      <div class="hint">
+        <span class="b">▸</span>
+        <span>The chips are the <b style="color:var(--fg)">only</b> values the type can hold. The state machine refuses illegal steps; the enum panel refuses values outside the set. <em>Only valid values exist.</em></span>
+      </div>
+    </div>
+
+    <script>
+      // The enum: a closed set of named constants, each carrying data (label, color)
+      // and an implicit ordering for valid transitions.
+      var ORDER = [
+        { name: "PENDING",   label: "Awaiting payment", color: "#f0a020" },
+        { name: "PAID",      label: "Payment received", color: "#5e9ff6" },
+        { name: "SHIPPED",   label: "On its way",       color: "#a78bfa" },
+        { name: "DELIVERED", label: "Delivered",        color: "#5cc66f" },
+        { name: "CANCELLED", label: "Cancelled",        color: "#f06868" },
+      ];
+      // valid forward path is the first four, in order; CANCELLED is reachable
+      // from any non-terminal state but is itself terminal.
+      var FLOW = ["PENDING", "PAID", "SHIPPED", "DELIVERED"];
+
+      var current = "PENDING"; // seed state on load
+
+      function byName(n) {
+        for (var i = 0; i < ORDER.length; i++) if (ORDER[i].name === n) return ORDER[i];
+        return null;
+      }
+      function flowIndex(n) { return FLOW.indexOf(n); }
+      function isTerminal(n) { return n === "DELIVERED" || n === "CANCELLED"; }
+
+      function log(html, cls) {
+        var box = document.getElementById("log");
+        var line = document.createElement("div");
+        line.className = "ln" + (cls ? " " + cls : "");
+        line.innerHTML = html;
+        box.appendChild(line);
+        while (box.children.length > 9) box.removeChild(box.firstChild);
+        box.scrollTop = box.scrollHeight;
+      }
+
+      function flashChip(n) {
+        var el = document.querySelector('[data-chip="' + n + '"]');
+        if (!el) return;
+        el.classList.add("flash");
+        setTimeout(function () { el.classList.remove("flash"); }, 320);
+      }
+
+      function renderChips() {
+        var host = document.getElementById("chips");
+        var html = "";
+        ORDER.forEach(function (m, i) {
+          var cls = "chip";
+          if (m.name === current) cls += " current";
+          else if (m.name !== "CANCELLED" && flowIndex(m.name) > -1 &&
+                   flowIndex(m.name) < flowIndex(current)) cls += " done";
+          if (isTerminal(m.name) && m.name !== current) cls += " terminal";
+          html += '<span class="' + cls + '" data-chip="' + m.name + '">' +
+                    '<span class="dot" style="background:' +
+                    (m.name === current ? m.color : (cls.indexOf("done") > -1 ? m.color : "var(--subtle)")) +
+                    '"></span>' + m.name + '</span>';
+          // arrow between the four flow members
+          if (i < FLOW.length - 1) html += '<span class="chip-arrow">→</span>';
+        });
+        host.innerHTML = html;
+      }
+
+      function renderCurrent() {
+        var m = byName(current);
+        document.getElementById("cp-swatch").style.background = m.color;
+        document.getElementById("cp-name").textContent = m.name;
+        document.getElementById("cp-label").textContent = m.label;
+        // disable next on terminal states
+        document.getElementById("btn-next").disabled = isTerminal(current);
+        document.getElementById("btn-cancel").disabled = isTerminal(current);
+      }
+
+      function setCurrent(n) {
+        current = n;
+        renderChips();
+        renderCurrent();
+      }
+
+      function advance() {
+        var idx = flowIndex(current);
+        if (idx === -1 || idx >= FLOW.length - 1) {
+          // terminal or off-flow — refuse
+          log('<span class="c-fg">' + current + '</span>.next() <span class="muted">→</span> ' +
+              '<span class="c-danger">refused</span> <span class="muted">— ' + current +
+              ' is a final state, no next() exists</span>', "c-danger");
+          flashChip(current);
+          return;
+        }
+        var next = FLOW[idx + 1];
+        var nm = byName(next);
+        setCurrent(next);
+        flashChip(next);
+        log('<span class="c-fg">' + FLOW[idx] + '</span>.next() <span class="muted">→</span> ' +
+            '<span class="c-success">' + next + '</span> ' +
+            '<span class="muted">{ label: "' + nm.label + '", color: ' + nm.color + ' }</span>', "c-info");
+      }
+
+      function cancel() {
+        if (isTerminal(current)) {
+          log('cancel() <span class="muted">→</span> <span class="c-danger">refused</span> ' +
+              '<span class="muted">— ' + current + ' is final and cannot be cancelled</span>', "c-danger");
+          flashChip(current);
+          return;
+        }
+        var from = current;
+        setCurrent("CANCELLED");
+        flashChip("CANCELLED");
+        log('<span class="c-fg">' + from + '</span> <span class="muted">→</span> ' +
+            '<span class="c-accent">CANCELLED</span> <span class="muted">— legal from any open state</span>', "c-accent");
+      }
+
+      function resetSM() {
+        setCurrent("PENDING");
+        log('<span class="muted">// reset — seeded back to PENDING</span>');
+      }
+
+      // ---- contrast: magic string vs enum ----
+      function setBoth() {
+        var raw = document.getElementById("typed").value.trim();
+        if (!raw) {
+          log('<span class="muted">// type a status string first</span>');
+          return;
+        }
+        var upper = raw.toUpperCase();
+        var match = byName(upper);
+
+        // magic-string version: accepts ANYTHING
+        var looseVal = document.getElementById("loose-val");
+        var looseState = document.getElementById("loose-state");
+        looseVal.innerHTML = '<span class="c-fg">"' + raw + '"</span>';
+        if (match) {
+          looseState.className = "pstate ok";
+          looseState.textContent = "Accepted (this one happens to be real).";
+        } else {
+          looseState.className = "pstate bad";
+          looseState.textContent = "Accepted — but \"" + raw + "\" is an invalid state. Bug shipped.";
+        }
+
+        // enum version: only the finite set is allowed
+        var strictVal = document.getElementById("strict-val");
+        var strictState = document.getElementById("strict-state");
+        if (match) {
+          strictVal.innerHTML = '<span class="c-success">OrderStatus.' + match.name + '</span>';
+          strictState.className = "pstate ok";
+          strictState.textContent = "Valid member — assigned.";
+          log('OrderStatus("' + raw + '") <span class="muted">→</span> ' +
+              '<span class="c-success">OrderStatus.' + match.name + '</span>', "c-success");
+        } else {
+          strictVal.innerHTML = '<span class="c-danger">✗ rejected</span>';
+          strictState.className = "pstate bad";
+          strictState.textContent = "\"" + raw + "\" is not a member of OrderStatus. Refused.";
+          log('OrderStatus("' + raw + '") <span class="muted">→</span> ' +
+              '<span class="c-danger">rejected</span> <span class="muted">— not in the finite set</span>', "c-danger");
+        }
+      }
+
+      // ---- init ----
+      renderChips();
+      renderCurrent();
+      log('<span class="muted">// seeded: status = </span><span class="c-accent">OrderStatus.PENDING</span>');
+      log('<span class="muted">// press next() to advance, or test a typed string below</span>');
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

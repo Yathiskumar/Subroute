@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Complete Graphs</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f; --success-bg: rgba(92,198,111,0.14); --success-bd: rgba(92,198,111,0.45);
+        --danger: #f06868;  --danger-bg: rgba(240,104,104,0.14); --danger-bd: rgba(240,104,104,0.45);
+        --warning: #f0b568; --warning-bg: rgba(240,181,104,0.14); --warning-bd: rgba(240,181,104,0.45);
+        --info: #5e9ff6;    --info-bg:    rgba(94,159,246,0.16); --info-bd:    rgba(94,159,246,0.45);
+        --purple: #a78bfa;  --purple-bg:  rgba(167,139,250,0.16); --purple-bd:  rgba(167,139,250,0.45);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --radius-lg: 14px; --radius-md: 8px; --radius-sm: 6px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; }
+      body {
+        padding: 18px 18px 24px;
+        background-image:
+          radial-gradient(1200px 600px at 50% -200px, rgba(251,134,58,0.06), transparent),
+          linear-gradient(to right, rgba(255,255,255,0.020) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.020) 1px, transparent 1px);
+        background-size: auto, 40px 40px, 40px 40px;
+      }
+      .container { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+      button { background: var(--elevated); color: var(--fg); font: 500 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; padding: 9px 12px; transition: filter 150ms ease, transform 100ms ease, background 150ms ease, border-color 150ms ease; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+      button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); color: var(--fg); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+      button.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); color: #1a1003; }
+      button.ghost { background: transparent; }
+      button i { font-size: 14px; }
+      select { background: var(--elevated); color: var(--fg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px 9px; font: 500 12px var(--sans); }
+      input[type="range"] { accent-color: var(--accent); }
+
+      .tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+      .tab { background: var(--elevated); border: 1px solid var(--border); color: var(--muted); border-radius: 999px; padding: 7px 13px; font: 500 11.5px var(--sans); cursor: pointer; transition: all 150ms ease; }
+      .tab:hover { border-color: var(--border-strong); color: var(--fg); }
+      .tab.active { background: var(--accent); color: #1a1003; border-color: transparent; font-weight: 600; }
+
+      .hero { background: linear-gradient(180deg, rgba(255,255,255,0.014), transparent), var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px 12px; position: relative; overflow: hidden; }
+      .hero::before { content: ""; position: absolute; inset: 0; background: radial-gradient(420px 240px at 50% 0%, rgba(94,159,246,0.05), transparent 60%); pointer-events: none; }
+      .hero-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; position: relative; z-index: 1; gap: 12px; flex-wrap: wrap; }
+      .ttl { font: 600 11.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .legend { font-size: 11px; color: var(--muted); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      .legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: -1px; margin-right: 4px; }
+
+      .graph-wrap { position: relative; z-index: 1; }
+      svg.graph { width: 100%; height: 290px; display: block; touch-action: none; }
+      .edge { stroke: var(--border-strong); stroke-width: 2.4; transition: stroke 220ms ease, stroke-width 220ms ease, opacity 220ms ease; }
+      .edge.active { stroke: var(--warning); stroke-width: 4; }
+      .edge.tree { stroke: var(--success); stroke-width: 3; }
+      .edge.path { stroke: var(--accent); stroke-width: 4.5; }
+      .edge.dim { opacity: 0.28; }
+      .edge.hit { stroke: transparent; stroke-width: 18; }
+      .node-circ { stroke-width: 2.4; transition: fill 220ms ease, stroke 220ms ease; }
+      .node-circ.dim { fill: var(--elevated); stroke: var(--border-strong); }
+      .node-circ.seen { fill: rgba(94,159,246,0.20); stroke: var(--info); }
+      .node-circ.active { fill: var(--warning); stroke: var(--warning); }
+      .node-circ.done { fill: rgba(92,198,111,0.22); stroke: var(--success); }
+      .node-circ.path { fill: rgba(251,134,58,0.22); stroke: var(--accent); }
+      .node-circ.pop { animation: pop 0.32s cubic-bezier(0.34, 1.56, 0.64, 1); }
+      @keyframes pop { from { transform: scale(0.92); } 50% { transform: scale(1.10); } to { transform: scale(1); } }
+      .node-lbl { font: 600 13px var(--mono); fill: var(--fg); text-anchor: middle; pointer-events: none; user-select: none; }
+      .node-badge { font: 600 10.5px var(--mono); fill: var(--purple); text-anchor: middle; pointer-events: none; }
+
+      .side { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; min-height: 56px; }
+      .side .h { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 7px; }
+      .side .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; min-height: 28px; }
+      .chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 6px; font: 600 11.5px var(--mono); border: 1px solid var(--border-strong); background: var(--elevated); color: var(--fg); }
+      .chip.v { background: rgba(92,198,111,0.18); color: var(--success); border-color: var(--success-bd); }
+      .chip.i { background: rgba(94,159,246,0.16); color: var(--info); border-color: var(--info-bd); }
+      .empty { font: 500 11.5px var(--mono); color: var(--subtle); }
+      .side .total { margin-left: auto; font: 600 12px var(--mono); color: var(--accent); }
+
+      .narration { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; position: relative; overflow: hidden; transition: border-color 350ms ease; }
+      .narration::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--border-strong); transition: background 350ms ease; }
+      .narration.add::before { background: var(--info); } .narration.add { border-color: rgba(94,159,246,0.30); }
+      .narration.calc::before { background: var(--purple); } .narration.calc { border-color: rgba(167,139,250,0.30); }
+      .narration.path::before { background: var(--accent); } .narration.path { border-color: rgba(251,134,58,0.32); }
+      .narration.done::before { background: var(--success); } .narration.done { border-color: rgba(92,198,111,0.45); }
+      .narr-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+      .badge { font: 600 10.5px var(--mono); padding: 4px 9px; border-radius: 999px; letter-spacing: 0.4px; text-transform: uppercase; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); color: var(--muted); background: var(--elevated); }
+      .badge.step { background: var(--elevated); border-color: var(--border-strong); color: var(--fg); }
+      .badge.event { background: transparent; }
+      .badge.event.add { color: var(--info); border-color: var(--info-bd); }
+      .badge.event.calc { color: var(--purple); border-color: var(--purple-bd); }
+      .badge.event.path { color: var(--accent); border-color: var(--warning-bd); }
+      .badge.event.done { color: var(--success); border-color: var(--success-bd); }
+      .narr-text { margin: 0; font-size: 14px; line-height: 1.55; color: var(--fg); }
+      .narr-text strong { color: var(--fg); font-weight: 600; }
+      .narr-text code { font-family: var(--mono); background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; color: var(--accent); font-size: 12px; }
+
+      .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+      .controls .spacer { flex: 1; }
+      .speed-wrap { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font: 500 11px var(--mono); }
+      .speed-wrap input[type="range"] { width: 80px; }
+      .n-wrap { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font: 500 11px var(--mono); }
+      .n-wrap input[type="range"] { width: 100px; }
+      .n-wrap .nval { color: var(--accent); font-weight: 600; min-width: 14px; text-align: center; }
+      .kbd { font-family: var(--mono); font-size: 10.5px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); color: var(--muted); border: 1px solid var(--border); }
+      .hint { font: 11px var(--mono); color: var(--subtle); display: inline-flex; align-items: center; gap: 5px; }
+
+      .free-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; display: none; flex-direction: column; gap: 10px; }
+      .free-card.show { display: flex; }
+      .free-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+      .free-note { font: 11.5px var(--mono); color: var(--muted); }
+
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; }
+      .stat .label { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+      .stat .value { font: 600 22px var(--mono); margin-top: 4px; line-height: 1; }
+
+      @media (max-width: 540px) {
+        .stats { grid-template-columns: repeat(2, 1fr); }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2 class="sr-only">A complete graph Kₙ: build it edge by edge, count the edges via degrees, contrast its density against a sparse tree, or explore it with the n slider in free play.</h2>
+
+      <div class="tabs" id="tabs">
+        <button class="tab active" data-sc="0">Build Kₙ</button>
+        <button class="tab" data-sc="1">Counting the edges</button>
+        <button class="tab" data-sc="2">Density extreme</button>
+        <button class="tab" data-sc="3">Free play</button>
+      </div>
+
+      <div class="hero">
+        <div class="hero-head">
+          <span class="ttl" id="hero-ttl">Complete · every pair joined</span>
+          <span class="legend">
+            <span><span class="sw" style="background:var(--elevated);border:1px solid var(--border-strong)"></span>vertex</span>
+            <span><span class="sw" style="background:var(--warning)"></span>active</span>
+            <span><span class="sw" style="background:rgba(92,198,111,0.25);border:1px solid var(--success-bd)"></span>joined</span>
+            <span><span class="sw" style="background:rgba(251,134,58,0.25);border:1px solid var(--warning-bd)"></span>tree</span>
+          </span>
+        </div>
+        <div class="graph-wrap">
+          <svg id="graph" class="graph" viewBox="0 0 560 300" aria-hidden="true">
+            <g id="edges"></g>
+            <g id="nodes"></g>
+          </svg>
+        </div>
+      </div>
+
+      <div class="side">
+        <div class="h" id="side-h">Edges drawn so far</div>
+        <div id="side-row" class="row"><span class="empty">—</span></div>
+      </div>
+
+      <div id="narration" class="narration">
+        <div class="narr-meta">
+          <span id="narr-step" class="badge step">Step 0 / 0</span>
+          <span id="narr-event" class="badge event" style="display:none"></span>
+        </div>
+        <p id="narr-text" class="narr-text"><strong>Press Play.</strong> A complete graph K<sub>n</sub> joins every single pair of vertices — the densest simple graph possible.</p>
+      </div>
+
+      <div class="controls" id="controls">
+        <button id="btn-prev"><i class="ti ti-chevron-left"></i>Back</button>
+        <button id="btn-play" class="primary"><i id="play-icon" class="ti ti-player-play"></i><span id="play-label">Play</span></button>
+        <button id="btn-next"><i class="ti ti-chevron-right"></i>Step</button>
+        <button id="btn-restart" class="ghost"><i class="ti ti-refresh"></i>Restart</button>
+        <span class="spacer"></span>
+        <span class="n-wrap"><span>n</span><input id="n" type="range" min="2" max="10" step="1" value="6" /><span class="nval" id="n-val">6</span></span>
+        <span class="speed-wrap"><span>Speed</span><input id="speed" type="range" min="1" max="10" step="1" value="5" /></span>
+      </div>
+
+      <div class="free-card" id="free-card">
+        <div class="free-row">
+          <span class="n-wrap"><span>n</span><input id="f-n" type="range" min="2" max="10" step="1" value="6" /><span class="nval" id="f-n-val">6</span></span>
+          <button id="f-all"><i class="ti ti-affiliate"></i>Show all</button>
+          <button id="f-clear" class="ghost"><i class="ti ti-eraser"></i>Clear</button>
+        </div>
+        <span class="free-note" id="free-note">Drag the n slider to relayout the circle. Click a vertex then another to toggle an edge; click Show all to complete the graph.</span>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="label" id="s1-label">graph</div><div id="s-k" class="value" style="color:var(--info)">K<sub>6</sub></div></div>
+        <div class="stat"><div class="label">edges</div><div id="s-e" class="value" style="color:var(--accent)">0</div></div>
+        <div class="stat"><div class="label" id="s3-label">n(n−1)/2</div><div id="s-f" class="value" style="color:var(--purple)">0</div></div>
+        <div class="stat"><div class="label" id="s4-label">degree (n−1)</div><div id="s-d" class="value" style="color:var(--success)">0</div></div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        var SUB = ['₀','₁','₂','₃','₄','₅','₆','₇','₈','₉'];
+        function sub(num){ return String(num).split('').map(function(d){ return SUB[+d]; }).join(''); }
+        function kLabel(num){ return 'K' + sub(num); }
+
+        var CX = 280, CY = 145, R = 118;
+        var n = 6;          // current vertex count
+        var pos = {};       // id -> [x,y]
+        var edges = [];     // [a,b] string-id pairs
+
+        function vid(i){ return String(i); }
+        function vertexIds(){ var a = []; for (var i = 0; i < n; i++) a.push(vid(i)); return a; }
+
+        function layout() {
+          pos = {};
+          for (var i = 0; i < n; i++) {
+            var angle = -Math.PI / 2 + (i * 2 * Math.PI) / n;
+            pos[vid(i)] = [CX + R * Math.cos(angle), CY + R * Math.sin(angle)];
+          }
+        }
+        function allPairs() {
+          var out = [];
+          for (var i = 0; i < n; i++) for (var j = i + 1; j < n; j++) out.push([vid(i), vid(j)]);
+          return out;
+        }
+        function setN(v, withEdges) {
+          n = v; layout();
+          edges = withEdges ? allPairs() : [];
+        }
+        setN(6, false);
+
+        var NODES = function(){ return vertexIds(); };
+        function ekey(a,b){ return [+a,+b].sort(function(x,y){return x-y;}).join('-'); }
+        function hasEdge(a,b){ return edges.some(function(e){ return ekey(e[0],e[1])===ekey(a,b); }); }
+        function degree(id){ return edges.reduce(function(d,e){ return d + (e[0]===id||e[1]===id?1:0); }, 0); }
+        function formula(){ return (n * (n - 1)) / 2; }
+
+        var nodesG = document.getElementById('nodes');
+        var edgesG = document.getElementById('edges');
+        var nodeEls = {}, edgeEls = {}, edgeHit = {};
+
+        function buildSVG() {
+          edgesG.innerHTML = ''; nodesG.innerHTML = ''; nodeEls = {}; edgeEls = {}; edgeHit = {};
+          // build SVG elements for ALL possible pairs so scripted steps can reveal them
+          allPairs().forEach(function(e){
+            var k = ekey(e[0],e[1]);
+            var hit = document.createElementNS('http://www.w3.org/2000/svg','line');
+            hit.setAttribute('class','edge hit'); edgeHit[k] = hit; edgesG.appendChild(hit);
+            var ln = document.createElementNS('http://www.w3.org/2000/svg','line');
+            ln.setAttribute('class','edge dim'); edgeEls[k] = ln; edgesG.appendChild(ln);
+          });
+          NODES().forEach(function(id){
+            var c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+            c.setAttribute('r', 22); c.setAttribute('class','node-circ dim');
+            c.dataset.id = id;
+            var t = document.createElementNS('http://www.w3.org/2000/svg','text');
+            t.setAttribute('class','node-lbl'); t.textContent = id; t.dataset.id = id;
+            var b = document.createElementNS('http://www.w3.org/2000/svg','text');
+            b.setAttribute('class','node-badge');
+            nodesG.appendChild(c); nodesG.appendChild(t); nodesG.appendChild(b);
+            nodeEls[id] = { c: c, t: t, b: b };
+          });
+          positionSVG();
+        }
+        function positionSVG() {
+          Object.keys(edgeEls).forEach(function(k){
+            var p = k.split('-'); var a = pos[p[0]], b = pos[p[1]];
+            if (!a || !b) return;
+            [edgeEls[k], edgeHit[k]].forEach(function(ln){
+              ln.setAttribute('x1',a[0]); ln.setAttribute('y1',a[1]);
+              ln.setAttribute('x2',b[0]); ln.setAttribute('y2',b[1]);
+            });
+          });
+          NODES().forEach(function(id){
+            var x = pos[id][0], y = pos[id][1];
+            nodeEls[id].c.setAttribute('cx',x); nodeEls[id].c.setAttribute('cy',y);
+            nodeEls[id].t.setAttribute('x',x); nodeEls[id].t.setAttribute('y',y+5);
+            nodeEls[id].b.setAttribute('x',x); nodeEls[id].b.setAttribute('y',y-30);
+          });
+        }
+
+        // ---- scripted scenarios produce arrays of step snapshots ----
+        function snap(o){
+          return { nodeRole: o.nodeRole||{}, edgeRole: o.edgeRole||{}, badge: o.badge||{},
+                   side: o.side||null, sideH: o.sideH||null, msg: o.msg, event: o.event||null,
+                   stat3: o.stat3, stat4: o.stat4 };
+        }
+
+        // SCENARIO 0 — Build K_n edge by edge with a running count
+        function scBuild() {
+          var s = [];
+          var ids = vertexIds(), pairs = allPairs(), total = formula();
+          s.push(snap({ msg:'<strong>'+kLabel(n)+'</strong> has <strong>'+n+' vertices</strong> on a circle, not yet connected. We will draw <em>every</em> pair exactly once — the count should land on <code>'+total+'</code>.', event:'add', sideH:'Edges drawn so far', side:[] }));
+          var added = [], chips = [];
+          pairs.forEach(function(e){
+            var k = ekey(e[0],e[1]); added.push(k);
+            var er = {}; added.forEach(function(kk){ er[kk]='tree'; });
+            var nr = {}; nr[e[0]]='active'; nr[e[1]]='active';
+            chips.push({ t:'{'+e[0]+','+e[1]+'}', cls:'i' });
+            s.push(snap({ msg:'Join <code>{'+e[0]+', '+e[1]+'}</code> — edge <strong>'+added.length+'</strong> of <code>'+total+'</code>. Every new vertex adds a fresh fan of edges to all the ones already placed.', event:'add', edgeRole: er, nodeRole: nr, sideH:'Edges drawn so far', side: chips.slice(), stat3: total }));
+          });
+          var allTree = {}; pairs.forEach(function(e){ allTree[ekey(e[0],e[1])]='tree'; });
+          var allDone = {}; ids.forEach(function(id){ allDone[id]='done'; });
+          s.push(snap({ msg:'<strong>Complete.</strong> All <code>'+total+'</code> pairs are joined — this is <strong>'+kLabel(n)+'</strong>. The edge count hit exactly <code>n(n−1)/2 = '+n+'·'+(n-1)+'/2 = '+total+'</code>.', event:'done', edgeRole: allTree, nodeRole: allDone, sideH:'Edges drawn so far', side: chips.slice(), stat3: total }));
+          return s;
+        }
+
+        // SCENARIO 1 — derive n(n-1)/2 by walking each vertex's degree
+        function scCount() {
+          var s = [];
+          var ids = vertexIds(), pairs = allPairs(), total = formula();
+          var allTree = {}; pairs.forEach(function(e){ allTree[ekey(e[0],e[1])]='tree'; });
+          s.push(snap({ msg:'Start from the finished <strong>'+kLabel(n)+'</strong>. We will count the edges <em>without listing them</em>: walk every vertex and add up how many edges touch it.', event:'calc', edgeRole: allTree, sideH:'Running Σ degree', side:[], stat3: total }));
+          var sum = 0, chips = [];
+          ids.forEach(function(id){
+            var d = n - 1; sum += d; chips.push({ t:id+'(+'+d+')', cls:'v' });
+            var er = {}; pairs.forEach(function(e){ if(e[0]===id||e[1]===id) er[ekey(e[0],e[1])]='active'; else er[ekey(e[0],e[1])]='tree'; });
+            var nr = {}; nr[id]='active';
+            var bb = {}; bb[id]='deg '+d;
+            s.push(snap({ msg:'Vertex <strong>'+id+'</strong> connects to the other <code>'+(n-1)+'</code> vertices, so its degree is <code>n−1 = '+d+'</code>. Running Σ degree → <code>'+sum+'</code>.', event:'calc', edgeRole: er, nodeRole: nr, badge: bb, sideH:'Running Σ degree', side: chips.slice(), stat3: total }));
+          });
+          var allDone = {}; ids.forEach(function(id){ allDone[id]='done'; });
+          s.push(snap({ msg:'<strong>Σ degree = '+n+'·('+n+'−1) = '+sum+'.</strong> But every edge was counted from <em>both</em> its endpoints, so divide by 2 → <code>n(n−1)/2 = '+total+'</code>. Each degree reads <code>n−1 = '+(n-1)+'</code>, so '+kLabel(n)+' is (n−1)-regular.', event:'done', edgeRole: allTree, nodeRole: allDone, sideH:'Running Σ degree', side: chips.slice(), stat3: total }));
+          return s;
+        }
+
+        // SCENARIO 2 — density extreme: K_n vs a sparse spanning tree (n-1 edges)
+        function scDensity() {
+          var s = [];
+          var ids = vertexIds(), pairs = allPairs(), total = formula();
+          var treeEdges = []; for (var i = 1; i < n; i++) treeEdges.push(ekey(vid(0), vid(i))); // star: n-1 edges
+          var allTree = {}; pairs.forEach(function(e){ allTree[ekey(e[0],e[1])]='tree'; });
+          s.push(snap({ msg:'Here is the full <strong>'+kLabel(n)+'</strong> with all <code>'+total+'</code> edges — the densest a simple graph on '+n+' vertices can get.', event:'path', edgeRole: allTree, sideH:'K'+sub(n)+' edges vs tree edges', side:[{t:kLabel(n)+': '+total, cls:'i'}], stat3: total, stat4: n-1 }));
+          var er = {}; pairs.forEach(function(e){ er[ekey(e[0],e[1])] = (treeEdges.indexOf(ekey(e[0],e[1])) >= 0 ? 'path' : 'dim'); });
+          var nr = {}; ids.forEach(function(id){ nr[id] = 'done'; });
+          s.push(snap({ msg:'Now keep only enough edges to stay connected: a <strong>spanning tree</strong> needs just <code>n−1 = '+(n-1)+'</code> edges. The faded lines are everything '+kLabel(n)+' had that a tree throws away.', event:'path', edgeRole: er, nodeRole: nr, sideH:'K'+sub(n)+' edges vs tree edges', side:[{t:kLabel(n)+': '+total, cls:'i'},{t:'tree: '+(n-1), cls:'v'}], stat3: total, stat4: n-1 }));
+          var ratio = (n - 1) === 0 ? 0 : total / (n - 1);
+          s.push(snap({ msg:'<strong>'+total+' vs '+(n-1)+'.</strong> The complete graph carries <code>'+ratio.toFixed(1)+'×</code> the tree’s edges. Grow n and the gap explodes — <em>quadratic</em> n(n−1)/2 against <em>linear</em> n−1 — which is exactly why a dense graph favours an adjacency matrix over a list.', event:'done', edgeRole: er, nodeRole: nr, sideH:'K'+sub(n)+' edges vs tree edges', side:[{t:kLabel(n)+': '+total, cls:'i'},{t:'tree: '+(n-1), cls:'v'},{t:ratio.toFixed(1)+'×', cls:''}], stat3: total, stat4: n-1 }));
+          return s;
+        }
+
+        var SCENARIOS = [scBuild, scCount, scDensity];
+        var SC_TTL = ['Complete · build it edge by edge','Complete · counting the edges','Complete · density extreme','Complete · free play — drag n'];
+        var SC_S3LBL = ['n(n−1)/2','n(n−1)/2','Kₙ edges','n(n−1)/2'];
+        var SC_S4LBL = ['degree (n−1)','degree (n−1)','tree edges (n−1)','degree (n−1)'];
+
+        var sc = 0, steps = [], idx = 0, playing = false, timer = null, freeMode = false;
+
+        var narrEl = document.getElementById('narration');
+        var narrText = document.getElementById('narr-text');
+        var narrStep = document.getElementById('narr-step');
+        var narrEvent = document.getElementById('narr-event');
+        var sideH = document.getElementById('side-h');
+        var sideRow = document.getElementById('side-row');
+        var sK = document.getElementById('s-k'), sE = document.getElementById('s-e'), sF = document.getElementById('s-f'), sD = document.getElementById('s-d');
+        var heroTtl = document.getElementById('hero-ttl');
+        var btnPrev = document.getElementById('btn-prev'), btnNext = document.getElementById('btn-next');
+        var btnPlay = document.getElementById('btn-play'), btnRestart = document.getElementById('btn-restart');
+        var playIcon = document.getElementById('play-icon'), playLabel = document.getElementById('play-label');
+        var speedEl = document.getElementById('speed');
+        var nEl = document.getElementById('n'), nVal = document.getElementById('n-val');
+        var fNEl = document.getElementById('f-n'), fNVal = document.getElementById('f-n-val');
+        var controls = document.getElementById('controls'), freeCard = document.getElementById('free-card');
+        var freeNote = document.getElementById('free-note');
+
+        function setSide(h, arr) {
+          sideH.textContent = h; sideRow.innerHTML = '';
+          if (!arr || arr.length === 0) { var em = document.createElement('span'); em.className='empty'; em.textContent='—'; sideRow.appendChild(em); return; }
+          arr.forEach(function(it){ var c = document.createElement('span'); c.className='chip '+(it.cls||''); c.textContent = it.t; sideRow.appendChild(c); });
+        }
+
+        function renderStep(st) {
+          NODES().forEach(function(id){
+            nodeEls[id].c.setAttribute('class','node-circ '+(st.nodeRole[id]||'dim'));
+            nodeEls[id].b.textContent = st.badge[id] || '';
+          });
+          Object.keys(edgeEls).forEach(function(k){
+            edgeEls[k].setAttribute('class','edge '+(st.edgeRole[k]||'dim'));
+          });
+          narrText.innerHTML = st.msg;
+          narrStep.textContent = 'Step ' + idx + ' / ' + (steps.length - 1);
+          narrEl.classList.remove('add','calc','path','done');
+          if (st.event) { narrEl.classList.add(st.event);
+            narrEvent.style.display = ''; narrEvent.className = 'badge event ' + st.event;
+            narrEvent.textContent = st.event === 'add' ? 'add edge' : st.event === 'calc' ? 'count' : st.event === 'path' ? 'compare' : 'done';
+          } else narrEvent.style.display = 'none';
+          if (st.sideH) setSide(st.sideH, st.side);
+          sK.innerHTML = 'K<sub>' + n + '</sub>';
+          sE.textContent = countActiveEdges(st);
+          sF.textContent = (st.stat3 !== undefined ? st.stat3 : formula());
+          sD.textContent = (st.stat4 !== undefined ? st.stat4 : (n - 1));
+        }
+
+        // count how many edges are "drawn" (tree/active/path) in this snapshot
+        function countActiveEdges(st) {
+          var c = 0;
+          Object.keys(st.edgeRole).forEach(function(k){ var r = st.edgeRole[k]; if (r==='tree'||r==='active'||r==='path') c++; });
+          return c;
+        }
+
+        function loadScenario(i) {
+          stop(); sc = i;
+          heroTtl.textContent = SC_TTL[i];
+          document.getElementById('s3-label').textContent = SC_S3LBL[i];
+          document.getElementById('s4-label').textContent = SC_S4LBL[i];
+          freeMode = (i === 3);
+          if (freeMode) {
+            controls.style.display = 'none'; freeCard.classList.add('show');
+            setN(parseInt(fNEl.value, 10), false); buildSVG(); renderFree();
+          } else {
+            controls.style.display = 'flex'; freeCard.classList.remove('show');
+            setN(parseInt(nEl.value, 10), false); buildSVG();
+            steps = SCENARIOS[i](); idx = 0; renderStep(steps[0]);
+          }
+        }
+
+        function next(){ if (idx >= steps.length-1){ stop(); return false; } idx++; renderStep(steps[idx]); if (idx>=steps.length-1) stop(); return true; }
+        function prev(){ if (idx<=0) return; idx--; renderStep(steps[idx]); }
+        function delay(){ return 1150 - parseInt(speedEl.value,10)*95; }
+        function play(){ if (idx>=steps.length-1){ idx=0; renderStep(steps[0]); } playing=true; playLabel.textContent='Pause'; playIcon.className='ti ti-player-pause'; loop(); }
+        function loop(){ if(!playing) return; if(!next()){ stop(); return; } timer=setTimeout(loop, delay()); }
+        function stop(){ playing=false; if(timer){clearTimeout(timer);timer=null;} playLabel.textContent='Play'; playIcon.className='ti ti-player-play'; }
+
+        // ---- free play ----
+        var fpSel = null;
+        function renderFree() {
+          NODES().forEach(function(id){
+            nodeEls[id].c.setAttribute('class','node-circ '+(fpSel === id ? 'active' : (edges.length ? 'done' : 'dim')));
+            nodeEls[id].b.textContent = 'deg '+degree(id);
+          });
+          Object.keys(edgeEls).forEach(function(k){
+            edgeEls[k].setAttribute('class','edge '+(hasEdge(k.split('-')[0], k.split('-')[1]) ? 'tree' : 'dim'));
+          });
+          sK.innerHTML = 'K<sub>' + n + '</sub>';
+          sE.textContent = edges.length;
+          sF.textContent = formula();
+          sD.textContent = n - 1;
+          setSide('Live degrees', NODES().map(function(id){ return {t:id+':'+degree(id), cls:'v'}; }));
+        }
+        function fpFlash(t){ freeNote.textContent = t; }
+
+        function nodeClickFree(id) {
+          if (fpSel === null) { fpSel = id; fpFlash('Selected '+id+'. Click another vertex to toggle the edge.'); }
+          else if (fpSel === id) { fpSel = null; fpFlash('Deselected.'); }
+          else {
+            var k = ekey(fpSel, id);
+            if (hasEdge(fpSel, id)) { edges = edges.filter(function(e){ return ekey(e[0],e[1])!==k; }); fpFlash('Removed edge {'+fpSel+', '+id+'}.'); }
+            else { edges.push([fpSel, id]); fpFlash('Added edge {'+fpSel+', '+id+'}. '+edges.length+' of '+formula()+' for K'+sub(n)+'.'); }
+            fpSel = null;
+          }
+          renderFree();
+        }
+
+        // ---- pointer handling (free play: click to select, drag to move) ----
+        var svg = document.getElementById('graph');
+        var drag = null;
+        function pt(ev){ var r = svg.getBoundingClientRect(); var cx = ev.touches?ev.touches[0].clientX:ev.clientX; var cy = ev.touches?ev.touches[0].clientY:ev.clientY; return { x:(cx-r.left)/r.width*560, y:(cy-r.top)/r.height*300 }; }
+        function down(ev){ if(!freeMode) return; var el = ev.target; if(el.dataset && el.dataset.id){ var id = el.dataset.id, p = pt(ev); drag = { id:id, moved:false, dx:p.x-pos[id][0], dy:p.y-pos[id][1] }; } }
+        function move(ev){ if(!drag) return; var p = pt(ev); var nx = Math.max(26,Math.min(534,p.x-drag.dx)), ny = Math.max(26,Math.min(274,p.y-drag.dy)); if(Math.abs(nx-pos[drag.id][0])>2||Math.abs(ny-pos[drag.id][1])>2) drag.moved=true; pos[drag.id]=[nx,ny]; positionSVG(); ev.preventDefault(); }
+        function up(){ if(!drag) return; if(!drag.moved) nodeClickFree(drag.id); drag=null; }
+        svg.addEventListener('mousedown',down); svg.addEventListener('touchstart',down,{passive:false});
+        window.addEventListener('mousemove',move); window.addEventListener('touchmove',move,{passive:false});
+        window.addEventListener('mouseup',up); window.addEventListener('touchend',up);
+
+        document.getElementById('f-all').addEventListener('click', function(){ edges = allPairs(); fpSel=null; fpFlash('Showed all '+formula()+' edges — this is the complete graph K'+sub(n)+'.'); renderFree(); });
+        document.getElementById('f-clear').addEventListener('click', function(){ edges=[]; fpSel=null; fpFlash('Cleared all edges — '+n+' isolated vertices.'); renderFree(); });
+
+        // n sliders
+        nEl.addEventListener('input', function(){ nVal.textContent = this.value; if(!freeMode){ loadScenario(sc); } });
+        fNEl.addEventListener('input', function(){ fNVal.textContent = this.value; if(freeMode){ setN(parseInt(this.value,10), false); fpSel=null; buildSVG(); fpFlash('n = '+n+' → '+formula()+' edges in the complete graph. Click vertices or Show all.'); renderFree(); } });
+
+        document.querySelectorAll('.tab').forEach(function(tab){ tab.addEventListener('click', function(){
+          document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
+          tab.classList.add('active'); loadScenario(parseInt(tab.dataset.sc,10));
+        }); });
+        btnPlay.addEventListener('click', function(){ playing?stop():play(); });
+        btnNext.addEventListener('click', function(){ stop(); next(); });
+        btnPrev.addEventListener('click', function(){ stop(); prev(); });
+        btnRestart.addEventListener('click', function(){ stop(); idx=0; renderStep(steps[0]); });
+        window.addEventListener('keydown', function(e){ if(freeMode) return;
+          if(e.key==='ArrowLeft'){ stop(); prev(); } else if(e.key==='ArrowRight'){ stop(); next(); }
+          else if(e.key===' '){ e.preventDefault(); playing?stop():play(); } });
+
+        buildSVG();
+        loadScenario(0);
+
+        function postHeight(){ try { parent.postMessage({type:'prototype:height',height:document.body.scrollHeight},'*'); } catch(e){} }
+        new ResizeObserver(postHeight).observe(document.body);
+        postHeight();
+      })();
+    </script>
+  </body>
+</html>
