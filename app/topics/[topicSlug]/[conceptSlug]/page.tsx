@@ -272,10 +272,13 @@ export default async function ConceptDetailPage({
               <SectionHeading
                 kicker="Knowledge check"
                 title="Did the prototype land?"
-                description="Quick questions, answers revealed on submit. No scoring saved."
+                description="Quick questions, answers revealed on submit. Sign in to save your best score."
                 className="mb-6"
               />
-              <QuizContainer items={content?.quiz ?? SAMPLE_QUIZ} />
+              <QuizContainer
+                items={content?.quiz ?? SAMPLE_QUIZ}
+                quizId={`topics/${topic.slug}/${concept.slug}`}
+              />
             </section>
 
             {/* Prev/Next footer */}

@@ -4,8 +4,18 @@
  * the two stay perfectly in sync — change the format in ONE place only.
  */
 
+/** Shared prefix for every per-roadmap localStorage key. */
+export const PROGRESS_KEY_PREFIX = "roadmap-progress:";
+
 export function progressStorageKey(roadmapSlug: string): string {
-  return `roadmap-progress:${roadmapSlug}`;
+  return `${PROGRESS_KEY_PREFIX}${roadmapSlug}`;
+}
+
+/** Recover the roadmap slug from a full storage key, or null if it isn't one. */
+export function roadmapSlugFromKey(key: string): string | null {
+  return key.startsWith(PROGRESS_KEY_PREFIX)
+    ? key.slice(PROGRESS_KEY_PREFIX.length)
+    : null;
 }
 
 /** Stable per-topic id based on its position in the roadmap. */

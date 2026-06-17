@@ -318,10 +318,13 @@ export default async function RoadmapLessonPage({
               <SectionHeading
                 kicker="Knowledge check"
                 title="Did it land?"
-                description="Quick questions, answers revealed on submit. Nothing is scored or saved."
+                description="Quick questions, answers revealed on submit. Sign in to save your best score."
                 className="mb-6"
               />
-              <QuizContainer items={content.quiz} />
+              <QuizContainer
+                items={content.quiz}
+                quizId={`roadmaps/${roadmap.slug}/${topicSlug}`}
+              />
             </section>
 
             {/* Prev / next lesson */}

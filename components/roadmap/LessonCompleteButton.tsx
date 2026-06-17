@@ -1,8 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { Check, Circle } from "lucide-react";
+import Link from "next/link";
+import { Check, Circle, Lock } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { useAuthGate } from "@/components/auth/useAuthGate";
 import {
   PROGRESS_SYNC_EVENT,
   progressStorageKey,
@@ -23,6 +25,7 @@ export function LessonCompleteButton({
 }) {
   const storageKey = progressStorageKey(roadmapSlug);
   const [done, setDone] = React.useState(false);
+  const { gated, loginHref } = useAuthGate();
 
   const read = React.useCallback(() => {
     if (!topicId) return false;
@@ -63,6 +66,22 @@ export function LessonCompleteButton({
   };
 
   if (!topicId) return null;
+
+  // Signed out (with auth configured): prompt sign-in instead of toggling.
+  if (gated) {
+    return (
+      <Link
+        href={loginHref}
+        className={cn(
+          "inline-flex items-center justify-center gap-2 rounded-md border border-border bg-surface-elevated px-3.5 py-2 text-sm font-medium text-foreground transition-colors hover:border-border-strong hover:bg-surface",
+          className,
+        )}
+      >
+        <Lock className="h-4 w-4" />
+        Sign in to mark complete
+      </Link>
+    );
+  }
 
   return (
     <button

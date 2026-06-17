@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils/cn";
 import { Logo } from "./Logo";
 import { ThemeToggle } from "./ThemeToggle";
 import { MobileMenu } from "./MobileMenu";
+import { UserMenu } from "@/components/auth/UserMenu";
 
 const NAV_ITEMS = [
   { href: "/topics", label: "Topics" },
@@ -59,6 +60,7 @@ export function Navbar() {
             <Search className="h-4 w-4" />
           </Link>
           <ThemeToggle />
+          <UserMenu />
           <MobileMenu items={NAV_ITEMS} />
         </div>
       </div>
