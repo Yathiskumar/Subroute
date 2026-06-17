@@ -371,7 +371,8 @@
       }
 
       function renderVerdict(inhCount) {
-        var partsTotal = el("parts-total").textContent;
+        // compute the count directly (don't read it back out of the DOM)
+        var partsTotal = MOVE_KEYS.length + ATTACK_KEYS.length + DEF_KEYS.length + (axisOn ? ARMOR_KEYS.length : 0);
         var v = el("verdict");
         v.innerHTML =
           'Same character, two costs: inheritance needs <span class="vd">' + inhCount + ' separate classes</span>, ' +

@@ -353,6 +353,7 @@
       function classify(conceptId, bucketId, viaAuto) {
         var x = lookup(conceptId);
         if (!x) return;
+        conceptId = x.id; // canonical id from the fixed catalog — never raw drag/DOM input
         var prev = placement[conceptId];
         if (prev === bucketId) return;
         placement[conceptId] = bucketId;
@@ -389,7 +390,9 @@
           chip.addEventListener("dragend", function () { chip.classList.remove("dragging"); });
           chip.addEventListener("click", function (e) {
             e.stopPropagation();
-            var id = chip.getAttribute("data-concept");
+            var cx = lookup(chip.getAttribute("data-concept"));
+            if (!cx) return;
+            var id = cx.id; // canonical id from the fixed catalog, not raw DOM input
             selected = (selected === id) ? null : id;
             render();
             if (selected) log('<span class="muted">selected</span> <span class="c-accent">' + id + '</span> <span class="muted">— now click a bucket</span>');
@@ -398,10 +401,7 @@
       }
 
       function wireDropZones() {
-        var zones = [document.getElementById("tray")].concat(
-          Array.prototype.slice.call(document.querySelectorAll("[data-bucket]"))
-        );
-        // delegate on the containers via document, but attach per-render for buckets:
+        // drop zones are matched live via e.target.closest("[data-bucket]") below
         document.addEventListener("dragover", function (e) {
           var zone = e.target.closest ? e.target.closest("[data-bucket]") : null;
           if (zone) { e.preventDefault(); zone.classList.add("over"); }
