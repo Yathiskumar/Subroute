@@ -15,6 +15,12 @@ import { equalsAndHashcode } from "./lld/equals-and-hashcode";
 import { immutabilityAndValueObjects } from "./lld/immutability-and-value-objects";
 import { genericsAndTemplates } from "./lld/generics-and-templates";
 import { enumsAndConstants } from "./lld/enums-and-constants";
+import { requirementGathering } from "./lld/requirement-gathering";
+import { identifyingEntities } from "./lld/identifying-entities";
+import { graspPrinciples } from "./lld/grasp-principles";
+import { crcCards } from "./lld/crc-cards";
+import { domainModeling } from "./lld/domain-modeling";
+import { apiFirstDesign } from "./lld/api-first-design";
 
 /** Indexed by `${roadmapSlug}/${topicSlug}`. */
 const ROADMAP_LESSONS: Record<string, RoadmapLesson> = {
@@ -34,6 +40,12 @@ const ROADMAP_LESSONS: Record<string, RoadmapLesson> = {
   "lld/immutability-and-value-objects": immutabilityAndValueObjects,
   "lld/generics-and-templates": genericsAndTemplates,
   "lld/enums-and-constants": enumsAndConstants,
+  "lld/requirement-gathering": requirementGathering,
+  "lld/identifying-entities": identifyingEntities,
+  "lld/grasp-principles": graspPrinciples,
+  "lld/crc-cards": crcCards,
+  "lld/domain-modeling": domainModeling,
+  "lld/api-first-design": apiFirstDesign,
 };
 
 export function getRoadmapLesson(

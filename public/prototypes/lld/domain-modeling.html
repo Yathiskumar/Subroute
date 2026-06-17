@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Domain Modeling — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.32);
+        --success: #5cc66f;
+        --info: #5e9ff6;
+        --danger: #f06868;
+        --violet: #a78bfa;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      .lab { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+
+      .toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+      .toolbar .spacer { flex: 1; }
+
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 12px; cursor: pointer; transition: filter .15s, transform .1s, border-color .15s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .btn.primary { background: var(--accent); color: #1a1003; border-color: transparent; }
+      .btn.primary:hover { filter: brightness(1.06); }
+      .btn.primary:disabled { opacity: .45; cursor: not-allowed; filter: none; }
+      .btn.ghost { background: transparent; }
+      .btn.sm { padding: 7px 9px; font-size: 11px; }
+
+      /* ---- Stats ---- */
+      .stats { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+      @media (max-width: 700px) { .stats { grid-template-columns: 1fr 1fr; } }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 12px 14px; }
+      .stat-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 9px; }
+      .stat-name { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+      .stat-val { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
+      .stat-val .sub { font-size: 12px; font-weight: 500; color: var(--subtle); margin-left: 3px; }
+      .bar { height: 8px; border-radius: 999px; background: var(--elevated); overflow: hidden; }
+      .bar > span { display: block; height: 100%; border-radius: 999px; transition: width .45s cubic-bezier(.22,.61,.36,1), background .3s; }
+      .stat-note { margin-top: 8px; font-size: 11px; color: var(--subtle); }
+      .stat .dotrow { display: flex; gap: 6px; align-items: center; margin-top: 4px; }
+      .stat .dotrow .d { width: 8px; height: 8px; border-radius: 3px; }
+
+      /* ---- Tray ---- */
+      .tray { background: var(--surface); border: 1px solid var(--border-strong); border-style: dashed; border-radius: var(--r-lg); padding: 12px; margin-bottom: 14px; min-height: 66px; transition: border-color .2s, box-shadow .2s; }
+      .tray.over { border-color: var(--accent-border); box-shadow: 0 0 0 1px var(--accent-border); }
+      .tray-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+      .tray-name { font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--muted); }
+      .tray-meta { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--subtle); }
+      .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+      .tray-empty { font-size: 12px; color: var(--subtle); font-style: italic; padding: 4px 2px; }
+
+      .chip { font-family: var(--mono); font-size: 12px; padding: 7px 11px; border-radius: var(--r-md); border: 1px solid var(--border); background: var(--elevated); color: var(--fg); cursor: grab; transition: transform .1s, border-color .15s, background .15s, opacity .2s; display: inline-flex; align-items: center; gap: 7px; user-select: none; }
+      .chip:hover { border-color: var(--accent-border); transform: translateY(-1px); }
+      .chip:active { cursor: grabbing; transform: scale(0.97); }
+      .chip.dragging { opacity: .4; }
+      .chip.right { border-color: rgba(92,198,111,0.45); }
+      .chip.wrong { border-color: rgba(240,104,104,0.4); }
+      .chip.pulse { animation: cpulse .5s ease; }
+      @keyframes cpulse { 0% { background: var(--accent-soft); } 100% { background: var(--elevated); } }
+      .chip .mk { font-size: 11px; }
+
+      /* ---- Buckets ---- */
+      .buckets { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+      @media (max-width: 700px) { .buckets { grid-template-columns: 1fr; } }
+      .bucket { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 12px; min-height: 118px; transition: border-color .2s, box-shadow .2s; }
+      .bucket.over { border-color: var(--accent-border); box-shadow: 0 0 0 1px var(--accent-border); }
+      .bucket-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+      .bucket-dot { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+      .bucket-name { font-family: var(--mono); font-size: 12.5px; font-weight: 600; }
+      .bucket-count { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--subtle); }
+      .bucket-desc { font-size: 10.5px; color: var(--subtle); margin-bottom: 10px; line-height: 1.4; }
+      .bucket-empty { font-size: 11.5px; color: var(--subtle); font-style: italic; padding: 6px 2px; }
+
+      /* ---- Aggregate view ---- */
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 16px 14px; margin-bottom: 16px; display: none; }
+      .stage.on { display: block; animation: fadein .4s ease; }
+      @keyframes fadein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+      .stage-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+      .stage-title { font-size: 14px; font-weight: 700; }
+      .stage-sub { font-size: 11.5px; color: var(--muted); margin-bottom: 14px; line-height: 1.5; }
+      .stage svg { display: block; width: 100%; max-width: 560px; margin: 0 auto; height: auto; }
+      .stage .legend { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; margin-top: 12px; font-size: 11px; color: var(--muted); }
+      .stage .legend span { display: inline-flex; align-items: center; gap: 6px; }
+      .stage .legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+
+      /* ---- Console ---- */
+      .console { margin-top: 4px; }
+      .console-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+      .console-bar .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+      .log { background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px 12px; font-family: var(--mono); font-size: 11.5px; line-height: 1.7; min-height: 92px; max-height: 158px; overflow-y: auto; }
+      .log .ln { white-space: pre-wrap; }
+      .log .muted { color: var(--subtle); }
+      .log .c-accent { color: var(--accent); }
+      .log .c-info { color: var(--info); }
+      .log .c-success { color: var(--success); }
+      .log .c-danger { color: var(--danger); }
+      .log .c-violet { color: var(--violet); }
+      .log .c-fg { color: var(--fg); }
+
+      .hint { margin-top: 12px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <div class="toolbar">
+      <button class="btn primary" id="reveal-btn" onclick="revealModel()" disabled>◆ reveal model</button>
+      <button class="btn ghost" onclick="autoClassify()">✦ Auto-classify</button>
+      <span class="spacer"></span>
+      <span class="lab" id="status">classify each concept — drag or click into a bucket</span>
+    </div>
+
+    <!-- STATS -->
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-top">
+          <span class="stat-name">Model correctness</span>
+          <span class="stat-val"><span id="score-val">0</span><span class="sub">%</span></span>
+        </div>
+        <div class="bar"><span id="score-bar" style="width:0%;background:var(--success)"></span></div>
+        <div class="stat-note" id="score-note">0 / 10 classified correctly</div>
+      </div>
+      <div class="stat">
+        <div class="stat-top">
+          <span class="stat-name">Entity</span>
+          <span class="stat-val" id="count-entity">0</span>
+        </div>
+        <div class="dotrow"><span class="d" style="background:var(--info)"></span><span class="stat-note" style="margin-top:0">identity + lifecycle</span></div>
+      </div>
+      <div class="stat">
+        <div class="stat-top">
+          <span class="stat-name">Value Obj</span>
+          <span class="stat-val" id="count-value">0</span>
+        </div>
+        <div class="dotrow"><span class="d" style="background:var(--violet)"></span><span class="stat-note" style="margin-top:0">immutable, by value</span></div>
+      </div>
+      <div class="stat">
+        <div class="stat-top">
+          <span class="stat-name">Service</span>
+          <span class="stat-val" id="count-service">0</span>
+        </div>
+        <div class="dotrow"><span class="d" style="background:var(--accent)"></span><span class="stat-note" style="margin-top:0">stateless behavior</span></div>
+      </div>
+    </div>
+
+    <!-- UNSORTED TRAY -->
+    <div class="tray" id="tray" data-bucket="unsorted">
+      <div class="tray-head">
+        <span class="tray-name">unsorted concepts</span>
+        <span class="tray-meta" id="tray-meta">10 to classify</span>
+      </div>
+      <div class="chips" id="tray-chips"></div>
+    </div>
+
+    <!-- BUCKETS -->
+    <div class="buckets" id="buckets"></div>
+
+    <!-- AGGREGATE STAGE -->
+    <div class="stage" id="stage">
+      <div class="stage-head">
+        <span class="bucket-dot" style="background:var(--info)"></span>
+        <span class="stage-title">Aggregate · <code style="font-family:var(--mono)">Order</code> is the root</span>
+      </div>
+      <div class="stage-sub">
+        Outside code only ever talks to the <b style="color:var(--info)">Order</b> (the aggregate root). It owns its
+        <b style="color:var(--fg)">OrderLine</b>s, and each line carries an immutable <b style="color:var(--violet)">Money</b> value object.
+        The root guards the invariant: <i>total = sum of lines</i>.
+      </div>
+      <svg id="agg-svg" viewBox="0 0 560 300" role="img" aria-label="Order aggregate diagram"></svg>
+      <div class="legend">
+        <span><i style="background:var(--info)"></i> Entity (aggregate root)</span>
+        <span><i style="background:var(--success)"></i> Entity / child</span>
+        <span><i style="background:var(--violet)"></i> Value Object</span>
+      </div>
+    </div>
+
+    <!-- CONSOLE -->
+    <div class="console">
+      <div class="console-bar">
+        <span class="dot"></span>
+        <span class="lab">console</span>
+        <button class="btn sm" style="margin-left:auto" onclick="reset()">Reset</button>
+      </div>
+      <div class="log" id="log"></div>
+      <div class="hint">
+        <span class="b">▸</span>
+        <span>Drag a <b style="color:var(--fg)">concept</b> into <b style="color:var(--info)">Entity</b>, <b style="color:var(--violet)">Value Object</b>, or <b style="color:var(--accent)">Service</b>. (You can also click a chip, then click a bucket.) Get it right and the <b style="color:var(--fg)">model-correctness</b> meter climbs; classify all ten to unlock <b style="color:var(--fg)">reveal model</b>.</span>
+      </div>
+    </div>
+
+    <script>
+      // The three buckets (the DDD building blocks the user classifies into).
+      var BUCKETS = [
+        { id: "entity",  name: "Entity",       color: "#5e9ff6", desc: "Distinct identity that persists through change; has a lifecycle. Equal by id." },
+        { id: "value",   name: "Value Object", color: "#a78bfa", desc: "No identity — defined entirely by its attributes. Immutable; equal by value." },
+        { id: "service", name: "Service",      color: "#fb863a", desc: "Stateless behavior that belongs to no single object. Named after a verb." },
+      ];
+      function bColor(id) { for (var i = 0; i < BUCKETS.length; i++) if (BUCKETS[i].id === id) return BUCKETS[i].color; return "#6b7280"; }
+      function bName(id)  { if (id === "unsorted") return "Unsorted"; for (var i = 0; i < BUCKETS.length; i++) if (BUCKETS[i].id === id) return BUCKETS[i].name; return "Unsorted"; }
+
+      // Each concept: its correct bucket + the one-line reason shown on a correct drop.
+      var CONCEPTS = [
+        { id: "Order",          home: "entity",  reason: "an order is tracked as itself through its lifecycle (pending → paid → shipped); identity by id" },
+        { id: "Customer",       home: "entity",  reason: "the same person stays the same Customer even after renaming or moving; identity persists" },
+        { id: "Product",        home: "entity",  reason: "a catalog product has its own identity and lifecycle; two products with equal fields are still distinct" },
+        { id: "Money",          home: "value",   reason: "two $5 notes are interchangeable, no identity — immutable, equal by value" },
+        { id: "Address",        home: "value",   reason: "a postal address is just its fields; copy it freely, compare by value, keep it immutable" },
+        { id: "DateRange",      home: "value",   reason: "a span (start..end) has no identity — equal ranges are interchangeable, immutable" },
+        { id: "EmailAddress",   home: "value",   reason: "an email is defined entirely by its string value; no identity, immutable, equal by value" },
+        { id: "OrderId",        home: "value",   reason: "an id is a value — \"ord-4471\" equals \"ord-4471\"; immutable, compared by value (it IS the identity, not an entity itself)" },
+        { id: "TaxCalculator",  home: "service", reason: "stateless behavior over jurisdiction rules; belongs to no single entity — a verb, not a noun" },
+        { id: "PaymentService", home: "service", reason: "charging spans gateways and orders and holds no domain data of its own; homeless behavior" },
+      ];
+
+      var placement = {}; // conceptId -> bucketId ("unsorted" by default)
+      var selected = null; // for click-to-place
+
+      function lookup(id) { for (var i = 0; i < CONCEPTS.length; i++) if (CONCEPTS[i].id === id) return CONCEPTS[i]; return null; }
+
+      function counts() {
+        var c = { entity: 0, value: 0, service: 0, unsorted: 0 };
+        CONCEPTS.forEach(function (x) { c[placement[x.id]] = (c[placement[x.id]] || 0) + 1; });
+        return c;
+      }
+      function correctCount() {
+        var n = 0;
+        CONCEPTS.forEach(function (x) { if (placement[x.id] === x.home) n++; });
+        return n;
+      }
+      function allClassified() {
+        for (var i = 0; i < CONCEPTS.length; i++) if (placement[CONCEPTS[i].id] === "unsorted") return false;
+        return true;
+      }
+
+      function lerpColor(t) {
+        var stops = [[240,104,104],[251,134,58],[92,198,111]];
+        var seg = t < 0.5 ? 0 : 1;
+        var lt = t < 0.5 ? t / 0.5 : (t - 0.5) / 0.5;
+        var a = stops[seg], b = stops[seg + 1];
+        return "rgb(" + Math.round(a[0]+(b[0]-a[0])*lt) + "," + Math.round(a[1]+(b[1]-a[1])*lt) + "," + Math.round(a[2]+(b[2]-a[2])*lt) + ")";
+      }
+
+      function updateStats() {
+        var c = counts();
+        document.getElementById("count-entity").textContent = c.entity || 0;
+        document.getElementById("count-value").textContent = c.value || 0;
+        document.getElementById("count-service").textContent = c.service || 0;
+
+        var correct = correctCount();
+        var pct = Math.round((correct / CONCEPTS.length) * 100);
+        document.getElementById("score-val").textContent = pct;
+        var bar = document.getElementById("score-bar");
+        bar.style.width = pct + "%";
+        bar.style.background = lerpColor(pct / 100);
+        document.getElementById("score-note").textContent = correct + " / " + CONCEPTS.length + " classified correctly";
+
+        var meta = document.getElementById("tray-meta");
+        var left = c.unsorted || 0;
+        meta.textContent = left === 0 ? "all classified ✓" : left + " to classify";
+
+        var revealBtn = document.getElementById("reveal-btn");
+        revealBtn.disabled = !allClassified();
+
+        var status = document.getElementById("status");
+        if (allClassified()) {
+          status.textContent = pct === 100
+            ? "✓ perfect model — every concept in its right bucket · reveal the aggregate →"
+            : "all placed · " + pct + "% correct — fix the ✗ chips, or reveal anyway →";
+        } else {
+          status.textContent = left + " concept" + (left === 1 ? "" : "s") + " left · model " + pct + "% correct";
+        }
+      }
+
+      function log(html, cls) {
+        var box = document.getElementById("log");
+        var line = document.createElement("div");
+        line.className = "ln" + (cls ? " " + cls : "");
+        line.innerHTML = html;
+        box.appendChild(line);
+        while (box.children.length > 9) box.removeChild(box.firstChild);
+        box.scrollTop = box.scrollHeight;
+      }
+
+      function chipHtml(x) {
+        var here = placement[x.id];
+        var cls = "chip";
+        var mk = "";
+        if (here !== "unsorted") {
+          if (here === x.home) { cls += " right"; mk = '<span class="mk c-success" style="color:var(--success)">✓</span>'; }
+          else { cls += " wrong"; mk = '<span class="mk" style="color:var(--danger)">✗</span>'; }
+        }
+        if (selected === x.id) cls += " pulse";
+        return '<div class="' + cls + '" draggable="true" data-concept="' + x.id + '">' + x.id + mk + '</div>';
+      }
+
+      function render() {
+        // tray
+        var tray = document.getElementById("tray-chips");
+        var unsorted = CONCEPTS.filter(function (x) { return placement[x.id] === "unsorted"; });
+        tray.innerHTML = unsorted.length
+          ? unsorted.map(chipHtml).join("")
+          : '<div class="tray-empty">tray empty — every concept has been classified</div>';
+
+        // buckets
+        var wrap = document.getElementById("buckets");
+        wrap.innerHTML = "";
+        BUCKETS.forEach(function (b) {
+          var members = CONCEPTS.filter(function (x) { return placement[x.id] === b.id; });
+          var el = document.createElement("div");
+          el.className = "bucket";
+          el.setAttribute("data-bucket", b.id);
+          var head =
+            '<div class="bucket-head">' +
+              '<span class="bucket-dot" style="background:' + b.color + '"></span>' +
+              '<span class="bucket-name">' + b.name + '</span>' +
+              '<span class="bucket-count">' + members.length + '</span>' +
+            '</div>' +
+            '<div class="bucket-desc">' + b.desc + '</div>';
+          var body = members.length
+            ? '<div class="chips">' + members.map(chipHtml).join("") + '</div>'
+            : '<div class="bucket-empty">drop concepts here</div>';
+          el.innerHTML = head + body;
+          wrap.appendChild(el);
+        });
+
+        wireChips();
+        updateStats();
+      }
+
+      // ---- placement logic ----
+      function classify(conceptId, bucketId, viaAuto) {
+        var x = lookup(conceptId);
+        if (!x) return;
+        conceptId = x.id; // canonical id from the fixed catalog — never raw drag/DOM input
+        var prev = placement[conceptId];
+        if (prev === bucketId) return;
+        placement[conceptId] = bucketId;
+        selected = null;
+        render();
+
+        // pulse + flash feedback
+        var chip = document.querySelector('.chip[data-concept="' + conceptId + '"]');
+        if (chip) { chip.classList.add("pulse"); setTimeout(function () { chip.classList.remove("pulse"); }, 500); }
+
+        if (bucketId === "unsorted") {
+          log('<span class="muted">returned</span> <span class="c-fg">' + conceptId + '</span> <span class="muted">to the tray</span>');
+          return;
+        }
+
+        if (bucketId === x.home) {
+          log('<span class="c-fg">' + conceptId + '</span> <span class="muted">→</span> <span style="color:' + bColor(bucketId) + '">' + bName(bucketId) + '</span> <span class="c-success">✓</span> <span class="muted">— ' + x.reason + '</span>');
+          if (!viaAuto && allClassified() && correctCount() === CONCEPTS.length) {
+            log('<span class="c-success">✓ model complete</span> <span class="muted">— all ten concepts correctly classified. Reveal the aggregate.</span>');
+          }
+        } else {
+          log('<span class="c-fg">' + conceptId + '</span> <span class="muted">→</span> <span style="color:' + bColor(bucketId) + '">' + bName(bucketId) + '</span> <span class="c-danger">✗</span> <span class="muted">— it belongs in </span><span style="color:' + bColor(x.home) + '">' + bName(x.home) + '</span><span class="muted">: ' + x.reason + '</span>');
+        }
+      }
+
+      // ---- drag & drop + click-to-place ----
+      function wireChips() {
+        var chips = document.querySelectorAll(".chip");
+        chips.forEach(function (chip) {
+          chip.addEventListener("dragstart", function (e) {
+            chip.classList.add("dragging");
+            if (e.dataTransfer) { e.dataTransfer.setData("text/plain", chip.getAttribute("data-concept")); e.dataTransfer.effectAllowed = "move"; }
+          });
+          chip.addEventListener("dragend", function () { chip.classList.remove("dragging"); });
+          chip.addEventListener("click", function (e) {
+            e.stopPropagation();
+            var cx = lookup(chip.getAttribute("data-concept"));
+            if (!cx) return;
+            var id = cx.id; // canonical id from the fixed catalog, not raw DOM input
+            selected = (selected === id) ? null : id;
+            render();
+            if (selected) log('<span class="muted">selected</span> <span class="c-accent">' + id + '</span> <span class="muted">— now click a bucket</span>');
+          });
+        });
+      }
+
+      function wireDropZones() {
+        // drop zones are matched live via e.target.closest("[data-bucket]") below
+        document.addEventListener("dragover", function (e) {
+          var zone = e.target.closest ? e.target.closest("[data-bucket]") : null;
+          if (zone) { e.preventDefault(); zone.classList.add("over"); }
+        });
+        document.addEventListener("dragleave", function (e) {
+          var zone = e.target.closest ? e.target.closest("[data-bucket]") : null;
+          if (zone && !zone.contains(e.relatedTarget)) zone.classList.remove("over");
+        });
+        document.addEventListener("drop", function (e) {
+          var zone = e.target.closest ? e.target.closest("[data-bucket]") : null;
+          if (!zone) return;
+          e.preventDefault();
+          zone.classList.remove("over");
+          var id = e.dataTransfer ? e.dataTransfer.getData("text/plain") : null;
+          if (id) classify(id, zone.getAttribute("data-bucket"));
+        });
+        // click a bucket to place the selected chip
+        document.addEventListener("click", function (e) {
+          if (!selected) return;
+          var zone = e.target.closest ? e.target.closest("[data-bucket]") : null;
+          if (zone && !e.target.closest(".chip")) classify(selected, zone.getAttribute("data-bucket"));
+        });
+      }
+
+      // ---- auto-classify ----
+      function autoClassify() {
+        CONCEPTS.forEach(function (x) { placement[x.id] = x.home; });
+        selected = null;
+        render();
+        log('<span class="c-success">auto-classify</span> <span class="muted">→ every concept snapped to its correct bucket · model 100% correct</span>');
+      }
+
+      // ---- aggregate reveal ----
+      function buildAggregateSvg() {
+        var I = "#5e9ff6", G = "#5cc66f", V = "#a78bfa", line = "#2d333d", txt = "#e8e4dc", sub = "#9099a8";
+        function box(x, y, w, h, color, title, sub2) {
+          var s = '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="9" fill="#1a1d22" stroke="' + color + '" stroke-width="1.5"/>';
+          s += '<rect x="' + x + '" y="' + y + '" width="4" height="' + h + '" rx="2" fill="' + color + '"/>';
+          s += '<text x="' + (x + 14) + '" y="' + (y + 21) + '" fill="' + txt + '" font-family="ui-monospace,monospace" font-size="13" font-weight="700">' + title + '</text>';
+          if (sub2) s += '<text x="' + (x + 14) + '" y="' + (y + 38) + '" fill="' + sub + '" font-family="ui-monospace,monospace" font-size="10.5">' + sub2 + '</text>';
+          return s;
+        }
+        function link(x1, y1, x2, y2, label) {
+          var midx = (x1 + x2) / 2, midy = (y1 + y2) / 2;
+          var s = '<line x1="' + x1 + '" y1="' + y1 + '" x2="' + x2 + '" y2="' + y2 + '" stroke="' + line + '" stroke-width="1.5"/>';
+          s += '<circle cx="' + x2 + '" cy="' + y2 + '" r="3" fill="' + line + '"/>';
+          if (label) s += '<text x="' + (midx + 6) + '" y="' + (midy - 2) + '" fill="' + sub + '" font-family="ui-monospace,monospace" font-size="9.5">' + label + '</text>';
+          return s;
+        }
+        var svg = "";
+        // root
+        svg += box(196, 14, 168, 48, I, "Order ◆ root", "id · status · total()");
+        // two order lines
+        svg += link(280, 62, 150, 118, "1..*");
+        svg += link(280, 62, 410, 118, "");
+        svg += box(70, 118, 168, 46, G, "OrderLine", "product · qty");
+        svg += box(330, 118, 168, 46, G, "OrderLine", "product · qty");
+        // money under each line
+        svg += link(154, 164, 154, 220, "unitPrice");
+        svg += link(414, 164, 414, 220, "unitPrice");
+        svg += box(70, 220, 168, 46, V, "Money", "amount · currency");
+        svg += box(330, 220, 168, 46, V, "Money", "immutable, by value");
+        return svg;
+      }
+
+      function revealModel() {
+        var stage = document.getElementById("stage");
+        document.getElementById("agg-svg").innerHTML = buildAggregateSvg();
+        stage.classList.add("on");
+        log('<span class="c-info">reveal model</span> <span class="muted">→</span> <span class="c-info">Order</span> <span class="muted">is the aggregate root holding</span> <span class="c-success">OrderLine</span><span class="muted">s, each with a</span> <span class="c-violet">Money</span> <span class="muted">value object · one entry point, one consistency boundary</span>');
+        stage.scrollIntoView ? stage.scrollIntoView({ behavior: "smooth", block: "nearest" }) : null;
+      }
+
+      // ---- reset / seed ----
+      function reset() {
+        CONCEPTS.forEach(function (x) { placement[x.id] = "unsorted"; });
+        selected = null;
+        document.getElementById("stage").classList.remove("on");
+        document.getElementById("log").innerHTML = "";
+        render();
+        log('<span class="muted">// reset — ten concepts in the tray. Classify each as Entity, Value Object, or Service.</span>');
+      }
+
+      function seed() {
+        CONCEPTS.forEach(function (x) { placement[x.id] = "unsorted"; });
+        render();
+        wireDropZones();
+      }
+
+      seed();
+      log('<span class="muted">// a domain model in three buckets: identity (Entity), values (Value Object), behavior (Service)</span>');
+      log('<span class="muted">// drag a concept into a bucket — the console explains every classification</span>');
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

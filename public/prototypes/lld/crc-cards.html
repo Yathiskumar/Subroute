@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CRC Cards — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.32);
+        --success: #5cc66f;
+        --info: #5e9ff6;
+        --danger: #f06868;
+        --violet: #a78bfa;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      .lab { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+
+      .toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+      .toolbar .spacer { flex: 1; }
+
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 12px; cursor: pointer; transition: filter .15s, transform .1s, border-color .15s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .btn.primary { background: var(--accent); color: #1a1003; border-color: transparent; }
+      .btn.primary:hover { filter: brightness(1.06); }
+      .btn.ghost { background: transparent; }
+      .btn.sm { padding: 7px 9px; font-size: 11px; }
+      .btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+      .btn.on { border-color: var(--accent-border); background: var(--accent-soft); color: var(--accent); }
+
+      select.sel { background: var(--elevated); color: var(--fg); font: 600 12px var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 8px 9px; cursor: pointer; }
+      select.sel:hover { border-color: var(--border-strong); }
+
+      /* ---- Indicator bar ---- */
+      .indi { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
+      @media (max-width: 700px) { .indi { grid-template-columns: 1fr; } }
+      .ind { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 11px 13px; }
+      .ind-name { font-family: var(--mono); font-size: 10px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+      .ind-val { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2; }
+      .ind-val .sub { font-size: 12px; font-weight: 500; color: var(--subtle); margin-left: 5px; }
+      .ind-val.accent { color: var(--accent); }
+      .ind-val.info { color: var(--info); }
+      .ind-val.success { color: var(--success); }
+
+      /* ---- Stage: SVG arrows + card deck ---- */
+      .stage { position: relative; margin-bottom: 16px; }
+      .stage svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; overflow: visible; }
+      .stage svg line { stroke: var(--accent); stroke-width: 2; opacity: 0; transition: opacity .35s; stroke-linecap: round; }
+      .stage svg line.show { opacity: .85; stroke-dasharray: 5 4; animation: dash 14s linear infinite; }
+      @keyframes dash { to { stroke-dashoffset: -200; } }
+
+      .deck { position: relative; z-index: 2; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+
+      .card {
+        background: linear-gradient(180deg, #16191e 0%, #131519 100%);
+        border: 1px solid var(--border);
+        border-radius: var(--r-lg);
+        padding: 0; overflow: hidden;
+        transition: border-color .2s, box-shadow .25s, transform .15s, opacity .2s;
+        cursor: default; position: relative;
+      }
+      .card.clickable { cursor: pointer; }
+      .card.clickable:hover { border-color: var(--accent-border); transform: translateY(-2px); }
+      .card.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 8px 24px rgba(251,134,58,0.18); }
+      .card.collab { border-color: var(--info); box-shadow: 0 0 0 1px rgba(94,159,246,0.5); }
+      .card.dim { opacity: .5; }
+      .card.right { border-color: var(--success) !important; box-shadow: 0 0 0 1px var(--success) !important; }
+      .card.wrong { border-color: var(--danger) !important; box-shadow: 0 0 0 1px var(--danger) !important; }
+
+      .card-name { font-family: var(--mono); font-size: 13px; font-weight: 700; padding: 9px 11px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 7px; background: rgba(255,255,255,0.015); }
+      .card-name .role { margin-left: auto; font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--subtle); font-weight: 600; }
+      .card-name .role.r-active { color: var(--accent); }
+      .card-name .role.r-collab { color: var(--info); }
+      .card-cols { display: grid; grid-template-columns: 1.35fr 1fr; }
+      .card-col { padding: 8px 9px; }
+      .card-col + .card-col { border-left: 1px dashed var(--border); }
+      .col-h { font-family: var(--mono); font-size: 8.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--subtle); margin-bottom: 6px; }
+      .col-li { font-size: 11px; line-height: 1.45; color: var(--muted); margin-bottom: 3px; display: flex; gap: 4px; }
+      .col-li::before { content: "·"; color: var(--subtle); }
+      .col-li.hot { color: var(--fg); }
+      .col-li.hot::before { content: "▸"; color: var(--accent); }
+      .col-li.empty { color: var(--subtle); font-style: italic; }
+      .col-li.empty::before { content: ""; }
+      .card-col.collabs .col-li.hot { color: var(--info); }
+      .card-col.collabs .col-li.hot::before { color: var(--info); }
+
+      /* ---- step bar ---- */
+      .stepbar { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+      .steps { display: flex; gap: 5px; flex: 1; }
+      .pip { flex: 1; height: 5px; border-radius: 999px; background: var(--elevated); transition: background .25s; }
+      .pip.done { background: var(--accent); }
+      .pip.cur { background: var(--fg); }
+
+      /* ---- Console ---- */
+      .console { margin-top: 4px; }
+      .console-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+      .console-bar .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+      .log { background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px 12px; font-family: var(--mono); font-size: 11.5px; line-height: 1.7; min-height: 92px; max-height: 150px; overflow-y: auto; }
+      .log .ln { white-space: pre-wrap; }
+      .log .muted { color: var(--subtle); }
+      .log .c-accent { color: var(--accent); }
+      .log .c-info { color: var(--info); }
+      .log .c-success { color: var(--success); }
+      .log .c-danger { color: var(--danger); }
+      .log .c-fg { color: var(--fg); }
+
+      .hint { margin-top: 12px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <div class="toolbar">
+      <button class="btn" id="prev" onclick="prev()">‹ Prev</button>
+      <button class="btn primary" id="next" onclick="next()">Next ›</button>
+      <button class="btn ghost" id="quiz-btn" onclick="toggleQuiz()">🎯 Quiz me</button>
+      <span class="spacer"></span>
+      <span class="lab">scenario</span>
+      <select class="sel" id="scenario" onchange="switchScenario()"></select>
+    </div>
+
+    <!-- INDICATORS -->
+    <div class="indi">
+      <div class="ind">
+        <div class="ind-name">Step</div>
+        <div class="ind-val" id="ind-step">0<span class="sub" id="ind-step-max">/ 0</span></div>
+      </div>
+      <div class="ind">
+        <div class="ind-name">Active card · responsible</div>
+        <div class="ind-val accent" id="ind-active">—</div>
+      </div>
+      <div class="ind">
+        <div class="ind-name">Collaborations drawn</div>
+        <div class="ind-val info" id="ind-collab">0</div>
+      </div>
+    </div>
+
+    <!-- STEP PIPS -->
+    <div class="stepbar">
+      <div class="steps" id="steps"></div>
+    </div>
+
+    <!-- STAGE -->
+    <div class="stage">
+      <svg id="wires" preserveAspectRatio="none"></svg>
+      <div class="deck" id="deck"></div>
+    </div>
+
+    <!-- CONSOLE -->
+    <div class="console">
+      <div class="console-bar">
+        <span class="dot"></span>
+        <span class="lab">walkthrough</span>
+        <button class="btn sm" style="margin-left:auto" onclick="reset()">Reset</button>
+      </div>
+      <div class="log" id="log"></div>
+      <div class="hint">
+        <span class="b">▸</span>
+        <span>Step through the scenario with <b style="color:var(--fg)">Next</b>. At each step the <b style="color:var(--accent)">responsible card</b> lights up and arrows reach to its <b style="color:var(--info)">collaborators</b>. Turn on <b style="color:var(--fg)">Quiz me</b> to guess who owns the step first.</span>
+      </div>
+    </div>
+
+    <script>
+      // ----- CRC deck: one card per class -----
+      var CARDS = [
+        { id: "Cashier",   resp: ["take the cart", "drive checkout", "show the receipt"], collab: ["Order", "Payment"] },
+        { id: "Order",     resp: ["hold the line items", "calculate the total", "request payment"], collab: ["OrderLine", "Payment"] },
+        { id: "OrderLine", resp: ["know product & qty", "give its subtotal"], collab: ["Product"] },
+        { id: "Product",   resp: ["know its name", "know its price"], collab: [] },
+        { id: "Payment",   resp: ["charge the customer", "report approval"], collab: [] },
+      ];
+      function card(id) { for (var i = 0; i < CARDS.length; i++) if (CARDS[i].id === id) return CARDS[i]; return null; }
+
+      // ----- Scenarios: ordered steps. Each: action, owner card, collaborators it talks to. -----
+      var SCENARIOS = {
+        checkout: {
+          label: "Customer checks out a cart",
+          steps: [
+            { action: "start a new order from the cart",   owner: "Cashier",   to: ["Order"] },
+            { action: "add each item as a line",           owner: "Order",     to: ["OrderLine"] },
+            { action: "look up each product's price",      owner: "OrderLine", to: ["Product"] },
+            { action: "calculate the order total",         owner: "Order",     to: ["OrderLine"] },
+            { action: "charge the customer",               owner: "Payment",   to: [] },
+            { action: "show the receipt",                  owner: "Cashier",   to: ["Order"] },
+          ],
+        },
+        declined: {
+          label: "Payment is declined",
+          steps: [
+            { action: "start a new order from the cart",   owner: "Cashier",   to: ["Order"] },
+            { action: "calculate the order total",         owner: "Order",     to: ["OrderLine"] },
+            { action: "request payment for the total",     owner: "Order",     to: ["Payment"] },
+            { action: "attempt the charge — DECLINED",     owner: "Payment",   to: [] },
+            { action: "report the failure to the cashier", owner: "Cashier",   to: ["Order", "Payment"] },
+          ],
+        },
+      };
+
+      var scenarioKey = "checkout";
+      var stepIdx = 0;          // 0 = not started; 1..N = step N active
+      var quizMode = false;
+      var awaitingGuess = false; // when quiz on and we've advanced to a step but not yet revealed
+      var collabCount = 0;
+
+      function steps() { return SCENARIOS[scenarioKey].steps; }
+      function curStep() { return stepIdx >= 1 ? steps()[stepIdx - 1] : null; }
+
+      // ---------- logging ----------
+      function log(html, cls) {
+        var box = document.getElementById("log");
+        var line = document.createElement("div");
+        line.className = "ln" + (cls ? " " + cls : "");
+        line.innerHTML = html;
+        box.appendChild(line);
+        while (box.children.length > 9) box.removeChild(box.firstChild);
+        box.scrollTop = box.scrollHeight;
+      }
+
+      // ---------- render ----------
+      function renderScenarioSelect() {
+        var sel = document.getElementById("scenario");
+        sel.innerHTML = "";
+        Object.keys(SCENARIOS).forEach(function (k) {
+          var o = document.createElement("option");
+          o.value = k; o.textContent = SCENARIOS[k].label;
+          if (k === scenarioKey) o.selected = true;
+          sel.appendChild(o);
+        });
+      }
+
+      function renderSteps() {
+        var n = steps().length;
+        var bar = document.getElementById("steps");
+        bar.innerHTML = "";
+        for (var i = 1; i <= n; i++) {
+          var p = document.createElement("div");
+          p.className = "pip" + (i < stepIdx ? " done" : "") + (i === stepIdx ? " cur" : "");
+          bar.appendChild(p);
+        }
+      }
+
+      function renderDeck() {
+        var st = curStep();
+        var owner = st && !awaitingGuess ? st.owner : null;
+        var collabs = st && !awaitingGuess ? st.to : [];
+        var deck = document.getElementById("deck");
+        deck.innerHTML = "";
+        CARDS.forEach(function (c) {
+          var el = document.createElement("div");
+          var roleTxt = "", roleCls = "";
+          var cls = "card";
+          if (awaitingGuess && quizMode) {
+            cls += " clickable";
+          } else if (owner) {
+            if (c.id === owner) { cls += " active"; roleTxt = "responsible"; roleCls = "r-active"; }
+            else if (collabs.indexOf(c.id) >= 0) { cls += " collab"; roleTxt = "collaborator"; roleCls = "r-collab"; }
+            else { cls += " dim"; }
+          }
+          el.className = cls;
+          el.setAttribute("data-card", c.id);
+          if (awaitingGuess && quizMode) el.onclick = (function (id) { return function () { guess(id); }; })(c.id);
+
+          // mark which resp / collab is "hot" this step
+          var respHTML = c.resp.map(function (r) { return '<div class="col-li">' + r + "</div>"; }).join("");
+          var collabHTML = c.collab.length
+            ? c.collab.map(function (cc) {
+                var hot = (owner === c.id && collabs.indexOf(cc) >= 0) ? " hot" : "";
+                return '<div class="col-li' + hot + '">' + cc + "</div>";
+              }).join("")
+            : '<div class="col-li empty">— none</div>';
+
+          el.innerHTML =
+            '<div class="card-name">' + c.id +
+              (roleTxt ? '<span class="role ' + roleCls + '">' + roleTxt + "</span>" : "") +
+            "</div>" +
+            '<div class="card-cols">' +
+              '<div class="card-col resps"><div class="col-h">Responsibilities</div>' + respHTML + "</div>" +
+              '<div class="card-col collabs"><div class="col-h">Collaborators</div>' + collabHTML + "</div>" +
+            "</div>";
+          deck.appendChild(el);
+        });
+      }
+
+      function drawWires() {
+        var svg = document.getElementById("wires");
+        svg.innerHTML = "";
+        collabCount = 0;
+        var st = curStep();
+        if (!st || awaitingGuess || st.to.length === 0) { updateIndicators(); return; }
+        var stage = document.querySelector(".stage").getBoundingClientRect();
+        var fromEl = document.querySelector('.card[data-card="' + st.owner + '"]');
+        if (!fromEl) { updateIndicators(); return; }
+        var fr = fromEl.getBoundingClientRect();
+        var fx = fr.left - stage.left + fr.width / 2;
+        var fy = fr.top - stage.top + fr.height / 2;
+        st.to.forEach(function (target) {
+          var tEl = document.querySelector('.card[data-card="' + target + '"]');
+          if (!tEl) return;
+          var tr = tEl.getBoundingClientRect();
+          var tx = tr.left - stage.left + tr.width / 2;
+          var ty = tr.top - stage.top + tr.height / 2;
+          var ln = document.createElementNS("http://www.w3.org/2000/svg", "line");
+          ln.setAttribute("x1", fx); ln.setAttribute("y1", fy);
+          ln.setAttribute("x2", tx); ln.setAttribute("y2", ty);
+          svg.appendChild(ln);
+          // force reflow then animate in
+          void ln.getBBox();
+          ln.classList.add("show");
+          collabCount++;
+        });
+        updateIndicators();
+      }
+
+      function updateIndicators() {
+        var n = steps().length;
+        document.getElementById("ind-step").childNodes[0].nodeValue = String(stepIdx);
+        document.getElementById("ind-step-max").textContent = "/ " + n;
+        var st = curStep();
+        var activeTxt = (st && !awaitingGuess) ? st.owner : (awaitingGuess ? "your guess?" : "—");
+        var av = document.getElementById("ind-active");
+        av.textContent = activeTxt;
+        av.className = "ind-val " + (awaitingGuess ? "info" : "accent");
+        document.getElementById("ind-collab").textContent = String(collabCount);
+
+        document.getElementById("prev").disabled = stepIdx <= 0;
+        var nextBtn = document.getElementById("next");
+        nextBtn.disabled = (stepIdx >= n && !awaitingGuess) || awaitingGuess;
+        nextBtn.textContent = stepIdx >= n ? "Done ✓" : "Next ›";
+      }
+
+      function renderAll() {
+        renderSteps();
+        renderDeck();
+        // wires need layout; defer a tick
+        drawWires();
+      }
+
+      // ---------- navigation ----------
+      function next() {
+        var n = steps().length;
+        if (stepIdx >= n) return;
+        if (quizMode) {
+          // advance to the next step but require a guess before revealing
+          stepIdx++;
+          awaitingGuess = true;
+          renderSteps();
+          renderDeck();
+          drawWires();
+          log('<span class="muted">step ' + stepIdx + ":</span> <span class=\"c-fg\">" + curStep().action + '</span> — <span class="c-info">click the card responsible</span>');
+          return;
+        }
+        stepIdx++;
+        reveal();
+      }
+
+      function reveal() {
+        var st = curStep();
+        renderAll();
+        var toTxt = st.to.length ? st.to.join(", ") : "(no collaborators — does it alone)";
+        log(
+          '<span class="muted">step ' + stepIdx + ":</span> <span class=\"c-fg\">" + st.action + '</span> → ' +
+          '<span class="c-accent">' + st.owner + '</span> <span class="muted">talks to</span> <span class="c-info">' + toTxt + "</span>"
+        );
+        if (stepIdx >= steps().length) {
+          log('<span class="c-success">✓ scenario complete</span> <span class="muted">— deck role-played end to end</span>');
+        }
+      }
+
+      function prev() {
+        if (stepIdx <= 0) return;
+        if (awaitingGuess) { awaitingGuess = false; }
+        stepIdx--;
+        renderAll();
+        if (stepIdx === 0) log('<span class="muted">// rewound to the start</span>');
+        else log('<span class="muted">‹ back to step ' + stepIdx + ": " + curStep().action + "</span>");
+      }
+
+      function guess(id) {
+        if (!awaitingGuess) return;
+        var st = curStep();
+        var correct = id === st.owner;
+        awaitingGuess = false;
+        renderAll();
+        if (correct) {
+          log('<span class="c-success">✓ correct</span> <span class="muted">—</span> <span class="c-accent">' + st.owner + '</span> owns "' + st.action + '"');
+        } else {
+          log('<span class="c-danger">✗ ' + id + '</span> <span class="muted">— that step belongs to</span> <span class="c-accent">' + st.owner + "</span>");
+        }
+        if (stepIdx >= steps().length) {
+          log('<span class="c-success">✓ scenario complete</span> <span class="muted">— deck role-played end to end</span>');
+        }
+      }
+
+      function toggleQuiz() {
+        quizMode = !quizMode;
+        var b = document.getElementById("quiz-btn");
+        b.classList.toggle("on", quizMode);
+        awaitingGuess = false;
+        log(quizMode
+          ? '<span class="c-accent">quiz mode on</span> <span class="muted">— guess who owns each step before it reveals</span>'
+          : '<span class="muted">quiz mode off — steps reveal automatically</span>');
+        renderAll();
+      }
+
+      function switchScenario() {
+        scenarioKey = document.getElementById("scenario").value;
+        stepIdx = 0; awaitingGuess = false; collabCount = 0;
+        document.getElementById("log").innerHTML = "";
+        renderAll();
+        log('<span class="muted">// scenario:</span> <span class="c-fg">' + SCENARIOS[scenarioKey].label + "</span> <span class=\"muted\">(" + steps().length + " steps) — press Next</span>");
+      }
+
+      function reset() {
+        stepIdx = 0; awaitingGuess = false; collabCount = 0;
+        document.getElementById("log").innerHTML = "";
+        renderAll();
+        log('<span class="muted">// reset — deck back to step zero. Press Next to role-play.</span>');
+      }
+
+      // ---------- init ----------
+      function init() {
+        renderScenarioSelect();
+        renderAll();
+        log('<span class="muted">// CRC deck loaded — 5 cards for the checkout.</span>');
+        log('<span class="muted">// scenario:</span> <span class="c-fg">' + SCENARIOS[scenarioKey].label + "</span> <span class=\"muted\">— press Next to enact it step by step</span>");
+      }
+      init();
+      window.addEventListener("resize", function () { drawWires(); });
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>
