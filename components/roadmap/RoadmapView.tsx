@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import * as Icons from "lucide-react";
 import {
   ArrowUpRight,
@@ -14,6 +15,7 @@ import {
 } from "lucide-react";
 import { DifficultyBadge } from "@/components/shared/DifficultyBadge";
 import { TagChip } from "@/components/shared/TagChip";
+import { useAuthGate } from "@/components/auth/useAuthGate";
 import { cn } from "@/lib/utils/cn";
 import { roadmapTopicCount } from "@/lib/data/roadmaps";
 import {
@@ -78,6 +80,8 @@ export function RoadmapView({ roadmap }: { roadmap: Roadmap }) {
   const [done, setDone] = React.useState<Set<string>>(new Set());
   const [mounted, setMounted] = React.useState(false);
   const [collapsed, setCollapsed] = React.useState<Set<number>>(new Set());
+  const { gated, loginHref } = useAuthGate();
+  const router = useRouter();
 
   React.useEffect(() => {
     setMounted(true);
@@ -108,13 +112,27 @@ export function RoadmapView({ roadmap }: { roadmap: Roadmap }) {
     }
   }, [done, mounted, storageKey]);
 
-  const toggle = (id: string) =>
+  const toggle = (id: string) => {
+    // Marking progress requires an account (when auth is configured).
+    if (gated) {
+      router.push(loginHref);
+      return;
+    }
     setDone((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
+  };
+
+  const resetProgress = () => {
+    if (gated) {
+      router.push(loginHref);
+      return;
+    }
+    setDone(new Set());
+  };
 
   const toggleCollapse = (pi: number) =>
     setCollapsed((prev) => {
@@ -190,7 +208,7 @@ export function RoadmapView({ roadmap }: { roadmap: Roadmap }) {
               {mounted && completedTotal > 0 ? (
                 <button
                   type="button"
-                  onClick={() => setDone(new Set())}
+                  onClick={resetProgress}
                   className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs text-muted transition-colors hover:border-border-strong hover:text-foreground"
                 >
                   <RotateCcw className="h-3.5 w-3.5" />
