@@ -18,8 +18,11 @@
         --accent-soft: rgba(251, 134, 58, 0.12);
         --accent-border: rgba(251, 134, 58, 0.32);
         --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
         --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
         --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.1);
         --violet: #a78bfa;
         --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
         --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
@@ -36,77 +39,92 @@
         background-size: 40px 40px;
       }
       .lab { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
-
-      .stage { display: grid; grid-template-columns: 230px 1fr 234px; gap: 16px; align-items: start; }
-      @media (max-width: 700px) { .stage { grid-template-columns: 1fr; } }
-
       .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); }
-
-      .card-bar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--elevated); border-radius: var(--r-lg) var(--r-lg) 0 0; }
-      .card-bar .kw { font-family: var(--mono); font-size: 12px; color: var(--accent); }
-      .card-bar .nm { font-family: var(--mono); font-size: 13px; font-weight: 600; }
-      .card-bar .tag { margin-left: auto; white-space: nowrap; font-family: var(--mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--subtle); border: 1px solid var(--border); border-radius: 999px; padding: 2px 8px; }
-      .card-body { padding: 12px 14px 14px; }
-
-      .section-lab { font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--subtle); margin: 14px 0 6px; }
-      .section-lab:first-child { margin-top: 0; }
-
-      /* ---- Palette controls ---- */
-      .field { margin-bottom: 4px; }
-      .field-row { display: flex; align-items: center; gap: 8px; }
-      select { width: 100%; background: var(--elevated); color: var(--fg); border: 1px solid var(--border); border-radius: var(--r-md); padding: 8px 10px; font: 13px var(--sans); }
-      select:focus { outline: none; border-color: var(--accent-border); }
-
-      .toggle { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r-md); padding: 8px 10px; cursor: pointer; user-select: none; transition: border-color .15s; }
-      .toggle:hover { border-color: var(--border-strong); }
-      .toggle .tl { font: 13px var(--sans); }
-      .toggle .pill { font-family: var(--mono); font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; border: 1px solid var(--border-strong); border-radius: 999px; padding: 2px 8px; color: var(--subtle); transition: all .15s; }
-      .toggle.on { border-color: var(--accent-border); background: var(--accent-soft); }
-      .toggle.on .pill { color: var(--accent); border-color: var(--accent-border); }
 
       .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 12px; cursor: pointer; transition: filter .15s, transform .1s, border-color .15s; }
       .btn:hover { border-color: var(--border-strong); }
       .btn:active { transform: scale(0.97); }
-      .btn.primary { background: var(--accent); color: #1a1003; border-color: transparent; width: 100%; padding: 11px; font-size: 13px; }
+      .btn.primary { background: var(--accent); color: #1a1003; border-color: transparent; }
       .btn.primary:hover { filter: brightness(1.06); }
       .btn.sm { padding: 7px 9px; font-size: 11px; }
 
-      /* ---- Character (center) ---- */
-      .stack { display: flex; flex-direction: column; gap: 16px; }
-      .char-wrap { display: flex; flex-direction: column; align-items: center; padding: 18px 14px 16px; }
-      .avatar { position: relative; width: 116px; height: 116px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle at 50% 38%, #20242b, #14161a); border: 1px solid var(--border-strong); transition: box-shadow .25s, transform .2s; }
-      .avatar.act { transform: translateY(-4px); box-shadow: 0 0 0 2px var(--accent-border), 0 0 28px var(--accent-soft); }
-      .avatar .glyph { font-size: 50px; line-height: 1; }
-      .avatar .shield-ring { position: absolute; inset: -8px; border-radius: 50%; border: 2px dashed var(--info); opacity: 0; transition: opacity .2s; }
-      .avatar.shielded .shield-ring { opacity: 0.8; }
-      .char-name { font-family: var(--mono); font-size: 13px; font-weight: 600; margin-top: 12px; }
-      .char-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+      /* ---- goal bar ---- */
+      .goal { padding: 12px 14px 13px; margin-bottom: 14px; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+      .goal .intro { font-size: 13px; font-weight: 600; width: 100%; margin-bottom: 2px; }
+      .goal .intro span { color: var(--muted); font-weight: 400; }
+      .ctl { display: flex; flex-direction: column; gap: 5px; }
+      .ctl .cl { font-family: var(--mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--subtle); }
+      select { background: var(--elevated); color: var(--fg); border: 1px solid var(--border); border-radius: var(--r-md); padding: 8px 10px; font: 13px var(--sans); min-width: 120px; }
+      select:focus { outline: none; border-color: var(--accent-border); }
+      select:disabled { opacity: .4; cursor: not-allowed; }
+      .goal .spacer { flex: 1; }
 
-      /* abilities panel */
-      .abilities { margin-top: 14px; width: 100%; border-top: 1px solid var(--border); padding-top: 12px; }
-      .ability { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 12px; padding: 5px 8px; border-radius: 6px; transition: background .2s; }
-      .ability.flash { background: var(--accent-soft); }
-      .ability .ico { width: 16px; text-align: center; flex: none; }
-      .ability .lk { color: var(--subtle); width: 56px; flex: none; }
-      .ability .lv { color: var(--fg); }
-      .ability .lv.off { color: var(--subtle); }
-      .ability .lv b { color: var(--accent); font-weight: 600; }
+      .axis { display: flex; align-items: center; gap: 8px; background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r-md); padding: 8px 11px; cursor: pointer; user-select: none; transition: border-color .15s, background .15s; align-self: flex-end; }
+      .axis:hover { border-color: var(--border-strong); }
+      .axis.on { border-color: var(--accent-border); background: var(--accent-soft); }
+      .axis .tl { font-size: 12.5px; }
+      .axis .pill { font-family: var(--mono); font-size: 10px; text-transform: uppercase; border: 1px solid var(--border-strong); border-radius: 999px; padding: 1px 7px; color: var(--subtle); }
+      .axis.on .pill { color: var(--accent); border-color: var(--accent-border); }
 
-      /* ---- Explosion panel (right) ---- */
-      .explode-eq { font-family: var(--mono); font-size: 13px; text-align: center; padding: 12px 8px; line-height: 1.8; }
-      .explode-eq .o { color: var(--info); }
-      .explode-eq .x { color: var(--subtle); }
-      .big { display: block; margin-top: 6px; font-size: 34px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--danger); transition: color .2s, transform .2s; }
-      .big.bump { transform: scale(1.12); color: var(--accent); }
-      .explode-note { font-size: 11.5px; color: var(--muted); line-height: 1.55; padding: 0 2px; }
-      .compare { margin-top: 12px; font-family: var(--mono); font-size: 11px; color: var(--success); border-top: 1px solid var(--border); padding-top: 10px; }
-      .compare b { color: var(--fg); }
+      /* ---- two columns ---- */
+      .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+      @media (max-width: 760px) { .cols { grid-template-columns: 1fr; } }
 
-      /* ---- Console ---- */
-      .console { margin-top: 16px; }
+      .col-bar { display: flex; align-items: center; gap: 8px; padding: 11px 14px; border-bottom: 1px solid var(--border); background: var(--elevated); border-radius: var(--r-lg) var(--r-lg) 0 0; }
+      .col-bar .kw { font-family: var(--mono); font-size: 12.5px; font-weight: 600; }
+      .col.inh .col-bar .kw { color: var(--danger); }
+      .col.comp .col-bar .kw { color: var(--success); }
+      .col-bar .tag { margin-left: auto; font-family: var(--mono); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--subtle); border: 1px solid var(--border); border-radius: 999px; padding: 2px 8px; }
+      .col-body { padding: 12px 14px 14px; }
+      .col-lead { font-size: 12px; color: var(--muted); line-height: 1.5; margin-bottom: 12px; }
+      .col-lead b { color: var(--fg); }
+
+      /* score line */
+      .score { display: flex; align-items: baseline; gap: 8px; margin-bottom: 12px; }
+      .score .big { font-size: 32px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; transition: transform .2s, color .2s; }
+      .col.inh .score .big { color: var(--danger); }
+      .col.comp .score .big { color: var(--success); }
+      .score .big.bump { transform: scale(1.14); }
+      .score .unit { font-size: 12px; color: var(--muted); }
+
+      /* zoo of subclasses */
+      .zoo { display: flex; flex-wrap: wrap; gap: 5px; max-height: 168px; overflow-y: auto; padding: 2px; border: 1px dashed var(--border-strong); border-radius: var(--r-md); padding: 8px; }
+      .zoo::-webkit-scrollbar { width: 8px; }
+      .zoo::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 999px; }
+      .sub { font-family: var(--mono); font-size: 10px; padding: 3px 7px; border-radius: 5px; border: 1px solid var(--border); color: var(--subtle); background: var(--elevated); white-space: nowrap; transition: all .15s; }
+      .sub.active { color: var(--accent); border-color: var(--accent-border); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent-border); font-weight: 600; }
+      .zoo-note { margin-top: 9px; font-size: 11.5px; color: var(--danger); display: flex; align-items: flex-start; gap: 6px; }
+
+      /* composition object */
+      .obj { border: 1px solid var(--success); border-radius: var(--r-md); background: var(--success-soft); padding: 10px 12px 12px; }
+      .obj-h { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--fg); margin-bottom: 9px; display: flex; align-items: center; gap: 8px; }
+      .obj-h .one { margin-left: auto; font-family: var(--mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--success); border: 1px solid rgba(92,198,111,.4); border-radius: 999px; padding: 1px 7px; }
+      .slots { display: flex; flex-direction: column; gap: 7px; }
+      .slot { display: flex; align-items: center; gap: 9px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; transition: border-color .15s; }
+      .slot.flash { border-color: var(--success); box-shadow: 0 0 0 1px rgba(92,198,111,.4); }
+      .slot .sk { font-family: var(--mono); font-size: 10px; color: var(--subtle); width: 58px; flex: none; }
+      .slot .part { font-family: var(--mono); font-size: 12px; color: var(--fg); display: inline-flex; align-items: center; gap: 6px; }
+      .slot .part .g { font-size: 14px; }
+      .slot .arrow { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--success); }
+
+      .bin { margin-top: 12px; }
+      .bin-h { font-family: var(--mono); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--subtle); margin-bottom: 7px; }
+      .bin-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+      .pc { font-family: var(--mono); font-size: 10px; padding: 3px 7px; border-radius: 5px; border: 1px solid var(--border); color: var(--subtle); background: var(--elevated); transition: all .15s; }
+      .pc.used { color: var(--success); border-color: rgba(92,198,111,.4); background: var(--success-soft); }
+      .comp-note { margin-top: 11px; font-size: 11.5px; color: var(--success); display: flex; align-items: flex-start; gap: 6px; }
+
+      /* ---- verdict + console ---- */
+      .verdict { margin-top: 14px; padding: 11px 13px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--elevated); font-size: 13px; line-height: 1.5; }
+      .verdict b { color: var(--fg); }
+      .verdict .vd { color: var(--danger); font-weight: 700; }
+      .verdict .vc { color: var(--success); font-weight: 700; }
+
+      .toolbar { display: flex; gap: 8px; align-items: center; margin: 14px 0 12px; flex-wrap: wrap; }
+      .toolbar .spacer { flex: 1; }
       .console-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
       .console-bar .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
-      .log { background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px 12px; font-family: var(--mono); font-size: 11.5px; line-height: 1.7; min-height: 92px; max-height: 150px; overflow-y: auto; }
+      .log { background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px 12px; font-family: var(--mono); font-size: 11.5px; line-height: 1.7; min-height: 92px; max-height: 158px; overflow-y: auto; }
       .log .ln { white-space: pre-wrap; }
       .log .muted { color: var(--subtle); }
       .log .c-accent { color: var(--accent); }
@@ -115,147 +133,137 @@
       .log .c-danger { color: var(--danger); }
       .log .c-violet { color: var(--violet); }
       .log .c-fg { color: var(--fg); }
-
-      .hint { margin-top: 12px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
-      .hint .b { color: var(--accent); }
     </style>
   </head>
   <body>
-    <div class="stage">
-      <!-- PALETTE OF BEHAVIORS -->
-      <div class="card">
-        <div class="card-bar">
-          <span class="kw">plug in</span>
-          <span class="nm">behaviors</span>
-          <span class="tag">has-a</span>
-        </div>
-        <div class="card-body">
-          <div class="section-lab">move behavior</div>
-          <div class="field">
-            <select id="move" onchange="recompose('move')">
-              <option value="walk">Walk</option>
-              <option value="fly">Fly</option>
-              <option value="swim">Swim</option>
-            </select>
-          </div>
-
-          <div class="section-lab">attack behavior</div>
-          <div class="field">
-            <select id="attack" onchange="recompose('attack')">
-              <option value="sword">Sword</option>
-              <option value="laser">Laser</option>
-              <option value="none">None</option>
-            </select>
-          </div>
-
-          <div class="section-lab">defense behavior</div>
-          <div class="toggle" id="shield-toggle" onclick="toggleShield()">
-            <span class="tl">Shield</span>
-            <span class="pill" id="shield-pill">off</span>
-          </div>
-
-          <div class="section-lab">act</div>
-          <button class="btn primary" onclick="simulateTurn()">▸ simulate turn</button>
-        </div>
+    <!-- GOAL BAR -->
+    <div class="card goal">
+      <div class="intro">I want a character that… <span>— change these and watch what each approach costs</span></div>
+      <div class="ctl">
+        <span class="cl">moves by</span>
+        <select id="move" onchange="onChange('move')">
+          <option value="walk">Walk</option>
+          <option value="fly">Fly</option>
+          <option value="swim">Swim</option>
+        </select>
       </div>
-
-      <!-- THE CHARACTER -->
-      <div class="card">
-        <div class="card-bar">
-          <span class="kw">class</span>
-          <span class="nm">Character</span>
-          <span class="tag">one object</span>
-        </div>
-        <div class="char-wrap">
-          <div class="avatar" id="avatar">
-            <span class="shield-ring"></span>
-            <span class="glyph" id="glyph">🛡️</span>
-          </div>
-          <div class="char-name">hero</div>
-          <div class="char-sub">holds 3 behavior objects · no subclass</div>
-
-          <div class="abilities">
-            <div class="ability" id="ab-move">
-              <span class="ico">🏃</span>
-              <span class="lk">move</span>
-              <span class="lv" id="lv-move">—</span>
-            </div>
-            <div class="ability" id="ab-attack">
-              <span class="ico">⚔️</span>
-              <span class="lk">attack</span>
-              <span class="lv" id="lv-attack">—</span>
-            </div>
-            <div class="ability" id="ab-defense">
-              <span class="ico">🛡️</span>
-              <span class="lk">defense</span>
-              <span class="lv" id="lv-defense">—</span>
-            </div>
-          </div>
-        </div>
+      <div class="ctl">
+        <span class="cl">attacks with</span>
+        <select id="attack" onchange="onChange('attack')">
+          <option value="sword">Sword</option>
+          <option value="laser">Laser</option>
+          <option value="none">Unarmed</option>
+        </select>
       </div>
+      <div class="ctl">
+        <span class="cl">defense</span>
+        <select id="defense" onchange="onChange('defense')">
+          <option value="plain">No shield</option>
+          <option value="shield">Shield</option>
+        </select>
+      </div>
+      <div class="ctl">
+        <span class="cl">armor tier</span>
+        <select id="armor" onchange="onChange('armor')" disabled>
+          <option value="light">Light</option>
+          <option value="medium">Medium</option>
+          <option value="heavy">Heavy</option>
+        </select>
+      </div>
+      <div class="spacer"></div>
+      <div class="axis" id="axis" onclick="toggleAxis()">
+        <span class="tl">+ armor tier (×3)</span>
+        <span class="pill" id="axis-pill">off</span>
+      </div>
+    </div>
 
-      <!-- INHERITANCE EXPLOSION -->
-      <div class="card">
-        <div class="card-bar">
-          <span class="kw">with</span>
-          <span class="nm">inheritance</span>
+    <!-- TWO APPROACHES -->
+    <div class="cols">
+      <!-- INHERITANCE -->
+      <div class="card col inh">
+        <div class="col-bar">
+          <span class="kw">Inheritance</span>
           <span class="tag">is-a</span>
         </div>
-        <div class="card-body">
-          <div class="explode-note">To cover every combination you'd need one subclass <em>per combination</em>:</div>
-          <div class="explode-eq">
-            <span class="o" id="eq-move">3</span> <span class="x">×</span>
-            <span class="o" id="eq-attack">3</span> <span class="x">×</span>
-            <span class="o" id="eq-defense">2</span><span id="eq-armor"></span>
-            <span class="x">=</span>
-            <span class="big" id="eq-total">18</span>
-            <span class="lab" style="display:block;text-align:center">subclasses</span>
+        <div class="col-body">
+          <div class="col-lead">One class <b>per combination</b>. Want a new mix of abilities? You write a <b>whole new subclass</b>. Here's every class you'd need — the highlighted one is your current pick:</div>
+          <div class="score">
+            <span class="big" id="inh-count">18</span>
+            <span class="unit">subclasses to write &amp; maintain</span>
           </div>
-          <div class="toggle" id="armor-toggle" onclick="toggleArmor()" style="margin-top:4px">
-            <span class="tl">+ add an armor axis (×3)</span>
-            <span class="pill" id="armor-pill">off</span>
+          <div class="zoo" id="zoo"></div>
+          <div class="zoo-note"><span>▲</span><span id="zoo-note">Every option you add <b style="color:var(--fg)">multiplies</b> this list.</span></div>
+        </div>
+      </div>
+
+      <!-- COMPOSITION -->
+      <div class="card col comp">
+        <div class="col-bar">
+          <span class="kw">Composition</span>
+          <span class="tag">has-a</span>
+        </div>
+        <div class="col-body">
+          <div class="col-lead">One <b>Character</b> that <b>holds swappable parts</b>. Want a new mix? Snap in a different part — <b>no new class</b>:</div>
+          <div class="score">
+            <span class="big" id="comp-count">1</span>
+            <span class="unit">Character class — <span id="parts-total">8</span> small reusable parts</span>
           </div>
-          <div class="compare">
-            composition needs only<br />
-            <b id="comp-count">3 + 3 + 2 = 8</b> behavior objects
+          <div class="obj">
+            <div class="obj-h">hero : Character <span class="one">one object</span></div>
+            <div class="slots" id="slots"></div>
           </div>
+          <div class="bin">
+            <div class="bin-h">parts bin — reuse these freely</div>
+            <div class="bin-chips" id="bin"></div>
+          </div>
+          <div class="comp-note"><span>▲</span><span id="comp-note">A new option just <b style="color:var(--fg)">adds one part</b> — no multiplying.</span></div>
         </div>
       </div>
     </div>
 
-    <!-- CONSOLE -->
-    <div class="console">
-      <div class="console-bar">
-        <span class="dot"></span>
-        <span class="lab">console</span>
-        <button class="btn sm" style="margin-left:auto" onclick="resetAll()">Reset</button>
-      </div>
-      <div class="log" id="log"></div>
-      <div class="hint">
-        <span class="b">▸</span>
-        <span>One <b style="color:var(--fg)">Character</b> object <em>holds</em> swappable behaviors. Change a dropdown and the abilities update live — no new class. The right panel shows how many <b style="color:var(--fg)">subclasses</b> inheritance would need instead.</span>
-      </div>
+    <div class="verdict" id="verdict"></div>
+
+    <div class="toolbar">
+      <button class="btn primary" onclick="runChar()">▶ Run this character</button>
+      <span class="spacer"></span>
+      <button class="btn sm" onclick="resetAll()">Reset</button>
     </div>
 
+    <div class="console-bar">
+      <span class="dot"></span>
+      <span class="lab">console</span>
+    </div>
+    <div class="log" id="log"></div>
+
     <script>
-      // ---- behavior "objects" the Character holds ----
+      // option catalogs — short class name + composition part + glyph + verb
       var MOVE = {
-        walk: { verb: "walking",  glyph: "🚶", label: "WalkBehavior" },
-        fly:  { verb: "flying",   glyph: "🕊️", label: "FlyBehavior" },
-        swim: { verb: "swimming", glyph: "🏊", label: "SwimBehavior" },
+        walk: { s: "Walk", part: "WalkBehavior", g: "🚶", verb: "walking" },
+        fly:  { s: "Fly",  part: "FlyBehavior",  g: "🕊️", verb: "flying" },
+        swim: { s: "Swim", part: "SwimBehavior", g: "🏊", verb: "swimming" }
       };
       var ATTACK = {
-        sword: { verb: "sword",  glyph: "⚔️", label: "SwordAttack" },
-        laser: { verb: "laser",  glyph: "🔫", label: "LaserAttack" },
-        none:  { verb: null,     glyph: "✋", label: "NoAttack" },
+        sword: { s: "Sword",   part: "SwordAttack", g: "⚔️", verb: "a sword" },
+        laser: { s: "Laser",   part: "LaserAttack", g: "🔫", verb: "a laser" },
+        none:  { s: "Unarmed", part: "NoAttack",    g: "✋", verb: "bare hands" }
       };
+      var DEFENSE = {
+        plain:  { s: "Plain",  part: "NoShield",       g: "▫️", verb: "no shield" },
+        shield: { s: "Shield", part: "ShieldBehavior", g: "🛡️", verb: "a shield" }
+      };
+      var ARMOR = {
+        light:  { s: "Light",  part: "LightArmor",  g: "🧥", verb: "light armor" },
+        medium: { s: "Medium", part: "MediumArmor", g: "🦺", verb: "medium armor" },
+        heavy:  { s: "Heavy",  part: "HeavyArmor",  g: "🛡", verb: "heavy armor" }
+      };
+      var MOVE_KEYS = ["walk", "fly", "swim"];
+      var ATTACK_KEYS = ["sword", "laser", "none"];
+      var DEF_KEYS = ["plain", "shield"];
+      var ARMOR_KEYS = ["light", "medium", "heavy"];
 
-      // counts for the inheritance explosion (fixed catalog of options)
-      var MOVE_OPTS = 3, ATTACK_OPTS = 3, DEFENSE_OPTS = 2, ARMOR_OPTS = 3;
-      var armorOn = false;
-      var shieldOn = false;
-
+      var axisOn = false;
       function el(id) { return document.getElementById(id); }
+      function val(id) { return el(id).value; }
 
       function log(html, cls) {
         var box = el("log");
@@ -263,154 +271,198 @@
         line.className = "ln" + (cls ? " " + cls : "");
         line.innerHTML = html;
         box.appendChild(line);
-        while (box.children.length > 9) box.removeChild(box.firstChild);
+        while (box.children.length > 10) box.removeChild(box.firstChild);
         box.scrollTop = box.scrollHeight;
       }
 
-      function flashAbility(id) {
-        var node = el(id);
-        if (!node) return;
-        node.classList.add("flash");
-        setTimeout(function () { node.classList.remove("flash"); }, 320);
+      function curKey() {
+        var k = val("move") + "|" + val("attack") + "|" + val("defense");
+        if (axisOn) k += "|" + val("armor");
+        return k;
       }
 
-      function curMove()   { return MOVE[el("move").value]; }
-      function curAttack() { return ATTACK[el("attack").value]; }
-
-      function renderAbilities() {
-        var m = curMove(), a = curAttack();
-        el("lv-move").innerHTML = "<b>" + m.label + "</b> · " + m.verb;
-        el("lv-attack").innerHTML = a.verb
-          ? "<b>" + a.label + "</b> · " + a.verb
-          : "<b>" + a.label + "</b> · unarmed";
-        el("lv-attack").className = "lv" + (a.verb ? "" : " off");
-        el("lv-defense").innerHTML = shieldOn
-          ? "<b>ShieldBehavior</b> · raised"
-          : "NoShield · none";
-        el("lv-defense").className = "lv" + (shieldOn ? "" : " off");
-
-        // avatar reflects current move + shield
-        el("glyph").textContent = m.glyph;
-        el("avatar").classList.toggle("shielded", shieldOn);
+      function bump(node) {
+        node.classList.add("bump");
+        setTimeout(function () { node.classList.remove("bump"); }, 240);
       }
 
-      function renderExplosion() {
-        el("eq-move").textContent = MOVE_OPTS;
-        el("eq-attack").textContent = ATTACK_OPTS;
-        el("eq-defense").textContent = DEFENSE_OPTS;
-        el("eq-armor").innerHTML = armorOn
-          ? ' <span class="x">×</span> <span class="o">' + ARMOR_OPTS + "</span>"
-          : "";
-        var total = MOVE_OPTS * ATTACK_OPTS * DEFENSE_OPTS * (armorOn ? ARMOR_OPTS : 1);
-        var big = el("eq-total");
-        big.textContent = total;
-        big.classList.add("bump");
-        setTimeout(function () { big.classList.remove("bump"); }, 240);
-
-        var sum = MOVE_OPTS + ATTACK_OPTS + DEFENSE_OPTS + (armorOn ? ARMOR_OPTS : 0);
-        el("comp-count").textContent =
-          MOVE_OPTS + " + " + ATTACK_OPTS + " + " + DEFENSE_OPTS +
-          (armorOn ? " + " + ARMOR_OPTS : "") + " = " + sum;
+      // ---------- INHERITANCE: render the full zoo of subclasses ----------
+      function renderZoo() {
+        var zoo = el("zoo");
+        zoo.innerHTML = "";
+        var active = curKey();
+        var count = 0;
+        MOVE_KEYS.forEach(function (mv) {
+          ATTACK_KEYS.forEach(function (at) {
+            DEF_KEYS.forEach(function (df) {
+              var armorList = axisOn ? ARMOR_KEYS : [null];
+              armorList.forEach(function (ar) {
+                count++;
+                var name = MOVE[mv].s + ATTACK[at].s + DEFENSE[df].s + (ar ? ARMOR[ar].s : "") + "Hero";
+                var key = mv + "|" + at + "|" + df + (ar ? "|" + ar : "");
+                var chip = document.createElement("span");
+                chip.className = "sub" + (key === active ? " active" : "");
+                chip.textContent = name;
+                zoo.appendChild(chip);
+              });
+            });
+          });
+        });
+        var big = el("inh-count");
+        big.textContent = count;
+        bump(big);
+        return count;
       }
 
-      // swap one behavior at runtime — this is the whole point
-      function recompose(which) {
-        renderAbilities();
-        if (which === "move") {
-          flashAbility("ab-move");
-          var m = curMove();
-          log('hero.<span class="c-info">setMove</span>(<span class="c-accent">new ' + m.label + '()</span>) ' +
-              '<span class="muted">→ swapped at runtime, no subclass</span>', "c-info");
+      // ---------- COMPOSITION: one object + swappable slots ----------
+      function renderComposition(flashKind) {
+        var slots = el("slots");
+        slots.innerHTML = "";
+        var rows = [
+          { k: "move",    obj: MOVE[val("move")] },
+          { k: "attack",  obj: ATTACK[val("attack")] },
+          { k: "defense", obj: DEFENSE[val("defense")] }
+        ];
+        if (axisOn) rows.push({ k: "armor", obj: ARMOR[val("armor")] });
+
+        rows.forEach(function (r) {
+          var div = document.createElement("div");
+          div.className = "slot" + (flashKind === r.k ? " flash" : "");
+          div.innerHTML =
+            '<span class="sk">' + r.k + '</span>' +
+            '<span class="part"><span class="g">' + r.obj.g + '</span>' + r.obj.part + '</span>' +
+            '<span class="arrow">held ◂</span>';
+          slots.appendChild(div);
+        });
+        if (flashKind) {
+          setTimeout(function () {
+            var f = slots.querySelector(".slot.flash");
+            if (f) f.classList.remove("flash");
+          }, 360);
+        }
+
+        // parts bin — show every reusable small class, highlight the ones in use
+        var bin = el("bin");
+        bin.innerHTML = "";
+        var used = {};
+        used[MOVE[val("move")].part] = 1;
+        used[ATTACK[val("attack")].part] = 1;
+        used[DEFENSE[val("defense")].part] = 1;
+        if (axisOn) used[ARMOR[val("armor")].part] = 1;
+
+        var parts = [];
+        MOVE_KEYS.forEach(function (k) { parts.push(MOVE[k].part); });
+        ATTACK_KEYS.forEach(function (k) { parts.push(ATTACK[k].part); });
+        DEF_KEYS.forEach(function (k) { parts.push(DEFENSE[k].part); });
+        if (axisOn) ARMOR_KEYS.forEach(function (k) { parts.push(ARMOR[k].part); });
+
+        parts.forEach(function (p) {
+          var c = document.createElement("span");
+          c.className = "pc" + (used[p] ? " used" : "");
+          c.textContent = p;
+          bin.appendChild(c);
+        });
+
+        var total = parts.length;
+        el("parts-total").textContent = total;
+        var cc = el("comp-count");
+        cc.textContent = "1";
+        bump(cc);
+      }
+
+      function renderVerdict(inhCount) {
+        var partsTotal = el("parts-total").textContent;
+        var v = el("verdict");
+        v.innerHTML =
+          'Same character, two costs: inheritance needs <span class="vd">' + inhCount + ' separate classes</span>, ' +
+          'composition needs <span class="vc">1 Character + ' + partsTotal + ' tiny parts</span> you reuse across all of them. ' +
+          '<b>That gap is why the rule is "favor composition over inheritance."</b>';
+      }
+
+      function renderAll(flashKind) {
+        // keep armor select enabled only when the axis is on
+        el("armor").disabled = !axisOn;
+        var inhCount = renderZoo();
+        renderComposition(flashKind);
+        renderVerdict(inhCount);
+      }
+
+      // ---------- interactions ----------
+      function onChange(which) {
+        renderAll(which);
+        var inhCount = MOVE_KEYS.length * ATTACK_KEYS.length * DEF_KEYS.length * (axisOn ? ARMOR_KEYS.length : 1);
+        var activeName =
+          MOVE[val("move")].s + ATTACK[val("attack")].s + DEFENSE[val("defense")].s +
+          (axisOn ? ARMOR[val("armor")].s : "") + "Hero";
+        var part =
+          which === "move" ? MOVE[val("move")].part :
+          which === "attack" ? ATTACK[val("attack")].part :
+          which === "defense" ? DEFENSE[val("defense")].part :
+          ARMOR[val("armor")].part;
+        log(
+          '<span class="c-danger">inheritance</span> <span class="muted">→ jump to a different class:</span> <span class="c-accent">' + activeName + '</span> ' +
+          '<span class="muted">(1 of ' + inhCount + ')</span>'
+        );
+        log(
+          '<span class="c-success">composition</span> <span class="muted">→</span> hero.<span class="c-info">set' +
+          which.charAt(0).toUpperCase() + which.slice(1) + '</span>(<span class="c-accent">new ' + part + '()</span>) ' +
+          '<span class="muted">— same hero object, one part swapped</span>'
+        );
+      }
+
+      function toggleAxis() {
+        axisOn = !axisOn;
+        el("axis").classList.toggle("on", axisOn);
+        el("axis-pill").textContent = axisOn ? "on" : "off";
+        renderAll();
+        var inhCount = MOVE_KEYS.length * ATTACK_KEYS.length * DEF_KEYS.length * (axisOn ? ARMOR_KEYS.length : 1);
+        if (axisOn) {
+          log('<span class="c-danger">+ armor axis</span> <span class="muted">→ every class spawns 3 (…Light/Medium/Heavy) →</span> <span class="c-danger">' + inhCount + ' subclasses</span> <span class="muted">(×3)</span>');
+          log('<span class="c-success">composition</span> <span class="muted">→ just adds</span> <span class="c-fg">1 armor slot + 3 parts</span> <span class="muted">(+1, not ×3)</span>');
         } else {
-          flashAbility("ab-attack");
-          var a = curAttack();
-          log('hero.<span class="c-info">setAttack</span>(<span class="c-accent">new ' + a.label + '()</span>) ' +
-              '<span class="muted">→ swapped at runtime</span>', "c-info");
+          log('<span class="muted">armor axis removed → back to</span> <span class="c-danger">' + inhCount + ' subclasses</span>');
         }
       }
 
-      function toggleShield() {
-        shieldOn = !shieldOn;
-        el("shield-toggle").classList.toggle("on", shieldOn);
-        el("shield-pill").textContent = shieldOn ? "on" : "off";
-        flashAbility("ab-defense");
-        renderAbilities();
-        log('hero.<span class="c-info">setDefense</span>(<span class="c-accent">' +
-            (shieldOn ? "new ShieldBehavior()" : "NoShield") + '</span>)', "c-info");
-      }
-
-      function toggleArmor() {
-        armorOn = !armorOn;
-        el("armor-toggle").classList.toggle("on", armorOn);
-        el("armor-pill").textContent = armorOn ? "on" : "off";
-        renderExplosion();
-        var total = MOVE_OPTS * ATTACK_OPTS * DEFENSE_OPTS * (armorOn ? ARMOR_OPTS : 1);
-        log('<span class="c-danger">inheritance</span> now needs <span class="c-danger">' + total +
-            '</span> subclasses ' + (armorOn ? '<span class="muted">(an axis multiplied the tree)</span>'
-                                            : '<span class="muted">(axis removed)</span>'), "c-danger");
-      }
-
-      function simulateTurn() {
-        var m = curMove(), a = curAttack();
-        var av = el("avatar");
-        av.classList.add("act");
-        setTimeout(function () { av.classList.remove("act"); }, 420);
-
-        flashAbility("ab-move");
-        log('hero.<span class="c-violet">performMove</span>() <span class="muted">→</span> ' +
-            'moves by <b class="c-fg">' + m.verb + '</b>', "c-violet");
-
+      function runChar() {
+        var m = MOVE[val("move")], a = ATTACK[val("attack")], d = DEFENSE[val("defense")];
+        log('<span class="c-violet">hero.act()</span> <span class="muted">— the ONE Character object runs, using its plugged-in parts:</span>');
+        renderComposition("move");
+        log('  <span class="c-info">performMove()</span> <span class="muted">→ moves by</span> <span class="c-fg">' + m.verb + '</span>');
         setTimeout(function () {
-          flashAbility("ab-attack");
-          if (a.verb) {
-            log('hero.<span class="c-violet">performAttack</span>() <span class="muted">→</span> ' +
-                'attacks with <b class="c-fg">' + a.verb + '</b>', "c-violet");
-          } else {
-            log('hero.<span class="c-violet">performAttack</span>() <span class="muted">→</span> ' +
-                '<span class="muted">no weapon, holds back</span>', "c-violet");
-          }
-        }, 240);
-
+          renderComposition("attack");
+          log('  <span class="c-info">performAttack()</span> <span class="muted">→ attacks with</span> <span class="c-fg">' + a.verb + '</span>');
+        }, 260);
         setTimeout(function () {
-          flashAbility("ab-defense");
-          if (shieldOn) {
-            log('hero.<span class="c-violet">performDefense</span>() <span class="muted">→</span> ' +
-                'raises <b class="c-fg">shield</b>', "c-violet");
-          } else {
-            log('hero.<span class="c-violet">performDefense</span>() <span class="muted">→</span> ' +
-                '<span class="muted">no shield</span>', "c-violet");
-          }
-        }, 480);
-
+          renderComposition("defense");
+          log('  <span class="c-info">performDefense()</span> <span class="muted">→ defends with</span> <span class="c-fg">' + d.verb + '</span>');
+        }, 520);
         setTimeout(function () {
-          log('<span class="c-success">// same object acted — only the plugged-in behaviors changed</span>');
-        }, 700);
+          log('<span class="c-success">// no new subclass was created — the same object just used different parts</span>');
+        }, 760);
       }
 
       function resetAll() {
         el("move").value = "walk";
         el("attack").value = "sword";
-        shieldOn = false; armorOn = false;
-        el("shield-toggle").classList.remove("on");
-        el("shield-pill").textContent = "off";
-        el("armor-toggle").classList.remove("on");
-        el("armor-pill").textContent = "off";
+        el("defense").value = "plain";
+        el("armor").value = "light";
+        axisOn = false;
+        el("axis").classList.remove("on");
+        el("axis-pill").textContent = "off";
         el("log").innerHTML = "";
-        renderAbilities();
-        renderExplosion();
-        log('<span class="muted">// reset — one Character, default behaviors plugged in</span>');
+        renderAll();
+        log('<span class="muted">// one Character holds swappable parts — change a dropdown to compare the two approaches</span>');
       }
 
-      // ---- seed: one default behavior set, simulate once on load ----
+      // seed
       el("move").value = "fly";
       el("attack").value = "laser";
-      shieldOn = true;
-      el("shield-toggle").classList.add("on");
-      el("shield-pill").textContent = "on";
-      renderAbilities();
-      renderExplosion();
-      log('<span class="muted">// new Character(new FlyBehavior(), new LaserAttack(), new ShieldBehavior())</span>');
-      simulateTurn();
+      el("defense").value = "shield";
+      renderAll();
+      log('<span class="muted">// goal: a flying, laser-shooting, shielded character</span>');
+      log('<span class="c-danger">inheritance</span> <span class="muted">needs the class</span> <span class="c-accent">FlyLaserShieldHero</span> <span class="muted">— 1 of 18 you\'d have to write</span>');
+      log('<span class="c-success">composition</span> <span class="muted">needs</span> <span class="c-fg">1 Character</span> <span class="muted">holding FlyBehavior + LaserAttack + ShieldBehavior</span>');
     </script>
     <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
   </body>

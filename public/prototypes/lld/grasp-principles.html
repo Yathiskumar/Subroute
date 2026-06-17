@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Responsibility Assignment (GRASP) — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.32);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --success-border: rgba(92, 198, 111, 0.4);
+        --info: #5e9ff6;
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.1);
+        --danger-border: rgba(240, 104, 104, 0.4);
+        --violet: #a78bfa;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      .lab { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 12px; cursor: pointer; transition: filter .15s, transform .1s, border-color .15s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .btn.primary { background: var(--accent); color: #1a1003; border-color: transparent; }
+      .btn.primary:hover { filter: brightness(1.06); }
+      .btn.ghost { background: transparent; }
+      .btn.sm { padding: 7px 9px; font-size: 11px; }
+      .btn:disabled { opacity: .4; cursor: not-allowed; }
+      .btn:disabled:active { transform: none; }
+
+      /* ---- Status bar ---- */
+      .statusbar { display: grid; grid-template-columns: auto 1fr auto auto; gap: 12px; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 11px 14px; margin-bottom: 16px; }
+      .pill { display: inline-flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+      .pill .n { color: var(--fg); font-weight: 700; font-variant-numeric: tabular-nums; }
+      .dots { display: flex; gap: 6px; }
+      .dots .d { width: 9px; height: 9px; border-radius: 50%; background: var(--elevated); border: 1px solid var(--border-strong); transition: background .25s, border-color .25s, transform .2s; }
+      .dots .d.cur { transform: scale(1.25); border-color: var(--accent); }
+      .dots .d.ok { background: var(--success); border-color: transparent; }
+      .dots .d.bad { background: var(--danger); border-color: transparent; }
+      .score { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+      .score .v { color: var(--success); font-weight: 700; font-size: 15px; font-variant-numeric: tabular-nums; }
+
+      /* ---- Question ---- */
+      .qcard { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 16px; margin-bottom: 14px; }
+      .qtag { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+      .qtext { font-size: 17px; font-weight: 650; line-height: 1.35; }
+      .qsub { margin-top: 7px; font-size: 12.5px; color: var(--muted); }
+      .qsub code { font-family: var(--mono); color: var(--fg); background: var(--elevated); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+
+      /* ---- Candidate class cards ---- */
+      .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 11px; margin-bottom: 16px; }
+      .card { text-align: left; background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 12px 13px; cursor: pointer; transition: border-color .15s, transform .1s, box-shadow .2s; position: relative; overflow: hidden; }
+      .card:hover { border-color: var(--accent-border); transform: translateY(-2px); }
+      .card:active { transform: scale(0.98); }
+      .card.locked { cursor: default; }
+      .card.locked:hover { transform: none; border-color: var(--border); }
+      .card.right { border-color: var(--success-border); background: var(--success-soft); }
+      .card.wrong { border-color: var(--danger-border); background: var(--danger-soft); }
+      .card.dim { opacity: .45; }
+      .card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
+      .card-dot { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+      .card-name { font-family: var(--mono); font-size: 13px; font-weight: 700; }
+      .card-role { margin-left: auto; font-family: var(--mono); font-size: 9px; letter-spacing: .06em; text-transform: uppercase; color: var(--subtle); }
+      .fields { display: flex; flex-direction: column; gap: 4px; }
+      .field { font-family: var(--mono); font-size: 11px; color: var(--muted); display: flex; gap: 6px; align-items: baseline; }
+      .field .k { color: var(--subtle); }
+      .field .v { color: var(--fg); }
+      .field.has { color: var(--success); }
+      .field.has .k, .field.has .v { color: var(--success); }
+      .card-mark { position: absolute; top: 9px; right: 10px; font-size: 15px; font-weight: 800; opacity: 0; transition: opacity .2s; }
+      .card.right .card-mark { opacity: 1; color: var(--success); }
+      .card.wrong .card-mark { opacity: 1; color: var(--danger); }
+
+      /* ---- Verdict ---- */
+      .verdict { border-radius: var(--r-md); padding: 11px 13px; margin-bottom: 14px; font-size: 12.5px; line-height: 1.55; display: none; border: 1px solid var(--border); background: var(--elevated); }
+      .verdict.show { display: block; }
+      .verdict.ok { border-color: var(--success-border); background: var(--success-soft); }
+      .verdict.no { border-color: var(--danger-border); background: var(--danger-soft); }
+      .verdict .principle { font-family: var(--mono); font-weight: 700; }
+      .verdict.ok .principle { color: var(--success); }
+      .verdict.no .principle { color: var(--danger); }
+      .verdict .body { color: var(--fg); margin-top: 4px; }
+      .verdict code { font-family: var(--mono); background: rgba(0,0,0,.25); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+
+      .nav { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+      .nav .spacer { flex: 1; }
+
+      /* ---- Console ---- */
+      .console { margin-top: 4px; }
+      .console-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+      .console-bar .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+      .log { background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px 12px; font-family: var(--mono); font-size: 11.5px; line-height: 1.7; min-height: 92px; max-height: 158px; overflow-y: auto; }
+      .log .ln { white-space: pre-wrap; }
+      .log .muted { color: var(--subtle); }
+      .log .c-accent { color: var(--accent); }
+      .log .c-info { color: var(--info); }
+      .log .c-success { color: var(--success); }
+      .log .c-danger { color: var(--danger); }
+      .log .c-violet { color: var(--violet); }
+      .log .c-fg { color: var(--fg); }
+
+      .hint { margin-top: 12px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <!-- STATUS BAR -->
+    <div class="statusbar">
+      <span class="pill">scenario <span class="n" id="scn-cur">1</span>/<span class="n" id="scn-tot">5</span></span>
+      <span class="dots" id="dots"></span>
+      <span class="pill" id="answered-pill">— unanswered</span>
+      <span class="score">score <span class="v" id="score">0</span><span style="color:var(--subtle)">/<span id="score-tot">5</span></span></span>
+    </div>
+
+    <!-- QUESTION -->
+    <div class="qcard">
+      <div class="qtag" id="qtag">responsibility · who owns it?</div>
+      <div class="qtext" id="qtext">—</div>
+      <div class="qsub" id="qsub">—</div>
+    </div>
+
+    <!-- CANDIDATE CARDS -->
+    <div class="cards" id="cards"></div>
+
+    <!-- VERDICT -->
+    <div class="verdict" id="verdict">
+      <span class="principle" id="verdict-principle"></span>
+      <div class="body" id="verdict-body"></div>
+    </div>
+
+    <!-- NAV -->
+    <div class="nav">
+      <button class="btn" id="prev" onclick="prev()">‹ Prev</button>
+      <button class="btn primary" id="next" onclick="next()">Next ›</button>
+      <span class="spacer"></span>
+      <button class="btn ghost sm" onclick="reset()">Reset</button>
+    </div>
+
+    <!-- CONSOLE -->
+    <div class="console">
+      <div class="console-bar">
+        <span class="dot"></span>
+        <span class="lab">console</span>
+      </div>
+      <div class="log" id="log"></div>
+      <div class="hint">
+        <span class="b">▸</span>
+        <span>Read each card's <b style="color:var(--fg)">fields</b> — the class that <b style="color:var(--fg)">already holds the information</b> is almost always the right owner. That's <b style="color:var(--accent)">Information Expert</b>, the heart of GRASP.</span>
+      </div>
+    </div>
+
+    <script>
+      // Each scenario: a responsibility question, candidate classes (with fields),
+      // the correct owner, the governing GRASP principle, and per-class feedback.
+      var SCENARIOS = [
+        {
+          tag: "Information Expert",
+          q: "Who should compute the order's grand total?",
+          sub: "Sum every line's subtotal into one number.",
+          correct: "Order",
+          principle: "Information Expert",
+          win: "Order has the line items, so Order sums them (each OrderLine computes its own subtotal). The logic lives next to the data.",
+          cards: [
+            { name: "Window", role: "ui", fields: [["clickedItem", "Product"], ["screen", "View"]] },
+            { name: "CheckoutController", role: "controller", fields: [["order", "ref →"]] },
+            { name: "Order", role: "domain", fields: [["lines", "OrderLine[]"]], has: [0] },
+            { name: "OrderLine", role: "domain", fields: [["product", "Product"], ["qty", "int"]] },
+          ],
+          wrong: {
+            Window: "the UI would reach through the order into every line — business logic leaks into the view, coupling spikes.",
+            CheckoutController: "the controller would poke at Order AND OrderLine internals; pricing logic then lives outside the data it depends on.",
+            OrderLine: "a single line only knows ONE line — it can't see the whole order, so it can't total it.",
+          },
+        },
+        {
+          tag: "Creator",
+          q: "Who should create a new OrderLine?",
+          sub: "Instantiate a line from a product + quantity and keep it.",
+          correct: "Order",
+          principle: "Creator",
+          win: "Order CONTAINS the OrderLines, so Order creates them — the container that aggregates a part is its natural maker.",
+          cards: [
+            { name: "Window", role: "ui", fields: [["pickedProduct", "Product"], ["qty", "int"]] },
+            { name: "Order", role: "domain", fields: [["lines", "OrderLine[]"]], has: [0] },
+            { name: "Product", role: "domain", fields: [["name", "string"], ["price", "money"]] },
+            { name: "LineFactory", role: "fabrication", fields: [["(no state)", ""]] },
+          ],
+          wrong: {
+            Window: "the UI would know OrderLine's constructor and hand a built object over — construction logic scatters into the view, coupling rises.",
+            Product: "a product is referenced BY a line; it neither contains nor records lines, so it's the wrong creator.",
+            LineFactory: "a Pure Fabrication here is overkill — Order already contains the lines and has the data; inventing a factory only adds a class.",
+          },
+        },
+        {
+          tag: "Controller",
+          q: "Who should receive the 'checkout' system event?",
+          sub: "The cashier clicked Checkout — something must accept that event.",
+          correct: "CheckoutHandler",
+          principle: "Controller",
+          win: "A non-UI use-case controller receives the system event and coordinates the work, then delegates to the experts. The UI stays thin.",
+          cards: [
+            { name: "Window", role: "ui", fields: [["button", "View"]] },
+            { name: "CheckoutHandler", role: "controller", fields: [["order", "ref →"], ["case", "use-case"]], has: [1] },
+            { name: "Order", role: "domain", fields: [["lines", "OrderLine[]"]] },
+            { name: "Database", role: "infra", fields: [["conn", "Socket"]] },
+          ],
+          wrong: {
+            Window: "letting the button handler run business logic inline tangles the use case into the UI — the classic fat-view mistake.",
+            Order: "the Order is a domain expert, not an event entry point; routing raw system events to it blurs its responsibility.",
+            Database: "persistence is downstream — the event needs coordinating first, not dumping straight into storage.",
+          },
+        },
+        {
+          tag: "Polymorphism",
+          q: "Who should charge a payment that varies by type (card / wallet / gift)?",
+          sub: "Each method charges differently — avoid a switch on a type tag.",
+          correct: "PaymentMethod",
+          principle: "Polymorphism",
+          win: "Let each PaymentMethod subtype charge itself via one polymorphic operation — no if/else on a type field. This is the seed of the Strategy pattern.",
+          cards: [
+            { name: "CheckoutController", role: "controller", fields: [["payment", "ref →"]] },
+            { name: "PaymentMethod", role: "domain", fields: [["charge()", "per-subtype"]], has: [0] },
+            { name: "Order", role: "domain", fields: [["lines", "OrderLine[]"]] },
+            { name: "TypeSwitch", role: "anti-pattern", fields: [["if/else", "on type"]] },
+          ],
+          wrong: {
+            CheckoutController: "a controller branching on payment.type with a switch is brittle — every new method edits this class. Push the variation into subtypes.",
+            Order: "the Order owns lines, not the charging algorithm; bolting payment logic on lowers its cohesion.",
+            TypeSwitch: "a switch on a type tag is exactly what Polymorphism replaces — add a payment method and you must hunt down every switch.",
+          },
+        },
+        {
+          tag: "Pure Fabrication",
+          q: "Who should save the order to the database?",
+          sub: "Persistence doesn't belong to any natural domain class.",
+          correct: "OrderRepository",
+          principle: "Pure Fabrication",
+          win: "No domain class is a good home for SQL/IO, so invent one — an OrderRepository — keeping the Order pure and coupling to the DB low.",
+          cards: [
+            { name: "Order", role: "domain", fields: [["lines", "OrderLine[]"]] },
+            { name: "OrderRepository", role: "fabrication", fields: [["save()", "→ DB"], ["db", "Connection"]], has: [0, 1] },
+            { name: "Window", role: "ui", fields: [["screen", "View"]] },
+            { name: "OrderLine", role: "domain", fields: [["product", "Product"]] },
+          ],
+          wrong: {
+            Order: "making the Order do its own SQL welds the domain model to the database — a change in storage now drags the Order along. Low cohesion.",
+            Window: "the UI persisting data couples views to the database and scatters IO across the presentation layer.",
+            OrderLine: "a single line has no business talking to storage; persistence is an order-level (or repository-level) concern.",
+          },
+        },
+      ];
+
+      var ROLE_COLOR = {
+        ui: "#6b7280",
+        controller: "#5e9ff6",
+        domain: "#5cc66f",
+        fabrication: "#a78bfa",
+        infra: "#fb863a",
+        "anti-pattern": "#f06868",
+      };
+      function roleColor(r) { return ROLE_COLOR[r] || "#6b7280"; }
+
+      var idx = 0;
+      var answers = []; // per scenario: { picked: name, correct: bool } or null
+
+      function resetAnswers() {
+        answers = SCENARIOS.map(function () { return null; });
+      }
+
+      function log(html, cls) {
+        var box = document.getElementById("log");
+        var line = document.createElement("div");
+        line.className = "ln" + (cls ? " " + cls : "");
+        line.innerHTML = html;
+        box.appendChild(line);
+        while (box.children.length > 10) box.removeChild(box.firstChild);
+        box.scrollTop = box.scrollHeight;
+      }
+
+      function score() {
+        var s = 0;
+        answers.forEach(function (a) { if (a && a.correct) s++; });
+        return s;
+      }
+
+      function renderDots() {
+        var wrap = document.getElementById("dots");
+        wrap.innerHTML = "";
+        SCENARIOS.forEach(function (_, i) {
+          var d = document.createElement("span");
+          d.className = "d";
+          if (i === idx) d.className += " cur";
+          var a = answers[i];
+          if (a) d.className += a.correct ? " ok" : " bad";
+          wrap.appendChild(d);
+        });
+      }
+
+      function render() {
+        var sc = SCENARIOS[idx];
+        var ans = answers[idx];
+
+        document.getElementById("scn-cur").textContent = idx + 1;
+        document.getElementById("scn-tot").textContent = SCENARIOS.length;
+        document.getElementById("score-tot").textContent = SCENARIOS.length;
+        document.getElementById("score").textContent = score();
+        document.getElementById("qtag").textContent = sc.tag + " · who owns it?";
+        document.getElementById("qtext").textContent = sc.q;
+        document.getElementById("qsub").textContent = sc.sub;
+
+        var pill = document.getElementById("answered-pill");
+        if (!ans) {
+          pill.textContent = "— unanswered";
+          pill.style.color = "var(--muted)";
+        } else if (ans.correct) {
+          pill.innerHTML = "✓ correct";
+          pill.style.color = "var(--success)";
+        } else {
+          pill.innerHTML = "✗ wrong — picked " + ans.picked;
+          pill.style.color = "var(--danger)";
+        }
+
+        // cards
+        var wrap = document.getElementById("cards");
+        wrap.innerHTML = "";
+        sc.cards.forEach(function (c) {
+          var btn = document.createElement("button");
+          var cls = "card";
+          if (ans) {
+            cls += " locked";
+            if (c.name === sc.correct) cls += " right";
+            else if (c.name === ans.picked) cls += " wrong";
+            else cls += " dim";
+          }
+          btn.className = cls;
+
+          var has = c.has || [];
+          var fieldsHtml = c.fields.map(function (f, fi) {
+            var hasCls = has.indexOf(fi) >= 0 ? " has" : "";
+            var val = f[1] ? '<span class="v">' + f[1] + '</span>' : "";
+            return '<div class="field' + hasCls + '"><span class="k">' + f[0] + '</span>' + val + '</div>';
+          }).join("");
+
+          btn.innerHTML =
+            '<span class="card-mark">' + (c.name === sc.correct ? "✓" : (ans && c.name === ans.picked ? "✗" : "")) + '</span>' +
+            '<div class="card-head">' +
+              '<span class="card-dot" style="background:' + roleColor(c.role) + '"></span>' +
+              '<span class="card-name">' + c.name + '</span>' +
+              '<span class="card-role">' + c.role + '</span>' +
+            '</div>' +
+            '<div class="fields">' + fieldsHtml + '</div>';
+
+          if (!ans) {
+            btn.onclick = (function (name) { return function () { answer(name); }; })(c.name);
+          }
+          wrap.appendChild(btn);
+        });
+
+        // verdict
+        var v = document.getElementById("verdict");
+        if (!ans) {
+          v.className = "verdict";
+        } else {
+          v.className = "verdict show " + (ans.correct ? "ok" : "no");
+          document.getElementById("verdict-principle").textContent =
+            (ans.correct ? "✓ " : "✗ ") + sc.principle;
+          if (ans.correct) {
+            document.getElementById("verdict-body").innerHTML =
+              "<b>" + sc.correct + "</b> — " + sc.win;
+          } else {
+            var why = sc.wrong[ans.picked] || "that class isn't the right owner here.";
+            document.getElementById("verdict-body").innerHTML =
+              "You picked <b>" + ans.picked + "</b>: " + why +
+              " The right owner is <b>" + sc.correct + "</b> — " + sc.win;
+          }
+        }
+
+        document.getElementById("prev").disabled = idx === 0;
+        var nextBtn = document.getElementById("next");
+        nextBtn.textContent = idx === SCENARIOS.length - 1 ? "Finish" : "Next ›";
+
+        renderDots();
+      }
+
+      function answer(name) {
+        if (answers[idx]) return; // already answered
+        var sc = SCENARIOS[idx];
+        var correct = name === sc.correct;
+        answers[idx] = { picked: name, correct: correct };
+
+        if (correct) {
+          log(
+            '<span class="c-success">✓ scenario ' + (idx + 1) + '</span> ' +
+            '<span class="muted">' + sc.principle + ' —</span> ' +
+            '<span class="c-fg">' + sc.correct + '</span> ' +
+            '<span class="muted">owns it.</span> ' +
+            '<span class="c-accent">score ' + score() + '/' + SCENARIOS.length + '</span>'
+          );
+        } else {
+          log(
+            '<span class="c-danger">✗ scenario ' + (idx + 1) + '</span> ' +
+            '<span class="muted">picked</span> <span class="c-fg">' + name + '</span>' +
+            '<span class="muted"> — violates ' + sc.principle + '. right owner: </span>' +
+            '<span class="c-success">' + sc.correct + '</span>'
+          );
+          var w = sc.wrong[name];
+          if (w) log('<span class="muted">  ↳ cost: ' + w + '</span>');
+        }
+
+        if (answers.every(function (a) { return a; })) {
+          var s = score();
+          var cls = s === SCENARIOS.length ? "c-success" : (s >= 3 ? "c-accent" : "c-danger");
+          log('<span class="' + cls + '">— all answered: ' + s + '/' + SCENARIOS.length + (s === SCENARIOS.length ? ' · perfect responsibility assignment!' : ' · Reset to retry') + '</span>');
+        }
+        render();
+      }
+
+      function next() {
+        if (idx < SCENARIOS.length - 1) { idx++; render(); }
+        else { log('<span class="muted">// end of set — Reset to run through again</span>'); }
+      }
+      function prev() {
+        if (idx > 0) { idx--; render(); }
+      }
+
+      function reset() {
+        idx = 0;
+        resetAnswers();
+        document.getElementById("log").innerHTML = "";
+        render();
+        log('<span class="muted">// 5 responsibilities, one question each: who should own this?</span>');
+        log('<span class="muted">// read the fields — whoever holds the data is usually the right owner</span>');
+      }
+
+      // boot
+      resetAnswers();
+      render();
+      log('<span class="muted">// 5 responsibilities, one question each: who should own this?</span>');
+      log('<span class="muted">// read the fields — whoever holds the data is usually the right owner</span>');
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

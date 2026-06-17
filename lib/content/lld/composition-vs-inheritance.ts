@@ -9,7 +9,7 @@ export const compositionVsInheritance: RoadmapLesson = {
   prototypePath: "/prototypes/lld/composition-vs-inheritance.html",
   content: {
     prototypeCaption:
-      "In the center sits one `Character` object. From the palette, plug in behaviors — pick how it **moves**, what it **attacks** with, whether it has a **shield** — and the abilities panel updates live. Press **simulate turn** to watch it act using whatever's currently plugged in. The counter on the right shows how many *subclasses* you'd need to cover every combination if you tried this with inheritance instead.",
+      "The same character, built two ways, side by side. Up top, describe the character you want — **moves by**, **attacks with**, **defense**. The left **Inheritance (is-a)** panel shows a *zoo of named subclasses* — one per combination — with your current pick highlighted (e.g. `FlyLaserShieldHero`) and a live count of how many classes you'd have to write. The right **Composition (has-a)** panel keeps just **one** `Character` that holds swappable parts. Flip **+ armor tier (×3)** and watch the inheritance zoo *multiply* while composition only adds one slot. Hit **Run this character** to see the single object act with its plugged-in parts.",
 
     overview: [
       {
@@ -100,16 +100,16 @@ export const compositionVsInheritance: RoadmapLesson = {
 
     handsOn: [
       {
-        title: "01 · Plug in any combination",
-        body: "In the palette, change the **Move** dropdown to *Fly*, set **Attack** to *Laser*, and toggle **Shield** on. Watch the *abilities* panel under the character update instantly. You just built a flying, laser-shooting, shielded character without creating a single new class.",
+        title: "01 · Find your character in the inheritance zoo",
+        body: "In the top bar set **moves by** *Fly*, **attacks with** *Laser*, **defense** *Shield*. In the left **Inheritance (is-a)** panel one chip lights up — `FlyLaserShieldHero` — the exact subclass you'd have to write. Every *other* chip in that box is another class you'd also need; the **subclasses to write & maintain** counter shows how big that zoo already is.",
       },
       {
-        title: "02 · Simulate a turn",
-        body: "Press **simulate turn**. The console logs the character acting with whatever is plugged in right now — e.g. `moves by flying`, then `attacks with laser`, then `raises shield`. Change one dropdown and simulate again: only that part of the behavior changes, because each behavior is an independent object.",
+        title: "02 · Watch composition stay at one object",
+        body: "Now look at the right **Composition (has-a)** panel. The same choices just snapped three small parts — `FlyBehavior`, `LaserAttack`, `ShieldBehavior` — into the *single* `hero : Character`'s slots. No new class. Change **attacks with** to *Sword*: only that one slot swaps, while the left panel jumps to a completely different class.",
       },
       {
-        title: "03 · Watch the inheritance counter explode",
-        body: "Look at the **\"With inheritance you'd need…\"** panel on the right. As you select options it recomputes `moves × attacks × defenses = N subclasses`. Toggle **+ add an armor axis** and watch the count multiply — the explosion composition quietly avoids with just a handful of behavior objects.",
+        title: "03 · Add an axis and watch the explosion",
+        body: "Flip **+ armor tier (×3)** on. The inheritance zoo visibly multiplies — every class spawns three (`…LightHero`, `…MediumHero`, `…HeavyHero`) and the counter jumps from 18 to 54. Composition just adds *one* armor slot and three reusable parts — `+1`, not `×3`. That widening gap is the whole reason to **favor composition**. Press **Run this character** to see the one object act with its current parts.",
       },
     ],
 

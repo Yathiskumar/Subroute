@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Designing the API First — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.32);
+        --success: #5cc66f;
+        --info: #5e9ff6;
+        --danger: #f06868;
+        --violet: #a78bfa;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      .lab { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+
+      .toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+      .toolbar .spacer { flex: 1; }
+
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 12px; cursor: pointer; transition: filter .15s, transform .1s, border-color .15s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .btn.primary { background: var(--accent); color: #1a1003; border-color: transparent; }
+      .btn.primary:hover { filter: brightness(1.06); }
+      .btn.ghost { background: transparent; }
+      .btn.sm { padding: 7px 9px; font-size: 11px; }
+
+      /* ---- Score bar ---- */
+      .score { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 12px 14px; margin-bottom: 16px; }
+      .score-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 9px; }
+      .score-name { font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+      .score-val { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
+      .score-val .sub { font-size: 12px; font-weight: 500; color: var(--subtle); margin-left: 4px; }
+      .bar { height: 8px; border-radius: 999px; background: var(--elevated); overflow: hidden; }
+      .bar > span { display: block; height: 100%; border-radius: 999px; transition: width .45s cubic-bezier(.22,.61,.36,1), background .3s; }
+      .score-verdict { margin-top: 8px; font-size: 12px; color: var(--subtle); font-variant-numeric: tabular-nums; }
+      .score-verdict b { font-family: var(--mono); }
+
+      /* ---- Board ---- */
+      .board { display: grid; grid-template-columns: 0.92fr 1.08fr; gap: 14px; margin-bottom: 16px; }
+      @media (max-width: 760px) { .board { grid-template-columns: 1fr; } }
+
+      .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 14px; }
+      .panel-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+      .panel-dot { width: 9px; height: 9px; border-radius: 3px; flex: none; }
+      .panel-title { font-family: var(--mono); font-size: 12px; font-weight: 600; }
+      .panel-sub { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--subtle); }
+
+      /* ---- Decisions ---- */
+      .decision { margin-bottom: 14px; }
+      .decision:last-child { margin-bottom: 0; }
+      .decision-label { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-bottom: 7px; display: flex; align-items: center; gap: 6px; }
+      .decision-label .q { color: var(--subtle); }
+      .opts { display: flex; flex-wrap: wrap; gap: 6px; }
+      .opt { font-family: var(--mono); font-size: 11px; padding: 7px 10px; border-radius: var(--r-md); border: 1px solid var(--border); background: var(--elevated); color: var(--muted); cursor: pointer; transition: transform .1s, border-color .15s, background .15s, color .15s; display: inline-flex; align-items: center; gap: 6px; }
+      .opt:hover { border-color: var(--accent-border); transform: translateY(-1px); }
+      .opt:active { transform: scale(0.97); }
+      .opt.on { color: var(--fg); border-color: var(--accent-border); background: var(--accent-soft); }
+      .opt .q { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+      .opt.on.good .q { background: var(--success); }
+      .opt.on.bad .q  { background: var(--danger); }
+      .opt.on.meh .q  { background: var(--accent); }
+      .opt:not(.on) .q { background: var(--subtle); opacity: .5; }
+
+      /* ---- Client code panel ---- */
+      .code { background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 14px; font-family: var(--mono); font-size: 12px; line-height: 1.65; overflow-x: auto; min-height: 150px; }
+      .code .ln { white-space: pre; }
+      .code .cmt { color: var(--subtle); }
+      .code .kw  { color: var(--violet); }
+      .code .fn  { color: var(--info); }
+      .code .str { color: var(--success); }
+      .code .typ { color: var(--accent); }
+      .code .warnln { color: var(--danger); }
+      .code .punc { color: var(--muted); }
+
+      .notes { margin-top: 12px; display: grid; gap: 7px; }
+      .note { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; line-height: 1.5; padding: 8px 10px; border-radius: var(--r-md); border: 1px solid var(--border); background: var(--elevated); }
+      .note .ic { font-family: var(--mono); font-weight: 700; flex: none; margin-top: 1px; }
+      .note.pro { border-color: rgba(92,198,111,0.28); }
+      .note.pro .ic { color: var(--success); }
+      .note.con { border-color: rgba(240,104,104,0.28); }
+      .note.con .ic { color: var(--danger); }
+      .note .txt b { color: var(--fg); font-family: var(--mono); font-weight: 600; }
+
+      /* ---- Console ---- */
+      .console { margin-top: 4px; }
+      .console-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+      .console-bar .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+      .log { background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px 12px; font-family: var(--mono); font-size: 11.5px; line-height: 1.7; min-height: 92px; max-height: 150px; overflow-y: auto; }
+      .log .ln { white-space: pre-wrap; }
+      .log .muted { color: var(--subtle); }
+      .log .c-accent { color: var(--accent); }
+      .log .c-info { color: var(--info); }
+      .log .c-success { color: var(--success); }
+      .log .c-danger { color: var(--danger); }
+      .log .c-fg { color: var(--fg); }
+
+      .hint { margin-top: 12px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <div class="toolbar">
+      <button class="btn primary" onclick="snapClean()">✦ Snap to clean API</button>
+      <button class="btn ghost" onclick="reset()">↺ Reset</button>
+      <span class="spacer"></span>
+      <span class="lab" id="status">design the contract — watch the caller's experience</span>
+    </div>
+
+    <!-- SCORE -->
+    <div class="score">
+      <div class="score-top">
+        <span class="score-name">Caller experience · how nice this API is to call</span>
+        <span class="score-val"><span id="score-val">0</span><span class="sub">/ 100</span></span>
+      </div>
+      <div class="bar"><span id="score-bar" style="width:0%;background:var(--danger)"></span></div>
+      <div class="score-verdict" id="verdict">awkward contract — leaks detail and hides failure</div>
+    </div>
+
+    <!-- BOARD -->
+    <div class="board">
+      <!-- DECISIONS -->
+      <div class="panel">
+        <div class="panel-head">
+          <span class="panel-dot" style="background:var(--accent)"></span>
+          <span class="panel-title">API design decisions</span>
+          <span class="panel-sub" id="op-name">park(...)</span>
+        </div>
+        <div id="decisions"></div>
+      </div>
+
+      <!-- CLIENT CODE -->
+      <div class="panel">
+        <div class="panel-head">
+          <span class="panel-dot" style="background:var(--info)"></span>
+          <span class="panel-title">Client code · what a caller writes</span>
+          <span class="panel-sub">// against your contract</span>
+        </div>
+        <div class="code" id="code"></div>
+        <div class="notes" id="notes"></div>
+      </div>
+    </div>
+
+    <!-- CONSOLE -->
+    <div class="console">
+      <div class="console-bar">
+        <span class="dot"></span>
+        <span class="lab">console</span>
+        <span class="lab" style="margin-left:auto" id="score-mini"></span>
+      </div>
+      <div class="log" id="log"></div>
+      <div class="hint">
+        <span class="b">▸</span>
+        <span>Flip each <b style="color:var(--fg)">design decision</b> and read the caller's snippet re-render. Make failure explicit, hide internals, name the method for its intent → the <b style="color:var(--fg)">caller experience</b> climbs.</span>
+      </div>
+    </div>
+
+    <script>
+      // ---- The four design decisions for a single park(...) operation. ----
+      // Each option carries: a label, a quality bucket (good/meh/bad), a score
+      // contribution, and pro/con notes that surface for the caller.
+      var DECISIONS = [
+        {
+          id: "ret",
+          label: "Return type",
+          q: "what does the caller get back?",
+          options: [
+            { id: "void",   label: "void",            qual: "bad", pts: 4,
+              con: "caller learns <b>nothing</b> — no ticket, no way to know it worked" },
+            { id: "ticket", label: "Ticket",          qual: "meh", pts: 14,
+              con: "returns a ticket on success, but <b>failure has nowhere to go</b>" },
+            { id: "result", label: "Result&lt;Ticket&gt;", qual: "good", pts: 25,
+              pro: "success <b>and</b> failure both live in the return type" },
+          ],
+        },
+        {
+          id: "err",
+          label: "Error handling",
+          q: "how does the caller learn it failed?",
+          options: [
+            { id: "null",   label: "return null",     qual: "bad", pts: 3,
+              con: "caller can forget the null check → <b>NPE risk</b>" },
+            { id: "throw",  label: "throw exception",  qual: "meh", pts: 13,
+              con: "works, but the failure is <b>invisible in the signature</b>" },
+            { id: "result", label: "Result / Optional", qual: "good", pts: 25,
+              pro: "errors are <b>explicit in the type</b> — impossible to ignore" },
+          ],
+        },
+        {
+          id: "param",
+          label: "Parameter style",
+          q: "how are inputs passed?",
+          options: [
+            { id: "long",   label: "long param list",  qual: "bad", pts: 5,
+              con: "positional soup — <b>easy to mis-order</b>, breaks when it grows" },
+            { id: "object", label: "parameter object", qual: "good", pts: 22,
+              pro: "one self-documenting <b>ParkRequest</b> — grows without breaking callers" },
+          ],
+        },
+        {
+          id: "name",
+          label: "Naming",
+          q: "does the name reveal intent?",
+          options: [
+            { id: "doit",   label: "doIt()",          qual: "bad", pts: 4,
+              con: "vague verb — caller <b>can't tell what it does</b>" },
+            { id: "park",   label: "park(vehicle)",   qual: "good", pts: 23,
+              pro: "intention-revealing — the <b>name tells the story</b>" },
+          ],
+        },
+      ];
+
+      // Starting (awkward) and clean (ideal) selections.
+      var START = { ret: "void",   err: "null",   param: "long",   name: "doit" };
+      var CLEAN = { ret: "result", err: "result", param: "object", name: "park" };
+
+      var sel = {};
+
+      function getOpt(decId, optId) {
+        for (var i = 0; i < DECISIONS.length; i++) {
+          if (DECISIONS[i].id !== decId) continue;
+          for (var j = 0; j < DECISIONS[i].options.length; j++) {
+            if (DECISIONS[i].options[j].id === optId) return DECISIONS[i].options[j];
+          }
+        }
+        return null;
+      }
+      function getDec(decId) {
+        for (var i = 0; i < DECISIONS.length; i++) if (DECISIONS[i].id === decId) return DECISIONS[i];
+        return null;
+      }
+
+      function score() {
+        var s = 0;
+        DECISIONS.forEach(function (d) { s += getOpt(d.id, sel[d.id]).pts; });
+        return s; // max = 25 + 25 + 22 + 23 = 95 → scale to /100
+      }
+      function scorePct() { return Math.round((score() / 95) * 100); }
+
+      function lerpColor(t) {
+        var stops = [[240,104,104],[251,134,58],[92,198,111]];
+        var seg = t < 0.5 ? 0 : 1;
+        var lt = t < 0.5 ? t / 0.5 : (t - 0.5) / 0.5;
+        var a = stops[seg], b = stops[seg + 1];
+        var r = Math.round(a[0] + (b[0] - a[0]) * lt);
+        var g = Math.round(a[1] + (b[1] - a[1]) * lt);
+        var bl = Math.round(a[2] + (b[2] - a[2]) * lt);
+        return "rgb(" + r + "," + g + "," + bl + ")";
+      }
+
+      function methodName() { return sel.name === "park" ? "park" : "doIt"; }
+      function callArg() {
+        // parameter style decides what the caller passes
+        return sel.param === "object"
+          ? '{ vehicle: car }'
+          : '"AB-12", "red", 1.6, false, out';
+      }
+
+      // ---- render the client code snippet for the current contract ----
+      function L(html) { return '<div class="ln">' + html + '</div>'; }
+      function renderCode() {
+        var box = document.getElementById("code");
+        var lines = [];
+        var name = methodName();
+        var arg = callArg();
+
+        lines.push(L('<span class="cmt">// the caller writes this against your contract</span>'));
+
+        // signature comment so the contrast in the contract is visible
+        var sigRet = sel.ret === "void" ? "void"
+                   : sel.ret === "ticket" ? '<span class="typ">Ticket</span>'
+                   : '<span class="typ">Result&lt;Ticket&gt;</span>';
+        var sigParam = sel.param === "object"
+          ? '<span class="typ">ParkRequest</span> req'
+          : 'plate, color, h, ev, out';
+        lines.push(L('<span class="cmt">// contract: </span><span class="fn">' + name + '</span><span class="punc">(</span>' + sigParam + '<span class="punc">) → </span>' + sigRet));
+        lines.push(L('&nbsp;'));
+
+        // the actual call, shaped by return type + error handling
+        if (sel.param === "long") {
+          lines.push(L('<span class="kw">const</span> out <span class="punc">=</span> <span class="punc">{</span> value<span class="punc">:</span> -1 <span class="punc">};</span> <span class="cmt">// out-param leaks an internal index</span>'));
+        }
+
+        if (sel.ret === "result") {
+          lines.push(L('<span class="kw">const</span> r <span class="punc">=</span> lot<span class="punc">.</span><span class="fn">' + name + '</span><span class="punc">(</span>' + arg + '<span class="punc">);</span>'));
+          lines.push(L('<span class="kw">if</span> <span class="punc">(</span>r.ok<span class="punc">)</span>  issue<span class="punc">(</span>r.value<span class="punc">);</span>     <span class="cmt">// a Ticket — a domain object</span>'));
+          lines.push(L('<span class="kw">else</span>      show<span class="punc">(</span>r.error.message<span class="punc">);</span> <span class="cmt">// failure MUST be handled ✓</span>'));
+        } else if (sel.ret === "ticket") {
+          if (sel.err === "null") {
+            lines.push(L('<span class="kw">const</span> t <span class="punc">=</span> lot<span class="punc">.</span><span class="fn">' + name + '</span><span class="punc">(</span>' + arg + '<span class="punc">);</span>'));
+            lines.push(L('<span class="warnln">issue(t.id);</span> <span class="cmt">// ⚠ t may be null — forgot the check → 💥 NPE</span>'));
+          } else if (sel.err === "throw") {
+            lines.push(L('<span class="kw">try</span> <span class="punc">{</span>'));
+            lines.push(L('&nbsp;&nbsp;<span class="kw">const</span> t <span class="punc">=</span> lot<span class="punc">.</span><span class="fn">' + name + '</span><span class="punc">(</span>' + arg + '<span class="punc">);</span> <span class="cmt">// throws on failure?</span>'));
+            lines.push(L('&nbsp;&nbsp;issue<span class="punc">(</span>t.id<span class="punc">);</span>'));
+            lines.push(L('<span class="punc">}</span> <span class="kw">catch</span> <span class="punc">(</span>e<span class="punc">) {</span> show<span class="punc">(</span>e.message<span class="punc">); }</span> <span class="cmt">// failure invisible in the type</span>'));
+          } else {
+            lines.push(L('<span class="kw">const</span> t <span class="punc">=</span> lot<span class="punc">.</span><span class="fn">' + name + '</span><span class="punc">(</span>' + arg + '<span class="punc">);</span>'));
+            lines.push(L('issue<span class="punc">(</span>t.id<span class="punc">);</span> <span class="cmt">// returns a ticket — but how did failure surface?</span>'));
+          }
+        } else { // void
+          lines.push(L('lot<span class="punc">.</span><span class="fn">' + name + '</span><span class="punc">(</span>' + arg + '<span class="punc">);</span>'));
+          if (sel.err === "null") {
+            lines.push(L('<span class="warnln">// returns void AND nulls? caller can\'t tell what happened</span>'));
+          } else if (sel.err === "throw") {
+            lines.push(L('<span class="cmt">// returns void — got no ticket back; only an exception means anything</span>'));
+          } else {
+            lines.push(L('<span class="cmt">// returns void — there is no result to inspect at all</span>'));
+          }
+        }
+
+        box.innerHTML = lines.join("");
+      }
+
+      // ---- render the pros/cons notes ----
+      function renderNotes() {
+        var box = document.getElementById("notes");
+        var html = "";
+        DECISIONS.forEach(function (d) {
+          var o = getOpt(d.id, sel[d.id]);
+          if (o.pro) {
+            html += '<div class="note pro"><span class="ic">✓</span><span class="txt">' +
+                    '<b>' + d.label + ':</b> ' + o.pro + '</span></div>';
+          } else if (o.con) {
+            html += '<div class="note con"><span class="ic">⚠</span><span class="txt">' +
+                    '<b>' + d.label + ':</b> ' + o.con + '</span></div>';
+          }
+        });
+        box.innerHTML = html;
+      }
+
+      // ---- render the decision selectors ----
+      function renderDecisions() {
+        var box = document.getElementById("decisions");
+        box.innerHTML = "";
+        DECISIONS.forEach(function (d) {
+          var wrap = document.createElement("div");
+          wrap.className = "decision";
+          var opts = '<div class="opts">';
+          d.options.forEach(function (o) {
+            var on = sel[d.id] === o.id;
+            var cls = "opt " + o.qual + (on ? " on" : "");
+            opts += '<button class="' + cls + '" data-dec="' + d.id + '" data-opt="' + o.id + '" ' +
+                    'onclick="choose(\'' + d.id + '\',\'' + o.id + '\')">' +
+                    '<span class="q"></span>' + o.label + '</button>';
+          });
+          opts += '</div>';
+          wrap.innerHTML =
+            '<div class="decision-label">' + d.label +
+              ' <span class="q">— ' + d.q + '</span></div>' + opts;
+          box.appendChild(wrap);
+        });
+      }
+
+      function updateScore() {
+        var pct = scorePct();
+        document.getElementById("score-val").textContent = pct;
+        var bar = document.getElementById("score-bar");
+        bar.style.width = pct + "%";
+        bar.style.background = lerpColor(pct / 100);
+        document.getElementById("score-mini").textContent = "caller experience " + pct + "/100";
+
+        var verdict;
+        if (pct >= 95)      verdict = '✓ clean contract — failure explicit, internals hidden, intent obvious';
+        else if (pct >= 70) verdict = 'decent — but one or more decisions still leak or hide failure';
+        else if (pct >= 45) verdict = 'rough — the caller has to guess or risk a crash';
+        else                verdict = 'awkward contract — leaks detail and hides failure';
+        document.getElementById("verdict").textContent = verdict;
+
+        var name = methodName();
+        document.getElementById("op-name").textContent = name + "(...)";
+        document.getElementById("status").textContent = pct >= 95
+          ? "✓ clean API — this is the contract a caller wants"
+          : "caller experience " + pct + "/100 — keep refining the contract";
+      }
+
+      function renderAll() {
+        renderDecisions();
+        renderCode();
+        renderNotes();
+        updateScore();
+      }
+
+      function log(html, cls) {
+        var box = document.getElementById("log");
+        var line = document.createElement("div");
+        line.className = "ln" + (cls ? " " + cls : "");
+        line.innerHTML = html;
+        box.appendChild(line);
+        while (box.children.length > 9) box.removeChild(box.firstChild);
+        box.scrollTop = box.scrollHeight;
+      }
+
+      function choose(decId, optId) {
+        if (sel[decId] === optId) return;
+        var before = scorePct();
+        var dec = getDec(decId);
+        var o = getOpt(decId, optId);
+        sel[decId] = optId;
+        renderAll();
+        var after = scorePct();
+
+        // pulse the chosen option
+        var chip = document.querySelector('.opt[data-dec="' + decId + '"][data-opt="' + optId + '"]');
+        if (chip) { chip.style.transition = "none"; chip.style.transform = "scale(1.06)"; setTimeout(function () { chip.style.transition = ""; chip.style.transform = ""; }, 160); }
+
+        var delta = after === before
+          ? '<span class="muted">score ' + before + ' (no change)</span>'
+          : '<span class="' + (after > before ? "c-success" : "c-danger") + '">score ' + before + '→' + after + '</span>';
+        var qualNote = o.qual === "good"
+          ? ' <span class="c-success">✓ good choice</span>'
+          : (o.qual === "bad" ? ' <span class="c-danger">⚠ leaky</span>' : ' <span class="c-accent">~ meh</span>');
+        log(
+          '<span class="muted">' + dec.label + ' →</span> <span class="c-fg">' + o.label.replace(/&lt;/g,"<").replace(/&gt;/g,">") + '</span>: ' + delta + qualNote
+        );
+      }
+
+      function snapClean() {
+        for (var k in CLEAN) sel[k] = CLEAN[k];
+        renderAll();
+        log('<span class="c-success">snap to clean API</span> <span class="muted">→</span> Result&lt;Ticket&gt; · explicit errors · parameter object · park(vehicle) · <span class="c-success">caller experience ' + scorePct() + '/100</span>');
+      }
+
+      function reset() {
+        for (var k in START) sel[k] = START[k];
+        document.getElementById("log").innerHTML = "";
+        renderAll();
+        log('<span class="muted">// reset — start with the awkward contract: void · return null · long param list · doIt()</span>');
+        log('<span class="muted">// flip each decision and watch the caller\'s snippet + score react</span>');
+      }
+
+      // boot
+      reset();
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>
