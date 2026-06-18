@@ -629,6 +629,16 @@ export const ROADMAPS: Roadmap[] = [
                 note: "Why there is no perfect design — only the right one for the constraints.",
                 tag: "core",
               },
+              {
+                title: "Push vs pull",
+                note: "The reusable primitive behind feeds, polling, and notifications — who initiates the data transfer.",
+                tag: "core",
+              },
+              {
+                title: "Cost-aware architecture",
+                note: "Cost per request as a first-class design axis — what senior+ interviews increasingly probe.",
+                tag: "interview",
+              },
             ],
           },
         ],
@@ -686,7 +696,7 @@ export const ROADMAPS: Roadmap[] = [
               },
               {
                 title: "RPC & gRPC",
-                note: "Call a remote function like a local one; HTTP/2 + Protobuf.",
+                note: "Call a remote function like a local one; HTTP/2 + Protobuf, with unary and streaming calls.",
                 tag: "interview",
               },
               {
@@ -766,6 +776,11 @@ export const ROADMAPS: Roadmap[] = [
               {
                 title: "Health checks & auto-scaling",
                 note: "Detect dead instances and add/remove capacity automatically.",
+              },
+              {
+                title: "Geo-distribution & multi-region",
+                note: "Active-active across regions, latency-based DNS routing, and data-residency constraints.",
+                tag: "interview",
               },
             ],
           },
@@ -916,6 +931,11 @@ export const ROADMAPS: Roadmap[] = [
                 title: "Connection pooling",
                 note: "Reuse expensive DB connections instead of reopening them.",
               },
+              {
+                title: "Online migrations & schema evolution",
+                note: "Backfills, dual-writes, and expand-contract — changing a live schema at scale without downtime.",
+                tag: "deep-dive",
+              },
             ],
           },
         ],
@@ -969,6 +989,10 @@ export const ROADMAPS: Roadmap[] = [
                 title: "Cache stampede & hot keys",
                 note: "Thundering herds on expiry, and one key melting one node.",
                 tag: "deep-dive",
+              },
+              {
+                title: "Negative caching",
+                note: "Cache the 'not found' too, so misses don't hammer the database.",
               },
             ],
           },
@@ -1237,6 +1261,11 @@ export const ROADMAPS: Roadmap[] = [
                 title: "Rate limiting & throttling",
                 note: "Token bucket, leaky bucket, sliding window — protecting capacity.",
                 tag: "interview",
+              },
+              {
+                title: "Load shedding",
+                note: "Drop or prioritize requests under overload so the system survives instead of collapsing.",
+                tag: "deep-dive",
               },
               {
                 title: "Graceful degradation & fallbacks",
