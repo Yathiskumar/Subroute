@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Object Diagrams — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --violet: #a78bfa;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      .lab { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+
+      /* ---- Buttons ---- */
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: filter .15s, transform .1s, border-color .15s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .btn.primary { background: var(--accent); color: #1a1003; border-color: transparent; }
+      .btn.primary:hover { filter: brightness(1.06); }
+      .btn.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--fg); }
+      .btn.ghost { background: transparent; }
+      .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+      /* ---- Section labels ---- */
+      .seclabel { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px 2px; display: flex; align-items: center; gap: 7px; }
+      .seclabel .dot { color: var(--accent); }
+
+      /* ---- Controls ---- */
+      .controls { display: flex; align-items: center; gap: 8px; margin: 4px 0 18px; flex-wrap: wrap; }
+      .controls .spacer { flex: 1; }
+      .controls .moment { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+      .controls .moment b { color: var(--fg); }
+
+      /* ---- The stage ---- */
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 20px 18px; }
+
+      /* ---- UML boxes (shared look) ---- */
+      .umlbox { width: 280px; border: 1.5px solid var(--border-strong); border-radius: 6px; overflow: hidden; background: var(--bg); font-family: var(--mono); box-shadow: 0 8px 28px rgba(0,0,0,.35); cursor: pointer; transition: box-shadow .2s, border-color .2s; }
+      .umlbox:hover { border-color: var(--accent-border); }
+      .umlbox.hot { box-shadow: 0 0 0 1.5px var(--accent-border), 0 8px 28px rgba(0,0,0,.35); border-color: var(--accent-border); }
+      .uml-name { text-align: center; font-size: 14px; font-weight: 700; color: var(--fg); padding: 10px 12px; border-bottom: 1.5px solid var(--border-strong); }
+      .uml-name.inst { text-decoration: underline; text-underline-offset: 3px; color: var(--info); }
+      .uml-rows { padding: 9px 13px; }
+      .row { font-size: 12.5px; line-height: 2; color: var(--fg); white-space: nowrap; }
+      .vis { display: inline-block; width: 13px; color: var(--accent); font-weight: 700; }
+      .mname { color: var(--info); }
+      .mtype { color: var(--muted); }
+
+      /* class box centered at top */
+      .blueprint-wrap { display: flex; flex-direction: column; align-items: center; }
+      .arrow-down { font-family: var(--mono); color: var(--subtle); font-size: 11px; text-align: center; margin: 12px 0 14px; }
+      .arrow-down b { color: var(--accent); }
+
+      /* object boxes row */
+      .objects { display: flex; gap: 18px; justify-content: center; flex-wrap: wrap; }
+      .objbox { width: 230px; }
+      .objbox .uml-rows { padding: 7px 12px; }
+      .slot { font-size: 12.5px; line-height: 2; color: var(--fg); white-space: nowrap; cursor: pointer; border-radius: 4px; padding: 0 4px; margin: 0 -4px; transition: background .15s; }
+      .slot:hover { background: var(--accent-soft); }
+      .slot.hot { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-border); }
+      .skey { color: var(--info); }
+      .seq { color: var(--muted); }
+      .sval { color: var(--success); font-weight: 600; }
+
+      .empty { color: var(--subtle); font-family: var(--mono); font-size: 12px; text-align: center; padding: 24px 0 8px; }
+
+      /* ---- Fixed explanation panel (REPLACES content, never grows) ---- */
+      .explain { margin-top: 16px; min-height: 92px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 13px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <!-- CONTROLS -->
+    <div class="controls">
+      <button class="btn primary" id="btn-a" onclick="snapshot('A')">Snapshot A</button>
+      <button class="btn" id="btn-b" onclick="snapshot('B')">Snapshot B</button>
+      <button class="btn ghost" id="btn-clear" onclick="clearSnap()">Clear</button>
+      <span class="spacer"></span>
+      <span class="moment">moment: <b id="moment">—</b></span>
+    </div>
+
+    <div class="stage">
+      <!-- BLUEPRINT (class box) -->
+      <p class="seclabel"><span class="dot">▢</span> The blueprint — one class</p>
+      <div class="blueprint-wrap">
+        <div class="umlbox" id="classbox" onclick="explainClass()">
+          <div class="uml-name">BankAccount</div>
+          <div class="uml-rows">
+            <div class="row"><span class="vis">-</span><span class="mname">owner</span><span class="mtype">: String</span></div>
+            <div class="row"><span class="vis">-</span><span class="mname">balance</span><span class="mtype">: double</span></div>
+          </div>
+        </div>
+        <div class="arrow-down">│<br />press a snapshot button → <b>spawns real objects</b><br />▼</div>
+      </div>
+
+      <!-- SNAPSHOT (object boxes) -->
+      <p class="seclabel"><span class="dot">◆</span> A snapshot — real objects, real values</p>
+      <div class="objects" id="objects">
+        <div class="empty">No objects yet. Press <b>Snapshot A</b> or <b>Snapshot B</b> to freeze a moment.</div>
+      </div>
+    </div>
+
+    <div class="explain">
+      <div class="explain-title" id="e-title">Take a snapshot</div>
+      <div class="explain-body" id="e-body"><span class="dim">The box above is the <b>blueprint</b>: it lists what every account <i>could</i> hold (an owner, a balance) by <b>type</b>. Press a snapshot button to create real objects with real <b>values</b>, then click any piece to learn what it means.</span></div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>Same blueprint, different snapshots: <b style="color:var(--fg)">Snapshot A</b> and <b style="color:var(--fg)">Snapshot B</b> make the <i>same</i> objects with <b style="color:var(--accent)">different values</b>. One class → many object diagrams.</span>
+    </div>
+
+    <script>
+      /* ---------- one explanation panel, content REPLACED (never appended) ---------- */
+      function setExplain(title, bodyHtml) {
+        document.getElementById("e-title").textContent = title;
+        document.getElementById("e-body").innerHTML = bodyHtml;
+      }
+
+      /* escape any value read back from the DOM before it re-enters innerHTML */
+      function esc(s) {
+        return String(s).replace(/[&<>"']/g, function (c) {
+          return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+        });
+      }
+
+      /* ---------- two snapshots from the SAME class ---------- */
+      var SNAPS = {
+        A: {
+          label: "A",
+          objs: [
+            { name: "alice", owner: '"Alice"', balance: "500" },
+            { name: "bob", owner: '"Bob"', balance: "1200" },
+          ],
+        },
+        B: {
+          label: "B (a later moment)",
+          objs: [
+            { name: "alice", owner: '"Alice"', balance: "300" },
+            { name: "bob", owner: '"Bob"', balance: "1850" },
+          ],
+        },
+      };
+      var current = null;
+
+      function renderObjects(which) {
+        var snap = SNAPS[which];
+        var wrap = document.getElementById("objects");
+        wrap.innerHTML = "";
+        snap.objs.forEach(function (o) {
+          var box = document.createElement("div");
+          box.className = "umlbox objbox";
+          box.innerHTML =
+            '<div class="uml-name inst">' + o.name + ' : BankAccount</div>' +
+            '<div class="uml-rows">' +
+            '<div class="slot" data-key="owner" data-val="' + o.owner.replace(/"/g, "&quot;") + '" data-obj="' + o.name + '">' +
+            '<span class="skey">owner</span><span class="seq"> = </span><span class="sval">' + o.owner + '</span></div>' +
+            '<div class="slot" data-key="balance" data-val="' + o.balance + '" data-obj="' + o.name + '">' +
+            '<span class="skey">balance</span><span class="seq"> = </span><span class="sval">' + o.balance + '</span></div>' +
+            '</div>';
+          // clicking the object title (the box) explains "an instance"
+          box.querySelector(".uml-name").onclick = (function (n) {
+            return function (ev) { ev.stopPropagation(); explainObject(n, box); };
+          })(o.name);
+          // clicking a slot explains "a real value"
+          box.querySelectorAll(".slot").forEach(function (s) {
+            s.onclick = function (ev) {
+              ev.stopPropagation();
+              explainSlot(s);
+            };
+          });
+          // clicking elsewhere on the box = object too
+          box.onclick = (function (n) {
+            return function () { explainObject(n, box); };
+          })(o.name);
+          wrap.appendChild(box);
+        });
+      }
+
+      function clearHot() {
+        document.getElementById("classbox").classList.remove("hot");
+        document.querySelectorAll(".objbox").forEach(function (b) { b.classList.remove("hot"); });
+        document.querySelectorAll(".slot").forEach(function (s) { s.classList.remove("hot"); });
+      }
+
+      function snapshot(which) {
+        current = which;
+        renderObjects(which);
+        document.getElementById("btn-a").classList.toggle("on", which === "A");
+        document.getElementById("btn-a").classList.toggle("primary", which !== "A");
+        document.getElementById("btn-b").classList.toggle("on", which === "B");
+        document.getElementById("btn-b").classList.toggle("primary", which !== "B");
+        document.getElementById("moment").textContent = SNAPS[which].label;
+        clearHot();
+        var other = which === "A" ? "B" : "A";
+        setExplain(
+          "Snapshot " + SNAPS[which].label + " taken",
+          'Two <b>real objects</b> now exist: <code>alice : BankAccount</code> and <code>bob : BankAccount</code>. Their titles are <u>underlined</u> — UML\'s way of saying "this is one real instance, not a class". ' +
+            '<span class="dim">Try <b>Snapshot ' + other + '</b>: the same objects come back with <b style="color:var(--success)">different values</b>. One blueprint → many snapshots.</span>'
+        );
+      }
+
+      function clearSnap() {
+        current = null;
+        document.getElementById("objects").innerHTML =
+          '<div class="empty">No objects yet. Press <b>Snapshot A</b> or <b>Snapshot B</b> to freeze a moment.</div>';
+        document.getElementById("btn-a").classList.add("primary");
+        document.getElementById("btn-a").classList.remove("on");
+        document.getElementById("btn-b").classList.add("primary");
+        document.getElementById("btn-b").classList.remove("on");
+        document.getElementById("moment").textContent = "—";
+        clearHot();
+        setExplain(
+          "Cleared",
+          'The objects are gone, but the <b>blueprint</b> remains. A class diagram is timeless; an object diagram only exists for a <b>moment</b>. Press a snapshot button to freeze a new one.'
+        );
+      }
+
+      /* ---------- click handlers: each REPLACES the one panel ---------- */
+      function explainClass() {
+        clearHot();
+        document.getElementById("classbox").classList.add("hot");
+        setExplain(
+          "The class box — a blueprint",
+          'This is the <b>class</b> <code>BankAccount</code>. It describes <i>every</i> account that could ever exist, by <b>type</b>: <code>balance: double</code> means "a balance, which is a number". ' +
+            'It holds <b>no actual values</b> — it\'s the form everyone fills in, not the filled-in form.'
+        );
+      }
+
+      function explainObject(name, box) {
+        clearHot();
+        box.classList.add("hot");
+        setExplain(
+          "An object box — one real instance",
+          'This is <code>' + name + ' : BankAccount</code> — <b>one specific account</b> that exists right now. The <u>underlined</u> title <code>name : ClassName</code> is how UML marks a real <b>instance</b>. ' +
+            '<span class="dim">It was made from the blueprint above, but it carries its own real values.</span>'
+        );
+      }
+
+      function explainSlot(s) {
+        clearHot();
+        s.classList.add("hot");
+        s.closest(".objbox").classList.add("hot");
+        var key = esc(s.getAttribute("data-key"));
+        var val = esc(s.getAttribute("data-val"));
+        var obj = esc(s.getAttribute("data-obj"));
+        setExplain(
+          "A slot — the actual value held now",
+          'A <b>slot</b> is one attribute with its <b>real value filled in</b>: here <code>' + obj + '</code>\'s <code>' + key + ' = ' + val + '</code>. ' +
+            'In the class box this same attribute appeared as a <b>type</b> (<code>' + key + ': ' + (key === "balance" ? "double" : "String") + '</code>). ' +
+            '<span class="dim">Type = blueprint · value = this one object, this one moment.</span>'
+        );
+      }
+
+      /* ---------- boot ---------- */
+      snapshot("A");
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Component & Deployment Diagrams — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --violet: #a78bfa;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      .lab { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+
+      /* ---- Tabs ---- */
+      .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+      .tab { flex: 1; background: var(--surface); color: var(--muted); font: 600 13px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 11px 12px; cursor: pointer; transition: all .15s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+      .tab:hover { border-color: var(--border-strong); color: var(--fg); }
+      .tab.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--fg); }
+      .tab .ico { font-family: var(--mono); font-size: 14px; color: var(--accent); }
+
+      .panel { display: none; }
+      .panel.on { display: block; }
+
+      /* ---- Buttons ---- */
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: filter .15s, transform .1s, border-color .15s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .btn.primary { background: var(--accent); color: #1a1003; border-color: transparent; }
+      .btn.primary:hover { filter: brightness(1.06); }
+      .btn.ghost { background: transparent; }
+      .btn:disabled { opacity: .4; cursor: not-allowed; }
+      .btn:disabled:active { transform: none; }
+
+      /* ---- Stage ---- */
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 26px 18px; }
+      .stage svg { width: 100%; height: auto; display: block; overflow: visible; }
+
+      /* clickable diagram bits */
+      .pick { cursor: pointer; }
+      .pick * { cursor: pointer; }
+      .box-fill { fill: var(--bg); stroke: var(--border-strong); stroke-width: 1.5; transition: stroke .2s, fill .2s; }
+      .pick:hover .box-fill, .pick.hot .box-fill { stroke: var(--accent-border); fill: var(--accent-soft); }
+      .box-label { fill: var(--fg); font-family: var(--mono); font-size: 13px; font-weight: 700; text-anchor: middle; }
+      .box-sub { fill: var(--muted); font-family: var(--mono); font-size: 9.5px; text-anchor: middle; letter-spacing: .04em; }
+      .stereo { fill: var(--violet); font-family: var(--mono); font-size: 9px; text-anchor: middle; letter-spacing: .05em; }
+
+      /* component-icon corner tab */
+      .ico-tab { fill: var(--elevated); stroke: var(--border-strong); stroke-width: 1; }
+
+      /* interface symbols */
+      .iface-line { stroke: var(--fg); stroke-width: 1.6; fill: none; }
+      .iface-shape { stroke: var(--fg); stroke-width: 1.6; transition: stroke .2s, fill .2s; }
+      .lolli { fill: var(--accent); }              /* provided ●  */
+      .socket { fill: none; }                       /* required ⊃  */
+      .pick:hover .iface-shape, .pick.hot .iface-shape { stroke: var(--accent); }
+      .pick:hover .iface-line, .pick.hot .iface-line { stroke: var(--accent); }
+      .pick:hover .lolli, .pick.hot .lolli { fill: var(--accent); }
+      .iface-tag { fill: var(--muted); font-family: var(--mono); font-size: 8.5px; text-anchor: middle; letter-spacing: .03em; }
+
+      /* deployment artifacts + paths */
+      .node-fill { fill: var(--bg); stroke: var(--border-strong); stroke-width: 1.5; transition: stroke .2s, fill .2s; }
+      .node-top { fill: var(--elevated); stroke: var(--border-strong); stroke-width: 1.5; }
+      .pick:hover .node-fill, .pick.hot .node-fill { stroke: var(--accent-border); fill: var(--accent-soft); }
+      .art-fill { fill: var(--surface); stroke: var(--border-strong); stroke-width: 1.3; transition: stroke .2s, fill .2s; }
+      .pick:hover .art-fill, .pick.hot .art-fill { stroke: var(--accent-border); fill: var(--accent-soft); }
+      .art-label { fill: var(--info); font-family: var(--mono); font-size: 10.5px; font-weight: 600; text-anchor: middle; }
+      .path-line { stroke: var(--muted); stroke-width: 1.8; fill: none; transition: stroke .2s; }
+      .path-hit { stroke: transparent; stroke-width: 16; fill: none; }
+      .pick:hover .path-line, .pick.hot .path-line { stroke: var(--accent); }
+      .path-label { fill: var(--success); font-family: var(--mono); font-size: 10px; font-weight: 700; text-anchor: middle; }
+
+      /* ---- Fixed explanation panel (REPLACES content, never grows) ---- */
+      .explain { margin-top: 14px; min-height: 96px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 13px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <!-- TABS -->
+    <div class="tabs">
+      <button class="tab on" id="tab-component" onclick="showTab('component')"><span class="ico">◳</span> Component view</button>
+      <button class="tab" id="tab-deploy" onclick="showTab('deploy')"><span class="ico">▤</span> Deployment view</button>
+    </div>
+
+    <!-- ============ PANEL 1: COMPONENT VIEW ============ -->
+    <div class="panel on" id="panel-component">
+      <div class="stage">
+        <svg viewBox="0 0 620 250" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Component diagram">
+          <!-- ===== component boxes (drawn first) ===== -->
+          <g class="pick" id="c-webui" onclick="pickC('webui')">
+            <rect class="box-fill" x="20" y="80" width="150" height="74" rx="6"/>
+            <rect class="ico-tab" x="148" y="88" width="16" height="11"/>
+            <rect class="ico-tab" x="145" y="90" width="6" height="3"/>
+            <rect class="ico-tab" x="145" y="95" width="6" height="3"/>
+            <text class="stereo" x="95" y="106">«component»</text>
+            <text class="box-label" x="95" y="126">Web UI</text>
+          </g>
+          <g class="pick" id="c-orderapi" onclick="pickC('orderapi')">
+            <rect class="box-fill" x="265" y="80" width="160" height="74" rx="6"/>
+            <rect class="ico-tab" x="403" y="88" width="16" height="11"/>
+            <rect class="ico-tab" x="400" y="90" width="6" height="3"/>
+            <rect class="ico-tab" x="400" y="95" width="6" height="3"/>
+            <text class="stereo" x="345" y="106">«component»</text>
+            <text class="box-label" x="345" y="126">Order API</text>
+          </g>
+          <g class="pick" id="c-db" onclick="pickC('db')">
+            <rect class="box-fill" x="515" y="80" width="90" height="74" rx="6"/>
+            <text class="stereo" x="560" y="106">«component»</text>
+            <text class="box-label" x="560" y="126">Database</text>
+          </g>
+
+          <!-- ===== interface symbols (on top, sitting in the gaps) ===== -->
+          <!-- Web UI's REQUIRED socket (⊃) plugging onto Order API's lollipop -->
+          <g class="pick" id="c-socket" onclick="pickC('socket')">
+            <line class="iface-line" x1="170" y1="117" x2="205" y2="117"/>
+            <path class="iface-shape socket" d="M205,103 a14,14 0 1 0 0,28"/>
+          </g>
+          <g class="pick" id="c-lolli" onclick="pickC('lolli')">
+            <line class="iface-line" x1="265" y1="117" x2="219" y2="117"/>
+            <circle class="iface-shape lolli" cx="219" cy="117" r="9"/>
+          </g>
+          <!-- Order API REQUIRES the Database's provided interface -->
+          <g class="pick" id="c-dbsocket" onclick="pickC('dbsocket')">
+            <line class="iface-line" x1="425" y1="117" x2="455" y2="117"/>
+            <path class="iface-shape socket" d="M455,103 a14,14 0 1 0 0,28"/>
+          </g>
+          <g class="pick" id="c-dblolli" onclick="pickC('dblolli')">
+            <line class="iface-line" x1="515" y1="117" x2="469" y2="117"/>
+            <circle class="iface-shape lolli" cx="469" cy="117" r="9"/>
+          </g>
+
+          <!-- ===== interface-name captions (drawn LAST, centered in each gap) ===== -->
+          <text class="iface-tag" x="212" y="150">OrderService</text>
+          <text class="iface-tag" x="470" y="150">DataAccess</text>
+        </svg>
+      </div>
+
+      <div class="explain">
+        <div class="explain-title" id="c-title">Click any piece above</div>
+        <div class="explain-body" id="c-body"><span class="dim">A <b>component</b> is a software building-block. The round <b>lollipop ●—</b> means "I offer this service"; the half-circle <b>socket ⊃—</b> means "I need this service". A working link is one component's lollipop sitting inside another's socket.</span></div>
+      </div>
+
+      <div class="hint">
+        <span class="b">▸</span>
+        <span><b style="color:var(--accent)">Lollipop ●—</b> = I OFFER. <b style="color:var(--accent)">Socket ⊃—</b> = I NEED. The offer plugs into the need.</span>
+      </div>
+    </div>
+
+    <!-- ============ PANEL 2: DEPLOYMENT VIEW ============ -->
+    <div class="panel" id="panel-deploy">
+      <div class="stage">
+        <svg viewBox="0 0 620 250" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Deployment diagram">
+          <!-- communication paths (drawn first, behind nodes) -->
+          <g class="pick" id="d-https" onclick="pickD('https')">
+            <path class="path-line" d="M170,110 L235,110" marker-end="url(#arr)"/>
+            <path class="path-hit" d="M170,110 L235,110"/>
+            <text class="path-label" x="202" y="100">HTTPS</text>
+          </g>
+          <g class="pick" id="d-jdbc" onclick="pickD('jdbc')">
+            <path class="path-line" d="M385,110 L450,110" marker-end="url(#arr)"/>
+            <path class="path-hit" d="M385,110 L450,110"/>
+            <text class="path-label" x="417" y="100">JDBC/TCP</text>
+          </g>
+
+          <defs>
+            <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+              <path d="M0,0 L8,4.5 L0,9 z" fill="var(--muted)"/>
+            </marker>
+          </defs>
+
+          <!-- ===== Browser node ===== -->
+          <g class="pick" id="d-browser" onclick="pickD('browser')">
+            <polygon class="node-top" points="40,60 60,46 170,46 150,60"/>
+            <rect class="node-fill" x="40" y="60" width="110" height="98" rx="2"/>
+            <text class="box-sub" x="95" y="78">Browser (device)</text>
+            <!-- artifact inside -->
+          </g>
+          <g class="pick" id="d-webapp" onclick="pickD('webapp')">
+            <rect class="art-fill" x="58" y="92" width="74" height="48" rx="3"/>
+            <text class="stereo" x="95" y="110" style="font-size:8px">«artifact»</text>
+            <text class="art-label" x="95" y="126">webapp.js</text>
+          </g>
+
+          <!-- ===== App Server node ===== -->
+          <g class="pick" id="d-appserver" onclick="pickD('appserver')">
+            <polygon class="node-top" points="255,60 275,46 385,46 365,60"/>
+            <rect class="node-fill" x="255" y="60" width="110" height="98" rx="2"/>
+            <text class="box-sub" x="310" y="78">App Server (node)</text>
+          </g>
+          <g class="pick" id="d-jar" onclick="pickD('jar')">
+            <rect class="art-fill" x="270" y="92" width="80" height="48" rx="3"/>
+            <text class="stereo" x="310" y="110" style="font-size:8px">«artifact»</text>
+            <text class="art-label" x="310" y="126">order-api.jar</text>
+          </g>
+
+          <!-- ===== DB Server node ===== -->
+          <g class="pick" id="d-dbserver" onclick="pickD('dbserver')">
+            <polygon class="node-top" points="470,60 490,46 600,46 580,60"/>
+            <rect class="node-fill" x="470" y="60" width="110" height="98" rx="2"/>
+            <text class="box-sub" x="525" y="78">DB Server (node)</text>
+          </g>
+          <g class="pick" id="d-pg" onclick="pickD('pg')">
+            <rect class="art-fill" x="488" y="92" width="74" height="48" rx="3"/>
+            <text class="stereo" x="525" y="110" style="font-size:8px">«artifact»</text>
+            <text class="art-label" x="525" y="126">postgres</text>
+          </g>
+        </svg>
+      </div>
+
+      <div class="explain">
+        <div class="explain-title" id="d-title">Click any piece above</div>
+        <div class="explain-body" id="d-body"><span class="dim">A <b>node</b> is a machine (the 3D box). An <b>artifact</b> is the real file deployed inside it. A <b>communication path</b> is the network link between two machines, labelled with its protocol.</span></div>
+      </div>
+
+      <div class="hint">
+        <span class="b">▸</span>
+        <span><b style="color:var(--fg)">Node</b> = a machine · <b style="color:var(--info)">artifact</b> = the file inside it · <b style="color:var(--success)">path</b> = the wire + protocol.</span>
+      </div>
+    </div>
+
+    <script>
+      /* ---------- shared: one explanation panel, content REPLACED (never appended) ---------- */
+      function setExplain(titleEl, bodyEl, title, bodyHtml) {
+        document.getElementById(titleEl).textContent = title;
+        document.getElementById(bodyEl).innerHTML = bodyHtml;
+      }
+
+      /* ---------- TABS ---------- */
+      function showTab(which) {
+        var comp = which === "component";
+        document.getElementById("tab-component").classList.toggle("on", comp);
+        document.getElementById("tab-deploy").classList.toggle("on", !comp);
+        document.getElementById("panel-component").classList.toggle("on", comp);
+        document.getElementById("panel-deploy").classList.toggle("on", !comp);
+      }
+
+      /* ---------- PANEL 1: COMPONENT VIEW ---------- */
+      var C = {
+        webui: {
+          el: "c-webui",
+          title: "Component · Web UI",
+          body: 'A <b>component</b> is a software building-block — a module or service you can build and replace on its own. <code>Web UI</code> is the front-end. The little corner icon (and <code>«component»</code>) marks it as a component.',
+        },
+        socket: {
+          el: "c-socket",
+          title: "Required interface — the socket ⊃—",
+          body: 'The half-circle <b>socket</b> means <b>"I NEED this service."</b> <code>Web UI</code> needs an <code>OrderService</code> from somewhere — it can\'t place orders by itself.',
+        },
+        lolli: {
+          el: "c-lolli",
+          title: "Provided interface — the lollipop ●—",
+          body: 'The filled-circle <b>lollipop</b> means <b>"I OFFER this service."</b> <code>Order API</code> provides <code>OrderService</code>. Its lollipop plugs into Web UI\'s socket — <span class="dim">offer meets need (an "assembly").</span>',
+        },
+        orderapi: {
+          el: "c-orderapi",
+          title: "Component · Order API",
+          body: '<code>Order API</code> is the back-end building-block. It <b>provides</b> <code>OrderService</code> (lollipop on its left) and <b>needs</b> the database (socket on its right). A component can both offer and require.',
+        },
+        dbsocket: {
+          el: "c-dbsocket",
+          title: "Required interface — Order API needs the DB",
+          body: 'Another <b>socket ⊃—</b>: <code>Order API</code> <b>needs</b> the database\'s interface to read and write orders. <span class="dim">Same symbol, same meaning: "I need this service."</span>',
+        },
+        dblolli: {
+          el: "c-dblolli",
+          title: "Provided interface — the Database offers its service",
+          body: 'The <b>Database</b> draws a <b>lollipop ●—</b> to <b>offer</b> its interface. It plugs into Order API\'s socket, satisfying Order API\'s need — the same offer-meets-need pattern, one step down.',
+        },
+        db: {
+          el: "c-db",
+          title: "Component · Database",
+          body: 'The <code>Database</code> is the third building-block. <span class="dim">In the Deployment view you\'ll see this same piece as the <code>postgres</code> artifact running on a DB Server machine.</span>',
+        },
+      };
+      var cHot = null;
+      function pickC(key) {
+        if (cHot) document.getElementById(cHot).classList.remove("hot");
+        var it = C[key];
+        document.getElementById(it.el).classList.add("hot");
+        cHot = it.el;
+        setExplain("c-title", "c-body", it.title, it.body);
+      }
+
+      /* ---------- PANEL 2: DEPLOYMENT VIEW ---------- */
+      var D = {
+        browser: {
+          el: "d-browser",
+          title: "Node · Browser (a machine)",
+          body: 'A <b>node</b> is a physical machine or device, drawn as a 3D box. <code>Browser</code> is the user\'s device. <span class="dim">Whatever runs here is shown as an artifact inside the box.</span>',
+        },
+        webapp: {
+          el: "d-webapp",
+          title: "Artifact · webapp.js",
+          body: 'An <b>artifact</b> is the real, deployable <b>file</b> that runs inside a node. <code>webapp.js</code> is the front-end code that runs in the browser. <span class="dim">(In the Component view this was the "Web UI" component.)</span>',
+        },
+        appserver: {
+          el: "d-appserver",
+          title: "Node · App Server (a machine)",
+          body: 'The <b>App Server</b> node is the machine that runs your back-end. <span class="dim">It sits between the browser and the database, talking to both over the network.</span>',
+        },
+        jar: {
+          el: "d-jar",
+          title: "Artifact · order-api.jar",
+          body: 'The <b>artifact</b> <code>order-api.jar</code> is the actual deployable file running on the App Server. <span class="dim">This is the same piece the Component view called the "Order API" component — logical block, physical file.</span>',
+        },
+        dbserver: {
+          el: "d-dbserver",
+          title: "Node · DB Server (a machine)",
+          body: 'The <b>DB Server</b> node is the machine dedicated to the database. <span class="dim">Keeping it on its own node is a deployment decision a component diagram can\'t show.</span>',
+        },
+        pg: {
+          el: "d-pg",
+          title: "Artifact · postgres",
+          body: 'The <b>artifact</b> <code>postgres</code> is the database software deployed on the DB Server. <span class="dim">(The "Database" component, made physical.)</span>',
+        },
+        https: {
+          el: "d-https",
+          title: "Communication path · HTTPS",
+          body: 'A <b>communication path</b> is the network link between two nodes, labelled with its <b>protocol</b>. The browser talks to the app server over <code>HTTPS</code>. <span class="dim">This protocol label is exactly what a component diagram never shows.</span>',
+        },
+        jdbc: {
+          el: "d-jdbc",
+          title: "Communication path · JDBC/TCP",
+          body: 'The app server talks to the database over <code>JDBC/TCP</code>. The label tells an ops person which wire and port to open. <span class="dim">Paths + protocols are the heart of a deployment diagram.</span>',
+        },
+      };
+      var dHot = null;
+      function pickD(key) {
+        if (dHot) document.getElementById(dHot).classList.remove("hot");
+        var it = D[key];
+        document.getElementById(it.el).classList.add("hot");
+        dHot = it.el;
+        setExplain("d-title", "d-body", it.title, it.body);
+      }
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

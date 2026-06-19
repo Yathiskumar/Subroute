@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Class Diagrams — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --violet: #a78bfa;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      .lab { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+
+      /* ---- Tabs ---- */
+      .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+      .tab { flex: 1; background: var(--surface); color: var(--muted); font: 600 13px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 11px 12px; cursor: pointer; transition: all .15s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+      .tab:hover { border-color: var(--border-strong); color: var(--fg); }
+      .tab.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--fg); }
+      .tab .ico { font-family: var(--mono); font-size: 14px; color: var(--accent); }
+
+      .panel { display: none; }
+      .panel.on { display: block; }
+
+      /* ---- Buttons ---- */
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: filter .15s, transform .1s, border-color .15s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .btn.primary { background: var(--accent); color: #1a1003; border-color: transparent; }
+      .btn.primary:hover { filter: brightness(1.06); }
+      .btn.ghost { background: transparent; }
+      .btn:disabled { opacity: .4; cursor: not-allowed; }
+      .btn:disabled:active { transform: none; }
+
+      /* ---- The UML class box ---- */
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 22px 18px; display: flex; justify-content: center; }
+      .umlbox { width: 320px; border: 1.5px solid var(--border-strong); border-radius: 6px; overflow: hidden; background: var(--bg); font-family: var(--mono); box-shadow: 0 8px 28px rgba(0,0,0,.35); }
+      .seg { transition: background .2s, box-shadow .2s; position: relative; }
+      .seg.hot { background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px var(--accent-border); }
+      .uml-name { text-align: center; font-size: 15px; font-weight: 700; color: var(--fg); padding: 11px 12px; border-bottom: 1.5px solid var(--border-strong); }
+      .uml-rows { padding: 9px 13px; }
+      .uml-rows.ops { border-top: 1.5px solid var(--border-strong); }
+      .row { font-size: 12.5px; line-height: 2; color: var(--fg); white-space: nowrap; }
+      .vis { display: inline-block; width: 13px; color: var(--accent); font-weight: 700; }
+      .mname { color: var(--info); }
+      .mtype { color: var(--muted); }
+      .seg-tag { position: absolute; top: 50%; right: -12px; transform: translate(100%, -50%); font-family: var(--mono); font-size: 9px; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); white-space: nowrap; opacity: 0; transition: opacity .2s; }
+      .seg.hot .seg-tag { opacity: 1; }
+      @media (max-width: 540px) { .seg-tag { display: none; } }
+
+      /* ---- Step controls ---- */
+      .controls { display: flex; align-items: center; gap: 10px; margin-top: 16px; }
+      .controls .step-pill { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+      .controls .step-pill b { color: var(--fg); font-variant-numeric: tabular-nums; }
+      .controls .spacer { flex: 1; }
+
+      /* ---- Fixed explanation panel (REPLACES content, never grows) ---- */
+      .explain { margin-top: 14px; min-height: 88px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 13px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+
+      /* ---- Relationship cheat-sheet ---- */
+      .rels { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+      .rel { text-align: left; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 13px; cursor: pointer; transition: border-color .15s, transform .1s, background .15s; }
+      .rel:hover { border-color: var(--accent-border); transform: translateY(-2px); }
+      .rel:active { transform: scale(0.98); }
+      .rel.on { border-color: var(--accent-border); background: var(--accent-soft); }
+      .rel-name { font-size: 13px; font-weight: 650; color: var(--fg); margin-bottom: 4px; }
+      .rel-gloss { font-size: 11px; color: var(--muted); margin-bottom: 11px; min-height: 28px; }
+      .rel-art { height: 30px; display: flex; align-items: center; }
+      .rel-art svg { width: 100%; height: 30px; overflow: visible; }
+      .rel-line { stroke: var(--fg); stroke-width: 1.6; fill: none; }
+      .rel-line.dash { stroke-dasharray: 5 4; }
+      .rel-head { stroke: var(--fg); stroke-width: 1.6; }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <!-- TABS -->
+    <div class="tabs">
+      <button class="tab on" id="tab-anatomy" onclick="showTab('anatomy')"><span class="ico">▢</span> Anatomy of a box</button>
+      <button class="tab" id="tab-rels" onclick="showTab('rels')"><span class="ico">⤜</span> Relationships</button>
+    </div>
+
+    <!-- ============ PANEL 1: ANATOMY ============ -->
+    <div class="panel on" id="panel-anatomy">
+      <div class="stage">
+        <div class="umlbox">
+          <div class="seg uml-name" id="seg-name" data-step="1">
+            BankAccount
+            <span class="seg-tag">class name</span>
+          </div>
+          <div class="seg uml-rows" id="seg-attrs" data-step="2">
+            <div class="row"><span class="vis">-</span><span class="mname">owner</span><span class="mtype">: String</span></div>
+            <div class="row"><span class="vis">-</span><span class="mname">balance</span><span class="mtype">: double</span></div>
+            <span class="seg-tag">attributes · data</span>
+          </div>
+          <div class="seg uml-rows ops" id="seg-ops" data-step="3">
+            <div class="row"><span class="vis" id="vis-dep">+</span><span class="mname">deposit</span><span class="mtype">(amount: double)</span></div>
+            <div class="row"><span class="vis">+</span><span class="mname">withdraw</span><span class="mtype">(amount: double)</span></div>
+            <div class="row"><span class="vis">+</span><span class="mname">getBalance</span><span class="mtype">(): double</span></div>
+            <span class="seg-tag">operations · methods</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button class="btn" id="a-prev" onclick="aStep(-1)">‹ Back</button>
+        <button class="btn primary" id="a-next" onclick="aStep(1)">Next ›</button>
+        <span class="spacer"></span>
+        <span class="step-pill">part <b id="a-cur">1</b> / <b id="a-tot">4</b></span>
+      </div>
+
+      <div class="explain">
+        <div class="explain-title" id="a-title">—</div>
+        <div class="explain-body" id="a-body">—</div>
+      </div>
+
+      <div class="hint">
+        <span class="b">▸</span>
+        <span>Read any box top to bottom: <b style="color:var(--fg)">name → data → actions</b>. The little <b style="color:var(--accent)">+ - #</b> in front of each line says who's allowed to touch it.</span>
+      </div>
+    </div>
+
+    <!-- ============ PANEL 2: RELATIONSHIPS ============ -->
+    <div class="panel" id="panel-rels">
+      <div class="rels" id="rel-grid"></div>
+
+      <div class="explain">
+        <div class="explain-title" id="r-title">Click a line above</div>
+        <div class="explain-body" id="r-body"><span class="dim">Each line connects two classes. The shape of its end tells you how tightly they're tied — from a plain line ("knows about") all the way to a filled diamond ("owns; they share one fate").</span></div>
+      </div>
+
+      <div class="hint">
+        <span class="b">▸</span>
+        <span>The diamond sits on the <b style="color:var(--fg)">whole</b>. <b style="color:var(--accent)">Hollow ◇</b> = parts survive on their own. <b style="color:var(--accent)">Filled ◆</b> = parts die with the whole.</span>
+      </div>
+    </div>
+
+    <script>
+      /* ---------- shared: one explanation panel, content REPLACED (never appended) ---------- */
+      function setExplain(titleEl, bodyEl, title, bodyHtml) {
+        document.getElementById(titleEl).textContent = title;
+        document.getElementById(bodyEl).innerHTML = bodyHtml;
+      }
+
+      /* ---------- TABS ---------- */
+      function showTab(which) {
+        var anat = which === "anatomy";
+        document.getElementById("tab-anatomy").classList.toggle("on", anat);
+        document.getElementById("tab-rels").classList.toggle("on", !anat);
+        document.getElementById("panel-anatomy").classList.toggle("on", anat);
+        document.getElementById("panel-rels").classList.toggle("on", !anat);
+      }
+
+      /* ---------- PANEL 1: ANATOMY step-through ---------- */
+      var A_STEPS = [
+        {
+          seg: "seg-name",
+          title: "1 · The class name",
+          body: 'The top row is the <b>class name</b> — here, <code>BankAccount</code>. One box = one class. Everything below describes what this one class knows and can do.',
+        },
+        {
+          seg: "seg-attrs",
+          title: "2 · Attributes — the data it knows",
+          body: 'The middle row lists <b>attributes</b>: the data each account holds. Read a line as <b>name : type</b> — so <code>balance: double</code> is "a value named balance that holds a double".',
+        },
+        {
+          seg: "seg-ops",
+          title: "3 · Operations — the things it can do",
+          body: 'The bottom row lists <b>operations</b> (methods). <code>deposit(amount: double)</code> is an action the account can perform. The type after the final colon — as in <code>getBalance(): double</code> — is what it gives back.',
+        },
+        {
+          seg: "seg-attrs",
+          title: "4 · The + - # symbols — who can touch it",
+          body: '<span class="dim">Look at the symbols in front of every line.</span> <code>-</code> = <b>private</b> (only this class), <code>+</code> = <b>public</b> (anyone), <code>#</code> = protected. <code>balance</code> is <b>private</b>, so outsiders must call the <b>public</b> <code>deposit</code> — that\'s encapsulation, drawn.',
+          highlightVis: true,
+        },
+      ];
+      var aIdx = 0;
+
+      function renderAnatomy() {
+        var step = A_STEPS[aIdx];
+        // clear highlights
+        ["seg-name", "seg-attrs", "seg-ops"].forEach(function (id) {
+          document.getElementById(id).classList.remove("hot");
+        });
+        document.getElementById(step.seg).classList.add("hot");
+        // emphasise the visibility column on the symbols step
+        var dep = document.getElementById("vis-dep");
+        dep.style.transform = step.highlightVis ? "scale(1.4)" : "none";
+        dep.style.display = "inline-block";
+
+        document.getElementById("a-cur").textContent = aIdx + 1;
+        document.getElementById("a-tot").textContent = A_STEPS.length;
+        setExplain("a-title", "a-body", step.title, step.body);
+
+        document.getElementById("a-prev").disabled = aIdx === 0;
+        var nextBtn = document.getElementById("a-next");
+        nextBtn.textContent = aIdx === A_STEPS.length - 1 ? "Start over" : "Next ›";
+      }
+
+      function aStep(dir) {
+        if (dir > 0 && aIdx === A_STEPS.length - 1) { aIdx = 0; }
+        else { aIdx = Math.max(0, Math.min(A_STEPS.length - 1, aIdx + dir)); }
+        renderAnatomy();
+      }
+
+      /* ---------- PANEL 2: RELATIONSHIPS cheat-sheet ---------- */
+      // SVG snippets drawn left (Part) → right (Whole). Diamond/triangle sits on the right.
+      var REL = [
+        {
+          name: "Association",
+          gloss: "knows about / uses",
+          art: '<line class="rel-line" x1="6" y1="15" x2="150" y2="15"/>',
+          title: "Association — a plain line",
+          body: 'The loosest link: one class <b>knows about and uses</b> another. <span class="dim">Example:</span> a <code>Teacher</code> ── the <code>Students</code> they teach. No ownership implied, just a connection.',
+        },
+        {
+          name: "Dependency",
+          gloss: "uses temporarily",
+          art: '<line class="rel-line dash" x1="6" y1="15" x2="138" y2="15"/><path class="rel-head" d="M138,15 l-9,-5 M138,15 l-9,5" fill="none"/>',
+          title: "Dependency — dashed line, open arrow",
+          body: 'A <b>brief</b> use — class A needs B for a moment, e.g. B is passed in as a method argument. <span class="dim">Example:</span> <code>OrderService</code> ⇢ <code>EmailSender</code> it calls once to send a receipt.',
+        },
+        {
+          name: "Aggregation",
+          gloss: "has-a · parts survive",
+          art: '<line class="rel-line" x1="40" y1="15" x2="150" y2="15"/><path class="rel-head" d="M40,15 l10,-6 l10,6 l-10,6 z" fill="none"/>',
+          title: "Aggregation — hollow ◇ diamond",
+          body: '"<b>Has-a</b>", but the parts can live on their own. <span class="dim">Example:</span> a <code>Team</code> ◇── <code>Players</code>. Disband the team and the players still exist. Diamond is on the <b>whole</b> (the Team).',
+        },
+        {
+          name: "Composition",
+          gloss: "owns-a · shared fate",
+          art: '<line class="rel-line" x1="40" y1="15" x2="150" y2="15"/><path class="rel-head" d="M40,15 l10,-6 l10,6 l-10,6 z" fill="var(--fg)"/>',
+          title: "Composition — filled ◆ diamond",
+          body: '"<b>Owns-a</b>"; the parts <b>cannot exist without the whole</b>. <span class="dim">Example:</span> a <code>House</code> ◆── <code>Rooms</code>. Demolish the house and the rooms are gone too. Filled = a stronger bond.',
+        },
+        {
+          name: "Inheritance",
+          gloss: "is-a",
+          art: '<line class="rel-line" x1="6" y1="15" x2="138" y2="15"/><path class="rel-head" d="M150,15 l-12,-7 l0,14 z" fill="none"/>',
+          title: "Inheritance — solid line, hollow ▷ triangle",
+          body: '"<b>Is-a</b>" — one class is a kind of another and reuses its members. <span class="dim">Example:</span> <code>SavingsAccount</code> ──▷ <code>BankAccount</code>. The triangle points at the <b>parent</b>.',
+        },
+        {
+          name: "Realization",
+          gloss: "promises to do",
+          art: '<line class="rel-line dash" x1="6" y1="15" x2="138" y2="15"/><path class="rel-head" d="M150,15 l-12,-7 l0,14 z" fill="none"/>',
+          title: "Realization — dashed line, hollow ▷ triangle",
+          body: 'A class <b>implements an interface</b> — it promises to provide the listed methods. <span class="dim">Example:</span> <code>Dog</code> ⇠⇠▷ <code>«interface» Animal</code>. Like inheritance, but the dashes mean "fulfils a contract".',
+        },
+      ];
+      var rIdx = -1;
+
+      function renderRelGrid() {
+        var grid = document.getElementById("rel-grid");
+        grid.innerHTML = "";
+        REL.forEach(function (r, i) {
+          var card = document.createElement("button");
+          card.className = "rel" + (i === rIdx ? " on" : "");
+          card.innerHTML =
+            '<div class="rel-name">' + r.name + '</div>' +
+            '<div class="rel-gloss">' + r.gloss + '</div>' +
+            '<div class="rel-art"><svg viewBox="0 0 156 30" preserveAspectRatio="xMidYMid meet">' + r.art + '</svg></div>';
+          card.onclick = (function (idx) { return function () { pickRel(idx); }; })(i);
+          grid.appendChild(card);
+        });
+      }
+
+      function pickRel(i) {
+        rIdx = i;
+        renderRelGrid();
+        var r = REL[i];
+        setExplain("r-title", "r-body", r.title, r.body);
+      }
+
+      /* ---------- boot ---------- */
+      renderAnatomy();
+      renderRelGrid();
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

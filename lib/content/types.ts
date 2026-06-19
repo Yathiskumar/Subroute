@@ -6,7 +6,8 @@ export type ProseBlock =
   | { type: "ul"; items: string[] }
   | { type: "ol"; items: string[] }
   | { type: "callout"; variant: "info" | "warning" | "tip" | "success"; title?: string; text: string }
-  | { type: "code"; language?: string; filename?: string; code: string };
+  | { type: "code"; language?: string; filename?: string; code: string }
+  | { type: "figure"; svg: string; caption?: string };
 
 export type HandsOnExercise = {
   title: string;

@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sequence Diagrams — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --violet: #a78bfa;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      .lab { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+
+      /* ---- Buttons ---- */
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: filter .15s, transform .1s, border-color .15s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .btn.primary { background: var(--accent); color: #1a1003; border-color: transparent; }
+      .btn.primary:hover { filter: brightness(1.06); }
+      .btn.ghost { background: transparent; }
+      .btn:disabled { opacity: .4; cursor: not-allowed; }
+      .btn:disabled:active { transform: none; }
+
+      /* ---- The diagram stage (FIXED height — never grows) ---- */
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 14px 10px 10px; }
+      .stagewrap { position: relative; width: 100%; height: 430px; }
+      .stagewrap svg { width: 100%; height: 100%; display: block; }
+
+      .lifeline { stroke: var(--border-strong); stroke-width: 1.4; stroke-dasharray: 4 5; }
+      .head-box { fill: var(--bg); stroke: var(--border-strong); stroke-width: 1.4; }
+      .head-box.actor { fill: transparent; stroke: none; }
+      .head-txt { fill: var(--fg); font-family: var(--mono); font-size: 12px; font-weight: 600; text-anchor: middle; dominant-baseline: middle; }
+      .actor-fig { stroke: var(--fg); stroke-width: 1.5; fill: none; }
+
+      .activation { fill: var(--accent-soft); stroke: var(--accent-border); stroke-width: 1.2; opacity: 0; transition: opacity .25s; }
+      .activation.on { opacity: 1; }
+
+      .msg-line { stroke: var(--fg); stroke-width: 1.7; fill: none; opacity: 0; transition: opacity .2s; }
+      .msg-line.dash { stroke-dasharray: 6 4; stroke: var(--muted); }
+      .msg-line.show { opacity: 1; }
+      .msg-line.cur { stroke: var(--accent); stroke-width: 2.1; }
+      .msg-line.cur.dash { stroke: var(--accent); }
+
+      .msg-head { stroke-width: 1.7; opacity: 0; transition: opacity .2s; }
+      .msg-head.show { opacity: 1; }
+      .msg-head.filled { fill: var(--fg); stroke: var(--fg); }
+      .msg-head.open { fill: none; stroke: var(--muted); }
+      .msg-head.cur.filled { fill: var(--accent); stroke: var(--accent); }
+      .msg-head.cur.open { stroke: var(--accent); }
+
+      .msg-label { font-family: var(--mono); font-size: 11px; fill: var(--fg); opacity: 0; transition: opacity .2s; }
+      .msg-label.show { opacity: 1; }
+      .msg-label.ret { fill: var(--muted); }
+      .msg-label.cur { fill: var(--accent); font-weight: 600; }
+
+      /* ---- Step controls ---- */
+      .controls { display: flex; align-items: center; gap: 10px; margin-top: 16px; }
+      .controls .step-pill { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+      .controls .step-pill b { color: var(--fg); font-variant-numeric: tabular-nums; }
+      .controls .spacer { flex: 1; }
+
+      /* ---- Fixed explanation panel (REPLACES content, never grows) ---- */
+      .explain { margin-top: 14px; min-height: 92px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 13px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .pill { font-family: var(--mono); font-size: 10.5px; padding: 1px 7px; border-radius: 20px; border: 1px solid var(--border-strong); }
+      .explain-body .pill.call { color: var(--fg); border-color: var(--accent-border); }
+      .explain-body .pill.ret { color: var(--muted); }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <div class="stage">
+      <div class="stagewrap">
+        <svg id="svg" viewBox="0 0 760 430" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="btn" id="prev" onclick="step(-1)">‹ Back</button>
+      <button class="btn primary" id="next" onclick="step(1)">Next ›</button>
+      <span class="spacer"></span>
+      <span class="step-pill">message <b id="cur">0</b> / <b id="tot">7</b></span>
+    </div>
+
+    <div class="explain">
+      <div class="explain-title" id="e-title">Press Next to send the first message</div>
+      <div class="explain-body" id="e-body"><span class="dim">Five participants sit across the top, each with a dashed <b style="color:var(--fg)">lifeline</b> dropping down. Time flows downward. Each click reveals one more arrow between two lifelines, in the order the calls really happen.</span></div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span><b style="color:var(--accent)">Solid line, filled head</b> = a call going out (asking for work). <b style="color:var(--accent)">Dashed line, open head</b> = a result coming back. Read the diagram top to bottom — that's time.</span>
+    </div>
+
+    <script>
+      /* ---------- one explanation panel, content REPLACED (never appended) ---------- */
+      function setExplain(title, bodyHtml) {
+        document.getElementById("e-title").textContent = title;
+        document.getElementById("e-body").innerHTML = bodyHtml;
+      }
+
+      /* ---------- participants laid out across the top ---------- */
+      // x = centre of each lifeline. Stage is 760 wide, 430 tall.
+      var P = {
+        user: { x: 70,  label: "User",          actor: true },
+        ui:   { x: 220, label: ":OrderUI",       actor: false },
+        svc:  { x: 400, label: ":OrderService",  actor: false },
+        pay:  { x: 580, label: ":Payment",       actor: false },
+        db:   { x: 700, label: ":Database",      actor: false },
+      };
+      var HEAD_Y = 18, HEAD_H = 30, LIFE_TOP = HEAD_Y + HEAD_H, LIFE_BOTTOM = 412;
+      var ACT_W = 9; // activation bar half-width is ACT_W/2
+
+      /* ---------- the messages, in order (top to bottom) ---------- */
+      // type: "call" (solid, filled head) or "return" (dashed, open head)
+      // from/to: participant keys. y: vertical position on the stage.
+      var STEPS = [
+        { from: "user", to: "ui",  type: "call",   label: "checkout()", y: 95,
+          title: "1 · User → :OrderUI  ·  checkout()",
+          body: '<span class="pill call">CALL</span> The <b>actor</b> (the human <code>User</code>) starts the whole flow by clicking checkout. <b>Solid line, filled head</b> = a synchronous call: the user asks and waits. The arrowhead points at <code>:OrderUI</code>, the receiver. An <b>activation bar</b> now lights up on <code>:OrderUI</code> — it is busy.' },
+        { from: "ui", to: "svc",   type: "call",   label: "placeOrder()", y: 140,
+          title: "2 · :OrderUI → :OrderService  ·  placeOrder()",
+          body: '<span class="pill call">CALL</span> <code>:OrderUI</code> can\'t place the order alone, so it calls <code>:OrderService</code>. Both bars are now lit: <code>:OrderUI</code> is <b>waiting</b> while <code>:OrderService</code> works. Stacked activation bars always mean <i>someone is blocked waiting on someone else.</i>' },
+        { from: "svc", to: "svc",  type: "self",   label: "validate()", y: 185,
+          title: "3 · :OrderService → itself  ·  validate()  (self-call)",
+          body: '<span class="pill call">CALL</span> Before charging, <code>:OrderService</code> calls one of its <b>own</b> methods. A <b>self-call</b> is an arrow that loops out and back to the <i>same</i> lifeline. No new participant is involved — the object is just doing internal work.' },
+        { from: "svc", to: "pay",  type: "call",   label: "charge()", y: 235,
+          title: "4 · :OrderService → :Payment  ·  charge()",
+          body: '<span class="pill call">CALL</span> <code>:OrderService</code> asks <code>:Payment</code> to take the money. Solid line, filled head, pointing into <code>:Payment</code>. <code>:Payment</code>\'s bar lights up while it does the work; <code>:OrderService</code> stays lit because it is waiting for the answer.' },
+        { from: "pay", to: "svc",  type: "return", label: "ok", y: 270,
+          title: "5 · :Payment returns → :OrderService  ·  ok",
+          body: '<span class="pill ret">RETURN</span> Payment is done, so <code>:Payment</code> sends its result <b>back</b>. <b>Dashed line, open head</b>, pointing back to the caller = a return. It carries the answer <code>ok</code>. Now <code>:Payment</code>\'s bar ends — its job is finished. <i>Solid goes, dashed returns.</i>' },
+        { from: "svc", to: "db",   type: "call",   label: "save()", y: 315,
+          title: "6 · :OrderService → :Database  ·  save()",
+          body: '<span class="pill call">CALL</span> With payment confirmed, <code>:OrderService</code> calls <code>:Database</code> to store the order. Another synchronous call — solid line, filled head — and <code>:Database</code> goes busy while it writes the row.' },
+        { from: "ui", to: "user",  type: "return", label: "orderId", y: 380, viaSvc: true,
+          title: "7 · the answer travels all the way back  ·  orderId",
+          body: '<span class="pill ret">RETURN</span> The result flows back up the chain: <code>:Database</code> → <code>:OrderService</code> → <code>:OrderUI</code> → <code>User</code>. The user finally sees the <code>orderId</code>. Every activation bar switches off as each method returns — the request is complete.' },
+      ];
+
+      var idx = 0; // 0 = nothing sent yet; 1..N = that many messages shown
+      document.getElementById("tot").textContent = STEPS.length;
+
+      function px(key) { return P[key].x; }
+
+      /* ---------- which participants are "busy" after N messages ---------- */
+      // We compute activation spans declaratively so bars start at a call and
+      // end at the matching return. Hand-tuned to the script above.
+      function activationSpans(shown) {
+        // returns array of {key, y1, y2}
+        var spans = [];
+        function span(key, y1, y2) { spans.push({ key: key, y1: y1, y2: y2 }); }
+        if (shown >= 1) span("ui",  95,  Math.min(showY(shown), 380)); // UI busy from checkout() until final return
+        if (shown >= 2) span("svc", 140, shown >= 7 ? 380 : Math.min(showY(shown), 380)); // service busy
+        if (shown >= 3 && shown < 7) span("svc", 185, 215); // nested self-call widening (visual)
+        if (shown >= 4) span("pay", 235, shown >= 5 ? 270 : showY(shown)); // payment busy until its return
+        if (shown >= 6) span("db",  315, shown >= 7 ? 350 : showY(shown)); // db busy
+        return spans;
+      }
+      function showY(shown) {
+        // y of the last shown message, used as a "still busy" lower bound
+        if (shown <= 0) return LIFE_TOP;
+        return STEPS[Math.min(shown, STEPS.length) - 1].y;
+      }
+
+      /* ---------- render everything (rebuild SVG each step — fixed size) ---------- */
+      function render() {
+        var svg = document.getElementById("svg");
+        var out = "";
+
+        // lifelines + heads
+        Object.keys(P).forEach(function (k) {
+          var p = P[k], x = p.x;
+          out += '<line class="lifeline" x1="' + x + '" y1="' + LIFE_TOP + '" x2="' + x + '" y2="' + LIFE_BOTTOM + '"/>';
+          if (p.actor) {
+            // stick figure actor
+            var cy = HEAD_Y + 6;
+            out += '<circle class="actor-fig" cx="' + x + '" cy="' + cy + '" r="5"/>';
+            out += '<line class="actor-fig" x1="' + x + '" y1="' + (cy + 5) + '" x2="' + x + '" y2="' + (cy + 16) + '"/>';
+            out += '<line class="actor-fig" x1="' + (x - 8) + '" y1="' + (cy + 9) + '" x2="' + (x + 8) + '" y2="' + (cy + 9) + '"/>';
+            out += '<line class="actor-fig" x1="' + x + '" y1="' + (cy + 16) + '" x2="' + (x - 7) + '" y2="' + (cy + 25) + '"/>';
+            out += '<line class="actor-fig" x1="' + x + '" y1="' + (cy + 16) + '" x2="' + (x + 7) + '" y2="' + (cy + 25) + '"/>';
+            out += '<text class="head-txt" x="' + x + '" y="' + (HEAD_Y + HEAD_H + 12) + '">' + p.label + '</text>';
+          } else {
+            var w = Math.max(58, p.label.length * 7.5 + 16);
+            out += '<rect class="head-box" x="' + (x - w / 2) + '" y="' + HEAD_Y + '" width="' + w + '" height="' + HEAD_H + '" rx="5"/>';
+            out += '<text class="head-txt" x="' + x + '" y="' + (HEAD_Y + HEAD_H / 2 + 1) + '">' + p.label + '</text>';
+          }
+        });
+
+        // activation bars (only those active given idx)
+        activationSpans(idx).forEach(function (s) {
+          var x = P[s.key].x;
+          out += '<rect class="activation on" x="' + (x - ACT_W / 2) + '" y="' + s.y1 + '" width="' + ACT_W + '" height="' + Math.max(8, s.y2 - s.y1) + '" rx="2"/>';
+        });
+
+        // messages
+        STEPS.forEach(function (m, i) {
+          var shown = i < idx;
+          var isCur = i === idx - 1;
+          out += drawMessage(m, shown, isCur);
+        });
+
+        svg.innerHTML = out;
+
+        // controls + explanation
+        document.getElementById("cur").textContent = idx;
+        document.getElementById("prev").disabled = idx === 0;
+        var nextBtn = document.getElementById("next");
+        nextBtn.textContent = idx >= STEPS.length ? "Start over" : (idx === 0 ? "Next ›" : "Next ›");
+
+        if (idx === 0) {
+          setExplain("Press Next to send the first message",
+            '<span class="dim">Five participants sit across the top, each with a dashed <b style="color:var(--fg)">lifeline</b> dropping down. Time flows downward. Each click reveals one more arrow between two lifelines, in the order the calls really happen.</span>');
+        } else if (idx >= STEPS.length) {
+          var last = STEPS[STEPS.length - 1];
+          setExplain(last.title, last.body + '<br><span class="dim">That\'s the whole request — read top to bottom, it\'s the exact order things happened. Click <b style="color:var(--fg)">Start over</b> to replay.</span>');
+        } else {
+          var m = STEPS[idx - 1];
+          setExplain(m.title, m.body);
+        }
+      }
+
+      /* ---------- draw one message arrow + label ---------- */
+      function drawMessage(m, shown, isCur) {
+        var cls = (shown ? " show" : "") + (isCur ? " cur" : "");
+        var lineCls = "msg-line" + (m.type !== "call" && m.type !== "self" ? " dash" : "") + cls;
+        var headFill = (m.type === "return") ? "open" : "filled";
+        var headCls = "msg-head " + headFill + cls;
+        var labCls = "msg-label" + (m.type === "return" ? " ret" : "") + cls;
+        var s = "";
+
+        if (m.type === "self") {
+          // loop back to same lifeline
+          var x = px(m.from), y = m.y;
+          var x2 = x + 46;
+          s += '<path class="' + lineCls + '" d="M' + (x + 4) + ',' + y + ' L' + x2 + ',' + y + ' L' + x2 + ',' + (y + 18) + ' L' + (x + 4) + ',' + (y + 18) + '"/>';
+          // arrowhead pointing back into the lifeline (left), filled
+          s += '<path class="' + headCls + '" d="M' + (x + 4) + ',' + (y + 18) + ' l9,-5 l0,10 z"/>';
+          s += '<text class="' + labCls + '" x="' + (x + 8) + '" y="' + (y - 5) + '">' + m.label + '</text>';
+          return s;
+        }
+
+        var x1 = px(m.from), x2 = px(m.to), y = m.y;
+        var dir = x2 > x1 ? 1 : -1;
+        // start/end at edge of activation bars
+        var sx = x1 + dir * (ACT_W / 2);
+        var ex = x2 - dir * (ACT_W / 2);
+        s += '<line class="' + lineCls + '" x1="' + sx + '" y1="' + y + '" x2="' + ex + '" y2="' + y + '"/>';
+        // arrowhead at the receiver end
+        if (headFill === "filled") {
+          s += '<path class="' + headCls + '" d="M' + ex + ',' + y + ' l' + (-dir * 10) + ',-5 l0,10 z"/>';
+        } else {
+          // open / line arrowhead (two strokes)
+          s += '<path class="' + headCls + '" fill="none" d="M' + ex + ',' + y + ' l' + (-dir * 10) + ',-5 M' + ex + ',' + y + ' l' + (-dir * 10) + ',5"/>';
+        }
+        // label centred above the line
+        var mid = (sx + ex) / 2;
+        s += '<text class="' + labCls + '" x="' + mid + '" y="' + (y - 6) + '" text-anchor="middle">' + m.label + '</text>';
+        return s;
+      }
+
+      function step(d) {
+        if (d > 0 && idx >= STEPS.length) { idx = 0; }
+        else { idx = Math.max(0, Math.min(STEPS.length, idx + d)); }
+        render();
+      }
+
+      /* ---------- boot ---------- */
+      render();
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

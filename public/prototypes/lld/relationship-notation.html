@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Relationship Notation — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --success-border: rgba(92, 198, 111, 0.45);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --danger-border: rgba(240, 104, 104, 0.45);
+        --violet: #a78bfa;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      .lab { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+
+      /* ---- Buttons ---- */
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: filter .15s, transform .1s, border-color .15s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .btn.primary { background: var(--accent); color: #1a1003; border-color: transparent; }
+      .btn.primary:hover { filter: brightness(1.06); }
+      .btn.ghost { background: transparent; }
+      .btn:disabled { opacity: .4; cursor: not-allowed; }
+      .btn:disabled:active { transform: none; }
+
+      /* ---- Top bar: progress + score ---- */
+      .topbar { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+      .topbar .lab b { color: var(--fg); font-variant-numeric: tabular-nums; }
+      .topbar .spacer { flex: 1; }
+      .score { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+      .score b { color: var(--success); font-variant-numeric: tabular-nums; }
+
+      /* ---- The statement card ---- */
+      .stmt { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 18px 18px 16px; margin-bottom: 16px; }
+      .stmt .tag { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+      .stmt .text { font-size: 15.5px; line-height: 1.55; color: var(--fg); }
+      .stmt .text code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 6px; border-radius: 4px; font-size: 13px; }
+      .stmt .ask { font-size: 12.5px; color: var(--muted); margin-top: 10px; }
+
+      /* ---- The six notation choices ---- */
+      .choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+      .choice { text-align: left; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 12px 13px 10px; cursor: pointer; transition: border-color .15s, transform .1s, background .15s; }
+      .choice:hover:not(:disabled) { border-color: var(--accent-border); transform: translateY(-2px); }
+      .choice:active:not(:disabled) { transform: scale(0.98); }
+      .choice:disabled { cursor: default; }
+      .choice.is-correct { border-color: var(--success-border); background: var(--success-soft); }
+      .choice.is-wrong { border-color: var(--danger-border); background: var(--danger-soft); }
+      .choice.is-dim { opacity: .42; }
+      .choice-name { font-size: 13px; font-weight: 650; color: var(--fg); margin-bottom: 2px; display: flex; align-items: center; gap: 6px; }
+      .choice-name .sym { color: var(--accent); font-size: 14px; }
+      .choice-gloss { font-size: 10.5px; color: var(--muted); margin-bottom: 9px; min-height: 26px; }
+      .choice-art { height: 26px; display: flex; align-items: center; }
+      .choice-art svg { width: 100%; height: 26px; overflow: visible; }
+      .rel-line { stroke: var(--fg); stroke-width: 1.6; fill: none; }
+      .rel-line.dash { stroke-dasharray: 5 4; }
+      .rel-head { stroke: var(--fg); stroke-width: 1.6; }
+
+      /* ---- Fixed explanation/verdict panel (REPLACES content, never grows) ---- */
+      .explain { margin-top: 14px; min-height: 96px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 13px 15px; display: flex; flex-direction: column; justify-content: center; transition: border-color .2s; }
+      .explain.ok { border-color: var(--success-border); }
+      .explain.no { border-color: var(--danger-border); }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain.ok .explain-title { color: var(--success); }
+      .explain.no .explain-title { color: var(--danger); }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+
+      /* ---- Controls ---- */
+      .controls { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+      .controls .spacer { flex: 1; }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <!-- TOP BAR -->
+    <div class="topbar">
+      <span class="lab">Decoder · statement <b id="cur">1</b> / <b id="tot">6</b></span>
+      <span class="spacer"></span>
+      <span class="score">score <b id="score">0</b> / <span id="answered">0</span></span>
+    </div>
+
+    <!-- STATEMENT -->
+    <div class="stmt">
+      <div class="tag">Real-world statement</div>
+      <div class="text" id="stmt-text">—</div>
+      <div class="ask">Which line notation models this? Read the line style + the end shape.</div>
+    </div>
+
+    <!-- CHOICES -->
+    <div class="choices" id="choices"></div>
+
+    <!-- VERDICT (single fixed-height panel, REPLACED each click — never appended) -->
+    <div class="explain" id="verdict">
+      <div class="explain-title" id="v-title">Pick a notation</div>
+      <div class="explain-body" id="v-body"><span class="dim">Click the connector whose two facts — line style (solid / dashed) and end shape (plain · arrow · diamond ◇◆ · triangle ▷) — match the statement above.</span></div>
+    </div>
+
+    <!-- CONTROLS -->
+    <div class="controls">
+      <button class="btn ghost" id="reset" onclick="reset()">↺ Reset</button>
+      <span class="spacer"></span>
+      <button class="btn primary" id="next" onclick="nextStmt()" disabled>Next ›</button>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>Decode any line from two facts: <b style="color:var(--fg)">dashed</b> = temporary use or a contract; <b style="color:var(--fg)">solid</b> = a stronger tie. The <b style="color:var(--accent)">diamond</b> sits on the whole — <b style="color:var(--accent)">hollow ◇</b> parts survive, <b style="color:var(--accent)">filled ◆</b> parts die with it.</span>
+    </div>
+
+    <script>
+      /* ---------- single panel: content REPLACED, never appended ---------- */
+      function setVerdict(state, title, bodyHtml) {
+        var v = document.getElementById("verdict");
+        v.classList.remove("ok", "no");
+        if (state) v.classList.add(state);
+        document.getElementById("v-title").textContent = title;
+        document.getElementById("v-body").innerHTML = bodyHtml;
+      }
+
+      /* ---------- the six notations (drawn Part → Whole, end-shape on the right) ---------- */
+      var REL = {
+        association: {
+          name: "Association", sym: "",
+          gloss: "knows-a · a stored field",
+          art: '<line class="rel-line" x1="6" y1="13" x2="150" y2="13"/>',
+        },
+        dependency: {
+          name: "Dependency", sym: "⇢",
+          gloss: "uses briefly · a parameter",
+          art: '<line class="rel-line dash" x1="6" y1="13" x2="138" y2="13"/><path class="rel-head" d="M138,13 l-9,-5 M138,13 l-9,5" fill="none"/>',
+        },
+        aggregation: {
+          name: "Aggregation", sym: "◇",
+          gloss: "has-a · parts survive",
+          art: '<line class="rel-line" x1="40" y1="13" x2="150" y2="13"/><path class="rel-head" d="M40,13 l10,-6 l10,6 l-10,6 z" fill="none"/>',
+        },
+        composition: {
+          name: "Composition", sym: "◆",
+          gloss: "owns-a · shared fate",
+          art: '<line class="rel-line" x1="40" y1="13" x2="150" y2="13"/><path class="rel-head" d="M40,13 l10,-6 l10,6 l-10,6 z" fill="var(--fg)"/>',
+        },
+        generalization: {
+          name: "Generalization", sym: "▷",
+          gloss: "is-a · extends",
+          art: '<line class="rel-line" x1="6" y1="13" x2="138" y2="13"/><path class="rel-head" d="M150,13 l-12,-7 l0,14 z" fill="none"/>',
+        },
+        realization: {
+          name: "Realization", sym: "⇠▷",
+          gloss: "implements a contract",
+          art: '<line class="rel-line dash" x1="6" y1="13" x2="138" y2="13"/><path class="rel-head" d="M150,13 l-12,-7 l0,14 z" fill="none"/>',
+        },
+      };
+      var ORDER = ["association", "dependency", "aggregation", "composition", "generalization", "realization"];
+
+      /* ---------- the six statements (one per relationship) ---------- */
+      var STMTS = [
+        {
+          html: 'A <code>House</code> is made of <code>Room</code>s. Demolish the house and the rooms are destroyed too — each room belongs to exactly one house.',
+          answer: "composition",
+          why: 'The parts <b>die with the whole</b> and aren\'t shared — that\'s composition, a <b>filled ◆ diamond</b> on the whole (the House). In code the rooms are created <i>inside</i> the house.',
+        },
+        {
+          html: 'A <code>Team</code> has <code>Player</code>s, but if the team disbands the players still exist and can join another team.',
+          answer: "aggregation",
+          why: 'The parts have an <b>independent lifetime</b> — players outlive the team — so it\'s aggregation, a <b>hollow ◇ diamond</b> on the whole. The players are passed in, not created by the team.',
+        },
+        {
+          html: 'A <code>SavingsAccount</code> is a kind of <code>BankAccount</code> and reuses its members.',
+          answer: "generalization",
+          why: 'Plain <b>"is-a"</b> inheritance between two classes — generalization, a <b>solid line</b> with a <b>hollow ▷ triangle</b> pointing at the parent. In code: <code>extends</code>.',
+        },
+        {
+          html: '<code>ArrayList</code> implements the <code>«interface» List</code> — it promises to provide every method List declares.',
+          answer: "realization",
+          why: 'Implementing an interface is realization: same hollow ▷ triangle as inheritance, but a <b>DASHED line</b> — it fulfils a <i>contract</i>, it isn\'t a kind of List. In code: <code>implements</code>.',
+        },
+        {
+          html: '<code>placeOrder(gateway: PaymentGateway)</code> takes a <code>PaymentGateway</code> as a parameter, charges once, and never stores it.',
+          answer: "dependency",
+          why: 'Used only <b>for a moment</b> as a parameter and not kept — that\'s a dependency, a <b>dashed line with an open arrow</b>. If it were stored as a field, it would be an association instead.',
+        },
+        {
+          html: 'An <code>Order</code> keeps a permanent reference to its <code>Customer</code> as a field; both objects exist on their own.',
+          answer: "association",
+          why: 'A lasting "<b>knows-a</b>" link with no ownership and no shared fate — that\'s an association, a plain <b>solid line</b>. The stored field is what makes it last (unlike a one-off dependency).',
+        },
+      ];
+
+      var idx = 0;
+      var answered = 0;
+      var score = 0;
+      var done = false; // whether current statement is already answered
+
+      function renderChoices() {
+        var grid = document.getElementById("choices");
+        grid.innerHTML = "";
+        ORDER.forEach(function (key) {
+          var r = REL[key];
+          var card = document.createElement("button");
+          card.className = "choice";
+          card.id = "ch-" + key;
+          card.innerHTML =
+            '<div class="choice-name">' + r.name + (r.sym ? ' <span class="sym">' + r.sym + '</span>' : '') + '</div>' +
+            '<div class="choice-gloss">' + r.gloss + '</div>' +
+            '<div class="choice-art"><svg viewBox="0 0 156 26" preserveAspectRatio="xMidYMid meet">' + r.art + '</svg></div>';
+          card.onclick = (function (k) { return function () { pick(k); }; })(key);
+          grid.appendChild(card);
+        });
+      }
+
+      function renderStmt() {
+        done = false;
+        document.getElementById("stmt-text").innerHTML = STMTS[idx].html;
+        document.getElementById("cur").textContent = idx + 1;
+        document.getElementById("tot").textContent = STMTS.length;
+        document.getElementById("next").disabled = true;
+        document.getElementById("next").textContent = idx === STMTS.length - 1 ? "Finish ›" : "Next ›";
+        // reset every choice
+        ORDER.forEach(function (key) {
+          var c = document.getElementById("ch-" + key);
+          c.disabled = false;
+          c.classList.remove("is-correct", "is-wrong", "is-dim");
+        });
+        setVerdict(null, "Pick a notation",
+          '<span class="dim">Read the statement, then click the connector whose line style and end shape match it.</span>');
+      }
+
+      function pick(key) {
+        if (done) return;
+        done = true;
+        answered++;
+        var s = STMTS[idx];
+        var correctKey = s.answer;
+
+        // lock + mark all choices
+        ORDER.forEach(function (k) {
+          var c = document.getElementById("ch-" + k);
+          c.disabled = true;
+          if (k === correctKey) c.classList.add("is-correct");
+          else if (k === key) c.classList.add("is-wrong");
+          else c.classList.add("is-dim");
+        });
+
+        if (key === correctKey) {
+          score++;
+          setVerdict("ok", "✓ Correct — " + REL[correctKey].name,
+            s.why);
+        } else {
+          setVerdict("no", "✗ Not quite — you picked " + REL[key].name,
+            'That\'s <b>' + REL[key].name + '</b> (<span class="dim">' + REL[key].gloss + '</span>), which doesn\'t fit here. ' +
+            'The answer is <b>' + REL[correctKey].name + '</b>: ' + s.why);
+        }
+
+        document.getElementById("score").textContent = score;
+        document.getElementById("answered").textContent = answered;
+        document.getElementById("next").disabled = false;
+      }
+
+      function nextStmt() {
+        if (idx < STMTS.length - 1) {
+          idx++;
+          renderStmt();
+        } else {
+          // summary on the same fixed panel
+          var verdict = score === STMTS.length ? "ok" : (score >= STMTS.length - 2 ? "ok" : "no");
+          document.getElementById("next").disabled = true;
+          ORDER.forEach(function (k) { document.getElementById("ch-" + k).disabled = true; });
+          setVerdict(verdict, "Finished — " + score + " / " + STMTS.length,
+            (score === STMTS.length
+              ? 'Perfect. You decoded all six by their line style and end shape. '
+              : 'Good run. ') +
+            'Remember the two tests: <b>dashed vs solid</b> separates a temporary use / contract from a structural tie, and the <b>diamond ◇◆</b> sits on the whole — hollow means the parts survive, filled means they die with it. Hit <b>↺ Reset</b> to try again.');
+        }
+      }
+
+      function reset() {
+        idx = 0; answered = 0; score = 0;
+        document.getElementById("score").textContent = 0;
+        document.getElementById("answered").textContent = 0;
+        renderStmt();
+      }
+
+      /* ---------- boot ---------- */
+      renderChoices();
+      renderStmt();
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

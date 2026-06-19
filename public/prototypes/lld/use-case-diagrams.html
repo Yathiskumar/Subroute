@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Use Case Diagrams — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --violet: #a78bfa;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      .lab { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+
+      /* ---- Buttons ---- */
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: filter .15s, transform .1s, border-color .15s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .btn.primary { background: var(--accent); color: #1a1003; border-color: transparent; }
+      .btn.primary:hover { filter: brightness(1.06); }
+      .btn.ghost { background: transparent; }
+      .btn:disabled { opacity: .4; cursor: not-allowed; }
+      .btn:disabled:active { transform: none; }
+
+      /* ---- Stage + SVG diagram ---- */
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 14px 12px; }
+      .diagram { width: 100%; height: auto; display: block; user-select: none; }
+
+      /* boundary box */
+      .boundary { fill: var(--bg); stroke: var(--border-strong); stroke-width: 1.5; }
+      .boundary-label { fill: var(--fg); font: 700 14px var(--sans); }
+      .clk { cursor: pointer; }
+
+      /* use case ovals */
+      .uc { fill: var(--elevated); stroke: var(--border-strong); stroke-width: 1.4; transition: fill .2s, stroke .2s; }
+      .uc-label { fill: var(--fg); font: 600 12px var(--sans); text-anchor: middle; pointer-events: none; }
+      g.clk:hover .uc { stroke: var(--accent-border); }
+      .hot .uc { fill: var(--accent-soft); stroke: var(--accent-border); stroke-width: 2; }
+
+      /* actors */
+      .actor-stroke { stroke: var(--info); stroke-width: 1.8; fill: none; }
+      .actor-fill { fill: var(--info); }
+      .actor-label { fill: var(--fg); font: 600 11px var(--sans); text-anchor: middle; pointer-events: none; }
+      g.clk:hover .actor-stroke { stroke: var(--accent); }
+      g.clk:hover .actor-fill { fill: var(--accent); }
+      .hot .actor-stroke { stroke: var(--accent); stroke-width: 2.4; }
+      .hot .actor-fill { fill: var(--accent); }
+
+      /* lines */
+      .assoc { stroke: var(--muted); stroke-width: 1.4; fill: none; }
+      .rel { stroke: var(--violet); stroke-width: 1.6; fill: none; stroke-dasharray: 6 4; transition: stroke .2s, stroke-width .2s; }
+      .rel-hit { stroke: transparent; stroke-width: 14; fill: none; cursor: pointer; }
+      .rel-head { fill: none; stroke: var(--violet); stroke-width: 1.6; }
+      .rel-label { fill: var(--violet); font: 600 10px var(--mono); text-anchor: middle; pointer-events: none; }
+      g.clk:hover .rel { stroke: var(--accent); }
+      g.clk:hover .rel-head { stroke: var(--accent); }
+      .hot .rel { stroke: var(--accent); stroke-width: 2.6; }
+      .hot .rel-head { stroke: var(--accent); stroke-width: 2.6; }
+      .hot .rel-label { fill: var(--accent); }
+
+      /* ---- Controls ---- */
+      .controls { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+      .controls .spacer { flex: 1; }
+      .step-pill { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+      .step-pill b { color: var(--fg); font-variant-numeric: tabular-nums; }
+
+      /* ---- Fixed explanation panel (REPLACES content, never grows) ---- */
+      .explain { margin-top: 14px; min-height: 92px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 13px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <div class="stage">
+      <svg class="diagram" viewBox="0 0 820 470" preserveAspectRatio="xMidYMid meet" aria-label="Use case diagram of an Online Store">
+        <defs>
+          <!-- clean open arrowhead for «include» / «extend» dependency arrows -->
+          <marker id="rel-arrow" markerWidth="13" markerHeight="13" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+            <path d="M2,1.5 L9.5,5 L2,8.5" fill="none" stroke="#a78bfa" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+          </marker>
+        </defs>
+
+        <!-- ===== System boundary ===== -->
+        <g class="clk" id="el-boundary" onclick="pick('boundary')">
+          <rect class="boundary" x="220" y="38" width="435" height="410" rx="12"></rect>
+          <text class="boundary-label" x="437" y="64" text-anchor="middle">Online Store</text>
+        </g>
+
+        <!-- ===== Association lines (plain — UML actors connect with no arrowhead) ===== -->
+        <!-- Customer -> Browse, Place Order, Track Delivery — all fan from the one hand point -->
+        <path class="assoc" d="M104,172 L237,108"></path>
+        <path class="assoc" d="M104,172 L243,205"></path>
+        <path class="assoc" d="M104,172 L237,303"></path>
+        <!-- Admin -> Manage Products (from the hand) -->
+        <path class="assoc" d="M104,380 L243,402"></path>
+        <!-- Payment Gateway -> Make Payment (from the hand) -->
+        <path class="assoc" d="M738,238 L636,253"></path>
+
+        <!-- ===== Use case ovals ===== -->
+        <g class="clk" id="el-browse" onclick="pick('browse')">
+          <ellipse class="uc" cx="315" cy="105" rx="80" ry="27"></ellipse>
+          <text class="uc-label" x="315" y="109">Browse Catalog</text>
+        </g>
+        <g class="clk" id="el-place" onclick="pick('place')">
+          <ellipse class="uc" cx="315" cy="205" rx="74" ry="27"></ellipse>
+          <text class="uc-label" x="315" y="209">Place Order</text>
+        </g>
+        <g class="clk" id="el-track" onclick="pick('track')">
+          <ellipse class="uc" cx="315" cy="305" rx="80" ry="27"></ellipse>
+          <text class="uc-label" x="315" y="309">Track Delivery</text>
+        </g>
+        <g class="clk" id="el-manage" onclick="pick('manage')">
+          <ellipse class="uc" cx="325" cy="405" rx="84" ry="27"></ellipse>
+          <text class="uc-label" x="325" y="409">Manage Products</text>
+        </g>
+        <g class="clk" id="el-coupon" onclick="pick('coupon')">
+          <ellipse class="uc" cx="560" cy="145" rx="70" ry="25"></ellipse>
+          <text class="uc-label" x="560" y="149">Apply Coupon</text>
+        </g>
+        <g class="clk" id="el-pay" onclick="pick('pay')">
+          <ellipse class="uc" cx="560" cy="255" rx="78" ry="27"></ellipse>
+          <text class="uc-label" x="560" y="259">Make Payment</text>
+        </g>
+
+        <!-- ===== «include»: Place Order -> Make Payment (clean marker arrowhead) ===== -->
+        <g class="clk" id="el-include" onclick="pick('include')">
+          <path class="rel" id="inc-line" d="M392,214 L476,249" marker-end="url(#rel-arrow)"></path>
+          <path class="rel-hit" d="M392,214 L476,249"></path>
+          <text class="rel-label" x="430" y="250">«include»</text>
+        </g>
+
+        <!-- ===== «extend»: Apply Coupon -> Place Order (clean marker arrowhead) ===== -->
+        <g class="clk" id="el-extend" onclick="pick('extend')">
+          <path class="rel" id="ext-line" d="M489,152 L392,198" marker-end="url(#rel-arrow)"></path>
+          <path class="rel-hit" d="M489,152 L392,198"></path>
+          <text class="rel-label" x="442" y="166">«extend»</text>
+        </g>
+
+        <!-- ===== Actors (stick figures) ===== -->
+        <!-- Customer (left) -->
+        <g class="clk" id="el-customer" onclick="pick('customer')">
+          <circle class="actor-stroke" cx="80" cy="150" r="12"></circle>
+          <line class="actor-stroke" x1="80" y1="162" x2="80" y2="198"></line>
+          <line class="actor-stroke" x1="58" y1="173" x2="102" y2="173"></line>
+          <line class="actor-stroke" x1="80" y1="198" x2="64" y2="222"></line>
+          <line class="actor-stroke" x1="80" y1="198" x2="96" y2="222"></line>
+          <text class="actor-label" x="80" y="242">Customer</text>
+        </g>
+        <!-- Admin (lower left) -->
+        <g class="clk" id="el-admin" onclick="pick('admin')">
+          <circle class="actor-stroke" cx="80" cy="358" r="12"></circle>
+          <line class="actor-stroke" x1="80" y1="370" x2="80" y2="406"></line>
+          <line class="actor-stroke" x1="58" y1="381" x2="102" y2="381"></line>
+          <line class="actor-stroke" x1="80" y1="406" x2="64" y2="430"></line>
+          <line class="actor-stroke" x1="80" y1="406" x2="96" y2="430"></line>
+          <text class="actor-label" x="80" y="450">Admin</text>
+        </g>
+        <!-- Payment Gateway (right, external system actor) -->
+        <g class="clk" id="el-gateway" onclick="pick('gateway')">
+          <circle class="actor-stroke" cx="760" cy="215" r="12"></circle>
+          <line class="actor-stroke" x1="760" y1="227" x2="760" y2="263"></line>
+          <line class="actor-stroke" x1="738" y1="238" x2="782" y2="238"></line>
+          <line class="actor-stroke" x1="760" y1="263" x2="744" y2="287"></line>
+          <line class="actor-stroke" x1="760" y1="263" x2="776" y2="287"></line>
+          <text class="actor-label" x="760" y="307">Payment</text>
+          <text class="actor-label" x="760" y="321">Gateway</text>
+          <text class="actor-label" x="760" y="190" style="fill:var(--muted);font-family:var(--mono);font-size:9px">«system»</text>
+        </g>
+      </svg>
+    </div>
+
+    <div class="controls">
+      <button class="btn" id="t-prev" onclick="tour(-1)">‹ Back</button>
+      <button class="btn primary" id="t-next" onclick="tour(1)">Tour ›</button>
+      <span class="spacer"></span>
+      <span class="step-pill" id="t-pill"></span>
+    </div>
+
+    <div class="explain">
+      <div class="explain-title" id="x-title">Click anything in the diagram</div>
+      <div class="explain-body" id="x-body"><span class="dim">Stick figures outside the box are <b style="color:var(--fg)">actors</b> (who). Ovals inside are <b style="color:var(--fg)">use cases</b> (their goals). Lines join who can do what. Click an actor, an oval, or a dashed arrow — or press <b style="color:var(--accent)">Tour</b> to step through every part.</span></div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>Read it actor-first: follow a stick figure's lines into the box, and every oval you reach is a goal it can pursue. <b style="color:var(--accent)">«include» = always</b> reused; <b style="color:var(--accent)">«extend» = optional</b> add-on.</span>
+    </div>
+
+    <script>
+      /* ---------- shared: one explanation panel, content REPLACED (never appended) ---------- */
+      function setExplain(titleEl, bodyEl, title, bodyHtml) {
+        document.getElementById(titleEl).textContent = title;
+        document.getElementById(bodyEl).innerHTML = bodyHtml;
+      }
+
+      /* ---------- element notes ---------- */
+      var NOTES = {
+        boundary: {
+          el: "el-boundary",
+          title: "System boundary — the box",
+          body: 'The box is the <b>system boundary</b>: everything <b>inside</b> is what the <code>Online Store</code> does (the ovals), and everyone <b>outside</b> is an actor that uses it. That line between in and out is the whole point — it agrees the <i>scope</i> of the system.',
+        },
+        customer: {
+          el: "el-customer",
+          title: "Actor — Customer (a human role)",
+          body: 'An <b>actor</b> is a <b>role</b>, not a named person. The <code>Customer</code> can browse, place orders, pay, and track delivery. Anyone playing the customer role is this one actor — even two different people.',
+        },
+        admin: {
+          el: "el-admin",
+          title: "Actor — Admin (a human role)",
+          body: 'The <code>Admin</code> is a different role with different goals: here, only the admin can <code>Manage Products</code>. An admin-only goal like this maps to an admin-only method in the code.',
+        },
+        gateway: {
+          el: "el-gateway",
+          title: "Actor — Payment Gateway (a SYSTEM)",
+          body: 'An actor can be <b>another system</b>, not just a human. The <code>Payment Gateway</code> takes part in <code>Make Payment</code>. Drawing it as an actor shows the store depends on an outside service to get paid.',
+        },
+        browse: {
+          el: "el-browse",
+          title: "Use case — Browse Catalog",
+          body: 'An <b>oval</b> is a <b>goal</b> an actor came to achieve, written as a verb phrase. <code>Browse Catalog</code> is something a customer would say they did — that\'s the right altitude for a use case (not a button click).',
+        },
+        place: {
+          el: "el-place",
+          title: "Use case — Place Order",
+          body: 'A core customer goal. Notice the arrows hanging off it: it <b>always</b> includes <code>Make Payment</code>, and it <b>may</b> be extended by <code>Apply Coupon</code>. One oval can be the hub of several relationships.',
+        },
+        pay: {
+          el: "el-pay",
+          title: "Use case — Make Payment",
+          body: 'A goal shared by both the <code>Customer</code> and the external <code>Payment Gateway</code>. Because <code>Place Order</code> always needs it, it\'s pulled out as its own oval and reused via <code>«include»</code>.',
+        },
+        track: {
+          el: "el-track",
+          title: "Use case — Track Delivery",
+          body: 'Another customer goal. It\'s independent — no include or extend — which is fine. Most use cases are just a plain line from an actor to a goal.',
+        },
+        manage: {
+          el: "el-manage",
+          title: "Use case — Manage Products",
+          body: 'The <code>Admin</code>\'s goal. Only one line reaches it, from the admin — that instantly shows this is an admin-only capability, not something customers can do.',
+        },
+        coupon: {
+          el: "el-coupon",
+          title: "Use case — Apply Coupon (optional)",
+          body: 'This goal only matters <i>sometimes</i> — when a customer has a code. That\'s why it connects to <code>Place Order</code> with an <code>«extend»</code> arrow rather than being part of every order.',
+        },
+        include: {
+          el: "el-include",
+          title: "«include» — always reused",
+          body: '<code>Place Order</code> <b>always</b> includes <code>Make Payment</code> — you can\'t finish an order without paying. The dashed arrow points <b>from</b> the base goal <b>to</b> the reused step. <span class="dim">Think: call this shared sub-routine every time.</span>',
+        },
+        extend: {
+          el: "el-extend",
+          title: "«extend» — optional add-on",
+          body: '<code>Apply Coupon</code> <b>may extend</b> <code>Place Order</code> — it adds behaviour only when a coupon exists. The dashed arrow points the <b>other way</b>: from the optional extra <b>back to</b> the base goal. <span class="dim">include = always; extend = sometimes.</span>',
+        },
+      };
+
+      var ALL_EL = Object.keys(NOTES).map(function (k) { return NOTES[k].el; });
+
+      function clearHot() {
+        ALL_EL.forEach(function (id) { document.getElementById(id).classList.remove("hot"); });
+      }
+
+      function pick(key) {
+        var n = NOTES[key];
+        if (!n) return;
+        clearHot();
+        document.getElementById(n.el).classList.add("hot");
+        setExplain("x-title", "x-body", n.title, n.body);
+        // keep tour pointer in sync if the picked element is on the tour
+        var ti = TOUR.indexOf(key);
+        if (ti !== -1) { tIdx = ti; }
+        updatePill();
+      }
+
+      /* ---------- Tour stepper ---------- */
+      var TOUR = ["boundary", "customer", "browse", "place", "pay", "include", "coupon", "extend", "admin", "manage", "gateway", "track"];
+      var tIdx = -1;
+
+      function updatePill() {
+        var pill = document.getElementById("t-pill");
+        if (tIdx < 0) { pill.innerHTML = "Tour: <b>" + TOUR.length + "</b> parts"; }
+        else { pill.innerHTML = "stop <b>" + (tIdx + 1) + "</b> / <b>" + TOUR.length + "</b>"; }
+        document.getElementById("t-prev").disabled = tIdx <= 0;
+        document.getElementById("t-next").textContent =
+          tIdx === -1 ? "Tour ›" : (tIdx === TOUR.length - 1 ? "Start over" : "Next ›");
+      }
+
+      function tour(dir) {
+        if (dir > 0 && tIdx === TOUR.length - 1) { tIdx = 0; }
+        else { tIdx = Math.max(0, Math.min(TOUR.length - 1, tIdx + dir)); }
+        pick(TOUR[tIdx]);
+      }
+
+      /* ---------- boot ---------- */
+      updatePill();
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

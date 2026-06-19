@@ -39,19 +39,51 @@ export const crcCards: RoadmapLesson = {
         text: "Every CRC card has the same layout. The **class name** goes across the top. The **left column** lists *responsibilities* — the things this class *knows* (data it holds) or *does* (operations it performs), written as short verb phrases like \"calculate total\" or \"hold line items.\" The **right column** lists *collaborators* — the other classes this one must talk to in order to meet its responsibilities. Responsibilities and collaborators usually line up: a responsibility on the left that needs help from another class names that class on the right.",
       },
       {
-        type: "code",
-        language: "text",
-        filename: "order.crc",
-        code: `┌─────────────────────────────────────────────┐
-│  Order                              (Class)  │
-├──────────────────────────┬──────────────────┤
-│  Responsibilities        │  Collaborators   │
-├──────────────────────────┼──────────────────┤
-│  • hold the line items   │  OrderLine       │
-│  • calculate the total   │  OrderLine       │
-│  • know the customer     │  Customer        │
-│  • request payment       │  Payment         │
-└──────────────────────────┴──────────────────┘`,
+        type: "figure",
+        svg: `<svg viewBox="0 0 520 250" width="100%" style="max-width:560px;display:block;margin:0 auto;font-family:ui-monospace,'SF Mono',Menlo,monospace" role="img" aria-label="A CRC index card for the Order class. Header: Order (Class). Two columns: Responsibilities — hold the line items, calculate the total, know the customer, request payment; Collaborators — OrderLine, OrderLine, Customer, Payment.">
+  <!-- card -->
+  <rect x="16" y="16" width="488" height="218" rx="10" fill="none" stroke="#3a414c" stroke-width="1.4"/>
+
+  <!-- header bar -->
+  <path d="M16 26 a10 10 0 0 1 10 -10 h468 a10 10 0 0 1 10 10 v26 h-488 z" fill="#1a1d22"/>
+  <line x1="16" y1="52" x2="504" y2="52" stroke="#3a414c" stroke-width="1.4"/>
+  <text x="36" y="40" font-size="16" fill="#e8e4dc">Order</text>
+  <text x="484" y="40" text-anchor="end" font-size="12" fill="#9099a8">(Class)</text>
+
+  <!-- column divider -->
+  <line x1="320" y1="52" x2="320" y2="234" stroke="#2d333d" stroke-width="1"/>
+
+  <!-- column headers -->
+  <text x="36" y="76" font-size="12.5" fill="#9099a8">Responsibilities</text>
+  <text x="340" y="76" font-size="12.5" fill="#9099a8">Collaborators</text>
+  <line x1="36" y1="84" x2="200" y2="84" stroke="#2d333d" stroke-width="1"/>
+  <line x1="340" y1="84" x2="488" y2="84" stroke="#2d333d" stroke-width="1"/>
+
+  <!-- rows: responsibilities (left) -->
+  <g font-size="13" fill="#e8e4dc">
+    <text x="50" y="113">hold the line items</text>
+    <text x="50" y="148">calculate the total</text>
+    <text x="50" y="183">know the customer</text>
+    <text x="50" y="218">request payment</text>
+  </g>
+  <!-- bullets -->
+  <g fill="#fb863a">
+    <circle cx="40" cy="109" r="2.6"/>
+    <circle cx="40" cy="144" r="2.6"/>
+    <circle cx="40" cy="179" r="2.6"/>
+    <circle cx="40" cy="214" r="2.6"/>
+  </g>
+
+  <!-- rows: collaborators (right) -->
+  <g font-size="13" fill="#e8e4dc">
+    <text x="340" y="113">OrderLine</text>
+    <text x="340" y="148">OrderLine</text>
+    <text x="340" y="183">Customer</text>
+    <text x="340" y="218">Payment</text>
+  </g>
+</svg>`,
+        caption:
+          "A *CRC card* names a class, what it's *responsible* for, and which other classes it *collaborates* with — brainstormed one index card per class.",
       },
       {
         type: "p",

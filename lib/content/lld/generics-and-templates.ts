@@ -101,11 +101,39 @@ max(3, 7);            // ok — Integer is Comparable
 max("ant", "bee");    // ok — String is Comparable
 // max(new Thread(), new Thread()); // ✗ Thread isn't Comparable`,
       },
+      { type: "h", text: "So what exactly is a \"template\"?" },
+      {
+        type: "p",
+        text: "**\"Template\" is C++'s word for the same idea** — write the code once with a type placeholder, fill the type in later. `template <class T> class Box { ... }` is C++ for what Java/C#/TypeScript call a generic `Box<T>`. So *generics* and *templates* are two names for the same goal: parametric reuse with type safety. The reason this lesson pairs the words is that you'll meet both — \"generics\" in Java, C#, TypeScript, Swift, Rust, and \"templates\" in C++ — and they are the same concept seen from two angles.",
+      },
+      {
+        type: "p",
+        text: "The angle is what differs. A **template is a recipe, not a class.** `Box<T>` on its own compiles to *nothing* — it's instructions for the compiler. Only when you actually write `Box<int>` does the compiler **stamp out** a brand-new, fully-typed `Box` class with every `T` replaced by `int` (this is called *template instantiation*). Use three types and you get three real, separate generated classes. Java generics work the opposite way: there is one `Box` class and the type is just *checked* then erased — see the callout below.",
+      },
+      {
+        type: "code",
+        language: "cpp",
+        filename: "template.cpp",
+        code: `// "template" is the keyword — T is the placeholder type.
+template <class T>
+T max(T a, T b) {
+    return a > b ? a : b;   // works for any T that supports >
+}
+
+max(3, 7);          // compiler STAMPS OUT an int version
+max(2.5, 1.5);      // ...and a separate double version
+max(std::string{"ant"}, std::string{"bee"});  // ...and a string version
+// Each call instantiates a real, concrete function — no casting, full speed.`,
+      },
+      {
+        type: "p",
+        text: "Because each instantiation is real generated code, a template can do things a Java generic can't: build the actual `int` machine code (so it runs at full speed with no boxing), take **non-type parameters** like `array<int, 5>` (the size `5` is part of the type), and even compute at compile time — a whole sub-discipline called *template metaprogramming*. The price is the flip side: **code bloat** (every type used generates another copy in the binary) and famously **cryptic error messages** when a type doesn't fit the recipe.",
+      },
       {
         type: "callout",
         variant: "info",
-        title: "Erasure vs. real instantiation — a key difference across languages",
-        text: "How generics work *under the hood* differs. Java uses **type erasure**: `T` is checked at compile time, then erased — `Box<number>` and `Box<string>` are the *same* class at runtime, so you can't do `new T()` or `instanceof T`. **TypeScript** also erases types entirely — none of it exists at runtime. **C++ templates** are the opposite: the compiler **instantiates** a fresh, fully-typed copy for each type you use, so `Box<int>` and `Box<string>` are genuinely different generated classes. That power is why C++ templates can be faster but also produce code bloat and famously cryptic errors.",
+        title: "Erasure vs. real instantiation — the key difference",
+        text: "This is the one distinction to keep. **Java** uses **type erasure**: `T` is checked at compile time, then *erased* — `Box<Integer>` and `Box<String>` are the *same* class at runtime, so you can't do `new T()` or `instanceof T`. **TypeScript** erases even further — none of the type info survives to runtime. **C++ templates** are the opposite: the compiler **instantiates** a fresh, fully-typed copy per type, so `Box<int>` and `Box<string>` are genuinely different generated classes. Same surface idea (`Box<T>`), two different engines underneath: *erase-and-check* vs *stamp-out-a-copy*.",
       },
     ],
 
@@ -353,6 +381,19 @@ int main() {
         correctOptionId: "b",
         explanation:
           "Java uses type erasure — `T` is checked then removed, so runtime can't do `new T()` or `instanceof T`. C++ templates are instantiated at compile time into distinct concrete classes. TypeScript types are erased entirely.",
+      },
+      {
+        id: "gn-q6",
+        question: "In C++, what does `template <class T> class Box` actually produce when you write `Box<int>` and `Box<string>`?",
+        options: [
+          { id: "a", label: "One shared Box class; the type is checked then erased, exactly like Java." },
+          { id: "b", label: "Two genuinely separate generated classes — the compiler stamps out a fresh, fully-typed copy per type used." },
+          { id: "c", label: "Nothing until runtime, when the type is resolved dynamically." },
+          { id: "d", label: "A single class that stores its element type as a runtime field." },
+        ],
+        correctOptionId: "b",
+        explanation:
+          "A C++ template is a recipe, not a class. Each use instantiates a brand-new concrete class with `T` replaced — so `Box<int>` and `Box<string>` are different generated types. That's the opposite of Java's erase-and-check model, and it's why templates give full-speed code but can cause code bloat.",
       },
       {
         id: "gn-q5",

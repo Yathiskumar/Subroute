@@ -178,35 +178,43 @@ export const ROADMAPS: Roadmap[] = [
                 title: "Class diagrams",
                 note: "Structure, relationships, multiplicity — the LLD workhorse.",
                 tag: "core",
+                slug: "class-diagrams",
               },
               {
                 title: "Object diagrams",
                 note: "A concrete snapshot of instances at one moment.",
+                slug: "object-diagrams",
               },
               {
                 title: "Sequence diagrams",
                 note: "How objects collaborate over time, message by message.",
                 tag: "interview",
+                slug: "sequence-diagrams",
               },
               {
                 title: "Use case diagrams",
                 note: "Actors and the goals they pursue with the system.",
+                slug: "use-case-diagrams",
               },
               {
                 title: "Activity diagrams",
                 note: "Workflows, branches, and parallel paths.",
+                slug: "activity-diagrams",
               },
               {
                 title: "State diagrams",
                 note: "An object's lifecycle and its valid transitions.",
+                slug: "state-diagrams",
               },
               {
                 title: "Component & deployment diagrams",
                 note: "Zooming out to modules and where they run.",
+                slug: "component-and-deployment-diagrams",
               },
               {
                 title: "Relationship notation",
                 note: "Association, dependency, generalization, realization.",
+                slug: "relationship-notation",
               },
             ],
           },
