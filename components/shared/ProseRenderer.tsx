@@ -107,6 +107,20 @@ export function ProseRenderer({ blocks }: { blocks: ProseBlock[] }) {
                 />
               </div>
             );
+          case "figure":
+            return (
+              <figure key={i} className="my-6">
+                <div
+                  className="overflow-x-auto rounded-lg border border-border-subtle bg-surface px-4 py-5"
+                  dangerouslySetInnerHTML={{ __html: block.svg }}
+                />
+                {block.caption && (
+                  <figcaption className="mt-2.5 px-1 text-center text-sm leading-6 text-muted">
+                    {renderInline(block.caption)}
+                  </figcaption>
+                )}
+              </figure>
+            );
           default:
             return <Fragment key={i} />;
         }

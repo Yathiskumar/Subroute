@@ -29,59 +29,86 @@ export const couplingAndCohesion: RoadmapLesson = {
     ],
 
     howItWorks: [
-      { type: "h", text: "Cohesion — how focused a module is" },
       {
         type: "p",
-        text: "Cohesion measures how related the things *inside* a single module are. A highly cohesive `InvoiceFormatter` does invoice formatting and nothing else — every method pulls in the same direction. A low-cohesion module is a junk drawer: a `Utils` or `OrderManager` class that validates orders, charges cards, sends emails, *and* writes to the database. The classic warning sign is a name with `Manager`, `Helper`, `Util`, or `Processor` in it, plus a method list that reads like four unrelated jobs stapled together — a **God class**.",
+        text: "These are just two simple questions you ask about any piece of code. That's it — keep these two questions in your head and you understand the whole topic:",
+      },
+      {
+        type: "ul",
+        items: [
+          "**Cohesion** — *Does this one module stick to a single job?* (You want **yes** → high cohesion.)",
+          "**Coupling** — *How much does this module need to know about other modules?* (You want **as little as possible** → low coupling.)",
+        ],
+      },
+
+      { type: "h", text: "1. Cohesion: one module, one job" },
+      {
+        type: "p",
+        text: "A module has **high cohesion** when everything inside it works toward the *same* job. An `InvoiceFormatter` that only formats invoices is cohesive — every method belongs there.",
       },
       {
         type: "p",
-        text: "There's a well-known spectrum here, from worst to best: **coincidental** (random things thrown together) → **logical** → **temporal** → **procedural** → **communicational** → **sequential** → **functional** (everything contributes to one single, well-defined task). You don't need to memorize the ladder — just aim for the top: *one module, one job.*",
-      },
-      { type: "h", text: "Coupling — how much modules depend on each other" },
-      {
-        type: "p",
-        text: "Coupling measures how much one module has to *know about* another. Highly coupled code is the kind where you change one class and five others break, because they all reached into each other's internals or hard-wired each other's concrete types. The tell-tale symptom: a small feature request touches files all over the codebase, and a one-line fix triggers a cascade of \"oh, I also need to update…\".",
+        text: "It has **low cohesion** when you've stuffed unrelated jobs into one place — like an `OrderManager` that validates orders, charges cards, *and* sends emails. Three different jobs in one box. (Engineers call this a **God class**.) A quick smell test: if you describe what a class does and you have to say \"and… and… and…\", it's probably doing too much.",
       },
       {
-        type: "p",
-        text: "Coupling also has a spectrum, from worst to best: **content** (one module pokes at another's private internals) → **common** (shared global/mutable state) → **control** → **stamp** → **data** (modules talk only through small, explicit parameters). The further toward *data coupling* you sit, the safer change becomes.",
+        type: "callout",
+        variant: "tip",
+        title: "Easy way to spot low cohesion",
+        text: "Vague names like `Manager`, `Helper`, `Util`, or `Processor` are red flags — they usually mean \"a pile of unrelated stuff lives here.\" A good module name tells you the *one* thing it does.",
       },
-      { type: "h", text: "Why they trade off with naive splitting" },
+
+      { type: "h", text: "2. Coupling: how tangled the wires are" },
       {
         type: "p",
-        text: "Here's the subtle part: cohesion and coupling pull against each other if you split *carelessly*. Chop a focused class into ten tiny pieces and each piece looks \"cohesive\" — but now they all have to call each other constantly, and coupling skyrockets. The art isn't *more* modules or *fewer* modules; it's drawing the boundaries along the *seams of responsibility* so that the things that change together live together, and the lines crossing between modules are few and thin.",
+        text: "Coupling is about the **connections between** modules. **Low coupling** means a module only needs to know a tiny, simple thing about its neighbours. **High coupling** means modules are tangled together and reach deep into each other.",
       },
-      { type: "h", text: "Reducing coupling with interfaces (DIP)" },
       {
         type: "p",
-        text: "The strongest lever for cutting coupling is depending on an *interface* instead of a *concrete class*. If `OrderService` `new`s up a `StripeGateway` directly, it's welded to Stripe. If instead it accepts a `PaymentGateway` interface and is *handed* an implementation, it no longer knows or cares which gateway it talks to:",
+        text: "The everyday symptom of high coupling: **you change one thing and something unrelated breaks.** A one-line fix turns into \"oh, now I also have to update these five other files.\" When code is loosely coupled, a change stays in one place.",
+      },
+
+      { type: "h", text: "Putting them together" },
+      {
+        type: "p",
+        text: "Think of a kitchen. Each station does one job — the grill grills, the pastry station bakes (**high cohesion**). They hand food off over a simple counter instead of rummaging through each other's drawers (**low coupling**). The result is fast and easy to change. The opposite — one chaotic station doing everything and grabbing everyone else's tools — is the messy code you're trying to avoid.",
+      },
+
+      { type: "h", text: "The #1 trick to lower coupling: use an interface" },
+      {
+        type: "p",
+        text: "Here's the single most useful move. If `OrderService` builds a `StripeGateway` itself, it's *glued* to Stripe forever. Instead, have it ask for a generic `PaymentGateway` and let someone *hand it* the real one. Now `OrderService` doesn't know or care whether it's Stripe or PayPal:",
       },
       {
         type: "code",
         language: "typescript",
-        code: `// ❌ tightly coupled — OrderService is welded to a concrete class
+        code: `// ❌ tightly coupled — glued to Stripe
 class OrderService {
-  private gateway = new StripeGateway(); // hard dependency
+  private gateway = new StripeGateway(); // builds it itself → stuck with Stripe
 }
 
-// ✅ loosely coupled — depends on an interface, gateway is injected
+// ✅ loosely coupled — just asks for "some payment gateway"
 interface PaymentGateway { charge(cents: number): void; }
 
 class OrderService {
-  constructor(private gateway: PaymentGateway) {} // dependency injected
+  constructor(private gateway: PaymentGateway) {} // handed in from outside
 }
-// now swapping Stripe → PayPal touches ONE wiring line, not OrderService`,
+// switching Stripe → PayPal now changes ONE line — never OrderService itself`,
       },
       {
         type: "p",
-        text: "This is the **Dependency Inversion Principle**: high-level modules and low-level modules both depend on an *abstraction*, not on each other. The interface becomes a thin contract — a small, stable line crossing the module boundary — instead of a thick web of concrete dependencies. Swapping implementations, mocking in tests, and evolving one side without breaking the other all become easy.",
+        text: "That's the whole idea behind the fancy name **Dependency Inversion**: depend on a simple *promise* (the interface — \"something that can charge a card\") instead of a specific *thing* (the Stripe class). Swapping implementations and testing with fakes both become trivial.",
+      },
+
+      { type: "h", text: "One warning: don't over-split" },
+      {
+        type: "p",
+        text: "More modules is **not** automatically better. If you chop one focused class into ten tiny pieces, each piece looks neat on its own — but now they have to call each other constantly, and coupling shoots back up. The goal isn't *more* boxes; it's drawing boundaries in the right places, so things that change together stay together.",
       },
       {
         type: "callout",
         variant: "info",
-        title: "Cohesion and the Single Responsibility Principle",
-        text: "High cohesion is essentially the **Single Responsibility Principle** seen from the inside: \"a module should have one reason to change.\" If two unrelated forces (say, *how we tax orders* and *how we format emails*) can each force the same class to change, that class is doing two jobs — split it.",
+        title: "The one line to remember",
+        text: "**High cohesion** = each module does *one thing well*. **Low coupling** = modules *barely need each other*. Almost every \"clean up this code\" task is just nudging these two dials in the right direction.",
       },
     ],
 

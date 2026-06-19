@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>State Diagrams — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --danger-border: rgba(240, 104, 104, 0.45);
+        --violet: #a78bfa;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---- top bar: current-state pill + reset ---- */
+      .topbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+      .now { font-family: var(--mono); font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+      .now .pill { display: inline-flex; align-items: center; gap: 6px; background: var(--accent-soft); border: 1px solid var(--accent-border); color: var(--fg); font-weight: 700; padding: 5px 11px; border-radius: 999px; font-size: 12px; }
+      .now .pill.final { background: var(--success-soft); border-color: rgba(92,198,111,.45); }
+      .now .pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+      .now .pill.final .dot { background: var(--success); box-shadow: 0 0 0 2px rgba(92,198,111,.3); }
+      .topbar .spacer { flex: 1; }
+
+      /* ---- Buttons ---- */
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: filter .15s, transform .1s, border-color .15s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .btn.primary { background: var(--accent); color: #1a1003; border-color: transparent; }
+      .btn.primary:hover { filter: brightness(1.06); }
+      .btn.ghost { background: transparent; }
+      .btn:disabled { opacity: .4; cursor: not-allowed; }
+      .btn:disabled:active { transform: none; }
+
+      /* ---- The diagram stage: ONE svg, everything scales together ---- */
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 12px; }
+      .stage svg { display: block; width: 100%; height: auto; overflow: visible; }
+
+      /* edges */
+      .edge { stroke: var(--border-strong); stroke-width: 1.7; fill: none; }
+      .edge-label { font-family: var(--mono); font-size: 11px; fill: var(--muted); text-anchor: middle; }
+
+      /* initial ● + final ◉ markers */
+      .init-dot { fill: var(--fg); }
+      .fin-ring { fill: none; stroke: var(--fg); stroke-width: 1.8; }
+      .fin-core { fill: var(--fg); }
+
+      /* state nodes (pure SVG) */
+      .snode .s-box { fill: var(--bg); stroke: var(--border-strong); stroke-width: 1.6; transition: fill .25s, stroke .25s, stroke-width .2s; }
+      .snode .s-nm { fill: var(--fg); font: 700 15px var(--mono); text-anchor: middle; }
+      .snode .s-bd { fill: var(--subtle); font: 9px var(--mono); text-anchor: middle; letter-spacing: .06em; }
+      .snode.current .s-box { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2.6; }
+      .snode.current .s-nm { fill: var(--fg); }
+      .snode.final.current .s-box { fill: var(--success-soft); stroke: var(--success); }
+
+      /* ---- Event buttons row ---- */
+      .events { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+      .events .ev { flex: 1; min-width: 92px; }
+      .ev .sub { display: block; font-size: 9px; font-weight: 600; color: var(--subtle); margin-top: 3px; letter-spacing: .04em; }
+
+      /* ---- Fixed explanation panel (REPLACES content, never grows) ---- */
+      .explain { margin-top: 14px; min-height: 92px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 13px 15px; display: flex; flex-direction: column; justify-content: center; transition: border-color .2s; }
+      .explain.ok { border-color: rgba(92,198,111,.4); }
+      .explain.bad { border-color: var(--danger-border); }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain.ok .explain-title { color: var(--success); }
+      .explain.bad .explain-title { color: var(--danger); }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <!-- TOP BAR -->
+    <div class="topbar">
+      <span class="now">Current state: <span class="pill" id="now-pill"><span class="dot"></span><b id="now-name">Placed</b></span></span>
+      <span class="spacer"></span>
+      <button class="btn ghost" id="reset" onclick="resetSM()">↺ Reset</button>
+    </div>
+
+    <!-- DIAGRAM STAGE — single SVG, nodes + edges share one coordinate space -->
+    <div class="stage">
+      <svg viewBox="0 0 760 340" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Order state machine">
+        <defs>
+          <marker id="arrow" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L7,3 L0,6 z" fill="var(--border-strong)" />
+          </marker>
+        </defs>
+
+        <!-- ===== edges (drawn first, behind nodes) ===== -->
+        <!-- initial ● -> Placed -->
+        <path class="edge" d="M90,72 L90,102" marker-end="url(#arrow)" />
+        <!-- Placed -> Paid -->
+        <path class="edge" d="M148,130 L223,130" marker-end="url(#arrow)" />
+        <text class="edge-label" x="186" y="121">pay()</text>
+        <!-- Paid -> Shipped -->
+        <path class="edge" d="M341,130 L416,130" marker-end="url(#arrow)" />
+        <text class="edge-label" x="379" y="121">ship()</text>
+        <!-- Shipped -> Delivered -->
+        <path class="edge" d="M534,130 L609,130" marker-end="url(#arrow)" />
+        <text class="edge-label" x="572" y="121">deliver()</text>
+        <!-- Placed -> Cancelled (down then right) -->
+        <path class="edge" d="M90,156 L90,255 L223,255" marker-end="url(#arrow)" />
+        <text class="edge-label" x="156" y="247">cancel()</text>
+        <!-- Paid -> Cancelled (straight down) -->
+        <path class="edge" d="M283,156 L283,231" marker-end="url(#arrow)" />
+        <text class="edge-label" x="315" y="196" text-anchor="start">cancel()</text>
+
+        <!-- ===== initial marker ● ===== -->
+        <circle class="init-dot" cx="90" cy="62" r="6.5" />
+
+        <!-- ===== state nodes ===== -->
+        <g class="snode" id="node-Placed" transform="translate(90,130)">
+          <rect class="s-box" x="-58" y="-26" width="116" height="52" rx="13" />
+          <text class="s-nm" y="-2">Placed</text>
+          <text class="s-bd" y="15">start</text>
+        </g>
+        <g class="snode" id="node-Paid" transform="translate(283,130)">
+          <rect class="s-box" x="-58" y="-26" width="116" height="52" rx="13" />
+          <text class="s-nm" y="5">Paid</text>
+        </g>
+        <g class="snode" id="node-Shipped" transform="translate(476,130)">
+          <rect class="s-box" x="-58" y="-26" width="116" height="52" rx="13" />
+          <text class="s-nm" y="5">Shipped</text>
+        </g>
+        <g class="snode final" id="node-Delivered" transform="translate(669,130)">
+          <rect class="s-box" x="-58" y="-26" width="116" height="52" rx="13" />
+          <text class="s-nm" y="-2">Delivered</text>
+          <text class="s-bd" y="15">final ◉</text>
+        </g>
+        <g class="snode final" id="node-Cancelled" transform="translate(283,255)">
+          <rect class="s-box" x="-58" y="-26" width="116" height="52" rx="13" />
+          <text class="s-nm" y="-2">Cancelled</text>
+          <text class="s-bd" y="15">final ◉</text>
+        </g>
+      </svg>
+    </div>
+
+    <!-- EVENT BUTTONS -->
+    <div class="events" id="events">
+      <button class="btn ev" id="ev-pay" onclick="fire('pay')">pay<span class="sub">Placed → Paid</span></button>
+      <button class="btn ev" id="ev-ship" onclick="fire('ship')">ship<span class="sub">Paid → Shipped</span></button>
+      <button class="btn ev" id="ev-deliver" onclick="fire('deliver')">deliver<span class="sub">Shipped → Delivered</span></button>
+      <button class="btn ev" id="ev-cancel" onclick="fire('cancel')">cancel<span class="sub">→ Cancelled</span></button>
+    </div>
+
+    <!-- FIXED EXPLANATION PANEL -->
+    <div class="explain" id="explain">
+      <div class="explain-title" id="x-title">Drive the order through its life</div>
+      <div class="explain-body" id="x-body"><span class="dim">The order starts at <code>Placed</code>. Click an event below. A <b>legal</b> move slides the highlight to the next state; an <b>illegal</b> move is blocked and tells you why. Only the drawn arrows are allowed.</span></div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>The current state <b style="color:var(--fg)">glows</b>. If an event has no arrow out of the current state, it's <b style="color:var(--accent)">illegal</b> — the highlight won't move. That's the lifecycle protecting itself.</span>
+    </div>
+
+    <script>
+      /* ---------- one explanation panel, content REPLACED (never appended) ---------- */
+      function setExplain(title, bodyHtml, tone) {
+        document.getElementById("x-title").textContent = title;
+        document.getElementById("x-body").innerHTML = bodyHtml;
+        var ex = document.getElementById("explain");
+        ex.classList.remove("ok", "bad");
+        if (tone) ex.classList.add(tone);
+      }
+
+      var NODE_KEYS = ["Placed", "Paid", "Shipped", "Delivered", "Cancelled"];
+
+      /* ---------- the state machine: legal transitions only ---------- */
+      var TRANSITIONS = {
+        pay:     { Placed: "Paid" },
+        ship:    { Paid: "Shipped" },
+        deliver: { Shipped: "Delivered" },
+        cancel:  { Placed: "Cancelled", Paid: "Cancelled" },
+      };
+      var FINAL = { Delivered: true, Cancelled: true };
+
+      var state = "Placed";
+
+      function renderState() {
+        NODE_KEYS.forEach(function (k) {
+          document.getElementById("node-" + k).classList.toggle("current", k === state);
+        });
+        document.getElementById("now-name").textContent = state;
+        document.getElementById("now-pill").classList.toggle("final", !!FINAL[state]);
+
+        ["pay", "ship", "deliver", "cancel"].forEach(function (ev) {
+          var legal = TRANSITIONS[ev] && TRANSITIONS[ev][state];
+          document.getElementById("ev-" + ev).disabled = !legal;
+        });
+      }
+
+      function fire(ev) {
+        var next = TRANSITIONS[ev] && TRANSITIONS[ev][state];
+        if (next) {
+          var from = state;
+          state = next;
+          renderState();
+          setExplain(
+            "✓ " + ev + ": " + from + " → " + next,
+            'Legal move. The <code>' + ev + '()</code> event is allowed in <code>' + from +
+              '</code>, so the order moves to <code>' + next + '</code>.' +
+              (FINAL[next] ? ' <span class="dim">' + next + ' is a <b>final state ◉</b> — the order\'s life ends here, no events leave it.</span>' : ''),
+            "ok"
+          );
+        } else {
+          var reason = illegalReason(ev);
+          setExplain("✕ " + ev + " blocked from " + state, reason, "bad");
+        }
+      }
+
+      function illegalReason(ev) {
+        if (FINAL[state]) {
+          return 'The order is in the <b>final state ◉</b> <code>' + state +
+            '</code>. Its life is over — <b>no transitions leave a final state</b>, so no event does anything now.';
+        }
+        var needs = { pay: "Placed", ship: "Paid", deliver: "Shipped" };
+        if (ev === "cancel") {
+          return "There's no <code>cancel()</code> arrow out of <code>" + state +
+            "</code>. You can only cancel an order that hasn't shipped yet (from <code>Placed</code> or <code>Paid</code>).";
+        }
+        return "There's no <code>" + ev + "()</code> transition out of <code>" + state +
+          "</code>. <code>" + ev + "()</code> is only legal from <code>" + needs[ev] +
+          "</code> — e.g. you can't ship an order that isn't <code>Paid</code> yet.";
+      }
+
+      function resetSM() {
+        state = "Placed";
+        renderState();
+        setExplain(
+          "↺ Back to the start",
+          '<span class="dim">The order is at <code>Placed</code> again. Drive it forward with <code>pay → ship → deliver</code>, or try an illegal jump to see it blocked.</span>',
+          null
+        );
+      }
+
+      /* ---------- boot ---------- */
+      renderState();
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

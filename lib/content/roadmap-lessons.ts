@@ -21,6 +21,14 @@ import { graspPrinciples } from "./lld/grasp-principles";
 import { crcCards } from "./lld/crc-cards";
 import { domainModeling } from "./lld/domain-modeling";
 import { apiFirstDesign } from "./lld/api-first-design";
+import { classDiagrams } from "./lld/class-diagrams";
+import { objectDiagrams } from "./lld/object-diagrams";
+import { sequenceDiagrams } from "./lld/sequence-diagrams";
+import { useCaseDiagrams } from "./lld/use-case-diagrams";
+import { relationshipNotation } from "./lld/relationship-notation";
+import { stateDiagrams } from "./lld/state-diagrams";
+import { activityDiagrams } from "./lld/activity-diagrams";
+import { componentAndDeploymentDiagrams } from "./lld/component-and-deployment-diagrams";
 
 /** Indexed by `${roadmapSlug}/${topicSlug}`. */
 const ROADMAP_LESSONS: Record<string, RoadmapLesson> = {
@@ -46,6 +54,14 @@ const ROADMAP_LESSONS: Record<string, RoadmapLesson> = {
   "lld/crc-cards": crcCards,
   "lld/domain-modeling": domainModeling,
   "lld/api-first-design": apiFirstDesign,
+  "lld/class-diagrams": classDiagrams,
+  "lld/object-diagrams": objectDiagrams,
+  "lld/sequence-diagrams": sequenceDiagrams,
+  "lld/use-case-diagrams": useCaseDiagrams,
+  "lld/relationship-notation": relationshipNotation,
+  "lld/state-diagrams": stateDiagrams,
+  "lld/activity-diagrams": activityDiagrams,
+  "lld/component-and-deployment-diagrams": componentAndDeploymentDiagrams,
 };
 
 export function getRoadmapLesson(
