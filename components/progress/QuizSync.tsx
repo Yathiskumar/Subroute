@@ -79,8 +79,8 @@ export function QuizSync() {
     let cancelled = false;
 
     const upsert = async (rows: Row[]) => {
-      if (!rows.length) return;
-      await supabase.from("quiz_results").upsert(
+      if (!rows.length) return true;
+      const { error } = await supabase.from("quiz_results").upsert(
         rows.map((r) => ({
           user_id: userId,
           quiz_id: r.quizId,
@@ -93,6 +93,11 @@ export function QuizSync() {
         })),
         { onConflict: "user_id,quiz_id" },
       );
+      if (error) {
+        console.warn("[QuizSync] failed to save quiz results:", error.message);
+        return false;
+      }
+      return true;
     };
 
     // Push any local row that differs from what we believe the cloud holds.
@@ -101,8 +106,10 @@ export function QuizSync() {
       const changed: Row[] = [];
       for (const [id, row] of local)
         if (!sameResult(cloud.current.get(id), row)) changed.push(row);
-      await upsert(changed);
-      if (!cancelled)
+      const ok = await upsert(changed);
+      // Only mark as synced if the write actually succeeded, so a failed save
+      // is retried on the next change instead of being silently forgotten.
+      if (ok && !cancelled)
         for (const r of changed) cloud.current.set(r.quizId, r);
     };
 
@@ -115,8 +122,16 @@ export function QuizSync() {
         );
       if (cancelled) return;
 
+      if (error) {
+        console.warn(
+          "[QuizSync] failed to load quiz results from the cloud:",
+          error.message,
+        );
+        return;
+      }
+
       const remote = new Map<string, Row>();
-      if (!error) {
+      {
         for (const r of data ?? []) {
           remote.set(r.quiz_id as string, {
             quizId: r.quiz_id as string,

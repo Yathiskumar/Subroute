@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Interface Segregation Principle — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --violet: #a78bfa;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      .lab { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+
+      /* ---- Mode toggle (tabs) ---- */
+      .tabs { display: flex; gap: 8px; margin-bottom: 8px; }
+      .tab { flex: 1; background: var(--surface); color: var(--muted); font: 600 13px/1.25 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 11px 12px; cursor: pointer; transition: all .15s; display: flex; align-items: center; justify-content: center; gap: 8px; text-align: center; }
+      .tab:hover { border-color: var(--border-strong); color: var(--fg); }
+      .tab.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--fg); }
+      .tab .ico { font-family: var(--mono); font-size: 14px; color: var(--accent); }
+      .tab .sub { font-weight: 500; font-size: 10.5px; color: var(--muted); }
+
+      .modeline { font-size: 12px; color: var(--muted); margin: 0 2px 14px; line-height: 1.55; }
+      .modeline b { color: var(--fg); }
+
+      /* ---- The interface contract box ---- */
+      .contract { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 16px 16px 14px; margin-bottom: 14px; }
+      .contract-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 11px; flex-wrap: wrap; }
+      .contract-title { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--fg); }
+      .contract-note { font-size: 11.5px; color: var(--muted); }
+      .ifaces { display: flex; gap: 10px; flex-wrap: wrap; }
+      .iface { flex: 1; min-width: 140px; border: 1.4px solid var(--border-strong); border-radius: 8px; background: var(--bg); overflow: hidden; font-family: var(--mono); }
+      .iface-name { text-align: center; font-size: 12.5px; font-weight: 700; color: var(--accent); padding: 8px 10px; border-bottom: 1.4px solid var(--border-strong); background: var(--accent-soft); }
+      .iface-rows { padding: 8px 11px; }
+      .iface-row { font-size: 11.5px; line-height: 2; color: var(--fg); white-space: nowrap; }
+      .iface-row .m { color: var(--info); }
+
+      /* ---- Device cards ---- */
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+      .device { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 14px; display: flex; flex-direction: column; }
+      .device-head { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
+      .device-ico { font-size: 18px; }
+      .device-name { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--fg); }
+      .device-impl { font-size: 11px; color: var(--muted); margin-bottom: 12px; min-height: 30px; line-height: 1.4; }
+      .device-impl code { font-family: var(--mono); color: var(--accent); background: var(--accent-soft); padding: 0 4px; border-radius: 3px; }
+      .mbtns { display: flex; flex-direction: column; gap: 7px; }
+      .mbtn { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--mono); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 11px; cursor: pointer; transition: border-color .15s, transform .1s, background .15s; text-align: left; }
+      .mbtn:hover { border-color: var(--border-strong); }
+      .mbtn:active { transform: scale(0.98); }
+      .mbtn .badge { font-size: 9.5px; font-weight: 700; letter-spacing: .04em; padding: 2px 6px; border-radius: 20px; text-transform: uppercase; white-space: nowrap; }
+      .mbtn.supported .badge { color: var(--success); background: var(--success-soft); }
+      .mbtn.forced .badge { color: var(--danger); background: var(--danger-soft); }
+      .mbtn.absent { opacity: .32; cursor: not-allowed; }
+      .mbtn.absent:active { transform: none; }
+      .mbtn.absent .badge { color: var(--subtle); background: transparent; }
+      .mbtn.hit { border-color: var(--accent-border); background: var(--accent-soft); }
+
+      /* ---- Tally ---- */
+      .tally { display: flex; align-items: center; gap: 12px; margin: 16px 0 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 15px; }
+      .tally-num { font-family: var(--mono); font-size: 26px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+      .tally-num.bad { color: var(--danger); }
+      .tally-num.good { color: var(--success); }
+      .tally-txt { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+      .tally-txt b { color: var(--fg); }
+
+      /* ---- Fixed explanation panel (REPLACES content, never grows) ---- */
+      .explain { margin-top: 14px; min-height: 92px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 13px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain.ok { border-color: var(--accent-border); }
+      .explain.err { border-color: rgba(240, 104, 104, 0.5); }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain.err .explain-title { color: var(--danger); }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 600; }
+      .explain-body .bad { color: var(--danger); font-weight: 600; }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <!-- MODE TOGGLE -->
+    <div class="tabs">
+      <button class="tab on" id="tab-fat" onclick="setMode('fat')">
+        <span class="ico">▦</span>
+        <span>Fat interface<br /><span class="sub">one big contract</span></span>
+      </button>
+      <button class="tab" id="tab-seg" onclick="setMode('seg')">
+        <span class="ico">⫴</span>
+        <span>Segregated<br /><span class="sub">small role contracts</span></span>
+      </button>
+    </div>
+
+    <p class="modeline" id="modeline">—</p>
+
+    <!-- INTERFACE CONTRACT(S) -->
+    <div class="contract">
+      <div class="contract-head">
+        <span class="contract-title" id="contract-title">«interface» IMultiFunctionDevice</span>
+        <span class="contract-note" id="contract-note">Every device below is forced to implement all three methods.</span>
+      </div>
+      <div class="ifaces" id="ifaces"></div>
+    </div>
+
+    <!-- DEVICE CARDS -->
+    <div class="grid" id="grid"></div>
+
+    <!-- FORCED-STUB TALLY -->
+    <div class="tally">
+      <span class="tally-num bad" id="tally-num">0</span>
+      <span class="tally-txt" id="tally-txt">—</span>
+    </div>
+
+    <!-- FIXED EXPLAIN PANEL -->
+    <div class="explain" id="explain">
+      <div class="explain-title" id="ex-title">Click any method on a device</div>
+      <div class="explain-body" id="ex-body"><span class="dim">In <b style="color:var(--fg)">Fat interface</b> mode every device must implement <code>print()</code>, <code>scan()</code> and <code>fax()</code> — even the ones it can't really do. Click a method to see what happens.</span></div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>A <b style="color:var(--fg)">forced stub</b> is a method a class is made to implement but can only answer with <b style="color:var(--danger)">"not supported"</b>. ISP says: split the fat interface so no class is ever forced.</span>
+    </div>
+
+    <script>
+      /* ---------- one explanation panel, content REPLACED (never appended) ---------- */
+      function setExplain(title, bodyHtml, kind) {
+        var ex = document.getElementById("explain");
+        ex.className = "explain" + (kind ? " " + kind : "");
+        document.getElementById("ex-title").textContent = title;
+        document.getElementById("ex-body").innerHTML = bodyHtml;
+      }
+
+      /* ---------- model ---------- */
+      // What each physical device can GENUINELY do.
+      var DEVICES = [
+        { id: "printer", name: "SimplePrinter", ico: "🖨️", can: { print: true, scan: false, fax: false } },
+        { id: "scanner", name: "Scanner", ico: "📷", can: { print: false, scan: true, fax: false } },
+        { id: "copier", name: "PhotoCopier", ico: "🏢", can: { print: true, scan: true, fax: true } },
+      ];
+
+      var METHODS = [
+        { key: "print", label: "print()", verb: "prints a page", iface: "Printer" },
+        { key: "scan", label: "scan()", verb: "scans a document", iface: "Scanner" },
+        { key: "fax", label: "fax()", verb: "sends a fax", iface: "Fax" },
+      ];
+
+      var mode = "fat"; // "fat" | "seg"
+
+      /* ---------- contract panel ---------- */
+      function renderContract() {
+        var title = document.getElementById("contract-title");
+        var note = document.getElementById("contract-note");
+        var box = document.getElementById("ifaces");
+        box.innerHTML = "";
+
+        if (mode === "fat") {
+          title.textContent = "«interface» IMultiFunctionDevice";
+          note.textContent = "One fat contract — every device is forced to implement all three methods.";
+          box.appendChild(ifaceCard("IMultiFunctionDevice", ["print()", "scan()", "fax()"]));
+        } else {
+          title.textContent = "Three role interfaces";
+          note.textContent = "Each device implements only the small contracts it truly fulfils.";
+          box.appendChild(ifaceCard("Printer", ["print()"]));
+          box.appendChild(ifaceCard("Scanner", ["scan()"]));
+          box.appendChild(ifaceCard("Fax", ["fax()"]));
+        }
+      }
+
+      function ifaceCard(name, methods) {
+        var el = document.createElement("div");
+        el.className = "iface";
+        var rows = methods.map(function (m) {
+          return '<div class="iface-row"><span class="m">' + m + '</span></div>';
+        }).join("");
+        el.innerHTML =
+          '<div class="iface-name">«interface» ' + name + '</div>' +
+          '<div class="iface-rows">' + rows + '</div>';
+        return el;
+      }
+
+      /* ---------- device cards ---------- */
+      function renderDevices() {
+        var grid = document.getElementById("grid");
+        grid.innerHTML = "";
+        DEVICES.forEach(function (d) {
+          var card = document.createElement("div");
+          card.className = "device";
+
+          // implements line
+          var implHtml;
+          if (mode === "fat") {
+            implHtml = 'implements <code>IMultiFunctionDevice</code>';
+          } else {
+            var roles = METHODS.filter(function (m) { return d.can[m.key]; })
+              .map(function (m) { return '<code>' + m.iface + '</code>'; }).join(", ");
+            implHtml = "implements " + roles;
+          }
+
+          card.innerHTML =
+            '<div class="device-head"><span class="device-ico">' + d.ico + '</span>' +
+            '<span class="device-name">' + d.name + '</span></div>' +
+            '<div class="device-impl">' + implHtml + '</div>';
+
+          var btnWrap = document.createElement("div");
+          btnWrap.className = "mbtns";
+
+          METHODS.forEach(function (m) {
+            var real = d.can[m.key];
+            // In fat mode ALL methods exist (forced). In seg mode only the real ones exist.
+            var present = mode === "fat" ? true : real;
+            var btn = document.createElement("button");
+            var cls = "mbtn ";
+            if (!present) { cls += "absent"; }
+            else if (real) { cls += "supported"; }
+            else { cls += "forced"; }
+            btn.className = cls;
+
+            var badge;
+            if (!present) { badge = "not on this class"; }
+            else if (real) { badge = "supported ✓"; }
+            else { badge = "forced stub ✗"; }
+
+            btn.innerHTML = '<span>' + m.label + '</span><span class="badge">' + badge + '</span>';
+            if (present) {
+              btn.onclick = (function (dev, meth, isReal) {
+                return function () { clickMethod(dev, meth, isReal, btn); };
+              })(d, m, real);
+            }
+            btnWrap.appendChild(btn);
+          });
+
+          card.appendChild(btnWrap);
+          grid.appendChild(card);
+        });
+        clearHit();
+      }
+
+      function clearHit() {
+        var hits = document.querySelectorAll(".mbtn.hit");
+        for (var i = 0; i < hits.length; i++) { hits[i].classList.remove("hit"); }
+      }
+
+      /* ---------- a click on a method ---------- */
+      function clickMethod(dev, meth, isReal, btn) {
+        clearHit();
+        btn.classList.add("hit");
+
+        if (isReal) {
+          setExplain(
+            dev.name + "." + meth.label + "  →  works",
+            '<span class="good">✓ Supported.</span> <code>' + dev.name + '</code> really ' + meth.verb +
+            ', so this call does its job. ' +
+            (mode === "seg"
+              ? 'This method is here because <code>' + dev.name + '</code> implements <code>' + meth.iface + '</code> — a contract it can actually keep.'
+              : 'No problem here — the device can honestly back this method.'),
+            "ok"
+          );
+        } else {
+          // forced stub — only happens in fat mode
+          setExplain(
+            dev.name + "." + meth.label + "  →  throws",
+            '<span class="bad">✗ UnsupportedOperationException.</span> <code>' + dev.name + '</code> has no ' +
+            meth.key + ' hardware, but the fat <code>IMultiFunctionDevice</code> forced it to declare <code>' +
+            meth.label + '</code> anyway. All it can do is <b style="color:var(--danger)">throw</b> — a <b>forced stub</b>. ' +
+            '<span class="dim">(A throwing stub also breaks LSP: callers expect the method to work.)</span>',
+            "err"
+          );
+        }
+        updateTally();
+      }
+
+      /* ---------- forced-stub tally ---------- */
+      function countForcedStubs() {
+        if (mode === "seg") return 0;
+        var n = 0;
+        DEVICES.forEach(function (d) {
+          METHODS.forEach(function (m) { if (!d.can[m.key]) n++; });
+        });
+        return n;
+      }
+
+      function updateTally() {
+        var n = countForcedStubs();
+        var num = document.getElementById("tally-num");
+        var txt = document.getElementById("tally-txt");
+        num.textContent = n;
+        num.className = "tally-num " + (n === 0 ? "good" : "bad");
+        if (n === 0) {
+          txt.innerHTML = '<b>0 forced stubs.</b> Every method on every device is one it can truly perform. No class depends on a method it doesn\'t use — that is the Interface Segregation Principle.';
+        } else {
+          txt.innerHTML = '<b>' + n + ' forced stubs</b> across these devices — methods a class was made to declare but can only answer with <b style="color:var(--danger)">"not supported"</b>. Switch to <b>Segregated</b> to drop this to 0.';
+        }
+      }
+
+      /* ---------- mode switch ---------- */
+      function setMode(which) {
+        mode = which;
+        document.getElementById("tab-fat").classList.toggle("on", which === "fat");
+        document.getElementById("tab-seg").classList.toggle("on", which === "seg");
+
+        var ml = document.getElementById("modeline");
+        if (which === "fat") {
+          ml.innerHTML = '<b>Fat interface.</b> One big <code style="font-family:var(--mono)">IMultiFunctionDevice</code> bundles <code style="font-family:var(--mono)">print() · scan() · fax()</code>. Each device must implement <b>all three</b> — even methods it can\'t back. Click the red <b style="color:var(--danger)">forced stub</b> buttons to watch them throw.';
+        } else {
+          ml.innerHTML = '<b>Segregated.</b> The fat contract is split into <code style="font-family:var(--mono)">Printer</code>, <code style="font-family:var(--mono)">Scanner</code> and <code style="font-family:var(--mono)">Fax</code>. Now each device exposes <b>only</b> the methods it truly supports — nothing to force, nothing to throw.';
+        }
+
+        renderContract();
+        renderDevices();
+        updateTally();
+
+        if (which === "fat") {
+          setExplain(
+            "Fat interface — one contract for everyone",
+            'Every device implements <code>IMultiFunctionDevice</code>, so every device must declare <code>print()</code>, <code>scan()</code> and <code>fax()</code>. The devices that can\'t do a method are stuck with a <b class="bad">forced stub</b> that throws. Click a red button to see it.',
+            "err"
+          );
+        } else {
+          setExplain(
+            "Segregated — small role contracts",
+            'The fat interface is gone. <code>SimplePrinter</code> implements only <code>Printer</code>; <code>Scanner</code> only <code>Scanner</code>; <code>PhotoCopier</code> implements all three because it genuinely does all three. <b class="good">No method can throw</b> — click any to confirm.',
+            "ok"
+          );
+        }
+      }
+
+      /* ---------- boot ---------- */
+      setMode("fat");
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>
