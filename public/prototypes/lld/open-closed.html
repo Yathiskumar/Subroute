@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Open/Closed Principle — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --violet: #a78bfa;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      .lab { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+
+      /* ---- Tabs ---- */
+      .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+      .tab { flex: 1; background: var(--surface); color: var(--muted); font: 600 13px/1.3 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 11px 12px; cursor: pointer; transition: all .15s; display: flex; align-items: center; justify-content: center; gap: 8px; text-align: center; }
+      .tab:hover { border-color: var(--border-strong); color: var(--fg); }
+      .tab.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--fg); }
+      .tab .ico { font-family: var(--mono); font-size: 14px; }
+      .tab.closed.on .ico { color: var(--danger); }
+      .tab.open.on .ico { color: var(--success); }
+      .tab .ico { color: var(--muted); }
+
+      /* ---- Buttons ---- */
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: filter .15s, transform .1s, border-color .15s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .btn.primary { background: var(--accent); color: #1a1003; border-color: transparent; }
+      .btn.primary:hover { filter: brightness(1.06); }
+      .btn.ghost { background: transparent; }
+      .btn:disabled { opacity: .4; cursor: not-allowed; }
+      .btn:disabled:active { transform: none; }
+
+      /* ---- Add-shape controls ---- */
+      .addbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; }
+      .addbar .label { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-right: 2px; }
+      .chip { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: 999px; padding: 8px 13px; cursor: pointer; transition: border-color .15s, transform .1s, background .15s; }
+      .chip:hover { border-color: var(--accent-border); }
+      .chip:active { transform: scale(0.96); }
+      .chip:disabled { opacity: .35; cursor: not-allowed; }
+      .chip .g { color: var(--subtle); margin-right: 5px; }
+
+      /* ---- Counters row ---- */
+      .meters { display: flex; gap: 10px; margin-bottom: 14px; }
+      .meter { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md); padding: 11px 13px; }
+      .meter .k { font-family: var(--mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+      .meter .v { font-family: var(--mono); font-size: 22px; font-weight: 700; line-height: 1.2; color: var(--fg); font-variant-numeric: tabular-nums; }
+      .meter.touched .v { color: var(--danger); }
+      .meter.touched.zero .v { color: var(--fg); }
+      .meter.badge .v { font-size: 13px; padding-top: 5px; }
+      .badge-ok { color: var(--success); }
+      .badge-bad { color: var(--danger); }
+
+      /* ---- Code / class stage ---- */
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 16px; min-height: 232px; }
+      .stage-head { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-bottom: 10px; display: flex; align-items: center; gap: 7px; }
+      .stage-head .dot { width: 8px; height: 8px; border-radius: 50%; }
+      .stage-head.closed .dot { background: var(--danger); }
+      .stage-head.open .dot { background: var(--success); }
+
+      /* CLOSED: the central switch block */
+      .codebox { font-family: var(--mono); font-size: 12.5px; line-height: 1.9; background: var(--bg); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 12px 14px; overflow-x: auto; }
+      .cl { white-space: pre; color: var(--fg); border-radius: 4px; padding: 0 4px; margin: 0 -4px; transition: background .25s; }
+      .cl .kw { color: var(--info); }
+      .cl .ty { color: var(--accent); }
+      .cl .dim { color: var(--subtle); }
+      .cl.flash { background: var(--danger-soft); box-shadow: inset 0 0 0 1px rgba(240,104,104,0.4); }
+      .cl.flash .tag { color: var(--danger); }
+      .cl .tag { color: var(--subtle); }
+
+      /* OPEN: grid of class cards */
+      .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 10px; }
+      .card { background: var(--bg); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 11px 12px; }
+      .card .cname { font-family: var(--mono); font-size: 12.5px; font-weight: 700; color: var(--fg); }
+      .card .cimpl { font-family: var(--mono); font-size: 10px; color: var(--muted); margin: 3px 0 7px; }
+      .card .carea { font-family: var(--mono); font-size: 11px; color: var(--accent); }
+      .card.fresh { border-color: var(--success); box-shadow: 0 0 0 1px rgba(92,198,111,0.35); }
+      .card.fresh .cname { color: var(--success); }
+      .card.iface { background: var(--accent-soft); border-color: var(--accent-border); }
+      .card.iface .cname { color: var(--accent); }
+      .card.iface .cimpl { color: var(--accent); }
+
+      /* ---- Fixed explanation panel (REPLACES content, never grows) ---- */
+      .explain { margin-top: 16px; min-height: 96px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 13px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-title.bad { color: var(--danger); }
+      .explain-title.good { color: var(--success); }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .em-bad { color: var(--danger); font-weight: 600; }
+      .explain-body .em-ok { color: var(--success); font-weight: 600; }
+
+      .controls { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+      .controls .spacer { flex: 1; }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <!-- MODE TABS -->
+    <div class="tabs">
+      <button class="tab closed on" id="tab-closed" onclick="showMode('closed')"><span class="ico">⚠</span> Closed design (switch)</button>
+      <button class="tab open" id="tab-open" onclick="showMode('open')"><span class="ico">▣</span> Open design (interface)</button>
+    </div>
+
+    <!-- ADD-SHAPE BAR -->
+    <div class="addbar" id="addbar">
+      <span class="label">Add a shape:</span>
+      <!-- chips injected by JS so we can disable already-added ones -->
+    </div>
+
+    <!-- METERS -->
+    <div class="meters">
+      <div class="meter touched zero" id="m-touched">
+        <div class="k">files you had to touch</div>
+        <div class="v" id="m-touched-v">0</div>
+      </div>
+      <div class="meter badge" id="m-badge">
+        <div class="k">last change</div>
+        <div class="v" id="m-badge-v">—</div>
+      </div>
+    </div>
+
+    <!-- STAGE -->
+    <div class="stage">
+      <!-- CLOSED head -->
+      <div class="stage-head closed" id="head-closed"><span class="dot"></span> AreaCalculator.area(shape) · one method, switches on type</div>
+      <!-- OPEN head -->
+      <div class="stage-head open" id="head-open" style="display:none"><span class="dot"></span> «interface» Shape { area() } · one class per shape</div>
+
+      <!-- CLOSED body: the switch -->
+      <div class="codebox" id="closed-body"></div>
+      <!-- OPEN body: class cards -->
+      <div class="cards" id="open-body" style="display:none"></div>
+    </div>
+
+    <!-- FIXED EXPLAIN PANEL -->
+    <div class="explain">
+      <div class="explain-title" id="x-title">Add a shape to begin</div>
+      <div class="explain-body" id="x-body"><span class="dim">Same feature — computing a shape's area — built two ways. Add the same shape in each mode and watch what it costs you. The <b style="color:var(--fg)">Closed</b> design makes you reopen tested code; the <b style="color:var(--fg)">Open</b> design lets you just plug in a new class.</span></div>
+    </div>
+
+    <div class="controls">
+      <button class="btn ghost" onclick="resetAll()">↺ Reset</button>
+      <span class="spacer"></span>
+      <span class="lab" id="mode-label">closed design</span>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span><b style="color:var(--fg)">Open for extension, closed for modification.</b> One design forces you to edit code that already works; the other adds new behaviour without touching it.</span>
+    </div>
+
+    <script>
+      /* ---------- one explanation panel, content REPLACED (never appended) ---------- */
+      function setExplain(title, bodyHtml, kind) {
+        var t = document.getElementById("x-title");
+        t.className = "explain-title" + (kind ? " " + kind : "");
+        t.textContent = title;
+        document.getElementById("x-body").innerHTML = bodyHtml;
+      }
+
+      /* ---------- shape catalogue ---------- */
+      // base shapes exist in BOTH designs from the start
+      var BASE = [
+        { key: "circle",    name: "Circle",    area: "π·r²" },
+        { key: "rectangle", name: "Rectangle", area: "w·h" },
+        { key: "triangle",  name: "Triangle",  area: "½·b·h" },
+      ];
+      // shapes the learner can ADD
+      var ADDABLE = [
+        { key: "hexagon",  name: "Hexagon",  area: "2.6·s²" },
+        { key: "pentagon", name: "Pentagon", area: "1.72·s²" },
+        { key: "star",     name: "Star",     area: "starArea(...)" },
+        { key: "ellipse",  name: "Ellipse",  area: "π·a·b" },
+      ];
+
+      var mode = "closed";
+      // independent state per mode: which addable shapes have been added, and touched-file count
+      var state = {
+        closed: { added: [], touched: 0 },
+        open:   { added: [], touched: 0 },
+      };
+
+      /* ---------- mode switch ---------- */
+      function showMode(m) {
+        mode = m;
+        var isClosed = m === "closed";
+        document.getElementById("tab-closed").classList.toggle("on", isClosed);
+        document.getElementById("tab-open").classList.toggle("on", !isClosed);
+        document.getElementById("head-closed").style.display = isClosed ? "flex" : "none";
+        document.getElementById("head-open").style.display = isClosed ? "none" : "flex";
+        document.getElementById("closed-body").style.display = isClosed ? "block" : "none";
+        document.getElementById("open-body").style.display = isClosed ? "none" : "grid";
+        document.getElementById("mode-label").textContent = isClosed ? "closed design" : "open design";
+        renderChips();
+        renderStage();
+        renderMeters();
+        setExplain(
+          isClosed ? "Closed design — one switch to rule them all" : "Open design — one class per shape",
+          isClosed
+            ? 'Every shape lives as a <code>case</code> inside one <code>AreaCalculator</code> method. Add a shape and you must <b class="em-bad">reopen this file</b> to add a branch.'
+            : 'Each shape is its own class implementing <code>Shape</code>. Add a shape and you just <b class="em-ok">drop in a new class</b> — the others are never touched.',
+          isClosed ? "bad" : "good"
+        );
+      }
+
+      /* ---------- add-shape chips ---------- */
+      function renderChips() {
+        var bar = document.getElementById("addbar");
+        bar.innerHTML = '<span class="label">Add a shape:</span>';
+        ADDABLE.forEach(function (s) {
+          var btn = document.createElement("button");
+          var done = state[mode].added.indexOf(s.key) !== -1;
+          btn.className = "chip";
+          btn.disabled = done;
+          btn.innerHTML = '<span class="g">+</span>' + s.name + (done ? " ✓" : "");
+          btn.onclick = (function (key) { return function () { addShape(key); }; })(s.key);
+          bar.appendChild(btn);
+        });
+      }
+
+      /* ---------- meters ---------- */
+      function renderMeters() {
+        var st = state[mode];
+        var tv = document.getElementById("m-touched-v");
+        tv.textContent = st.touched;
+        var tm = document.getElementById("m-touched");
+        tm.classList.toggle("zero", st.touched === 0);
+
+        var bv = document.getElementById("m-badge-v");
+        var last = st.lastBadge;
+        if (!last) { bv.innerHTML = "—"; return; }
+        if (mode === "closed") bv.innerHTML = '<span class="badge-bad">✗ modified existing code</span>';
+        else bv.innerHTML = '<span class="badge-ok">✓ existing code untouched</span>';
+      }
+
+      /* ---------- stage rendering ---------- */
+      function renderStage() {
+        if (mode === "closed") renderClosed();
+        else renderOpen();
+      }
+
+      function shapesFor(m) {
+        // base shapes + the ones added in this mode (preserve ADDABLE order)
+        var added = ADDABLE.filter(function (s) { return state[m].added.indexOf(s.key) !== -1; });
+        return BASE.concat(added);
+      }
+
+      function renderClosed(flashKey) {
+        var box = document.getElementById("closed-body");
+        box.innerHTML = "";
+        var shapes = shapesFor("closed");
+        var lines = [];
+        lines.push({ html: '<span class="kw">switch</span> (shape.type) {' });
+        shapes.forEach(function (s) {
+          lines.push({
+            key: s.key,
+            html: '  <span class="kw">case</span> <span class="ty">"' + s.key + '"</span>: return ' + s.area + ';',
+          });
+        });
+        lines.push({ html: '  <span class="dim">default</span>: throw <span class="ty">"unknown shape"</span>;' });
+        lines.push({ html: '}' });
+
+        lines.forEach(function (ln) {
+          var div = document.createElement("div");
+          div.className = "cl" + (flashKey && ln.key === flashKey ? " flash" : "");
+          var extra = (flashKey && ln.key === flashKey) ? '   <span class="tag">← edited just now ✗</span>' : "";
+          div.innerHTML = ln.html + extra;
+          box.appendChild(div);
+        });
+      }
+
+      function renderOpen(freshKey) {
+        var box = document.getElementById("open-body");
+        box.innerHTML = "";
+        // interface card first
+        var iface = document.createElement("div");
+        iface.className = "card iface";
+        iface.innerHTML = '<div class="cname">«interface»</div><div class="cimpl">the stable socket</div><div class="cname">Shape</div><div class="carea">+ area()</div>';
+        box.appendChild(iface);
+
+        shapesFor("open").forEach(function (s) {
+          var card = document.createElement("div");
+          card.className = "card" + (s.key === freshKey ? " fresh" : "");
+          card.innerHTML =
+            '<div class="cname">' + s.name + (s.key === freshKey ? " ✦" : "") + '</div>' +
+            '<div class="cimpl">implements Shape</div>' +
+            '<div class="carea">area() → ' + s.area + '</div>';
+          box.appendChild(card);
+        });
+      }
+
+      /* ---------- the core interaction: add a shape ---------- */
+      function addShape(key) {
+        var s = ADDABLE.find(function (x) { return x.key === key; });
+        var st = state[mode];
+        if (st.added.indexOf(key) !== -1) return;
+        st.added.push(key);
+        st.touched += 1;
+        st.lastBadge = true;
+
+        renderChips();
+        renderMeters();
+
+        if (mode === "closed") {
+          renderClosed(key);
+          setExplain(
+            "Adding " + s.name + " forced an edit ✗",
+            'To support <b style="color:var(--fg)">' + s.name + '</b> you had to <b class="em-bad">reopen <code>AreaCalculator</code></b> and add a new <code>case</code> (highlighted in red). ' +
+            'That\'s <b class="em-bad">modification</b> of code that already worked — you now have to re-test <span class="dim">every</span> case, not just the new one. ' +
+            'Files you had to touch: <b style="color:var(--fg)">' + st.touched + '</b>. <span class="dim">This is the cost OCP removes.</span>',
+            "bad"
+          );
+        } else {
+          renderOpen(key);
+          setExplain(
+            "Adding " + s.name + " just plugged in ✓",
+            'You wrote a <b class="em-ok">new <code>' + s.name + '</code> class</b> that implements <code>Shape</code> (the green card). ' +
+            '<b class="em-ok">No existing class was opened</b> — <code>Circle</code>, <code>Rectangle</code>, and the rest are byte-for-byte unchanged. ' +
+            'Files you had to touch: <b style="color:var(--fg)">' + st.touched + '</b> <span class="dim">(just the one new file)</span>. <span class="dim">The system grew by addition, not modification.</span>',
+            "good"
+          );
+        }
+      }
+
+      /* ---------- reset ---------- */
+      function resetAll() {
+        state = { closed: { added: [], touched: 0 }, open: { added: [], touched: 0 } };
+        renderChips();
+        renderStage();
+        renderMeters();
+        setExplain(
+          mode === "closed" ? "Closed design — one switch to rule them all" : "Open design — one class per shape",
+          mode === "closed"
+            ? 'Every shape lives as a <code>case</code> inside one method. Add a shape and you must <b class="em-bad">reopen this file</b>.'
+            : 'Each shape is its own class. Add a shape and you just <b class="em-ok">drop in a new class</b> — the others stay untouched.',
+          mode === "closed" ? "bad" : "good"
+        );
+      }
+
+      /* ---------- boot ---------- */
+      showMode("closed");
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

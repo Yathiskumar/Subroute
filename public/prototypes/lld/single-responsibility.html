@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Single Responsibility Principle — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --violet: #a78bfa;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      .lab { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+
+      /* ---- Tabs ---- */
+      .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+      .tab { flex: 1; background: var(--surface); color: var(--muted); font: 600 13px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 11px 12px; cursor: pointer; transition: all .15s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+      .tab:hover { border-color: var(--border-strong); color: var(--fg); }
+      .tab.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--fg); }
+      .tab .ico { font-family: var(--mono); font-size: 14px; color: var(--accent); }
+
+      .panel { display: none; }
+      .panel.on { display: block; }
+
+      /* ---- Buttons ---- */
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: filter .15s, transform .1s, border-color .15s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .btn.primary { background: var(--accent); color: #1a1003; border-color: transparent; }
+      .btn.primary:hover { filter: brightness(1.06); }
+      .btn.ghost { background: transparent; }
+      .btn:disabled { opacity: .4; cursor: not-allowed; }
+      .btn:disabled:active { transform: none; }
+
+      /* ---- Layout ---- */
+      .topbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+      .topbar .spacer { flex: 1; }
+      .counter { font-family: var(--mono); font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 7px; }
+      .counter b { font-size: 15px; color: var(--accent); font-variant-numeric: tabular-nums; }
+      .counter.good b { color: var(--success); }
+
+      .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+      @media (max-width: 560px) { .cols { grid-template-columns: 1fr; } }
+
+      /* ---- God class box ---- */
+      .umlbox { border: 1.6px solid var(--accent-border); border-radius: var(--r-lg); overflow: hidden; background: var(--surface); font-family: var(--mono); box-shadow: 0 8px 28px rgba(0,0,0,.3); }
+      .uml-name { text-align: center; padding: 10px 12px; border-bottom: 1.4px solid var(--accent-border); }
+      .uml-name .cn { font-size: 14px; font-weight: 700; color: var(--fg); }
+      .uml-name .sub { display: block; margin-top: 3px; font-size: 9.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
+      .methods { padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+      .method { text-align: left; background: var(--elevated); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; cursor: pointer; transition: border-color .15s, background .15s, transform .1s, opacity .2s; font-family: var(--mono); font-size: 12px; color: var(--fg); display: flex; align-items: center; gap: 7px; }
+      .method:hover { border-color: var(--border-strong); }
+      .method:active { transform: scale(0.985); }
+      .method .vis { color: var(--accent); font-weight: 700; }
+      .method.sel { border-color: var(--accent-border); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-border); }
+      .method.done { opacity: .42; cursor: default; }
+      .method.done:hover { border-color: var(--border); }
+      .method .check { margin-left: auto; color: var(--success); font-weight: 700; font-size: 13px; }
+
+      /* ---- Buckets ---- */
+      .buckets { display: flex; flex-direction: column; gap: 10px; }
+      .bucket { text-align: left; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md); padding: 11px 12px; cursor: pointer; transition: border-color .15s, background .15s, transform .1s; }
+      .bucket:hover { border-color: var(--accent-border); transform: translateY(-1px); }
+      .bucket:active { transform: scale(0.99); }
+      .bucket.armed { border-color: var(--accent-border); }
+      .bucket.flash { animation: flash .5s ease; }
+      @keyframes flash { 0% { background: var(--success-soft); } 100% { background: var(--surface); } }
+      .b-head { display: flex; align-items: baseline; gap: 8px; }
+      .b-name { font-size: 13px; font-weight: 650; color: var(--fg); }
+      .b-actor { font-family: var(--mono); font-size: 10px; color: var(--accent); }
+      .b-items { margin-top: 7px; display: flex; flex-direction: column; gap: 4px; min-height: 16px; }
+      .b-item { font-family: var(--mono); font-size: 11px; color: var(--success); }
+      .b-empty { font-size: 11px; color: var(--subtle); font-style: italic; }
+
+      /* ---- Fixed explanation panel (REPLACES content, never grows) ---- */
+      .explain { margin-top: 14px; min-height: 84px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 13px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain.ok { border-color: rgba(92,198,111,0.5); }
+      .explain.no { border-color: rgba(240,104,104,0.5); }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain.ok .explain-title { color: var(--success); }
+      .explain.no .explain-title { color: var(--danger); }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+
+      /* ---- Refactor reveal ---- */
+      .refactor { margin-top: 16px; display: none; }
+      .refactor.on { display: block; }
+      .ref-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+      @media (max-width: 560px) { .ref-grid { grid-template-columns: 1fr; } }
+      .ref-card { background: var(--surface); border: 1px solid rgba(92,198,111,0.45); border-radius: var(--r-md); padding: 12px; font-family: var(--mono); }
+      .ref-card .rc-name { font-size: 13px; font-weight: 700; color: var(--fg); }
+      .ref-card .rc-method { margin-top: 7px; font-size: 11.5px; color: var(--fg); }
+      .ref-card .rc-method .vis { color: var(--accent); font-weight: 700; }
+      .ref-card .rc-reason { margin-top: 9px; font-size: 10px; color: var(--success); display: flex; align-items: center; gap: 5px; }
+      .ref-card .rc-actor { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+
+      .col-label { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px 2px; }
+    </style>
+  </head>
+  <body>
+    <!-- TABS -->
+    <div class="tabs">
+      <button class="tab on" id="tab-sort" onclick="showTab('sort')"><span class="ico">⤳</span> Sort the responsibilities</button>
+      <button class="tab" id="tab-why" onclick="showTab('why')"><span class="ico">?</span> Why it matters</button>
+    </div>
+
+    <!-- ============ PANEL 1: SORTER ============ -->
+    <div class="panel on" id="panel-sort">
+      <div class="topbar">
+        <span class="lab">Click a method · then click its owner</span>
+        <span class="spacer"></span>
+        <span class="counter" id="god-counter">god class · reasons to change <b id="god-num">3</b></span>
+        <button class="btn ghost" onclick="resetSort()">↻ Reset</button>
+      </div>
+
+      <div class="cols">
+        <!-- LEFT: god class -->
+        <div>
+          <p class="col-label">The god class</p>
+          <div class="umlbox">
+            <div class="uml-name">
+              <span class="cn">Employee</span>
+              <span class="sub">does everything · answers to 3 bosses</span>
+            </div>
+            <div class="methods" id="methods"></div>
+          </div>
+        </div>
+
+        <!-- RIGHT: buckets -->
+        <div>
+          <p class="col-label">Which boss owns each job?</p>
+          <div class="buckets" id="buckets"></div>
+        </div>
+      </div>
+
+      <div class="explain" id="explain">
+        <div class="explain-title" id="ex-title">Pick a method to begin</div>
+        <div class="explain-body" id="ex-body"><span class="dim">Each method secretly belongs to a different boss. Click one on the left, then click the boss on the right who would ever ask to change it. Sort all six and the refactor appears.</span></div>
+      </div>
+
+      <!-- refactor reveal -->
+      <div class="refactor" id="refactor">
+        <p class="col-label" style="color:var(--success)">✓ Sorted — refactored into three focused classes</p>
+        <div class="ref-grid" id="ref-grid"></div>
+        <div class="hint">
+          <span class="b">▸</span>
+          <span>Same behaviour, but each class now answers to <b style="color:var(--fg)">one boss</b> and has dropped from <b style="color:var(--accent)">3 reasons to change</b> down to <b style="color:var(--success)">1</b>. That drop <b style="color:var(--fg)">is</b> SRP.</span>
+        </div>
+      </div>
+
+      <div class="hint" id="bottom-hint">
+        <span class="b">▸</span>
+        <span>Try the <b style="color:var(--fg)">"and" test</b>: <i>"Employee calculates pay <b style="color:var(--accent)">and</b> saves to the DB <b style="color:var(--accent)">and</b> formats reports…"</i> — every <b style="color:var(--accent)">and</b> is a second reason to change.</span>
+      </div>
+    </div>
+
+    <!-- ============ PANEL 2: WHY ============ -->
+    <div class="panel" id="panel-why">
+      <div class="why-grid" id="why-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;"></div>
+
+      <div class="explain">
+        <div class="explain-title" id="w-title">Click a card above</div>
+        <div class="explain-body" id="w-body"><span class="dim">SRP isn't about ugliness — it's about <b style="color:var(--fg)">accidental breakage</b>. When two bosses share one class, a change for one can silently break the other's feature. These cards show why one-actor-per-class keeps changes from colliding.</span></div>
+      </div>
+
+      <div class="hint">
+        <span class="b">▸</span>
+        <span><b style="color:var(--fg)">One reason to change = one actor.</b> The real question isn't "how many things does this class do?" but <i>"how many different people would ask me to change it?"</i></span>
+      </div>
+    </div>
+
+    <script>
+      /* ---------- shared: one explanation panel, content REPLACED (never appended) ---------- */
+      function setExplain(titleEl, bodyEl, title, bodyHtml) {
+        document.getElementById(titleEl).textContent = title;
+        document.getElementById(bodyEl).innerHTML = bodyHtml;
+      }
+
+      /* ---------- TABS ---------- */
+      function showTab(which) {
+        var sort = which === "sort";
+        document.getElementById("tab-sort").classList.toggle("on", sort);
+        document.getElementById("tab-why").classList.toggle("on", !sort);
+        document.getElementById("panel-sort").classList.toggle("on", sort);
+        document.getElementById("panel-why").classList.toggle("on", !sort);
+      }
+
+      /* ===================== PANEL 1: SORTER ===================== */
+      var METHODS = [
+        { id: "calcPay",   sig: "calculatePay()",   owner: "acct",   why: "An <b>Accountant</b> would request a change here — e.g. a new overtime or tax rule. It's pure business math." },
+        { id: "applyBonus",sig: "applyRaise()",     owner: "acct",   why: "Raises and bonuses are an <b>Accounting</b> decision. The pay rules change for the same reason <code>calculatePay</code> does — same boss." },
+        { id: "save",      sig: "saveToDatabase()", owner: "db",     why: "The <b>DBA</b> owns this — switching tables, adding an index, or moving to a new database changes how we save, and only that." },
+        { id: "load",      sig: "loadFromDb()",     owner: "db",     why: "Reading from storage is the <b>DBA's</b> world too. If the schema changes, this changes — for a database reason, not a money or report reason." },
+        { id: "report",    sig: "generateReport()", owner: "report", why: "<b>Reporting</b> owns the layout. If they want a new column or PDF format, this changes — and an Accountant wouldn't touch it." },
+        { id: "toCsv",     sig: "exportToCsv()",    owner: "report", why: "Formatting output for humans is a <b>Reporting</b> concern. Same boss as <code>generateReport</code>: it changes when the report's shape changes." },
+      ];
+
+      var BUCKETS = [
+        { id: "acct",   name: "Accounting", actor: "Accountant", className: "PayCalculator" },
+        { id: "db",     name: "Database",   actor: "DBA",        className: "EmployeeRepository" },
+        { id: "report", name: "Reporting",  actor: "Report reader", className: "ReportFormatter" },
+      ];
+
+      var sel = null;          // selected method id
+      var placed = {};         // methodId -> bucketId (correct placements only)
+
+      function bucketLabel(id) {
+        for (var i = 0; i < BUCKETS.length; i++) if (BUCKETS[i].id === id) return BUCKETS[i].name;
+        return id;
+      }
+
+      function renderMethods() {
+        var host = document.getElementById("methods");
+        host.innerHTML = "";
+        METHODS.forEach(function (m) {
+          var done = !!placed[m.id];
+          var el = document.createElement("button");
+          el.className = "method" + (sel === m.id ? " sel" : "") + (done ? " done" : "");
+          el.innerHTML = '<span class="vis">+</span><span>' + m.sig + '</span>' + (done ? '<span class="check">✓</span>' : '');
+          if (!done) el.onclick = (function (id) { return function () { pickMethod(id); }; })(m.id);
+          host.appendChild(el);
+        });
+      }
+
+      function renderBuckets() {
+        var host = document.getElementById("buckets");
+        host.innerHTML = "";
+        BUCKETS.forEach(function (b) {
+          var el = document.createElement("button");
+          el.className = "bucket" + (sel ? " armed" : "");
+          el.id = "bk-" + b.id;
+          var items = METHODS.filter(function (m) { return placed[m.id] === b.id; });
+          var itemsHtml = items.length
+            ? items.map(function (m) { return '<div class="b-item">+ ' + m.sig + '</div>'; }).join("")
+            : '<div class="b-empty">— no jobs yet —</div>';
+          el.innerHTML =
+            '<div class="b-head"><span class="b-name">' + b.name + '</span><span class="b-actor">' + b.actor + '</span></div>' +
+            '<div class="b-items">' + itemsHtml + '</div>';
+          el.onclick = (function (id) { return function () { dropInto(id); }; })(b.id);
+          host.appendChild(el);
+        });
+      }
+
+      function pickMethod(id) {
+        sel = id;
+        renderMethods();
+        renderBuckets();
+        var m = methodById(id);
+        var ex = document.getElementById("explain");
+        ex.className = "explain";
+        setExplain("ex-title", "ex-body",
+          "Selected · " + m.sig,
+          'Now click the boss who would ever ask you to change <code>' + m.sig + '</code>. <span class="dim">Hint: ask "whose job is this — money, storage, or paperwork?"</span>');
+      }
+
+      function dropInto(bucketId) {
+        if (!sel) {
+          var ex0 = document.getElementById("explain");
+          ex0.className = "explain";
+          setExplain("ex-title", "ex-body", "Pick a method first",
+            '<span class="dim">Click one of the <code>+</code> methods on the left, then click a boss.</span>');
+          return;
+        }
+        var m = methodById(sel);
+        var ex = document.getElementById("explain");
+        if (m.owner === bucketId) {
+          placed[m.id] = bucketId;
+          sel = null;
+          ex.className = "explain ok";
+          setExplain("ex-title", "ex-body",
+            "✓ Correct — owned by " + bucketLabel(bucketId),
+            m.why);
+          var bk = document.getElementById("bk-" + bucketId);
+          if (bk) { bk.classList.add("flash"); setTimeout(function () { bk.classList.remove("flash"); }, 500); }
+        } else {
+          ex.className = "explain no";
+          setExplain("ex-title", "ex-body",
+            "✗ Not " + bucketLabel(bucketId),
+            'The <b>' + actorOf(bucketId) + '</b> would never ask to change <code>' + m.sig + '</code>. ' + m.why + ' <span class="dim">Try again — pick the boss who owns this job.</span>');
+        }
+        renderMethods();
+        renderBuckets();
+        updateCounter();
+        checkComplete();
+      }
+
+      function methodById(id) { for (var i = 0; i < METHODS.length; i++) if (METHODS[i].id === id) return METHODS[i]; }
+      function actorOf(bucketId) { for (var i = 0; i < BUCKETS.length; i++) if (BUCKETS[i].id === bucketId) return BUCKETS[i].actor; return bucketId; }
+
+      function updateCounter() {
+        // reasons to change = number of distinct actors still owning a method INSIDE Employee (unsorted)
+        var unsorted = METHODS.filter(function (m) { return !placed[m.id]; });
+        var actors = {};
+        unsorted.forEach(function (m) { actors[m.owner] = true; });
+        var n = Object.keys(actors).length;
+        document.getElementById("god-num").textContent = n;
+        document.getElementById("god-counter").classList.toggle("good", n <= 1);
+      }
+
+      function checkComplete() {
+        var all = METHODS.every(function (m) { return !!placed[m.id]; });
+        var ref = document.getElementById("refactor");
+        document.getElementById("bottom-hint").style.display = all ? "none" : "flex";
+        if (all) { renderRefactor(); ref.classList.add("on"); }
+        else { ref.classList.remove("on"); }
+      }
+
+      function renderRefactor() {
+        var grid = document.getElementById("ref-grid");
+        grid.innerHTML = "";
+        BUCKETS.forEach(function (b) {
+          var items = METHODS.filter(function (m) { return m.owner === b.id; });
+          var methodsHtml = items.map(function (m) {
+            return '<div class="rc-method"><span class="vis">+</span> ' + m.sig + '</div>';
+          }).join("");
+          var card = document.createElement("div");
+          card.className = "ref-card";
+          card.innerHTML =
+            '<div class="rc-name">' + b.className + '</div>' +
+            methodsHtml +
+            '<div class="rc-reason">● 1 reason to change</div>' +
+            '<div class="rc-actor">owned by ' + b.actor + '</div>';
+          grid.appendChild(card);
+        });
+      }
+
+      function resetSort() {
+        sel = null;
+        placed = {};
+        document.getElementById("refactor").classList.remove("on");
+        document.getElementById("bottom-hint").style.display = "flex";
+        var ex = document.getElementById("explain");
+        ex.className = "explain";
+        setExplain("ex-title", "ex-body", "Pick a method to begin",
+          '<span class="dim">Each method secretly belongs to a different boss. Click one on the left, then click the boss on the right who would ever ask to change it. Sort all six and the refactor appears.</span>');
+        renderMethods();
+        renderBuckets();
+        updateCounter();
+      }
+
+      /* ===================== PANEL 2: WHY ===================== */
+      var WHY = [
+        {
+          name: "One reason to change",
+          gloss: "= one actor",
+          title: "What \"one reason to change\" means",
+          body: 'Uncle Bob refined SRP from "do one thing" to <b>be responsible to one actor</b>. An actor is the group of people who would request a change — a department, a role. Count the <b>distinct people</b> who could ask you to edit a class; if it\'s more than one, it does too much.',
+        },
+        {
+          name: "The collision bug",
+          gloss: "two bosses, one class",
+          title: "Why mixing actors is dangerous",
+          body: 'Say <code>calculatePay</code> and <code>generateReport</code> share a private <code>round()</code> helper. <b>Accounting</b> asks for a rounding tweak, you edit the helper — and the <b>report</b>, owned by a different team, silently changes too. Two actors collided in one class. SRP keeps them apart so their changes can\'t reach each other.',
+        },
+        {
+          name: "The \"and\" test",
+          gloss: "spot the smell fast",
+          title: "How to spot a violation",
+          body: 'Describe the class in one sentence. If you need <b>"and"</b> to list its jobs — <i>"it calculates pay <b>and</b> saves to the DB <b>and</b> prints reports"</i> — it has more than one responsibility. Vague names like <code>Manager</code>, <code>Helper</code>, or <code>Util</code> are another tell.',
+        },
+        {
+          name: "Extract Class",
+          gloss: "the fix",
+          title: "How to fix it",
+          body: 'Pull each responsibility into its own focused class — <code>PayCalculator</code>, <code>EmployeeRepository</code>, <code>ReportFormatter</code> — and let the original delegate to them. <b>No behaviour is lost</b>; each job just gets a single owner, so "who would change this?" has exactly one answer per class.',
+        },
+        {
+          name: "Don't over-split",
+          gloss: "SRP ≠ tiny classes",
+          title: "When NOT to split",
+          body: 'SRP is about <b>reasons to change</b>, not method count. A class with ten methods that all serve <b>one</b> actor is fine — that\'s good cohesion. Splitting <i>every</i> method into its own class trades one tangle for a maze of one-line classes. Split by <b>actor</b>, not by size.',
+        },
+      ];
+      var wIdx = -1;
+
+      function renderWhy() {
+        var grid = document.getElementById("why-grid");
+        grid.innerHTML = "";
+        WHY.forEach(function (w, i) {
+          var card = document.createElement("button");
+          card.className = "bucket" + (i === wIdx ? " armed" : "");
+          card.style.cursor = "pointer";
+          card.innerHTML =
+            '<div class="b-head"><span class="b-name">' + w.name + '</span></div>' +
+            '<div class="b-empty" style="margin-top:6px;font-style:normal;color:var(--muted)">' + w.gloss + '</div>';
+          card.onclick = (function (idx) { return function () { pickWhy(idx); }; })(i);
+          grid.appendChild(card);
+        });
+      }
+
+      function pickWhy(i) {
+        wIdx = i;
+        renderWhy();
+        var w = WHY[i];
+        setExplain("w-title", "w-body", w.title, w.body);
+      }
+
+      /* ---------- boot ---------- */
+      renderMethods();
+      renderBuckets();
+      updateCounter();
+      renderWhy();
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>
