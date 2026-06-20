@@ -29,6 +29,11 @@ import { relationshipNotation } from "./lld/relationship-notation";
 import { stateDiagrams } from "./lld/state-diagrams";
 import { activityDiagrams } from "./lld/activity-diagrams";
 import { componentAndDeploymentDiagrams } from "./lld/component-and-deployment-diagrams";
+import { singleResponsibility } from "./lld/single-responsibility";
+import { openClosed } from "./lld/open-closed";
+import { liskovSubstitution } from "./lld/liskov-substitution";
+import { interfaceSegregation } from "./lld/interface-segregation";
+import { dependencyInversion } from "./lld/dependency-inversion";
 
 /** Indexed by `${roadmapSlug}/${topicSlug}`. */
 const ROADMAP_LESSONS: Record<string, RoadmapLesson> = {
@@ -62,6 +67,11 @@ const ROADMAP_LESSONS: Record<string, RoadmapLesson> = {
   "lld/state-diagrams": stateDiagrams,
   "lld/activity-diagrams": activityDiagrams,
   "lld/component-and-deployment-diagrams": componentAndDeploymentDiagrams,
+  "lld/single-responsibility": singleResponsibility,
+  "lld/open-closed": openClosed,
+  "lld/liskov-substitution": liskovSubstitution,
+  "lld/interface-segregation": interfaceSegregation,
+  "lld/dependency-inversion": dependencyInversion,
 };
 
 export function getRoadmapLesson(

@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dependency Inversion Principle — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --violet: #a78bfa;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      .lab { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+
+      /* ---- Mode toggle (tabs) ---- */
+      .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+      .tab { flex: 1; background: var(--surface); color: var(--muted); font: 600 13px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 11px 12px; cursor: pointer; transition: all .15s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+      .tab:hover { border-color: var(--border-strong); color: var(--fg); }
+      .tab.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--fg); }
+      .tab .ico { font-family: var(--mono); font-size: 14px; color: var(--accent); }
+
+      /* ---- Buttons ---- */
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: filter .15s, transform .1s, border-color .15s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .btn.primary { background: var(--accent); color: #1a1003; border-color: transparent; }
+      .btn.primary:hover { filter: brightness(1.06); }
+      .btn.ghost { background: transparent; }
+      .btn:disabled { opacity: .4; cursor: not-allowed; }
+      .btn:disabled:active { transform: none; }
+
+      /* ---- Layout: stage + side indicators ---- */
+      .grid { display: grid; grid-template-columns: 1fr 200px; gap: 14px; align-items: start; }
+      @media (max-width: 620px) { .grid { grid-template-columns: 1fr; } }
+
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 20px 16px; }
+      .stage-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); text-align: center; margin-bottom: 14px; }
+
+      /* ---- The class boxes drawn as a column ---- */
+      .col { display: flex; flex-direction: column; align-items: center; }
+      .node { width: 230px; border: 1.5px solid var(--border-strong); border-radius: 7px; background: var(--bg); box-shadow: 0 8px 24px rgba(0,0,0,.32); overflow: hidden; }
+      .node-name { text-align: center; font-family: var(--mono); font-size: 13.5px; font-weight: 700; color: var(--fg); padding: 9px 10px; }
+      .node-sub { text-align: center; font-family: var(--mono); font-size: 9.5px; color: var(--subtle); padding: 0 10px 8px; }
+      .node-body { font-family: var(--mono); font-size: 11px; color: var(--muted); border-top: 1px solid var(--border-strong); padding: 7px 11px; line-height: 1.7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .node-body .kw { color: var(--violet); }
+      .node-body .warn { color: var(--danger); }
+
+      .node.policy { border-color: var(--info); box-shadow: 0 0 0 1px rgba(94,159,246,0.22), 0 8px 24px rgba(0,0,0,.32); }
+      .node.iface { border-color: var(--accent-border); background: linear-gradient(var(--accent-soft), var(--accent-soft)), var(--bg); }
+      .node.iface .node-name { color: var(--fg); }
+      .node.iface .stereo { display: block; font-size: 10px; color: var(--accent); margin-bottom: 2px; }
+      .node.concrete { border-color: var(--border-strong); }
+      .node.concrete.danger { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger-soft), 0 8px 24px rgba(0,0,0,.32); }
+      .node.concrete.active { border-color: var(--success); box-shadow: 0 0 0 1px var(--success-soft), 0 8px 24px rgba(0,0,0,.32); }
+
+      /* ---- The arrow between boxes ---- */
+      .conn { height: 58px; display: flex; align-items: center; justify-content: center; }
+      .conn svg { overflow: visible; }
+      .arrow-label { font-family: var(--mono); font-size: 9px; letter-spacing: .04em; text-transform: uppercase; }
+
+      /* ---- Tray of pluggable implementations (Inverted mode) ---- */
+      .tray-wrap { margin-top: 16px; }
+      .tray-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+      .tray { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+      .chip { text-align: center; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md); padding: 11px 8px; cursor: pointer; transition: border-color .15s, transform .1s, background .15s; font-family: var(--mono); }
+      .chip:hover { border-color: var(--accent-border); transform: translateY(-2px); }
+      .chip:active { transform: scale(0.98); }
+      .chip.on { border-color: var(--success); background: var(--success-soft); }
+      .chip-name { font-size: 12px; font-weight: 700; color: var(--fg); }
+      .chip-sub { font-size: 9.5px; color: var(--muted); margin-top: 3px; }
+      .chip:disabled { opacity: .4; cursor: not-allowed; }
+      .chip:disabled:hover { transform: none; border-color: var(--border); }
+
+      /* ---- Side indicators ---- */
+      .side { display: flex; flex-direction: column; gap: 10px; }
+      .ind { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 13px; transition: border-color .2s, background .2s; }
+      .ind.ok { border-color: rgba(92,198,111,0.5); background: var(--success-soft); }
+      .ind.bad { border-color: rgba(240,104,104,0.5); background: var(--danger-soft); }
+      .ind-q { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+      .ind-v { font-family: var(--mono); font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+      .ind.ok .ind-v { color: var(--success); }
+      .ind.bad .ind-v { color: var(--danger); }
+      .ind-mark { font-size: 18px; }
+
+      /* ---- Fixed explanation panel (REPLACES content, never grows) ---- */
+      .explain { margin-top: 14px; min-height: 88px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 13px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <!-- MODE TOGGLE -->
+    <div class="tabs">
+      <button class="tab on" id="tab-welded" onclick="setMode('welded')"><span class="ico">⊗</span> Welded</button>
+      <button class="tab" id="tab-inverted" onclick="setMode('inverted')"><span class="ico">⇅</span> Inverted</button>
+    </div>
+
+    <div class="grid">
+      <!-- ===== STAGE: the class column ===== -->
+      <div class="stage">
+        <div class="stage-cap" id="stage-cap">OrderService welded to a concrete EmailSender</div>
+        <div class="col">
+          <!-- high-level policy (never changes) -->
+          <div class="node policy">
+            <div class="node-name">OrderService</div>
+            <div class="node-sub">high-level policy</div>
+            <div class="node-body" id="policy-line"><span class="warn">new EmailSender()</span></div>
+          </div>
+
+          <!-- connector to interface (inverted mode only) -->
+          <div class="conn" id="conn-top" style="display:none">
+            <svg width="20" height="58" viewBox="0 0 20 58" role="img" aria-label="OrderService depends on the interface (arrow pointing down)">
+              <line x1="10" y1="2" x2="10" y2="44" stroke="#9099a8" stroke-width="1.6"/>
+              <path d="M10,52 L5,42 L15,42 z" fill="#9099a8"/>
+            </svg>
+          </div>
+
+          <!-- the abstraction (inverted mode only) -->
+          <div class="node iface" id="node-iface" style="display:none">
+            <div class="node-name"><span class="stereo">«interface»</span>MessageSender</div>
+            <div class="node-body" style="color:var(--fg)">+ send(to, text)</div>
+          </div>
+
+          <!-- connector to concrete: arrow direction flips by mode -->
+          <div class="conn" id="conn-bottom">
+            <svg id="arrow-svg" width="120" height="58" viewBox="0 0 120 58" role="img" aria-label="dependency arrow"></svg>
+          </div>
+
+          <!-- low-level detail -->
+          <div class="node concrete danger" id="node-concrete">
+            <div class="node-name" id="concrete-name">EmailSender</div>
+            <div class="node-sub" id="concrete-sub">low-level detail</div>
+          </div>
+        </div>
+
+        <!-- pluggable tray (enabled only in inverted mode) -->
+        <div class="tray-wrap">
+          <div class="tray-cap" id="tray-cap">Tray · plug an implementation into the socket</div>
+          <div class="tray" id="tray"></div>
+        </div>
+      </div>
+
+      <!-- ===== SIDE: live indicators ===== -->
+      <div class="side">
+        <div class="ind bad" id="ind-swap">
+          <div class="ind-q">Swap the sender without touching <b style="color:var(--fg)">OrderService</b>?</div>
+          <div class="ind-v"><span class="ind-mark" id="swap-mark">✗</span><span id="swap-text">No</span></div>
+        </div>
+        <div class="ind bad" id="ind-test">
+          <div class="ind-q">Unit-test <b style="color:var(--fg)">OrderService</b> with a fake?</div>
+          <div class="ind-v"><span class="ind-mark" id="test-mark">✗</span><span id="test-text">No</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FIXED EXPLAIN PANEL (replaced, never appended) -->
+    <div class="explain">
+      <div class="explain-title" id="ex-title">—</div>
+      <div class="explain-body" id="ex-body">—</div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>Depend on the <b style="color:var(--fg)">socket</b> (the interface), not the <b style="color:var(--fg)">plant</b> (a concrete class). Flip to <b style="color:var(--accent)">Inverted</b> and plug things in — <b style="color:var(--fg)">OrderService never changes</b>.</span>
+    </div>
+
+    <script>
+      /* ---------- one explanation panel, content REPLACED (never appended) ---------- */
+      function setExplain(title, bodyHtml) {
+        document.getElementById("ex-title").textContent = title;
+        document.getElementById("ex-body").innerHTML = bodyHtml;
+      }
+
+      /* ---------- implementations available in the tray ---------- */
+      var IMPLS = {
+        email: { name: "EmailSender", sub: "real email", chip: "EmailSender", chipSub: "real email" },
+        sms:   { name: "SMSSender",   sub: "real SMS",   chip: "SMSSender",   chipSub: "real SMS" },
+        fake:  { name: "FakeSender",  sub: "records only · for tests", chip: "FakeSender", chipSub: "for tests" },
+      };
+      var TRAY_ORDER = ["email", "sms", "fake"];
+
+      var mode = "welded";   // "welded" | "inverted"
+      var plugged = "email"; // which impl is plugged in (inverted mode)
+
+      /* ---------- arrow SVG: down=policy→detail (welded), up=detail→iface (inverted) ---------- */
+      function downArrowSolid(color) {
+        // filled arrowhead pointing DOWN at the concrete (hard dependency)
+        return '<line x1="60" y1="2" x2="60" y2="44" stroke="' + color + '" stroke-width="1.8"/>' +
+               '<path d="M60,52 L54,40 L66,40 z" fill="' + color + '"/>' +
+               '<text x="70" y="30" class="arrow-label" fill="' + color + '">depends on</text>';
+      }
+      function upArrowImpl(color) {
+        // open arrowhead pointing UP at the interface (the detail implements it) — inverted!
+        return '<line x1="60" y1="56" x2="60" y2="14" stroke="' + color + '" stroke-width="1.8"/>' +
+               '<path d="M60,6 L54,18 L66,18" fill="none" stroke="' + color + '" stroke-width="1.8"/>' +
+               '<text x="70" y="34" class="arrow-label" fill="' + color + '">implements ↑</text>';
+      }
+
+      function setIndicators(swapOk, testOk) {
+        var sw = document.getElementById("ind-swap");
+        sw.className = "ind " + (swapOk ? "ok" : "bad");
+        document.getElementById("swap-mark").textContent = swapOk ? "✓" : "✗";
+        document.getElementById("swap-text").textContent = swapOk ? "Yes" : "No";
+        var te = document.getElementById("ind-test");
+        te.className = "ind " + (testOk ? "ok" : "bad");
+        document.getElementById("test-mark").textContent = testOk ? "✓" : "✗";
+        document.getElementById("test-text").textContent = testOk ? "Yes" : "No";
+      }
+
+      function renderTray() {
+        var tray = document.getElementById("tray");
+        tray.innerHTML = "";
+        TRAY_ORDER.forEach(function (key) {
+          var im = IMPLS[key];
+          var b = document.createElement("button");
+          b.className = "chip" + (mode === "inverted" && plugged === key ? " on" : "");
+          b.disabled = mode !== "inverted";
+          b.innerHTML = '<div class="chip-name">' + im.chip + '</div><div class="chip-sub">' + im.chipSub + '</div>';
+          b.onclick = (function (k) { return function () { plug(k); }; })(key);
+          tray.appendChild(b);
+        });
+      }
+
+      function render() {
+        var weld = mode === "welded";
+        document.getElementById("tab-welded").classList.toggle("on", weld);
+        document.getElementById("tab-inverted").classList.toggle("on", !weld);
+
+        var iface = document.getElementById("node-iface");
+        var connTop = document.getElementById("conn-top");
+        var policyLine = document.getElementById("policy-line");
+        var concrete = document.getElementById("node-concrete");
+        var arrow = document.getElementById("arrow-svg");
+        var trayCap = document.getElementById("tray-cap");
+
+        if (weld) {
+          // ----- WELDED -----
+          document.getElementById("stage-cap").textContent = "OrderService welded to a concrete EmailSender";
+          iface.style.display = "none";
+          connTop.style.display = "none";
+          policyLine.innerHTML = '<span class="warn">new EmailSender()</span>';
+          trayCap.textContent = "Tray · disabled — the service builds its own sender";
+
+          // concrete is the hard-wired EmailSender, danger red, arrow points DOWN
+          concrete.className = "node concrete danger";
+          document.getElementById("concrete-name").textContent = "EmailSender";
+          document.getElementById("concrete-sub").textContent = "low-level detail · hard-wired";
+          arrow.innerHTML = downArrowSolid("#f06868");
+
+          setIndicators(false, false);
+          renderTray();
+          setExplain(
+            "Welded — the service is stuck",
+            'Inside <code>OrderService</code> sits <code>new EmailSender()</code>, so the dependency arrow points <span class="bad">straight down</span> at the concrete sender. ' +
+            'To change email→SMS you must <span class="bad">edit OrderService</span> itself, and every test fires a <span class="bad">real email</span>. ' +
+            '<span class="dim">Swap ✗, testable ✗. Flip to Inverted to fix both.</span>'
+          );
+        } else {
+          // ----- INVERTED -----
+          document.getElementById("stage-cap").textContent = "OrderService depends on «interface» MessageSender";
+          iface.style.display = "block";
+          connTop.style.display = "flex";
+          policyLine.innerHTML = '<span class="kw">constructor</span>(sender: <span style="color:var(--accent)">MessageSender</span>)';
+          trayCap.textContent = "Tray · plug an implementation into the socket";
+
+          // concrete is whatever is plugged in; arrow points UP at the interface (inverted)
+          var im = IMPLS[plugged];
+          concrete.className = "node concrete active";
+          document.getElementById("concrete-name").textContent = im.name;
+          document.getElementById("concrete-sub").textContent = im.sub;
+          arrow.innerHTML = upArrowImpl("#fb863a");
+
+          // swap always OK now; test OK because we *can* inject a fake (true today if fake is plugged)
+          setIndicators(true, true);
+          renderTray();
+          // explain is set by plug(); set a default first-time message here
+          if (!renderedOnceInverted) {
+            explainForPlug(plugged, true);
+          }
+          renderedOnceInverted = true;
+        }
+      }
+
+      var renderedOnceInverted = false;
+
+      function explainForPlug(key, isModeSwitch) {
+        var im = IMPLS[key];
+        if (key === "fake") {
+          setExplain(
+            "Plugged in FakeSender — testable ✓",
+            'The <code>FakeSender</code> just <b>records</b> what it was asked to send instead of sending anything. ' +
+            'Now a unit test runs <span class="good">fast and offline</span>: inject the fake, call <code>placeOrder()</code>, then assert on the recording — <span class="good">no real email or network</span>. ' +
+            '<span class="dim">And notice: OrderService never changed.</span>'
+          );
+        } else {
+          setExplain(
+            "Plugged in " + im.name + " — swap ✓",
+            'You picked <code>' + im.name + '</code> from the tray and the bottom arrow <b>inverted</b> to point <span class="good">up</span> at <code>«interface» MessageSender</code>. ' +
+            (key === "sms"
+              ? 'Going from email to SMS took <span class="good">one wiring line</span> — '
+              : 'The real sender is wired in at the edge of the app — ') +
+            '<b style="color:var(--success)">OrderService never changed.</b> <span class="dim">It depends on the socket, not the plant.</span>'
+          );
+        }
+      }
+
+      function plug(key) {
+        if (mode !== "inverted") return;
+        plugged = key;
+        render();
+        explainForPlug(key, false);
+      }
+
+      function setMode(m) {
+        mode = m;
+        if (m === "inverted") { renderedOnceInverted = false; }
+        render();
+      }
+
+      /* ---------- boot ---------- */
+      render();
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

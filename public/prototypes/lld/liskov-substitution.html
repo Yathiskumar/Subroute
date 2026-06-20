@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Liskov Substitution Principle — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --success-border: rgba(92, 198, 111, 0.55);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --danger-border: rgba(240, 104, 104, 0.55);
+        --violet: #a78bfa;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      .lab { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+
+      /* ---- Tabs ---- */
+      .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+      .tab { flex: 1; background: var(--surface); color: var(--muted); font: 600 12.5px/1.2 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 11px 10px; cursor: pointer; transition: all .15s; display: flex; align-items: center; justify-content: center; gap: 7px; text-align: center; }
+      .tab:hover { border-color: var(--border-strong); color: var(--fg); }
+      .tab.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--fg); }
+      .tab .ico { font-family: var(--mono); font-size: 14px; color: var(--accent); }
+
+      .panel { display: none; }
+      .panel.on { display: block; }
+
+      /* ---- Buttons ---- */
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: filter .15s, transform .1s, border-color .15s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .btn.primary { background: var(--accent); color: #1a1003; border-color: transparent; }
+      .btn.primary:hover { filter: brightness(1.06); }
+      .btn.ghost { background: transparent; }
+      .btn:disabled { opacity: .4; cursor: not-allowed; }
+      .btn:disabled:active { transform: none; }
+      .btn.ok { background: var(--success-soft); border-color: var(--success-border); color: var(--fg); }
+      .btn.bad { background: var(--danger-soft); border-color: var(--danger-border); color: var(--fg); }
+
+      /* ---- The bench layout ---- */
+      .bench { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      @media (max-width: 560px) { .bench { grid-template-columns: 1fr; } }
+
+      .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 15px; }
+      .card-h { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+
+      /* fixed caller code block */
+      .code { font-family: var(--mono); font-size: 12.5px; line-height: 1.9; color: var(--fg); white-space: nowrap; overflow-x: auto; }
+      .code .k { color: var(--info); }
+      .code .n { color: var(--accent); }
+      .code .c { color: var(--subtle); }
+      .code .row { transition: background .2s; border-radius: 4px; padding: 0 4px; margin: 0 -4px; }
+      .code .row.hot { background: var(--accent-soft); }
+
+      /* substitute picker buttons */
+      .picker { display: flex; gap: 8px; flex-wrap: wrap; }
+
+      /* the visual stage (shape / bird) */
+      .vis-stage { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 168px; gap: 10px; }
+      .shape { transition: width .55s ease, height .55s ease, background .3s, border-color .3s; border: 1.5px solid var(--border-strong); background: var(--elevated); border-radius: 4px; }
+      .shape.ok { border-color: var(--success-border); background: var(--success-soft); }
+      .shape.bad { border-color: var(--danger-border); background: var(--danger-soft); }
+      .dims { font-family: var(--mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+      .bird-emoji { font-size: 56px; line-height: 1; transition: transform .5s ease, opacity .3s; }
+      .bird-state { font-family: var(--mono); font-size: 12px; color: var(--muted); text-align: center; }
+
+      /* verdict pill */
+      .verdict { font-family: var(--mono); font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; }
+      .verdict.ok { background: var(--success-soft); color: var(--success); border: 1px solid var(--success-border); }
+      .verdict.bad { background: var(--danger-soft); color: var(--danger); border: 1px solid var(--danger-border); }
+      .verdict.idle { background: var(--elevated); color: var(--muted); border: 1px solid var(--border); }
+
+      /* ---- Fixed explanation panel (REPLACES content, never grows) ---- */
+      .explain { margin-top: 14px; min-height: 92px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 13px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain.ok { border-color: var(--success-border); }
+      .explain.bad { border-color: var(--danger-border); }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain.ok .explain-title { color: var(--success); }
+      .explain.bad .explain-title { color: var(--danger); }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <!-- TABS -->
+    <div class="tabs">
+      <button class="tab on" id="tab-rect" onclick="showTab('rect')"><span class="ico">▭</span> Rectangle vs Square</button>
+      <button class="tab" id="tab-bird" onclick="showTab('bird')"><span class="ico">🕊</span> Bird.fly()</button>
+      <button class="tab" id="tab-fix" onclick="showTab('fix')"><span class="ico">✓</span> Fixed design</button>
+    </div>
+
+    <!-- ============ PANEL 1: RECTANGLE vs SQUARE ============ -->
+    <div class="panel on" id="panel-rect">
+      <div class="bench">
+        <div class="card">
+          <div class="card-h">the caller · fixed code</div>
+          <div class="code">
+            <div class="row" id="rc-1"><span class="k">s</span>.setWidth(<span class="n">5</span>);</div>
+            <div class="row" id="rc-2"><span class="k">s</span>.setHeight(<span class="n">4</span>);</div>
+            <div class="row" id="rc-3"><span class="c">// expect</span> area == <span class="n">20</span></div>
+          </div>
+          <div style="margin-top:14px" class="card-h">pass in a substitute</div>
+          <div class="picker">
+            <button class="btn primary" onclick="runRect('rect')">Pass a Rectangle</button>
+            <button class="btn" onclick="runRect('square')">Pass a Square</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-h">what the bench sees</div>
+          <div class="vis-stage">
+            <div class="shape" id="rs-shape" style="width:70px;height:56px"></div>
+            <div class="dims" id="rs-dims">width × height</div>
+            <div class="verdict idle" id="rs-verdict">— pick a substitute</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="explain" id="r-explain">
+        <div class="explain-title" id="r-title">The substitution test</div>
+        <div class="explain-body" id="r-body"><span class="dim">The caller code never changes. Pass a <b style="color:var(--fg)">Rectangle</b> and it should hold its promise — pass a <b style="color:var(--fg)">Square</b> and watch what happens to the width you set.</span></div>
+      </div>
+
+      <div class="hint">
+        <span class="b">▸</span>
+        <span>Watch the box <b style="color:var(--fg)">animate</b> when you pass a Square: <code style="color:var(--accent)">setHeight(4)</code> quietly drags the width down too.</span>
+      </div>
+    </div>
+
+    <!-- ============ PANEL 2: BIRD.fly() ============ -->
+    <div class="panel" id="panel-bird">
+      <div class="bench">
+        <div class="card">
+          <div class="card-h">the caller · fixed code</div>
+          <div class="code">
+            <div class="row" id="bc-1"><span class="k">bird</span>.fly();</div>
+            <div class="row" id="bc-2"><span class="c">// expect</span> it takes off</div>
+          </div>
+          <div style="margin-top:14px" class="card-h">pass in a substitute</div>
+          <div class="picker">
+            <button class="btn primary" onclick="runBird('sparrow')">Pass a Sparrow</button>
+            <button class="btn" onclick="runBird('penguin')">Pass a Penguin</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-h">what the bench sees</div>
+          <div class="vis-stage">
+            <div class="bird-emoji" id="bd-emoji">🐦</div>
+            <div class="bird-state" id="bd-state">a Bird, ready to fly()</div>
+            <div class="verdict idle" id="bd-verdict">— pick a substitute</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="explain" id="b-explain">
+        <div class="explain-title" id="b-title">The substitution test</div>
+        <div class="explain-body" id="b-body"><span class="dim">The base <code>Bird</code> promises <code>fly()</code> works. A <b style="color:var(--fg)">Sparrow</b> keeps that promise. A <b style="color:var(--fg)">Penguin</b> can't fly — so what does its <code>fly()</code> do?</span></div>
+      </div>
+
+      <div class="hint">
+        <span class="b">▸</span>
+        <span>A subtype that overrides a method just to <code style="color:var(--accent)">throw</code> is a <b style="color:var(--fg)">degenerate override</b> — a loud LSP smell.</span>
+      </div>
+    </div>
+
+    <!-- ============ PANEL 3: FIXED DESIGN ============ -->
+    <div class="panel" id="panel-fix">
+      <div class="card">
+        <div class="card-h">the corrected design — every substitute passes</div>
+        <div class="explain-body" style="margin-bottom:14px">
+          We stop forcing bad <code>extends</code> trees. Shapes share a tiny <b>immutable</b> <code>Shape</code> interface (just <code>area()</code>, no setters to break). Birds split into a plain <code>Bird</code> and a separate <code>FlyingBird</code> capability. <span class="dim">Click any substitute below — they all keep their promises now.</span>
+        </div>
+        <div class="picker" id="fix-picker">
+          <button class="btn" onclick="runFix('rect')">Rect (area)</button>
+          <button class="btn" onclick="runFix('square')">Square (area)</button>
+          <button class="btn" onclick="runFix('sparrow')">FlyingBird (sparrow)</button>
+          <button class="btn" onclick="runFix('penguin')">Bird (penguin)</button>
+        </div>
+      </div>
+
+      <div class="explain ok" id="f-explain">
+        <div class="explain-title" id="f-title">✓ Substitutability restored</div>
+        <div class="explain-body" id="f-body"><span class="dim">Pick a substitute above to see why it now passes the bench with no surprises.</span></div>
+      </div>
+
+      <div class="hint">
+        <span class="b">▸</span>
+        <span><b style="color:var(--fg)">The rule:</b> when a subtype can't keep the base's full contract, prefer a <b style="color:var(--accent)">shared interface</b> or <b style="color:var(--accent)">composition</b> over inheritance.</span>
+      </div>
+    </div>
+
+    <script>
+      /* ---------- shared: one explanation panel per tab, content REPLACED (never appended) ---------- */
+      function setExplain(wrapId, titleId, bodyId, state, title, bodyHtml) {
+        var wrap = document.getElementById(wrapId);
+        wrap.classList.remove("ok", "bad");
+        if (state) wrap.classList.add(state);
+        document.getElementById(titleId).textContent = title;
+        document.getElementById(bodyId).innerHTML = bodyHtml;
+      }
+
+      /* ---------- TABS ---------- */
+      function showTab(which) {
+        ["rect", "bird", "fix"].forEach(function (t) {
+          document.getElementById("tab-" + t).classList.toggle("on", t === which);
+          document.getElementById("panel-" + t).classList.toggle("on", t === which);
+        });
+      }
+
+      /* ---------- PANEL 1: RECTANGLE vs SQUARE ---------- */
+      function setRowHot(id) {
+        ["rc-1", "rc-2", "rc-3"].forEach(function (r) {
+          document.getElementById(r).classList.toggle("hot", r === id);
+        });
+      }
+
+      function runRect(kind) {
+        var shape = document.getElementById("rs-shape");
+        var dims = document.getElementById("rs-dims");
+        var verdict = document.getElementById("rs-verdict");
+        shape.classList.remove("ok", "bad");
+        verdict.className = "verdict idle";
+        verdict.textContent = "running…";
+
+        // step 1: setWidth(5)
+        setRowHot("rc-1");
+        var w = 5, h = (kind === "square") ? 5 : 0;        // square ties height to width
+        shape.style.width = (w * 14) + "px";
+        shape.style.height = (kind === "square" ? (h * 14) : 56) + "px";
+        dims.textContent = kind === "square" ? "5 × 5  (setWidth tied height!)" : "5 × ?";
+
+        // step 2: setHeight(4)
+        setTimeout(function () {
+          setRowHot("rc-2");
+          h = 4;
+          w = (kind === "square") ? 4 : 5;                 // square: setHeight clobbers width too
+          shape.style.width = (w * 14) + "px";
+          shape.style.height = (h * 14) + "px";
+          dims.textContent = kind === "square"
+            ? "4 × 4  (setHeight clobbered width!)"
+            : "5 × 4";
+        }, 650);
+
+        // step 3: assert area == 20
+        setTimeout(function () {
+          setRowHot("rc-3");
+          var area = w * h;
+          var pass = area === 20;
+          shape.classList.add(pass ? "ok" : "bad");
+          verdict.className = "verdict " + (pass ? "ok" : "bad");
+          verdict.textContent = (pass ? "✓ area = " : "✗ area = ") + area + (pass ? "" : "  (expected 20)");
+
+          if (kind === "rect") {
+            setExplain("r-explain", "r-title", "r-body", "ok",
+              "✓ Rectangle keeps the promise",
+              'Width and height are <b>independent</b>, so <code>setWidth(5)</code> and <code>setHeight(4)</code> stick. Area is <b>20</b>, exactly what the caller expected. The Rectangle substitutes cleanly — <b>LSP satisfied</b>.');
+          } else {
+            setExplain("r-explain", "r-title", "r-body", "bad",
+              "✗ Square broke the promise",
+              'To stay square, <code>setHeight(4)</code> <b>also</b> reset the width to 4 — silently destroying the <code>5</code> the caller had set. Area is <b>16</b>, not 20. <span class="dim">Rule violated:</span> the Square <b>weakened a postcondition</b> the base Rectangle promised. The caller did nothing wrong; the subtype is the bug.');
+          }
+        }, 1300);
+      }
+
+      /* ---------- PANEL 2: BIRD.fly() ---------- */
+      function runBird(kind) {
+        var emoji = document.getElementById("bd-emoji");
+        var state = document.getElementById("bd-state");
+        var verdict = document.getElementById("bd-verdict");
+        verdict.className = "verdict idle";
+        verdict.textContent = "calling fly()…";
+        emoji.textContent = kind === "penguin" ? "🐧" : "🐦";
+        emoji.style.opacity = "1";
+        emoji.style.transform = "none";
+        state.textContent = kind === "penguin" ? "a Penguin — fly() ?" : "a Sparrow — fly() ?";
+
+        setTimeout(function () {
+          if (kind === "sparrow") {
+            emoji.style.transform = "translateY(-26px) rotate(-8deg)";
+            state.textContent = "lifted off ✓";
+            verdict.className = "verdict ok";
+            verdict.textContent = "✓ fly() returned";
+            setExplain("b-explain", "b-title", "b-body", "ok",
+              "✓ Sparrow keeps the promise",
+              'A <code>Sparrow</code> truly flies, so <code>fly()</code> does what the base <code>Bird</code> promised. It substitutes cleanly — <b>LSP satisfied</b>.');
+          } else {
+            emoji.style.transform = "translateY(6px)";
+            emoji.style.opacity = "0.55";
+            state.textContent = "💥 threw UnsupportedOperationException";
+            verdict.className = "verdict bad";
+            verdict.textContent = "✗ fly() threw";
+            setExplain("b-explain", "b-title", "b-body", "bad",
+              "✗ Penguin broke the promise",
+              'A penguin can\'t fly, so its <code>fly()</code> override just <code>throw</code>s. <span class="dim">Rule violated:</span> the subtype <b>threw a new, unexpected exception</b> the caller never agreed to handle — a <b>degenerate override</b>. Any loop calling <code>fly()</code> over birds now crashes on the first penguin.');
+          }
+        }, 450);
+      }
+
+      /* ---------- PANEL 3: FIXED DESIGN ---------- */
+      function runFix(kind) {
+        var copy = {
+          rect: 'A <code>Rect</code> implements the immutable <code>Shape</code> interface with one method, <code>area()</code>. No setters exist, so there\'s no width/height promise to break. <b>Passes.</b>',
+          square: 'A <code>Square</code> is <b>no longer a Rectangle</b> — it just implements <code>Shape</code> on its own with <code>area() = side²</code>. It can\'t clobber any setter it doesn\'t have. <b>Passes.</b>',
+          sparrow: 'A <code>Sparrow</code> is a <code>FlyingBird</code> — a separate capability that <i>actually</i> provides <code>fly()</code>. Code that needs flight asks for <code>FlyingBird</code>, never a generic <code>Bird</code>. <b>Passes.</b>',
+          penguin: 'A <code>Penguin</code> is a plain <code>Bird</code> — it never claims <code>fly()</code>, so it can\'t break a promise it never made. It can <code>swim()</code> instead, via its own capability. <b>Passes.</b>',
+        };
+        // mark the picked button
+        var btns = document.getElementById("fix-picker").children;
+        var order = ["rect", "square", "sparrow", "penguin"];
+        for (var i = 0; i < btns.length; i++) {
+          btns[i].className = "btn" + (order[i] === kind ? " ok" : "");
+        }
+        setExplain("f-explain", "f-title", "f-body", "ok",
+          "✓ Substitutability restored",
+          copy[kind]);
+      }
+
+      /* ---------- boot ---------- */
+      /* nothing auto-runs; panels start in their idle state */
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>
