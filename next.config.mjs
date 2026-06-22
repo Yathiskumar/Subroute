@@ -10,7 +10,9 @@ const cspReportOnly = [
   "default-src 'self'",
   "base-uri 'self'",
   "object-src 'none'",
-  "frame-ancestors 'none'",
+  // 'self' (not 'none') so the app can frame its own same-origin prototype
+  // HTML in the embedded simulation iframes; still blocks external framing.
+  "frame-ancestors 'self'",
   "form-action 'self'",
   "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://va.vercel-scripts.com",
   "style-src 'self' 'unsafe-inline'",
@@ -28,7 +30,9 @@ const securityHeaders = [
     key: "Strict-Transport-Security",
     value: "max-age=63072000; includeSubDomains; preload",
   },
-  { key: "X-Frame-Options", value: "DENY" },
+  // SAMEORIGIN (not DENY) so the app can embed its own prototype HTML in
+  // iframes; external sites still can't frame the app (clickjacking defense).
+  { key: "X-Frame-Options", value: "SAMEORIGIN" },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   {

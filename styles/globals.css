@@ -1,8 +1,6 @@
-@import "tailwindcss";
-
-/* Keep the existing v3-style JS config (theme tokens, content globs, keyframes)
-   instead of porting it to CSS @theme — Tailwind v4 loads it via @config. */
-@config "../tailwind.config.ts";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 /* ============================================================
    Theme tokens — every color, surface, and accent in the app
