@@ -94,43 +94,202 @@ export const leastResponseTime: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "least-response-time.ts",
-    code: `// Least response time: score = (active + 1) * avgRtSeconds, lowest wins.
-type Backend = { id: string; active: number; avgRtMs: number; samples: number };
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "least_response_time.go",
+      code: `package lb
 
-const DEFAULT_RT_MS = 1500; // used until a server has answered once
+// Least response time: score = (active + 1) * avgRtSeconds, lowest wins.
+type Backend struct {
+	id      string
+	active  int
+	avgRtMs float64
+	samples int
+}
+
+const defaultRtMs = 1500.0 // used until a server has answered once
+
+type LeastResponseTimeBalancer struct {
+	backends []*Backend
+}
+
+func NewLeastResponseTimeBalancer(ids []string) *LeastResponseTimeBalancer {
+	bs := make([]*Backend, len(ids))
+	for i, id := range ids {
+		bs[i] = &Backend{id: id}
+	}
+	return &LeastResponseTimeBalancer{backends: bs}
+}
+
+func (lb *LeastResponseTimeBalancer) score(b *Backend) float64 {
+	rt := b.avgRtMs
+	if rt == 0 {
+		rt = defaultRtMs
+	}
+	return float64(b.active+1) * (rt / 1000)
+}
+
+func (lb *LeastResponseTimeBalancer) Acquire() *Backend {
+	best := lb.backends[0]
+	for _, b := range lb.backends {
+		if lb.score(b) < lb.score(best) {
+			best = b
+		}
+	}
+	best.active++ // reserve immediately, like least-conn
+	return best
+}
+
+// Release is called on completion with the observed round-trip time.
+func (lb *LeastResponseTimeBalancer) Release(b *Backend, rtMs float64) {
+	b.active--
+	// running mean — simple, but slow to forget (EWMA improves on this)
+	b.avgRtMs = (b.avgRtMs*float64(b.samples) + rtMs) / float64(b.samples+1)
+	b.samples++
+}`,
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "LeastResponseTime.java",
+      code: `import java.util.ArrayList;
+import java.util.List;
+
+// Least response time: score = (active + 1) * avgRtSeconds, lowest wins.
+class LeastResponseTimeBalancer {
+    static final class Backend {
+        final String id;
+        int active = 0;
+        double avgRtMs = 0;
+        int samples = 0;
+
+        Backend(String id) { this.id = id; }
+    }
+
+    private static final double DEFAULT_RT_MS = 1500; // until a server answers once
+
+    private final List<Backend> backends = new ArrayList<>();
+
+    LeastResponseTimeBalancer(String[] ids) {
+        for (String id : ids) backends.add(new Backend(id));
+    }
+
+    private double score(Backend b) {
+        double rt = b.avgRtMs == 0 ? DEFAULT_RT_MS : b.avgRtMs;
+        return (b.active + 1) * (rt / 1000);
+    }
+
+    Backend acquire() {
+        Backend best = backends.get(0);
+        for (Backend b : backends) {
+            if (score(b) < score(best)) best = b;
+        }
+        best.active++;               // reserve immediately, like least-conn
+        return best;
+    }
+
+    // Call on completion with the observed round-trip time.
+    void release(Backend b, double rtMs) {
+        b.active--;
+        // running mean — simple, but slow to forget (EWMA improves on this)
+        b.avgRtMs = (b.avgRtMs * b.samples + rtMs) / (b.samples + 1);
+        b.samples++;
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "least_response_time.py",
+      code: `from dataclasses import dataclass
+
+DEFAULT_RT_MS = 1500.0  # used until a server has answered once
+
+
+# Least response time: score = (active + 1) * avg_rt_seconds, lowest wins.
+@dataclass
+class Backend:
+    id: str
+    active: int = 0
+    avg_rt_ms: float = 0
+    samples: int = 0
+
+
+class LeastResponseTimeBalancer:
+    def __init__(self, ids: list[str]) -> None:
+        self.backends = [Backend(id) for id in ids]
+
+    def _score(self, b: Backend) -> float:
+        rt = b.avg_rt_ms or DEFAULT_RT_MS
+        return (b.active + 1) * (rt / 1000)
+
+    def acquire(self) -> Backend:
+        best = self.backends[0]
+        for b in self.backends:
+            if self._score(b) < self._score(best):
+                best = b
+        best.active += 1             # reserve immediately, like least-conn
+        return best
+
+    def release(self, b: Backend, rt_ms: float) -> None:
+        """Call on completion with the observed round-trip time."""
+        b.active -= 1
+        # running mean — simple, but slow to forget (EWMA improves on this)
+        b.avg_rt_ms = (b.avg_rt_ms * b.samples + rt_ms) / (b.samples + 1)
+        b.samples += 1`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "least_response_time.cpp",
+      code: `// Least response time: score = (active + 1) * avgRtSeconds, lowest wins.
+#include <string>
+#include <vector>
 
 class LeastResponseTimeBalancer {
-  private backends: Backend[];
-  constructor(ids: string[]) {
-    this.backends = ids.map((id) => ({ id, active: 0, avgRtMs: 0, samples: 0 }));
-  }
+public:
+    struct Backend {
+        std::string id;
+        int active = 0;
+        double avgRtMs = 0;
+        int samples = 0;
+    };
 
-  private score(b: Backend): number {
-    const rt = b.avgRtMs || DEFAULT_RT_MS;
-    return (b.active + 1) * (rt / 1000);
-  }
+private:
+    static constexpr double DEFAULT_RT_MS = 1500; // until a server answers once
+    std::vector<Backend> backends_;
 
-  acquire(): Backend {
-    let best = this.backends[0];
-    for (const b of this.backends) {
-      if (this.score(b) < this.score(best)) best = b;
+    double score(const Backend& b) const {
+        double rt = b.avgRtMs == 0 ? DEFAULT_RT_MS : b.avgRtMs;
+        return (b.active + 1) * (rt / 1000);
     }
-    best.active++;               // reserve immediately, like least-conn
-    return best;
-  }
 
-  // Call on completion with the observed round-trip time.
-  release(b: Backend, rtMs: number): void {
-    b.active--;
-    // running mean — simple, but slow to forget (EWMA improves on this)
-    b.avgRtMs = (b.avgRtMs * b.samples + rtMs) / (b.samples + 1);
-    b.samples++;
-  }
-}`,
-  },
+public:
+    explicit LeastResponseTimeBalancer(const std::vector<std::string>& ids) {
+        for (const auto& id : ids) backends_.push_back({id});
+    }
+
+    Backend* acquire() {
+        Backend* best = &backends_[0];
+        for (auto& b : backends_) {
+            if (score(b) < score(*best)) best = &b;
+        }
+        best->active++;              // reserve immediately, like least-conn
+        return best;
+    }
+
+    // Call on completion with the observed round-trip time.
+    void release(Backend* b, double rtMs) {
+        b->active--;
+        // running mean — simple, but slow to forget (EWMA improves on this)
+        b->avgRtMs = (b->avgRtMs * b->samples + rtMs) / (b->samples + 1);
+        b->samples++;
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

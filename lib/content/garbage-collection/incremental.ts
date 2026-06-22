@@ -93,48 +93,236 @@ export const incremental: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "incremental.ts",
-    code: `// Incremental marking: tri-color marking that runs in bounded slices,
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "incremental.go",
+      code: `// Incremental marking: tri-color marking that runs in bounded slices,
 // yielding to the mutator between them. A write barrier keeps it correct.
-type Color = "white" | "gray" | "black";
-interface Obj { color: Color; refs: Obj[]; }
+package gc
+
+type Color int
+
+const (
+	White Color = iota
+	Gray
+	Black
+)
+
+type Obj struct {
+	color Color
+	refs  []*Obj
+}
+
+type IncrementalCollector struct {
+	gray    []*Obj
+	marking bool
+}
+
+func (c *IncrementalCollector) StartCycle(roots []*Obj) {
+	for _, r := range roots {
+		c.shade(r) // short initial pause: gray the roots
+	}
+	c.marking = true
+}
+
+// MarkSlice does a bounded amount of marking, then returns so the program can run.
+func (c *IncrementalCollector) MarkSlice(budget int) {
+	work := 0
+	for c.marking && len(c.gray) > 0 && work < budget {
+		obj := c.gray[len(c.gray)-1]
+		c.gray = c.gray[:len(c.gray)-1]
+		for _, child := range obj.refs {
+			c.shade(child)
+		}
+		obj.color = Black
+		work++
+	}
+	if len(c.gray) == 0 {
+		c.marking = false // done -> sweep next
+	}
+}
+
+// WriteBarrier in mutator slices: keeps the tri-color invariant.
+func (c *IncrementalCollector) WriteBarrier(holder, target *Obj) {
+	if c.marking {
+		c.shade(target) // re-gray so D isn't missed
+	}
+}
+
+func (c *IncrementalCollector) shade(o *Obj) {
+	if o.color == White {
+		o.color = Gray
+		c.gray = append(c.gray, o)
+	}
+}
+
+// Driver: interleave program work with GC slices.
+//   for running { runMutatorForAWhile(); collector.MarkSlice(1000) }`,
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "Incremental.java",
+      code: `// Incremental marking: tri-color marking that runs in bounded slices,
+// yielding to the mutator between them. A write barrier keeps it correct.
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
+import java.util.List;
+
+enum Color { WHITE, GRAY, BLACK }
+
+class Obj {
+    Color color = Color.WHITE;
+    List<Obj> refs = new ArrayList<>();
+}
 
 class IncrementalCollector {
-  private gray: Obj[] = [];
-  private marking = false;
+    private final Deque<Obj> gray = new ArrayDeque<>();
+    private boolean marking = false;
 
-  startCycle(roots: Obj[]): void {
-    for (const r of roots) this.shade(r); // short initial pause: gray the roots
-    this.marking = true;
-  }
-
-  /** Do a bounded amount of marking, then return so the program can run. */
-  markSlice(budget: number): void {
-    let work = 0;
-    while (this.marking && this.gray.length && work < budget) {
-      const obj = this.gray.pop()!;
-      for (const child of obj.refs) this.shade(child);
-      obj.color = "black";
-      work++;
+    void startCycle(List<Obj> roots) {
+        for (Obj r : roots) shade(r); // short initial pause: gray the roots
+        marking = true;
     }
-    if (this.gray.length === 0) this.marking = false; // done -> sweep next
-  }
 
-  /** Write barrier in mutator slices: keeps the tri-color invariant. */
-  writeBarrier(_holder: Obj, target: Obj): void {
-    if (this.marking) this.shade(target); // re-gray so D isn't missed
-  }
+    /** Do a bounded amount of marking, then return so the program can run. */
+    void markSlice(int budget) {
+        int work = 0;
+        while (marking && !gray.isEmpty() && work < budget) {
+            Obj obj = gray.pop();
+            for (Obj child : obj.refs) shade(child);
+            obj.color = Color.BLACK;
+            work++;
+        }
+        if (gray.isEmpty()) marking = false; // done -> sweep next
+    }
 
-  private shade(o: Obj): void {
-    if (o.color === "white") { o.color = "gray"; this.gray.push(o); }
-  }
+    /** Write barrier in mutator slices: keeps the tri-color invariant. */
+    void writeBarrier(Obj holder, Obj target) {
+        if (marking) shade(target); // re-gray so D isn't missed
+    }
+
+    private void shade(Obj o) {
+        if (o.color == Color.WHITE) { o.color = Color.GRAY; gray.push(o); }
+    }
 }
 
 // Driver: interleave program work with GC slices.
 //   while (running) { runMutatorForAWhile(); collector.markSlice(1000); }`,
-  },
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "incremental.py",
+      code: `# Incremental marking: tri-color marking that runs in bounded slices,
+# yielding to the mutator between them. A write barrier keeps it correct.
+from enum import Enum
+
+
+class Color(Enum):
+    WHITE = 0
+    GRAY = 1
+    BLACK = 2
+
+
+class Obj:
+    def __init__(self) -> None:
+        self.color = Color.WHITE
+        self.refs: list["Obj"] = []
+
+
+class IncrementalCollector:
+    def __init__(self) -> None:
+        self.gray: list[Obj] = []
+        self.marking = False
+
+    def start_cycle(self, roots: list[Obj]) -> None:
+        for r in roots:
+            self._shade(r)  # short initial pause: gray the roots
+        self.marking = True
+
+    def mark_slice(self, budget: int) -> None:
+        """Do a bounded amount of marking, then return so the program can run."""
+        work = 0
+        while self.marking and self.gray and work < budget:
+            obj = self.gray.pop()
+            for child in obj.refs:
+                self._shade(child)
+            obj.color = Color.BLACK
+            work += 1
+        if not self.gray:
+            self.marking = False  # done -> sweep next
+
+    def write_barrier(self, holder: Obj, target: Obj) -> None:
+        """Write barrier in mutator slices: keeps the tri-color invariant."""
+        if self.marking:
+            self._shade(target)  # re-gray so D isn't missed
+
+    def _shade(self, o: Obj) -> None:
+        if o.color == Color.WHITE:
+            o.color = Color.GRAY
+            self.gray.append(o)
+
+
+# Driver: interleave program work with GC slices.
+#   while running: run_mutator_for_a_while(); collector.mark_slice(1000)`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "incremental.cpp",
+      code: `// Incremental marking: tri-color marking that runs in bounded slices,
+// yielding to the mutator between them. A write barrier keeps it correct.
+#include <vector>
+
+enum class Color { White, Gray, Black };
+
+struct Obj {
+    Color color = Color::White;
+    std::vector<Obj*> refs;
+};
+
+class IncrementalCollector {
+    std::vector<Obj*> gray_;
+    bool marking_ = false;
+
+public:
+    void startCycle(const std::vector<Obj*>& roots) {
+        for (Obj* r : roots) shade(r); // short initial pause: gray the roots
+        marking_ = true;
+    }
+
+    // Do a bounded amount of marking, then return so the program can run.
+    void markSlice(int budget) {
+        int work = 0;
+        while (marking_ && !gray_.empty() && work < budget) {
+            Obj* obj = gray_.back();
+            gray_.pop_back();
+            for (Obj* child : obj->refs) shade(child);
+            obj->color = Color::Black;
+            work++;
+        }
+        if (gray_.empty()) marking_ = false; // done -> sweep next
+    }
+
+    // Write barrier in mutator slices: keeps the tri-color invariant.
+    void writeBarrier(Obj* holder, Obj* target) {
+        if (marking_) shade(target); // re-gray so D isn't missed
+    }
+
+private:
+    void shade(Obj* o) {
+        if (o->color == Color::White) { o->color = Color::Gray; gray_.push_back(o); }
+    }
+};
+
+// Driver: interleave program work with GC slices.
+//   while (running) { runMutatorForAWhile(); collector.markSlice(1000); }`,
+    },
+  ],
 
   furtherReading: [
     {

@@ -92,10 +92,12 @@ export const slidingLog: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "sliding-log.ts",
-    code: `// Sliding log — exact, but stores every timestamp.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "sliding-log.ts",
+      code: `// Sliding log — exact, but stores every timestamp.
 class SlidingLog {
   private log: number[] = [];
 
@@ -123,7 +125,110 @@ class SlidingLog {
 //   if count < limit:
 //     ZADD rl:{user} {now} {uuid}
 //   EXPIRE rl:{user} {window-seconds}`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "SlidingLog.java",
+      code: `// Sliding log — exact, but stores every timestamp.
+import java.util.ArrayDeque;
+import java.util.Deque;
+
+class SlidingLog {
+    private final Deque<Long> log = new ArrayDeque<>();
+    private final int limit;
+    private final long windowSizeMs;
+
+    SlidingLog(int limit, long windowSizeMs) {
+        this.limit = limit;
+        this.windowSizeMs = windowSizeMs;
+    }
+
+    synchronized boolean allow() {
+        long now = System.currentTimeMillis();
+        long cutoff = now - windowSizeMs;
+        // Drop expired timestamps (log is append-ordered).
+        while (!log.isEmpty() && log.peekFirst() <= cutoff) {
+            log.pollFirst();
+        }
+        if (log.size() >= limit) return false;
+        log.addLast(now);
+        return true;
+    }
+}
+
+// Redis (atomic via Lua): ZREMRANGEBYSCORE to prune, ZCARD to count,
+// ZADD the new timestamp if under the limit, then EXPIRE the key.`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "sliding_log.py",
+      code: `import time
+from collections import deque
+
+
+class SlidingLog:
+    """Sliding log — exact, but stores every timestamp."""
+
+    def __init__(self, limit: int, window_size_s: float) -> None:
+        self.limit = limit
+        self.window_size_s = window_size_s
+        self.log: deque[float] = deque()
+
+    def allow(self) -> bool:
+        now = time.monotonic()
+        cutoff = now - self.window_size_s
+        # Drop expired timestamps (log is append-ordered).
+        while self.log and self.log[0] <= cutoff:
+            self.log.popleft()
+        if len(self.log) >= self.limit:
+            return False
+        self.log.append(now)
+        return True
+
+
+# Redis (atomic via Lua): ZREMRANGEBYSCORE to prune, ZCARD to count,
+# ZADD the new timestamp if under the limit, then EXPIRE the key.`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "sliding_log.cpp",
+      code: `// Sliding log — exact, but stores every timestamp.
+#include <chrono>
+#include <deque>
+#include <mutex>
+
+class SlidingLog {
+    using clock = std::chrono::steady_clock;
+    std::deque<clock::time_point> log_;
+    int limit_;
+    std::chrono::milliseconds windowSize_;
+    std::mutex mu_;
+
+public:
+    SlidingLog(int limit, std::chrono::milliseconds windowSize)
+        : limit_(limit), windowSize_(windowSize) {}
+
+    bool allow() {
+        std::lock_guard<std::mutex> lock(mu_);
+        auto now = clock::now();
+        auto cutoff = now - windowSize_;
+        // Drop expired timestamps (log is append-ordered).
+        while (!log_.empty() && log_.front() <= cutoff) {
+            log_.pop_front();
+        }
+        if (static_cast<int>(log_.size()) >= limit_) return false;
+        log_.push_back(now);
+        return true;
+    }
+};
+
+// Redis (atomic via Lua): ZREMRANGEBYSCORE to prune, ZCARD to count,
+// ZADD the new timestamp if under the limit, then EXPIRE the key.`,
+    },
+  ],
 
   furtherReading: [
     {

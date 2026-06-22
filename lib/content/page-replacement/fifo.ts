@@ -90,35 +90,140 @@ export const fifo: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "fifo.ts",
-    code: `// FIFO page replacement: evict the oldest-loaded page.
-class FIFO {
-  private frames: number;
-  private resident = new Set<number>(); // pages currently in memory
-  private queue: number[] = [];         // arrival order, front = oldest
-  faults = 0;
-  hits = 0;
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "fifo.go",
+      code: `// FIFO page replacement: evict the oldest-loaded page.
+package fifo
 
-  constructor(frames: number) { this.frames = frames; }
+type FIFO struct {
+	frames   int
+	resident map[int]bool // pages currently in memory
+	queue    []int        // arrival order, front = oldest
+	Faults   int
+	Hits     int
+}
 
-  access(page: number): "hit" | "fault" {
-    if (this.resident.has(page)) {       // already in memory
-      this.hits++;
-      return "hit";                       // FIFO doesn't reorder on a hit
-    }
-    this.faults++;
-    if (this.resident.size >= this.frames) {
-      const victim = this.queue.shift()!; // evict the front (oldest)
-      this.resident.delete(victim);
-    }
-    this.resident.add(page);
-    this.queue.push(page);                // new page joins the back
-    return "fault";
-  }
+func NewFIFO(frames int) *FIFO {
+	return &FIFO{frames: frames, resident: make(map[int]bool)}
+}
+
+func (f *FIFO) Access(page int) string {
+	if f.resident[page] { // already in memory
+		f.Hits++
+		return "hit" // FIFO doesn't reorder on a hit
+	}
+	f.Faults++
+	if len(f.resident) >= f.frames {
+		victim := f.queue[0] // evict the front (oldest)
+		f.queue = f.queue[1:]
+		delete(f.resident, victim)
+	}
+	f.resident[page] = true
+	f.queue = append(f.queue, page) // new page joins the back
+	return "fault"
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "Fifo.java",
+      code: `// FIFO page replacement: evict the oldest-loaded page.
+import java.util.*;
+
+class Fifo {
+    private final int frames;
+    private final Set<Integer> resident = new HashSet<>(); // pages currently in memory
+    private final Deque<Integer> queue = new ArrayDeque<>(); // arrival order, front = oldest
+    int faults = 0;
+    int hits = 0;
+
+    Fifo(int frames) { this.frames = frames; }
+
+    String access(int page) {
+        if (resident.contains(page)) { // already in memory
+            hits++;
+            return "hit";               // FIFO doesn't reorder on a hit
+        }
+        faults++;
+        if (resident.size() >= frames) {
+            int victim = queue.pollFirst(); // evict the front (oldest)
+            resident.remove(victim);
+        }
+        resident.add(page);
+        queue.addLast(page);            // new page joins the back
+        return "fault";
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "fifo.py",
+      code: `# FIFO page replacement: evict the oldest-loaded page.
+from collections import deque
+
+
+class FIFO:
+    def __init__(self, frames: int) -> None:
+        self.frames = frames
+        self.resident: set[int] = set()  # pages currently in memory
+        self.queue: deque[int] = deque()  # arrival order, front = oldest
+        self.faults = 0
+        self.hits = 0
+
+    def access(self, page: int) -> str:
+        if page in self.resident:        # already in memory
+            self.hits += 1
+            return "hit"                  # FIFO doesn't reorder on a hit
+        self.faults += 1
+        if len(self.resident) >= self.frames:
+            victim = self.queue.popleft()  # evict the front (oldest)
+            self.resident.discard(victim)
+        self.resident.add(page)
+        self.queue.append(page)           # new page joins the back
+        return "fault"`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "fifo.cpp",
+      code: `// FIFO page replacement: evict the oldest-loaded page.
+#include <deque>
+#include <string>
+#include <unordered_set>
+
+class FIFO {
+    int frames_;
+    std::unordered_set<int> resident_; // pages currently in memory
+    std::deque<int> queue_;            // arrival order, front = oldest
+
+public:
+    int faults = 0;
+    int hits = 0;
+
+    explicit FIFO(int frames) : frames_(frames) {}
+
+    std::string access(int page) {
+        if (resident_.count(page)) {   // already in memory
+            hits++;
+            return "hit";              // FIFO doesn't reorder on a hit
+        }
+        faults++;
+        if (static_cast<int>(resident_.size()) >= frames_) {
+            int victim = queue_.front(); // evict the front (oldest)
+            queue_.pop_front();
+            resident_.erase(victim);
+        }
+        resident_.insert(page);
+        queue_.push_back(page);          // new page joins the back
+        return "fault";
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

@@ -95,23 +95,67 @@ export const ipHash: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "ip-hash.ts",
-    code: `// IP hash: deterministic session affinity via hash(client) mod N.
-function hashIP(ip: string): number {
-  let h = 5381;                 // djb2
-  for (let i = 0; i < ip.length; i++) {
-    h = ((h << 5) + h + ip.charCodeAt(i)) | 0;
-  }
-  return Math.abs(h);
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "ip_hash.go",
+      code: `package lb
+
+// IP hash: deterministic session affinity via hash(client) mod N.
+func hashIP(ip string) int {
+	var h int32 = 5381 // djb2
+	for i := 0; i < len(ip); i++ {
+		h = (h << 5) + h + int32(ip[i])
+	}
+	if h < 0 {
+		h = -h
+	}
+	return int(h)
 }
 
+type IpHashBalancer struct {
+	servers []string
+}
+
+func NewIpHashBalancer(servers []string) *IpHashBalancer {
+	return &IpHashBalancer{servers: servers}
+}
+
+func (b *IpHashBalancer) Pick(clientIP string) string {
+	return b.servers[hashIP(clientIP)%len(b.servers)]
+}
+
+// The fragility: 'mod N' remaps almost everyone when N changes.
+// Production systems use consistent hashing (a ring) instead, which
+// remaps only ~1/N of clients when a server is added or removed:
+//
+//   ring.AddServer("s5")   // only keys between s5 and its
+//   s := ring.Locate(ip)   // predecessor move — the rest stay put`,
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "IpHash.java",
+      code: `// IP hash: deterministic session affinity via hash(client) mod N.
 class IpHashBalancer {
-  constructor(private servers: string[]) {}
-  pick(clientIp: string): string {
-    return this.servers[hashIP(clientIp) % this.servers.length];
-  }
+    private final String[] servers;
+
+    IpHashBalancer(String[] servers) {
+        this.servers = servers;
+    }
+
+    private static int hashIP(String ip) {
+        int h = 5381;                 // djb2
+        for (int i = 0; i < ip.length(); i++) {
+            h = ((h << 5) + h + ip.charAt(i));
+        }
+        return Math.abs(h);
+    }
+
+    String pick(String clientIp) {
+        return servers[hashIP(clientIp) % servers.length];
+    }
 }
 
 // The fragility: 'mod N' remaps almost everyone when N changes.
@@ -119,8 +163,73 @@ class IpHashBalancer {
 // remaps only ~1/N of clients when a server is added or removed:
 //
 //   ring.addServer("s5");      // only keys between s5 and its
-//   const s = ring.locate(ip); // predecessor move — the rest stay put`,
-  },
+//   String s = ring.locate(ip); // predecessor move — the rest stay put`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "ip_hash.py",
+      code: `# IP hash: deterministic session affinity via hash(client) mod N.
+def hash_ip(ip: str) -> int:
+    h = 5381  # djb2
+    for ch in ip:
+        h = ((h << 5) + h + ord(ch)) & 0xFFFFFFFF  # keep it 32-bit
+    return h
+
+
+class IpHashBalancer:
+    def __init__(self, servers: list[str]) -> None:
+        self.servers = servers
+
+    def pick(self, client_ip: str) -> str:
+        return self.servers[hash_ip(client_ip) % len(self.servers)]
+
+
+# The fragility: 'mod N' remaps almost everyone when N changes.
+# Production systems use consistent hashing (a ring) instead, which
+# remaps only ~1/N of clients when a server is added or removed:
+#
+#   ring.add_server("s5")   # only keys between s5 and its
+#   s = ring.locate(ip)     # predecessor move — the rest stay put`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "ip_hash.cpp",
+      code: `// IP hash: deterministic session affinity via hash(client) mod N.
+#include <cstdint>
+#include <cstdlib>
+#include <string>
+#include <vector>
+
+static int hashIP(const std::string& ip) {
+    int32_t h = 5381;             // djb2
+    for (char c : ip) {
+        h = ((h << 5) + h + static_cast<unsigned char>(c));
+    }
+    return std::abs(static_cast<int>(h));
+}
+
+class IpHashBalancer {
+    std::vector<std::string> servers_;
+
+public:
+    explicit IpHashBalancer(std::vector<std::string> servers)
+        : servers_(std::move(servers)) {}
+
+    std::string pick(const std::string& clientIp) {
+        return servers_[hashIP(clientIp) % servers_.size()];
+    }
+};
+
+// The fragility: 'mod N' remaps almost everyone when N changes.
+// Production systems use consistent hashing (a ring) instead, which
+// remaps only ~1/N of clients when a server is added or removed:
+//
+//   ring.addServer("s5");      // only keys between s5 and its
+//   auto s = ring.locate(ip);  // predecessor move — the rest stay put`,
+    },
+  ],
 
   furtherReading: [
     {

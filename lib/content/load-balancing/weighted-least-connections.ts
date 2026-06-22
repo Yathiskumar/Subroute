@@ -91,42 +91,186 @@ export const weightedLeastConnections: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "weighted-least-connections.ts",
-    code: `// Weighted least connections: minimize active / weight.
-type Backend = { id: string; weight: number; active: number };
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "weighted_least_connections.go",
+      code: `package lb
 
-class WeightedLeastConnBalancer {
-  private backends: Backend[];
-  constructor(pool: { id: string; weight: number }[]) {
-    this.backends = pool.map((b) => ({ ...b, active: 0 }));
-  }
+// Weighted least connections: minimize active / weight.
+type Backend struct {
+	id     string
+	weight float64
+	active float64
+}
 
-  acquire(): Backend {
-    let best = this.backends[0];
-    let bestRatio = best.active / best.weight;
-    for (const b of this.backends) {
-      const ratio = b.active / b.weight;   // load relative to capacity
-      if (ratio < bestRatio) { best = b; bestRatio = ratio; }
-    }
-    best.active++;                          // reserve eagerly, at decision time
-    return best;
-  }
+type WeightedLeastConnBalancer struct {
+	backends []*Backend
+}
 
-  release(b: Backend): void {
-    b.active--;
-  }
+func NewWeightedLeastConnBalancer(pool []*Backend) *WeightedLeastConnBalancer {
+	return &WeightedLeastConnBalancer{backends: pool}
+}
+
+func (b *WeightedLeastConnBalancer) Acquire() *Backend {
+	best := b.backends[0]
+	bestRatio := best.active / best.weight
+	for _, be := range b.backends {
+		ratio := be.active / be.weight // load relative to capacity
+		if ratio < bestRatio {
+			best, bestRatio = be, ratio
+		}
+	}
+	best.active++ // reserve eagerly, at decision time
+	return best
+}
+
+func (b *WeightedLeastConnBalancer) Release(be *Backend) {
+	be.active--
 }
 
 // With equal weights this reduces exactly to plain least connections.
-const lb = new WeightedLeastConnBalancer([
-  { id: "s1", weight: 3 },
-  { id: "s2", weight: 1 },
-  { id: "s3", weight: 2 },
-  { id: "s4", weight: 1 },
-]);`,
-  },
+// lb := NewWeightedLeastConnBalancer([]*Backend{
+// 	{id: "s1", weight: 3},
+// 	{id: "s2", weight: 1},
+// 	{id: "s3", weight: 2},
+// 	{id: "s4", weight: 1},
+// })`,
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "WeightedLeastConnections.java",
+      code: `import java.util.List;
+
+// Weighted least connections: minimize active / weight.
+class WeightedLeastConnBalancer {
+    static final class Backend {
+        final String id;
+        final double weight;
+        double active = 0;
+
+        Backend(String id, double weight) {
+            this.id = id;
+            this.weight = weight;
+        }
+    }
+
+    private final List<Backend> backends;
+
+    WeightedLeastConnBalancer(List<Backend> pool) {
+        this.backends = pool;
+    }
+
+    synchronized Backend acquire() {
+        Backend best = backends.get(0);
+        double bestRatio = best.active / best.weight;
+        for (Backend b : backends) {
+            double ratio = b.active / b.weight;   // load relative to capacity
+            if (ratio < bestRatio) { best = b; bestRatio = ratio; }
+        }
+        best.active++;                            // reserve eagerly, at decision time
+        return best;
+    }
+
+    synchronized void release(Backend b) {
+        b.active--;
+    }
+}
+
+// With equal weights this reduces exactly to plain least connections.
+WeightedLeastConnBalancer lb = new WeightedLeastConnBalancer(List.of(
+    new WeightedLeastConnBalancer.Backend("s1", 3),
+    new WeightedLeastConnBalancer.Backend("s2", 1),
+    new WeightedLeastConnBalancer.Backend("s3", 2),
+    new WeightedLeastConnBalancer.Backend("s4", 1)));`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "weighted_least_connections.py",
+      code: `from dataclasses import dataclass
+
+
+# Weighted least connections: minimize active / weight.
+@dataclass
+class Backend:
+    id: str
+    weight: float
+    active: float = 0
+
+
+class WeightedLeastConnBalancer:
+    def __init__(self, pool: list[Backend]) -> None:
+        self.backends = pool
+
+    def acquire(self) -> Backend:
+        best = self.backends[0]
+        best_ratio = best.active / best.weight
+        for b in self.backends:
+            ratio = b.active / b.weight   # load relative to capacity
+            if ratio < best_ratio:
+                best, best_ratio = b, ratio
+        best.active += 1                  # reserve eagerly, at decision time
+        return best
+
+    def release(self, b: Backend) -> None:
+        b.active -= 1
+
+
+# With equal weights this reduces exactly to plain least connections.
+lb = WeightedLeastConnBalancer([
+    Backend("s1", 3),
+    Backend("s2", 1),
+    Backend("s3", 2),
+    Backend("s4", 1),
+])`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "weighted_least_connections.cpp",
+      code: `// Weighted least connections: minimize active / weight.
+#include <string>
+#include <vector>
+
+class WeightedLeastConnBalancer {
+public:
+    struct Backend {
+        std::string id;
+        double weight;
+        double active = 0;
+    };
+
+private:
+    std::vector<Backend> backends_;
+
+public:
+    explicit WeightedLeastConnBalancer(std::vector<Backend> pool)
+        : backends_(std::move(pool)) {}
+
+    Backend* acquire() {
+        Backend* best = &backends_[0];
+        double bestRatio = best->active / best->weight;
+        for (auto& b : backends_) {
+            double ratio = b.active / b.weight;   // load relative to capacity
+            if (ratio < bestRatio) { best = &b; bestRatio = ratio; }
+        }
+        best->active++;                           // reserve eagerly, at decision time
+        return best;
+    }
+
+    void release(Backend* b) {
+        b->active--;
+    }
+};
+
+// With equal weights this reduces exactly to plain least connections.
+// WeightedLeastConnBalancer lb({
+//     {"s1", 3}, {"s2", 1}, {"s3", 2}, {"s4", 1}});`,
+    },
+  ],
 
   furtherReading: [
     {

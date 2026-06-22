@@ -130,10 +130,12 @@ export const cuckoo: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "cuckoo-filter.ts",
-    code: `// Cuckoo filter — fingerprints, two candidate buckets, kick chain.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "cuckoo-filter.ts",
+      code: `// Cuckoo filter — fingerprints, two candidate buckets, kick chain.
 type Fingerprint = number;            // typically 8–16 bits
 
 class CuckooFilter {
@@ -199,7 +201,247 @@ class CuckooFilter {
   private fingerprint(x: string): Fingerprint { return hash(x, 'fp') & 0xff; }
   private hash(x: string, seed = ''): number { return murmur3(x + seed); }
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "CuckooFilter.java",
+      code: `// Cuckoo filter — fingerprints, two candidate buckets, kick chain.
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
+
+class CuckooFilter {
+    private final List<List<Integer>> buckets;  // fingerprints: typically 8–16 bits
+    private final int numBuckets;
+    private final int slotsPerBucket;
+    private final int maxKicks;
+
+    CuckooFilter(int numBuckets, int slotsPerBucket, int maxKicks) {
+        this.numBuckets = numBuckets;
+        this.slotsPerBucket = slotsPerBucket;
+        this.maxKicks = maxKicks;
+        this.buckets = new ArrayList<>(numBuckets);
+        for (int i = 0; i < numBuckets; i++) buckets.add(new ArrayList<>());
+    }
+
+    boolean add(String item) {
+        int fp = fingerprint(item);
+        int i1 = Math.floorMod(hash(item, ""), numBuckets);
+        int i2 = Math.floorMod(i1 ^ hash(String.valueOf(fp), ""), numBuckets);
+
+        if (tryPlace(i1, fp)) return true;
+        if (tryPlace(i2, fp)) return true;
+
+        // Both buckets full — start the cuckoo dance.
+        ThreadLocalRandom rng = ThreadLocalRandom.current();
+        int idx = rng.nextBoolean() ? i1 : i2;
+        int cur = fp;
+        for (int n = 0; n < maxKicks; n++) {
+            int slot = rng.nextInt(slotsPerBucket);
+            int evicted = buckets.get(idx).get(slot);
+            buckets.get(idx).set(slot, cur);
+            cur = evicted;
+            idx = Math.floorMod(idx ^ hash(String.valueOf(cur), ""), numBuckets);
+            if (tryPlace(idx, cur)) return true;
+        }
+        return false;    // filter is too full — caller should resize
+    }
+
+    boolean has(String item) {
+        int fp = fingerprint(item);
+        int i1 = Math.floorMod(hash(item, ""), numBuckets);
+        int i2 = Math.floorMod(i1 ^ hash(String.valueOf(fp), ""), numBuckets);
+        return buckets.get(i1).contains(fp) || buckets.get(i2).contains(fp);
+    }
+
+    boolean remove(String item) {
+        int fp = fingerprint(item);
+        int i1 = Math.floorMod(hash(item, ""), numBuckets);
+        int i2 = Math.floorMod(i1 ^ hash(String.valueOf(fp), ""), numBuckets);
+        return removeFp(i1, fp) || removeFp(i2, fp);
+    }
+
+    private boolean tryPlace(int idx, int fp) {
+        if (buckets.get(idx).size() < slotsPerBucket) {
+            buckets.get(idx).add(fp);
+            return true;
+        }
+        return false;
+    }
+
+    private boolean removeFp(int idx, int fp) {
+        int i = buckets.get(idx).indexOf(fp);
+        if (i == -1) return false;
+        buckets.get(idx).remove(i);
+        return true;
+    }
+
+    private int fingerprint(String x) { return hash(x, "fp") & 0xff; }
+    private int hash(String x, String seed) { return murmur3(x + seed); }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "cuckoo_filter.py",
+      code: `import random
+
+# Cuckoo filter — fingerprints, two candidate buckets, kick chain.
+# Fingerprints are small ints, typically 8–16 bits.
+
+
+class CuckooFilter:
+    def __init__(self, num_buckets: int, slots_per_bucket: int = 4,
+                 max_kicks: int = 500) -> None:
+        self.num_buckets = num_buckets
+        self.slots_per_bucket = slots_per_bucket
+        self.max_kicks = max_kicks
+        self.buckets: list[list[int]] = [[] for _ in range(num_buckets)]
+
+    def add(self, item: str) -> bool:
+        fp = self._fingerprint(item)
+        i1 = self._hash(item) % self.num_buckets
+        i2 = (i1 ^ self._hash(str(fp))) % self.num_buckets
+
+        if self._try_place(i1, fp):
+            return True
+        if self._try_place(i2, fp):
+            return True
+
+        # Both buckets full — start the cuckoo dance.
+        idx = i1 if random.random() < 0.5 else i2
+        cur = fp
+        for _ in range(self.max_kicks):
+            slot = random.randrange(self.slots_per_bucket)
+            evicted = self.buckets[idx][slot]
+            self.buckets[idx][slot] = cur
+            cur = evicted
+            idx = (idx ^ self._hash(str(cur))) % self.num_buckets
+            if self._try_place(idx, cur):
+                return True
+        return False  # filter is too full — caller should resize
+
+    def has(self, item: str) -> bool:
+        fp = self._fingerprint(item)
+        i1 = self._hash(item) % self.num_buckets
+        i2 = (i1 ^ self._hash(str(fp))) % self.num_buckets
+        return fp in self.buckets[i1] or fp in self.buckets[i2]
+
+    def remove(self, item: str) -> bool:
+        fp = self._fingerprint(item)
+        i1 = self._hash(item) % self.num_buckets
+        i2 = (i1 ^ self._hash(str(fp))) % self.num_buckets
+        return self._remove_fp(i1, fp) or self._remove_fp(i2, fp)
+
+    def _try_place(self, idx: int, fp: int) -> bool:
+        if len(self.buckets[idx]) < self.slots_per_bucket:
+            self.buckets[idx].append(fp)
+            return True
+        return False
+
+    def _remove_fp(self, idx: int, fp: int) -> bool:
+        if fp not in self.buckets[idx]:
+            return False
+        self.buckets[idx].remove(fp)
+        return True
+
+    def _fingerprint(self, x: str) -> int:
+        return hash_seeded(x, "fp") & 0xff
+
+    def _hash(self, x: str, seed: str = "") -> int:
+        return murmur3(x + seed)`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "cuckoo_filter.cpp",
+      code: `// Cuckoo filter — fingerprints, two candidate buckets, kick chain.
+#include <algorithm>
+#include <cstdint>
+#include <random>
+#include <string>
+#include <vector>
+
+class CuckooFilter {
+    std::vector<std::vector<int>> buckets_;  // fingerprints: typically 8–16 bits
+    int numBuckets_;
+    int slotsPerBucket_;
+    int maxKicks_;
+    std::mt19937 rng_{std::random_device{}()};
+
+public:
+    CuckooFilter(int numBuckets, int slotsPerBucket = 4, int maxKicks = 500)
+        : buckets_(numBuckets), numBuckets_(numBuckets),
+          slotsPerBucket_(slotsPerBucket), maxKicks_(maxKicks) {}
+
+    bool add(const std::string& item) {
+        int fp = fingerprint(item);
+        int i1 = hash(item, "") % numBuckets_;
+        int i2 = (i1 ^ hash(std::to_string(fp), "")) % numBuckets_;
+
+        if (tryPlace(i1, fp)) return true;
+        if (tryPlace(i2, fp)) return true;
+
+        // Both buckets full — start the cuckoo dance.
+        std::uniform_int_distribution<int> coin(0, 1);
+        std::uniform_int_distribution<int> slotPick(0, slotsPerBucket_ - 1);
+        int idx = coin(rng_) ? i1 : i2;
+        int cur = fp;
+        for (int n = 0; n < maxKicks_; n++) {
+            int slot = slotPick(rng_);
+            int evicted = buckets_[idx][slot];
+            buckets_[idx][slot] = cur;
+            cur = evicted;
+            idx = (idx ^ hash(std::to_string(cur), "")) % numBuckets_;
+            if (tryPlace(idx, cur)) return true;
+        }
+        return false;    // filter is too full — caller should resize
+    }
+
+    bool has(const std::string& item) const {
+        int fp = fingerprint(item);
+        int i1 = hash(item, "") % numBuckets_;
+        int i2 = (i1 ^ hash(std::to_string(fp), "")) % numBuckets_;
+        return contains(i1, fp) || contains(i2, fp);
+    }
+
+    bool remove(const std::string& item) {
+        int fp = fingerprint(item);
+        int i1 = hash(item, "") % numBuckets_;
+        int i2 = (i1 ^ hash(std::to_string(fp), "")) % numBuckets_;
+        return removeFp(i1, fp) || removeFp(i2, fp);
+    }
+
+private:
+    bool tryPlace(int idx, int fp) {
+        if ((int) buckets_[idx].size() < slotsPerBucket_) {
+            buckets_[idx].push_back(fp);
+            return true;
+        }
+        return false;
+    }
+
+    bool removeFp(int idx, int fp) {
+        auto& b = buckets_[idx];
+        auto it = std::find(b.begin(), b.end(), fp);
+        if (it == b.end()) return false;
+        b.erase(it);
+        return true;
+    }
+
+    bool contains(int idx, int fp) const {
+        const auto& b = buckets_[idx];
+        return std::find(b.begin(), b.end(), fp) != b.end();
+    }
+
+    int fingerprint(const std::string& x) const { return hash(x, "fp") & 0xff; }
+    int hash(const std::string& x, const std::string& seed) const {
+        return murmur3(x + seed);
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

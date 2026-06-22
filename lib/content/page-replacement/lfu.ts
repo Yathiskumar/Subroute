@@ -90,39 +90,189 @@ export const lfu: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "lfu.ts",
-    code: `// LFU: evict the smallest reference count; ties broken by least-recently-used.
-interface Slot { page: number; freq: number; lastUsed: number; }
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "lfu.go",
+      code: `// LFU: evict the smallest reference count; ties broken by least-recently-used.
+package lfu
+
+type slot struct {
+	page     int
+	freq     int
+	lastUsed int
+}
+
+type LFU struct {
+	frames   int
+	resident []*slot
+	clock    int // logical time for the LRU tie-break
+	Faults   int
+	Hits     int
+}
+
+func NewLFU(frames int) *LFU {
+	return &LFU{frames: frames}
+}
+
+func (l *LFU) Access(page int) string {
+	l.clock++
+	for _, s := range l.resident {
+		if s.page == page {
+			s.freq++
+			s.lastUsed = l.clock
+			l.Hits++
+			return "hit"
+		}
+	}
+	l.Faults++
+	if len(l.resident) >= l.frames {
+		// smallest freq wins; tie -> smallest lastUsed (least recently used)
+		victimIdx := 0
+		victim := l.resident[0]
+		for i, s := range l.resident {
+			if s.freq < victim.freq ||
+				(s.freq == victim.freq && s.lastUsed < victim.lastUsed) {
+				victim = s
+				victimIdx = i
+			}
+		}
+		l.resident = append(l.resident[:victimIdx], l.resident[victimIdx+1:]...)
+	}
+	l.resident = append(l.resident, &slot{page: page, freq: 1, lastUsed: l.clock}) // new page: count 1
+	return "fault"
+}`,
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "Lfu.java",
+      code: `// LFU: evict the smallest reference count; ties broken by least-recently-used.
+import java.util.*;
+
+class Lfu {
+    private static final class Slot {
+        int page;
+        int freq;
+        int lastUsed;
+        Slot(int page, int freq, int lastUsed) { this.page = page; this.freq = freq; this.lastUsed = lastUsed; }
+    }
+
+    private final int frames;
+    private final List<Slot> resident = new ArrayList<>();
+    private int clock = 0;      // logical time for the LRU tie-break
+    int faults = 0;
+    int hits = 0;
+
+    Lfu(int frames) { this.frames = frames; }
+
+    String access(int page) {
+        clock++;
+        for (Slot s : resident) {
+            if (s.page == page) { s.freq++; s.lastUsed = clock; hits++; return "hit"; }
+        }
+        faults++;
+        if (resident.size() >= frames) {
+            // smallest freq wins; tie -> smallest lastUsed (least recently used)
+            Slot victim = resident.get(0);
+            for (Slot s : resident) {
+                if (s.freq < victim.freq ||
+                    (s.freq == victim.freq && s.lastUsed < victim.lastUsed)) victim = s;
+            }
+            resident.remove(victim);
+        }
+        resident.add(new Slot(page, 1, clock)); // new page: count 1
+        return "fault";
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "lfu.py",
+      code: `# LFU: evict the smallest reference count; ties broken by least-recently-used.
+from dataclasses import dataclass
+
+
+@dataclass
+class Slot:
+    page: int
+    freq: int
+    last_used: int
+
+
+class LFU:
+    def __init__(self, frames: int) -> None:
+        self.frames = frames
+        self.resident: list[Slot] = []
+        self.clock = 0  # logical time for the LRU tie-break
+        self.faults = 0
+        self.hits = 0
+
+    def access(self, page: int) -> str:
+        self.clock += 1
+        for s in self.resident:
+            if s.page == page:
+                s.freq += 1
+                s.last_used = self.clock
+                self.hits += 1
+                return "hit"
+        self.faults += 1
+        if len(self.resident) >= self.frames:
+            # smallest freq wins; tie -> smallest last_used (least recently used)
+            victim = min(self.resident, key=lambda s: (s.freq, s.last_used))
+            self.resident.remove(victim)
+        self.resident.append(Slot(page, 1, self.clock))  # new page: count 1
+        return "fault"`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "lfu.cpp",
+      code: `// LFU: evict the smallest reference count; ties broken by least-recently-used.
+#include <string>
+#include <vector>
 
 class LFU {
-  private frames: number;
-  private resident: Slot[] = [];
-  private clock = 0;          // logical time for the LRU tie-break
-  faults = 0; hits = 0;
+    struct Slot {
+        int page;
+        int freq;
+        int lastUsed;
+    };
 
-  constructor(frames: number) { this.frames = frames; }
+    int frames_;
+    std::vector<Slot> resident_;
+    int clock_ = 0;            // logical time for the LRU tie-break
 
-  access(page: number): "hit" | "fault" {
-    this.clock++;
-    const slot = this.resident.find((s) => s.page === page);
-    if (slot) { slot.freq++; slot.lastUsed = this.clock; this.hits++; return "hit"; }
-    this.faults++;
-    if (this.resident.length >= this.frames) {
-      // smallest freq wins; tie -> smallest lastUsed (least recently used)
-      let victim = this.resident[0];
-      for (const s of this.resident) {
-        if (s.freq < victim.freq ||
-           (s.freq === victim.freq && s.lastUsed < victim.lastUsed)) victim = s;
-      }
-      this.resident = this.resident.filter((s) => s !== victim);
+public:
+    int faults = 0;
+    int hits = 0;
+
+    explicit LFU(int frames) : frames_(frames) {}
+
+    std::string access(int page) {
+        clock_++;
+        for (auto& s : resident_) {
+            if (s.page == page) { s.freq++; s.lastUsed = clock_; hits++; return "hit"; }
+        }
+        faults++;
+        if (static_cast<int>(resident_.size()) >= frames_) {
+            // smallest freq wins; tie -> smallest lastUsed (least recently used)
+            std::size_t victim = 0;
+            for (std::size_t i = 0; i < resident_.size(); i++) {
+                if (resident_[i].freq < resident_[victim].freq ||
+                    (resident_[i].freq == resident_[victim].freq &&
+                     resident_[i].lastUsed < resident_[victim].lastUsed)) victim = i;
+            }
+            resident_.erase(resident_.begin() + victim);
+        }
+        resident_.push_back({page, 1, clock_}); // new page: count 1
+        return "fault";
     }
-    this.resident.push({ page, freq: 1, lastUsed: this.clock }); // new page: count 1
-    return "fault";
-  }
-}`,
-  },
+};`,
+    },
+  ],
 
   furtherReading: [
     {

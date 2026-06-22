@@ -97,10 +97,12 @@ export const twoQ: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "two-q.ts",
-    code: `// 2Q simplified: A1in (FIFO), Am (LRU), A1out (ghost set).
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "two-q.ts",
+      code: `// 2Q simplified: A1in (FIFO), Am (LRU), A1out (ghost set).
 class TwoQ<K, V> {
   private a1in = new Map<K, V>();   // FIFO probation
   private am = new Map<K, V>();      // LRU main
@@ -152,7 +154,194 @@ class TwoQ<K, V> {
     }
   }
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "TwoQCache.java",
+      code: `import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+
+// 2Q simplified: A1in (FIFO), Am (LRU), A1out (ghost set).
+class TwoQCache<K, V> {
+    private final LinkedHashMap<K, V> a1in = new LinkedHashMap<>();  // FIFO probation
+    private final LinkedHashMap<K, V> am = new LinkedHashMap<>();    // LRU main
+    private final LinkedHashSet<K> a1out = new LinkedHashSet<>();    // ghost
+    private final int kIn;    // capacity of A1in
+    private final int kOut;   // capacity of A1out (ghost)
+    private final int kMain;  // capacity of Am
+
+    TwoQCache(int kIn, int kOut, int kMain) {
+        this.kIn = kIn;
+        this.kOut = kOut;
+        this.kMain = kMain;
+    }
+
+    V get(K key) {
+        if (am.containsKey(key)) {
+            V v = am.remove(key);
+            am.put(key, v); // touch (LRU)
+            return v;
+        }
+        if (a1in.containsKey(key)) {
+            return a1in.get(key); // do NOT promote on first re-hit
+        }
+        return null;
+    }
+
+    void set(K key, V value) {
+        if (am.containsKey(key) || a1in.containsKey(key)) return; // already cached
+        if (a1out.contains(key)) {
+            // Ghost hit: promote straight to Am
+            a1out.remove(key);
+            evictMainIfNeeded();
+            am.put(key, value);
+            return;
+        }
+        // Brand-new key -> A1in
+        if (a1in.size() >= kIn) {
+            K oldest = a1in.keySet().iterator().next();
+            a1in.remove(oldest);
+            a1out.add(oldest);
+            if (a1out.size() > kOut) {
+                K ghostOldest = a1out.iterator().next();
+                a1out.remove(ghostOldest);
+            }
+        }
+        a1in.put(key, value);
+    }
+
+    private void evictMainIfNeeded() {
+        if (am.size() >= kMain) {
+            K oldest = am.keySet().iterator().next();
+            am.remove(oldest);
+        }
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "two_q_cache.py",
+      code: `from collections import OrderedDict
+from typing import Optional
+
+
+class TwoQ:
+    """2Q simplified: A1in (FIFO), Am (LRU), A1out (ghost set)."""
+
+    def __init__(self, k_in: int, k_out: int, k_main: int) -> None:
+        self.a1in: OrderedDict = OrderedDict()   # FIFO probation
+        self.am: OrderedDict = OrderedDict()     # LRU main
+        self.a1out: OrderedDict = OrderedDict()  # ghost (used as ordered set)
+        self.k_in = k_in      # capacity of A1in
+        self.k_out = k_out    # capacity of A1out (ghost)
+        self.k_main = k_main  # capacity of Am
+
+    def get(self, key) -> Optional[object]:
+        if key in self.am:
+            self.am.move_to_end(key)  # touch (LRU)
+            return self.am[key]
+        if key in self.a1in:
+            return self.a1in[key]  # do NOT promote on first re-hit
+        return None
+
+    def set(self, key, value) -> None:
+        if key in self.am or key in self.a1in:
+            return  # already cached
+        if key in self.a1out:
+            # Ghost hit: promote straight to Am
+            del self.a1out[key]
+            self._evict_main_if_needed()
+            self.am[key] = value
+            return
+        # Brand-new key -> A1in
+        if len(self.a1in) >= self.k_in:
+            oldest, _ = self.a1in.popitem(last=False)
+            self.a1out[oldest] = True
+            if len(self.a1out) > self.k_out:
+                self.a1out.popitem(last=False)
+        self.a1in[key] = value
+
+    def _evict_main_if_needed(self) -> None:
+        if len(self.am) >= self.k_main:
+            self.am.popitem(last=False)`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "two_q_cache.cpp",
+      code: `// 2Q simplified: A1in (FIFO), Am (LRU), A1out (ghost set).
+// Each list keeps insertion/access order via a std::list + index map.
+#include <list>
+#include <unordered_map>
+#include <optional>
+
+template <class K, class V>
+class TwoQ {
+    using VList = std::list<std::pair<K, V>>;
+    VList a1in_;                                                  // FIFO probation
+    VList am_;                                                    // LRU main
+    std::list<K> a1out_;                                          // ghost
+    std::unordered_map<K, typename VList::iterator> inIdx_, amIdx_;
+    std::unordered_map<K, typename std::list<K>::iterator> outIdx_;
+    size_t kIn_, kOut_, kMain_;
+
+public:
+    TwoQ(size_t kIn, size_t kOut, size_t kMain)
+        : kIn_(kIn), kOut_(kOut), kMain_(kMain) {}
+
+    std::optional<V> get(const K& key) {
+        auto a = amIdx_.find(key);
+        if (a != amIdx_.end()) {
+            am_.splice(am_.end(), am_, a->second); // touch (LRU, back = MRU)
+            return a->second->second;
+        }
+        auto i = inIdx_.find(key);
+        if (i != inIdx_.end()) {
+            return i->second->second; // do NOT promote on first re-hit
+        }
+        return std::nullopt;
+    }
+
+    void set(const K& key, const V& value) {
+        if (amIdx_.count(key) || inIdx_.count(key)) return; // already cached
+        auto g = outIdx_.find(key);
+        if (g != outIdx_.end()) {
+            // Ghost hit: promote straight to Am
+            a1out_.erase(g->second);
+            outIdx_.erase(g);
+            evictMainIfNeeded();
+            am_.emplace_back(key, value);
+            amIdx_[key] = std::prev(am_.end());
+            return;
+        }
+        // Brand-new key -> A1in
+        if (inIdx_.size() >= kIn_) {
+            K oldest = a1in_.front().first;
+            a1in_.pop_front();
+            inIdx_.erase(oldest);
+            a1out_.push_back(oldest);
+            outIdx_[oldest] = std::prev(a1out_.end());
+            if (outIdx_.size() > kOut_) {
+                outIdx_.erase(a1out_.front());
+                a1out_.pop_front();
+            }
+        }
+        a1in_.emplace_back(key, value);
+        inIdx_[key] = std::prev(a1in_.end());
+    }
+
+private:
+    void evictMainIfNeeded() {
+        if (amIdx_.size() >= kMain_) {
+            amIdx_.erase(am_.front().first); // front = LRU
+            am_.pop_front();
+        }
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

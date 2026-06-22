@@ -92,38 +92,155 @@ export const leastConnections: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "least-connections.ts",
-    code: `// Least connections: route to the shortest queue, count eagerly.
-class LeastConnBalancer {
-  private active: number[];
-  constructor(private servers: string[]) {
-    this.active = servers.map(() => 0);
-  }
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "least_connections.go",
+      code: `package lb
 
-  // Pick the least-busy server and reserve a slot immediately.
-  acquire(): number {
-    let best = 0;
-    for (let i = 1; i < this.active.length; i++) {
-      if (this.active[i] < this.active[best]) best = i;
-    }
-    this.active[best]++;          // increment NOW, at decision time —
-    return best;                  // not when the request reaches the backend
-  }
+// Least connections: route to the shortest queue, count eagerly.
+type LeastConnBalancer struct {
+	servers []string
+	active  []int
+}
 
-  // Call when the response completes.
-  release(serverIndex: number): void {
-    this.active[serverIndex]--;
-  }
+func NewLeastConnBalancer(servers []string) *LeastConnBalancer {
+	return &LeastConnBalancer{
+		servers: servers,
+		active:  make([]int, len(servers)),
+	}
+}
+
+// Acquire picks the least-busy server and reserves a slot immediately.
+func (b *LeastConnBalancer) Acquire() int {
+	best := 0
+	for i := 1; i < len(b.active); i++ {
+		if b.active[i] < b.active[best] {
+			best = i
+		}
+	}
+	b.active[best]++ // increment NOW, at decision time —
+	return best      // not when the request reaches the backend
+}
+
+// Release is called when the response completes.
+func (b *LeastConnBalancer) Release(serverIndex int) {
+	b.active[serverIndex]--
 }
 
 // Usage
-const lb = new LeastConnBalancer(["s1", "s2", "s3", "s4"]);
-const i = lb.acquire();           // forward request to servers[i]
+// lb := NewLeastConnBalancer([]string{"s1", "s2", "s3", "s4"})
+// i := lb.Acquire() // forward request to servers[i]
+// // ... await response ...
+// lb.Release(i)`,
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "LeastConnections.java",
+      code: `// Least connections: route to the shortest queue, count eagerly.
+class LeastConnBalancer {
+    private final String[] servers;
+    private final int[] active;
+
+    LeastConnBalancer(String[] servers) {
+        this.servers = servers;
+        this.active = new int[servers.length];
+    }
+
+    // Pick the least-busy server and reserve a slot immediately.
+    synchronized int acquire() {
+        int best = 0;
+        for (int i = 1; i < active.length; i++) {
+            if (active[i] < active[best]) best = i;
+        }
+        active[best]++;          // increment NOW, at decision time —
+        return best;             // not when the request reaches the backend
+    }
+
+    // Call when the response completes.
+    synchronized void release(int serverIndex) {
+        active[serverIndex]--;
+    }
+}
+
+// Usage
+LeastConnBalancer lb =
+    new LeastConnBalancer(new String[] {"s1", "s2", "s3", "s4"});
+int i = lb.acquire();            // forward request to servers[i]
 // ... await response ...
 lb.release(i);`,
-  },
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "least_connections.py",
+      code: `# Least connections: route to the shortest queue, count eagerly.
+class LeastConnBalancer:
+    def __init__(self, servers: list[str]) -> None:
+        self.servers = servers
+        self.active = [0] * len(servers)
+
+    def acquire(self) -> int:
+        """Pick the least-busy server and reserve a slot immediately."""
+        best = 0
+        for i in range(1, len(self.active)):
+            if self.active[i] < self.active[best]:
+                best = i
+        self.active[best] += 1   # increment NOW, at decision time —
+        return best              # not when the request reaches the backend
+
+    def release(self, server_index: int) -> None:
+        """Call when the response completes."""
+        self.active[server_index] -= 1
+
+
+# Usage
+lb = LeastConnBalancer(["s1", "s2", "s3", "s4"])
+i = lb.acquire()                 # forward request to servers[i]
+# ... await response ...
+lb.release(i)`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "least_connections.cpp",
+      code: `// Least connections: route to the shortest queue, count eagerly.
+#include <string>
+#include <vector>
+
+class LeastConnBalancer {
+    std::vector<std::string> servers_;
+    std::vector<int> active_;
+
+public:
+    explicit LeastConnBalancer(std::vector<std::string> servers)
+        : servers_(std::move(servers)), active_(servers_.size(), 0) {}
+
+    // Pick the least-busy server and reserve a slot immediately.
+    int acquire() {
+        int best = 0;
+        for (size_t i = 1; i < active_.size(); i++) {
+            if (active_[i] < active_[best]) best = static_cast<int>(i);
+        }
+        active_[best]++;         // increment NOW, at decision time —
+        return best;             // not when the request reaches the backend
+    }
+
+    // Call when the response completes.
+    void release(int serverIndex) {
+        active_[serverIndex]--;
+    }
+};
+
+// Usage
+// LeastConnBalancer lb({"s1", "s2", "s3", "s4"});
+// int i = lb.acquire(); // forward request to servers[i]
+// // ... await response ...
+// lb.release(i);`,
+    },
+  ],
 
   furtherReading: [
     {

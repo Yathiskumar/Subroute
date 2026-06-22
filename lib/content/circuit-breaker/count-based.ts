@@ -99,62 +99,340 @@ export const countBased: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "count-based.ts",
-    code: `// Count-based circuit breaker: trip when the failure rate over the last N calls
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "count_based.go",
+      code: `// Count-based circuit breaker: trip when the failure rate over the last N calls
 // crosses the threshold. The simplest sliding window there is.
-class CountBasedBreaker {
-  private state: "CLOSED" | "OPEN" | "HALF" = "CLOSED";
-  private window: boolean[] = [];        // true = ok, false = fail
-  private trials: boolean[] = [];
-  private openUntil = 0;
+package breaker
 
-  constructor(
-    private size = 10,
-    private threshold = 0.5,             // 50%
-    private cooldownMs = 5000,
-    private trialCount = 3,
-    private minCalls = 5,                // don't trip on tiny samples
-  ) {}
+import (
+	"errors"
+	"time"
+)
 
-  async call<T>(work: () => Promise<T>): Promise<T> {
-    if (this.state === "OPEN") {
-      if (Date.now() >= this.openUntil) { this.state = "HALF"; this.trials = []; }
-      else throw new Error("circuit open");
-    }
-    try {
-      const result = await work();
-      this.record(true);
-      return result;
-    } catch (err) {
-      this.record(false);
-      throw err;
-    }
-  }
+var ErrOpen = errors.New("circuit open")
 
-  private record(ok: boolean) {
-    if (this.state === "HALF") {
-      this.trials.push(ok);
-      if (this.trials.length >= this.trialCount) {
-        const fails = this.trials.filter(x => !x).length;
-        if (fails / this.trials.length >= this.threshold) this.trip();
-        else this.close();
-      }
-      return;
-    }
-    this.window.push(ok);
-    if (this.window.length > this.size) this.window.shift();
-    if (this.window.length >= this.minCalls) {
-      const fails = this.window.filter(x => !x).length;
-      if (fails / this.window.length >= this.threshold) this.trip();
-    }
-  }
+type CountBasedBreaker struct {
+	state     string  // "CLOSED" | "OPEN" | "HALF"
+	window    []bool  // true = ok, false = fail
+	trials    []bool
+	openUntil time.Time
 
-  private trip()  { this.state = "OPEN"; this.openUntil = Date.now() + this.cooldownMs; this.trials = []; }
-  private close() { this.state = "CLOSED"; this.window = []; this.trials = []; }
+	size       int
+	threshold  float64 // 50%
+	cooldown   time.Duration
+	trialCount int
+	minCalls   int // don't trip on tiny samples
+}
+
+func NewCountBasedBreaker() *CountBasedBreaker {
+	return &CountBasedBreaker{
+		state:      "CLOSED",
+		size:       10,
+		threshold:  0.5,
+		cooldown:   5000 * time.Millisecond,
+		trialCount: 3,
+		minCalls:   5,
+	}
+}
+
+func (cb *CountBasedBreaker) Call(work func() error) error {
+	if cb.state == "OPEN" {
+		if !time.Now().Before(cb.openUntil) {
+			cb.state = "HALF"
+			cb.trials = nil
+		} else {
+			return ErrOpen
+		}
+	}
+	if err := work(); err != nil {
+		cb.record(false)
+		return err
+	}
+	cb.record(true)
+	return nil
+}
+
+func (cb *CountBasedBreaker) record(ok bool) {
+	if cb.state == "HALF" {
+		cb.trials = append(cb.trials, ok)
+		if len(cb.trials) >= cb.trialCount {
+			if failRate(cb.trials) >= cb.threshold {
+				cb.trip()
+			} else {
+				cb.close()
+			}
+		}
+		return
+	}
+	cb.window = append(cb.window, ok)
+	if len(cb.window) > cb.size {
+		cb.window = cb.window[1:]
+	}
+	if len(cb.window) >= cb.minCalls && failRate(cb.window) >= cb.threshold {
+		cb.trip()
+	}
+}
+
+func failRate(window []bool) float64 {
+	fails := 0
+	for _, ok := range window {
+		if !ok {
+			fails++
+		}
+	}
+	return float64(fails) / float64(len(window))
+}
+
+func (cb *CountBasedBreaker) trip() {
+	cb.state = "OPEN"
+	cb.openUntil = time.Now().Add(cb.cooldown)
+	cb.trials = nil
+}
+
+func (cb *CountBasedBreaker) close() {
+	cb.state = "CLOSED"
+	cb.window = nil
+	cb.trials = nil
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "CountBasedBreaker.java",
+      code: `// Count-based circuit breaker: trip when the failure rate over the last N calls
+// crosses the threshold. The simplest sliding window there is.
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.concurrent.Callable;
+
+class CountBasedBreaker {
+    private String state = "CLOSED";              // "CLOSED" | "OPEN" | "HALF"
+    private final Deque<Boolean> window = new ArrayDeque<>(); // true = ok, false = fail
+    private final Deque<Boolean> trials = new ArrayDeque<>();
+    private long openUntil = 0;
+
+    private final int size;
+    private final double threshold;               // 50%
+    private final long cooldownMs;
+    private final int trialCount;
+    private final int minCalls;                   // don't trip on tiny samples
+
+    CountBasedBreaker(int size, double threshold, long cooldownMs, int trialCount, int minCalls) {
+        this.size = size;
+        this.threshold = threshold;
+        this.cooldownMs = cooldownMs;
+        this.trialCount = trialCount;
+        this.minCalls = minCalls;
+    }
+
+    <T> T call(Callable<T> work) throws Exception {
+        if (state.equals("OPEN")) {
+            if (System.currentTimeMillis() >= openUntil) { state = "HALF"; trials.clear(); }
+            else throw new IllegalStateException("circuit open");
+        }
+        try {
+            T result = work.call();
+            record(true);
+            return result;
+        } catch (Exception err) {
+            record(false);
+            throw err;
+        }
+    }
+
+    private void record(boolean ok) {
+        if (state.equals("HALF")) {
+            trials.addLast(ok);
+            if (trials.size() >= trialCount) {
+                if (failRate(trials) >= threshold) trip();
+                else close();
+            }
+            return;
+        }
+        window.addLast(ok);
+        if (window.size() > size) window.removeFirst();
+        if (window.size() >= minCalls && failRate(window) >= threshold) trip();
+    }
+
+    private double failRate(Deque<Boolean> w) {
+        long fails = w.stream().filter(x -> !x).count();
+        return (double) fails / w.size();
+    }
+
+    private void trip() {
+        state = "OPEN";
+        openUntil = System.currentTimeMillis() + cooldownMs;
+        trials.clear();
+    }
+
+    private void close() {
+        state = "CLOSED";
+        window.clear();
+        trials.clear();
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "count_based.py",
+      code: `# Count-based circuit breaker: trip when the failure rate over the last N calls
+# crosses the threshold. The simplest sliding window there is.
+import time
+from collections import deque
+from typing import Callable, Deque, TypeVar
+
+T = TypeVar("T")
+
+
+class CountBasedBreaker:
+    def __init__(
+        self,
+        size: int = 10,
+        threshold: float = 0.5,     # 50%
+        cooldown_s: float = 5.0,
+        trial_count: int = 3,
+        min_calls: int = 5,         # don't trip on tiny samples
+    ) -> None:
+        self.state = "CLOSED"       # "CLOSED" | "OPEN" | "HALF"
+        self.window: Deque[bool] = deque()  # True = ok, False = fail
+        self.trials: list[bool] = []
+        self.open_until = 0.0
+        self.size = size
+        self.threshold = threshold
+        self.cooldown_s = cooldown_s
+        self.trial_count = trial_count
+        self.min_calls = min_calls
+
+    def call(self, work: Callable[[], T]) -> T:
+        if self.state == "OPEN":
+            if time.monotonic() >= self.open_until:
+                self.state = "HALF"
+                self.trials = []
+            else:
+                raise RuntimeError("circuit open")
+        try:
+            result = work()
+        except Exception:
+            self._record(False)
+            raise
+        self._record(True)
+        return result
+
+    def _record(self, ok: bool) -> None:
+        if self.state == "HALF":
+            self.trials.append(ok)
+            if len(self.trials) >= self.trial_count:
+                if self._fail_rate(self.trials) >= self.threshold:
+                    self._trip()
+                else:
+                    self._close()
+            return
+        self.window.append(ok)
+        if len(self.window) > self.size:
+            self.window.popleft()
+        if len(self.window) >= self.min_calls and self._fail_rate(self.window) >= self.threshold:
+            self._trip()
+
+    @staticmethod
+    def _fail_rate(window) -> float:
+        fails = sum(1 for ok in window if not ok)
+        return fails / len(window)
+
+    def _trip(self) -> None:
+        self.state = "OPEN"
+        self.open_until = time.monotonic() + self.cooldown_s
+        self.trials = []
+
+    def _close(self) -> None:
+        self.state = "CLOSED"
+        self.window.clear()
+        self.trials = []`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "count_based.cpp",
+      code: `// Count-based circuit breaker: trip when the failure rate over the last N calls
+// crosses the threshold. The simplest sliding window there is.
+#include <chrono>
+#include <deque>
+#include <functional>
+#include <stdexcept>
+
+class CountBasedBreaker {
+    std::string state_ = "CLOSED";  // "CLOSED" | "OPEN" | "HALF"
+    std::deque<bool> window_;       // true = ok, false = fail
+    std::deque<bool> trials_;
+    std::chrono::steady_clock::time_point openUntil_;
+
+    int size_;
+    double threshold_;              // 50%
+    std::chrono::milliseconds cooldown_;
+    int trialCount_;
+    int minCalls_;                  // don't trip on tiny samples
+
+public:
+    CountBasedBreaker(int size = 10, double threshold = 0.5, int cooldownMs = 5000,
+                      int trialCount = 3, int minCalls = 5)
+        : size_(size), threshold_(threshold), cooldown_(cooldownMs),
+          trialCount_(trialCount), minCalls_(minCalls) {}
+
+    // work() returns true on success, throws or returns false on failure.
+    void call(const std::function<bool()>& work) {
+        if (state_ == "OPEN") {
+            if (std::chrono::steady_clock::now() >= openUntil_) { state_ = "HALF"; trials_.clear(); }
+            else throw std::runtime_error("circuit open");
+        }
+        bool ok = false;
+        try {
+            ok = work();
+        } catch (...) {
+            record(false);
+            throw;
+        }
+        record(ok);
+    }
+
+private:
+    void record(bool ok) {
+        if (state_ == "HALF") {
+            trials_.push_back(ok);
+            if (static_cast<int>(trials_.size()) >= trialCount_) {
+                if (failRate(trials_) >= threshold_) trip();
+                else close();
+            }
+            return;
+        }
+        window_.push_back(ok);
+        if (static_cast<int>(window_.size()) > size_) window_.pop_front();
+        if (static_cast<int>(window_.size()) >= minCalls_ && failRate(window_) >= threshold_) trip();
+    }
+
+    static double failRate(const std::deque<bool>& w) {
+        int fails = 0;
+        for (bool ok : w) if (!ok) fails++;
+        return static_cast<double>(fails) / w.size();
+    }
+
+    void trip() {
+        state_ = "OPEN";
+        openUntil_ = std::chrono::steady_clock::now() + cooldown_;
+        trials_.clear();
+    }
+
+    void close() {
+        state_ = "CLOSED";
+        window_.clear();
+        trials_.clear();
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

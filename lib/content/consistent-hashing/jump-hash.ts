@@ -96,30 +96,119 @@ export const jumpHash: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "jump-hash.ts",
-    code: `// Jump Consistent Hash (Lamping & Veach, 2014).
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "jump_hash.go",
+      code: `// Jump Consistent Hash (Lamping & Veach, 2014).
 // Returns a bucket in [0, numBuckets) using zero stored state.
-function jumpConsistentHash(key: bigint, numBuckets: number): number {
-  let b = -1n;
-  let j = 0n;
-  const MASK = (1n << 64n) - 1n;
-  while (j < BigInt(numBuckets)) {
-    b = j;
-    // a 64-bit LCG step: the pseudo-random stream for this key
-    key = (key * 2862933555777941757n + 1n) & MASK;
-    // next candidate jumps forward; bigger jumps are rarer
-    const r = Number((key >> 33n) + 1n);
-    j = BigInt(Math.floor((Number(b) + 1) * (1 << 31) / r));
-  }
-  return Number(b); // last bucket we landed on before overshooting
+package main
+
+func jumpConsistentHash(key uint64, numBuckets int) int {
+	var b int64 = -1
+	var j int64 = 0
+	for j < int64(numBuckets) {
+		b = j
+		// a 64-bit LCG step: the pseudo-random stream for this key
+		key = key*2862933555777941757 + 1
+		// next candidate jumps forward; bigger jumps are rarer
+		r := float64((key >> 33) + 1)
+		j = int64(float64(b+1) * (float64(int64(1)<<31) / r))
+	}
+	return int(b) // last bucket we landed on before overshooting
 }
 
+func main() {
+	// Each key needs a 64-bit seed (hash the key once).
+	jumpConsistentHash(0x123456789abcdef0, 6) // -> a bucket 0..5
+	// Grow to 7 buckets: only ~1/7 of keys move, into the new bucket 6.
+}`,
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "JumpHash.java",
+      code: `// Jump Consistent Hash (Lamping & Veach, 2014).
+// Returns a bucket in [0, numBuckets) using zero stored state.
+class JumpHash {
+    static int jumpConsistentHash(long key, int numBuckets) {
+        long b = -1;
+        long j = 0;
+        while (j < numBuckets) {
+            b = j;
+            // a 64-bit LCG step: the pseudo-random stream for this key
+            key = key * 2862933555777941757L + 1L;
+            // next candidate jumps forward; bigger jumps are rarer
+            // >>> is the unsigned shift, so the LCG stays in [0, 2^64).
+            double r = (double) ((key >>> 33) + 1);
+            j = (long) ((b + 1) * ((double) (1L << 31) / r));
+        }
+        return (int) b; // last bucket we landed on before overshooting
+    }
+
+    public static void main(String[] args) {
+        // Each key needs a 64-bit seed (hash the key once).
+        jumpConsistentHash(0x123456789abcdef0L, 6); // -> a bucket 0..5
+        // Grow to 7 buckets: only ~1/7 of keys move, into the new bucket 6.
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "jump_hash.py",
+      code: `# Jump Consistent Hash (Lamping & Veach, 2014).
+# Returns a bucket in [0, num_buckets) using zero stored state.
+import math
+
+MASK64 = (1 << 64) - 1
+
+
+def jump_consistent_hash(key: int, num_buckets: int) -> int:
+    b, j = -1, 0
+    while j < num_buckets:
+        b = j
+        # a 64-bit LCG step: the pseudo-random stream for this key
+        key = (key * 2862933555777941757 + 1) & MASK64
+        # next candidate jumps forward; bigger jumps are rarer
+        r = (key >> 33) + 1
+        j = math.floor((b + 1) * ((1 << 31) / r))
+    return b  # last bucket we landed on before overshooting
+
+
+# Each key needs a 64-bit seed (hash the key once).
+jump_consistent_hash(0x123456789ABCDEF0, 6)  # -> a bucket 0..5
+# Grow to 7 buckets: only ~1/7 of keys move, into the new bucket 6.`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "jump_hash.cpp",
+      code: `// Jump Consistent Hash (Lamping & Veach, 2014).
+// Returns a bucket in [0, numBuckets) using zero stored state.
+#include <cstdint>
+
+int jumpConsistentHash(uint64_t key, int numBuckets) {
+    int64_t b = -1;
+    int64_t j = 0;
+    while (j < numBuckets) {
+        b = j;
+        // a 64-bit LCG step: the pseudo-random stream for this key
+        key = key * 2862933555777941757ULL + 1;
+        // next candidate jumps forward; bigger jumps are rarer
+        double r = static_cast<double>((key >> 33) + 1);
+        j = static_cast<int64_t>((b + 1) * (static_cast<double>(1LL << 31) / r));
+    }
+    return static_cast<int>(b); // last bucket we landed on before overshooting
+}
+
+// Usage:
 // Each key needs a 64-bit seed (hash the key once).
-jumpConsistentHash(0x1234_5678_9abc_def0n, 6); // -> a bucket 0..5
+// jumpConsistentHash(0x123456789abcdef0ULL, 6); // -> a bucket 0..5
 // Grow to 7 buckets: only ~1/7 of keys move, into the new bucket 6.`,
-  },
+    },
+  ],
 
   furtherReading: [
     {

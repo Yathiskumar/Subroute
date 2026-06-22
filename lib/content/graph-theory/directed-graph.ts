@@ -106,10 +106,12 @@ export const directedGraph: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "directed-graph.ts",
-    code: `// A directed graph (digraph) as an adjacency list.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "directed-graph.ts",
+      code: `// A directed graph (digraph) as an adjacency list.
 // The key difference from undirected: each edge is stored ONCE,
 // only on its source — direction is the whole point.
 class DirectedGraph {
@@ -158,7 +160,190 @@ class DirectedGraph {
     return seen;
   }
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "DirectedGraph.java",
+      code: `// A directed graph (digraph) as an adjacency list.
+// The key difference from undirected: each edge is stored ONCE,
+// only on its source — direction is the whole point.
+import java.util.*;
+
+class DirectedGraph {
+    private final Map<String, Set<String>> adj = new HashMap<>();
+
+    void addVertex(String v) {
+        adj.putIfAbsent(v, new LinkedHashSet<>());
+    }
+
+    // One-way arrow u -> v. We do NOT add v -> u.
+    void addEdge(String u, String v) {
+        addVertex(u);
+        addVertex(v);
+        adj.get(u).add(v);
+    }
+
+    int outDegree(String v) {
+        return adj.containsKey(v) ? adj.get(v).size() : 0;
+    }
+
+    int inDegree(String v) {
+        int count = 0;
+        for (Set<String> targets : adj.values()) if (targets.contains(v)) count++;
+        return count;
+    }
+
+    List<String> sources() {         // in-degree 0
+        List<String> result = new ArrayList<>();
+        for (String v : adj.keySet()) if (inDegree(v) == 0) result.add(v);
+        return result;
+    }
+
+    List<String> sinks() {           // out-degree 0
+        List<String> result = new ArrayList<>();
+        for (String v : adj.keySet()) if (outDegree(v) == 0) result.add(v);
+        return result;
+    }
+
+    // Reachability: BFS that follows arrow direction only.
+    // reachable("A") may include "F" even when reachable("F") excludes "A".
+    Set<String> reachable(String start) {
+        Set<String> seen = new LinkedHashSet<>(List.of(start));
+        Deque<String> queue = new ArrayDeque<>();
+        queue.add(start);
+        while (!queue.isEmpty()) {
+            String u = queue.poll();
+            for (String v : adj.getOrDefault(u, Set.of())) {
+                if (seen.add(v)) queue.add(v);
+            }
+        }
+        return seen;
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "directed_graph.py",
+      code: `from collections import deque
+
+
+class DirectedGraph:
+    """A directed graph (digraph) as an adjacency list.
+
+    The key difference from undirected: each edge is stored ONCE,
+    only on its source — direction is the whole point.
+    """
+
+    def __init__(self) -> None:
+        self.adj: dict[str, set[str]] = {}
+
+    def add_vertex(self, v: str) -> None:
+        self.adj.setdefault(v, set())
+
+    def add_edge(self, u: str, v: str) -> None:
+        # One-way arrow u -> v. We do NOT add v -> u.
+        self.add_vertex(u)
+        self.add_vertex(v)
+        self.adj[u].add(v)
+
+    def out_degree(self, v: str) -> int:
+        return len(self.adj.get(v, ()))
+
+    def in_degree(self, v: str) -> int:
+        return sum(1 for targets in self.adj.values() if v in targets)
+
+    def sources(self) -> list[str]:          # in-degree 0
+        return [v for v in self.adj if self.in_degree(v) == 0]
+
+    def sinks(self) -> list[str]:            # out-degree 0
+        return [v for v in self.adj if self.out_degree(v) == 0]
+
+    def reachable(self, start: str) -> set[str]:
+        # BFS that follows arrow direction only.
+        # reachable("A") may include "F" even when reachable("F") excludes "A".
+        seen = {start}
+        queue = deque([start])
+        while queue:
+            u = queue.popleft()
+            for v in self.adj.get(u, ()):
+                if v not in seen:
+                    seen.add(v)
+                    queue.append(v)
+        return seen`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "directed_graph.cpp",
+      code: `// A directed graph (digraph) as an adjacency list.
+// The key difference from undirected: each edge is stored ONCE,
+// only on its source — direction is the whole point.
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+#include <queue>
+
+class DirectedGraph {
+    std::unordered_map<std::string, std::unordered_set<std::string>> adj_;
+
+public:
+    void addVertex(const std::string& v) {
+        adj_.try_emplace(v);
+    }
+
+    // One-way arrow u -> v. We do NOT add v -> u.
+    void addEdge(const std::string& u, const std::string& v) {
+        addVertex(u);
+        addVertex(v);
+        adj_[u].insert(v);
+    }
+
+    int outDegree(const std::string& v) const {
+        auto it = adj_.find(v);
+        return it == adj_.end() ? 0 : static_cast<int>(it->second.size());
+    }
+
+    int inDegree(const std::string& v) const {
+        int count = 0;
+        for (const auto& [src, targets] : adj_)
+            if (targets.count(v)) count++;
+        return count;
+    }
+
+    std::vector<std::string> sources() const {   // in-degree 0
+        std::vector<std::string> result;
+        for (const auto& [v, _] : adj_) if (inDegree(v) == 0) result.push_back(v);
+        return result;
+    }
+
+    std::vector<std::string> sinks() const {     // out-degree 0
+        std::vector<std::string> result;
+        for (const auto& [v, _] : adj_) if (outDegree(v) == 0) result.push_back(v);
+        return result;
+    }
+
+    // Reachability: BFS that follows arrow direction only.
+    // reachable("A") may include "F" even when reachable("F") excludes "A".
+    std::unordered_set<std::string> reachable(const std::string& start) const {
+        std::unordered_set<std::string> seen{start};
+        std::queue<std::string> queue;
+        queue.push(start);
+        while (!queue.empty()) {
+            std::string u = queue.front();
+            queue.pop();
+            auto it = adj_.find(u);
+            if (it == adj_.end()) continue;
+            for (const auto& v : it->second)
+                if (seen.insert(v).second) queue.push(v);
+        }
+        return seen;
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

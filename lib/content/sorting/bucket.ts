@@ -120,10 +120,12 @@ export const bucket: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "bucket-sort.ts",
-    code: `// Bucket sort — expected O(n) on uniform data, O(n²) worst case.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "bucket-sort.ts",
+      code: `// Bucket sort — expected O(n) on uniform data, O(n²) worst case.
 function bucketSort(a: number[], minVal: number, maxVal: number, B: number): number[] {
   const buckets: number[][] = Array.from({ length: B }, () => []);
   const range = (maxVal - minVal) / B;
@@ -146,7 +148,106 @@ function bucketSort(a: number[], minVal: number, maxVal: number, B: number): num
 // Example — 9 values in [0, 100), 5 buckets of width 20.
 bucketSort([29, 25, 3, 49, 9, 37, 21, 43, 17], 0, 100, 5);
 // → [3, 9, 17, 21, 25, 29, 37, 43, 49]`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "BucketSort.java",
+      code: `// Bucket sort — expected O(n) on uniform data, O(n²) worst case.
+import java.util.*;
+
+static int[] bucketSort(int[] a, double minVal, double maxVal, int B) {
+    List<List<Integer>> buckets = new ArrayList<>();
+    for (int i = 0; i < B; i++) buckets.add(new ArrayList<>());
+    double range = (maxVal - minVal) / B;
+
+    // Phase 1: scatter into buckets.
+    for (int v : a) {
+        int idx = Math.min(B - 1, (int) Math.floor((v - minVal) / range));
+        buckets.get(idx).add(v);
+    }
+
+    // Phase 2: sort each bucket (insertion sort is typical).
+    for (List<Integer> bucket : buckets) Collections.sort(bucket);
+
+    // Phase 3: gather in order.
+    int[] out = new int[a.length];
+    int k = 0;
+    for (List<Integer> bucket : buckets)
+        for (int v : bucket) out[k++] = v;
+    return out;
+}
+
+// Example — 9 values in [0, 100), 5 buckets of width 20.
+bucketSort(new int[]{29, 25, 3, 49, 9, 37, 21, 43, 17}, 0, 100, 5);
+// → [3, 9, 17, 21, 25, 29, 37, 43, 49]`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "bucket_sort.py",
+      code: `import math
+
+
+def bucket_sort(a: list, min_val: float, max_val: float, B: int) -> list:
+    """Bucket sort — expected O(n) on uniform data, O(n²) worst case."""
+    buckets: list[list[float]] = [[] for _ in range(B)]
+    rng = (max_val - min_val) / B
+
+    # Phase 1: scatter into buckets.
+    for v in a:
+        idx = min(B - 1, math.floor((v - min_val) / rng))
+        buckets[idx].append(v)
+
+    # Phase 2: sort each bucket (insertion sort is typical).
+    for bucket in buckets:
+        bucket.sort()
+
+    # Phase 3: gather in order.
+    out: list[float] = []
+    for bucket in buckets:
+        out.extend(bucket)
+    return out
+
+
+# Example — 9 values in [0, 100), 5 buckets of width 20.
+bucket_sort([29, 25, 3, 49, 9, 37, 21, 43, 17], 0, 100, 5)
+# → [3, 9, 17, 21, 25, 29, 37, 43, 49]`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "bucket_sort.cpp",
+      code: `// Bucket sort — expected O(n) on uniform data, O(n²) worst case.
+#include <vector>
+#include <algorithm>
+#include <cmath>
+
+std::vector<int> bucketSort(const std::vector<int>& a, double minVal, double maxVal, int B) {
+    std::vector<std::vector<int>> buckets(B);
+    double range = (maxVal - minVal) / B;
+
+    // Phase 1: scatter into buckets.
+    for (int v : a) {
+        int idx = std::min(B - 1, (int) std::floor((v - minVal) / range));
+        buckets[idx].push_back(v);
+    }
+
+    // Phase 2: sort each bucket (insertion sort is typical).
+    for (auto& bucket : buckets) std::sort(bucket.begin(), bucket.end());
+
+    // Phase 3: gather in order.
+    std::vector<int> out;
+    for (const auto& bucket : buckets)
+        out.insert(out.end(), bucket.begin(), bucket.end());
+    return out;
+}
+
+// Example — 9 values in [0, 100), 5 buckets of width 20.
+// bucketSort({29, 25, 3, 49, 9, 37, 21, 43, 17}, 0, 100, 5);
+// → [3, 9, 17, 21, 25, 29, 37, 43, 49]`,
+    },
+  ],
 
   furtherReading: [
     {

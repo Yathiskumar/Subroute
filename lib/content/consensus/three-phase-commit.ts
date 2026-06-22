@@ -117,54 +117,297 @@ export const threePhaseCommit: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "three-phase-commit.ts",
-    code: `// 3PC coordinator. Adds a PreCommit phase between CanCommit and DoCommit.
-type Vote = "YES" | "NO";
-interface Participant {
-  canCommit(txId: string): Promise<Vote>;
-  preCommit(txId: string): Promise<"ACK">;
-  doCommit(txId: string): Promise<void>;
-  abort(txId: string): Promise<void>;
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "three_phase_commit.go",
+      code: `// 3PC coordinator. Adds a PreCommit phase between CanCommit and DoCommit.
+package threepc
+
+import "fmt"
+
+type Vote string
+
+const (
+	VoteYes Vote = "YES"
+	VoteNo  Vote = "NO"
+)
+
+type Participant interface {
+	CanCommit(txID string) (Vote, error)
+	PreCommit(txID string) (string, error) // returns "ACK"
+	DoCommit(txID string) error
+	Abort(txID string) error
 }
 
-async function threePhaseCommit(
-  txId: string,
-  participants: Participant[],
-  log: { write(line: string): Promise<void> },
-): Promise<"COMMITTED" | "ABORTED"> {
-  await log.write(\`BEGIN \${txId}\`);
+type Log interface {
+	Write(line string) error
+}
+
+func ThreePhaseCommit(txID string, participants []Participant, log Log) (string, error) {
+	if err := log.Write(fmt.Sprintf("BEGIN %s", txID)); err != nil {
+		return "", err
+	}
+
+	// Phase 1 — CanCommit (lightweight feasibility check)
+	votes, err := withTimeout(func() ([]Vote, error) {
+		out := make([]Vote, len(participants))
+		for i, p := range participants {
+			v, err := p.CanCommit(txID)
+			if err != nil {
+				return nil, err
+			}
+			out[i] = v
+		}
+		return out, nil
+	})
+	if err != nil {
+		abortAll(txID, participants, log)
+		return "ABORTED", nil
+	}
+	for _, v := range votes {
+		if v == VoteNo {
+			abortAll(txID, participants, log)
+			return "ABORTED", nil
+		}
+	}
+
+	// Phase 2 — PreCommit (the new phase that prevents blocking)
+	if err := log.Write(fmt.Sprintf("PRECOMMIT %s", txID)); err != nil {
+		return "", err
+	}
+	_, err = withTimeout(func() ([]Vote, error) {
+		for _, p := range participants {
+			if _, err := p.PreCommit(txID); err != nil {
+				return nil, err
+			}
+		}
+		return nil, nil
+	})
+	if err != nil {
+		abortAll(txID, participants, log)
+		return "ABORTED", nil
+	}
+
+	// Phase 3 — DoCommit
+	if err := log.Write(fmt.Sprintf("COMMIT %s", txID)); err != nil {
+		return "", err
+	}
+	retryAll(func() error {
+		for _, p := range participants {
+			if err := p.DoCommit(txID); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	return "COMMITTED", nil
+}
+
+// On the participant side: if doCommit doesn't arrive within a timeout
+// AND we already acked PreCommit, query peers. If any peer also reached
+// PreCommit, finish the commit. Otherwise abort. That cooperative
+// recovery is what 2PC lacks.`,
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "ThreePhaseCommit.java",
+      code: `// 3PC coordinator. Adds a PreCommit phase between CanCommit and DoCommit.
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+
+enum Vote { YES, NO }
+
+interface Participant {
+  CompletableFuture<Vote> canCommit(String txId);
+  CompletableFuture<String> preCommit(String txId); // completes with "ACK"
+  CompletableFuture<Void> doCommit(String txId);
+  CompletableFuture<Void> abort(String txId);
+}
+
+interface Log {
+  CompletableFuture<Void> write(String line);
+}
+
+public class ThreePhaseCommit {
+  public static String threePhaseCommit(String txId, List<Participant> participants, Log log) {
+    log.write("BEGIN " + txId).join();
+
+    // Phase 1 — CanCommit (lightweight feasibility check)
+    List<Vote> votes;
+    try {
+      votes = withTimeout(
+        allOf(participants.stream().map(p -> p.canCommit(txId)).toList()));
+    } catch (Exception e) {
+      abortAll(txId, participants, log);
+      return "ABORTED";
+    }
+    if (votes.stream().anyMatch(v -> v == Vote.NO)) {
+      abortAll(txId, participants, log);
+      return "ABORTED";
+    }
+
+    // Phase 2 — PreCommit (the new phase that prevents blocking)
+    log.write("PRECOMMIT " + txId).join();
+    try {
+      withTimeout(
+        allOf(participants.stream().map(p -> p.preCommit(txId)).toList()));
+    } catch (Exception e) {
+      abortAll(txId, participants, log);
+      return "ABORTED";
+    }
+
+    // Phase 3 — DoCommit
+    log.write("COMMIT " + txId).join();
+    retryAll(() -> participants.stream().map(p -> p.doCommit(txId)).toList());
+    return "COMMITTED";
+  }
+}
+
+// On the participant side: if doCommit doesn't arrive within a timeout
+// AND we already acked PreCommit, query peers. If any peer also reached
+// PreCommit, finish the commit. Otherwise abort. That cooperative
+// recovery is what 2PC lacks.`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "three_phase_commit.py",
+      code: `# 3PC coordinator. Adds a PreCommit phase between CanCommit and DoCommit.
+import asyncio
+from enum import Enum
+from typing import Protocol
+
+
+class Vote(str, Enum):
+    YES = "YES"
+    NO = "NO"
+
+
+class Participant(Protocol):
+    async def can_commit(self, tx_id: str) -> Vote: ...
+    async def pre_commit(self, tx_id: str) -> str: ...  # returns "ACK"
+    async def do_commit(self, tx_id: str) -> None: ...
+    async def abort(self, tx_id: str) -> None: ...
+
+
+class Log(Protocol):
+    async def write(self, line: str) -> None: ...
+
+
+async def three_phase_commit(
+    tx_id: str,
+    participants: list[Participant],
+    log: Log,
+) -> str:
+    await log.write(f"BEGIN {tx_id}")
+
+    # Phase 1 — CanCommit (lightweight feasibility check)
+    try:
+        votes = await with_timeout(
+            asyncio.gather(*(p.can_commit(tx_id) for p in participants)),
+        )
+    except Exception:
+        await abort_all(tx_id, participants, log)
+        return "ABORTED"
+    if any(v == Vote.NO for v in votes):
+        await abort_all(tx_id, participants, log)
+        return "ABORTED"
+
+    # Phase 2 — PreCommit (the new phase that prevents blocking)
+    await log.write(f"PRECOMMIT {tx_id}")
+    try:
+        await with_timeout(
+            asyncio.gather(*(p.pre_commit(tx_id) for p in participants)),
+        )
+    except Exception:
+        await abort_all(tx_id, participants, log)
+        return "ABORTED"
+
+    # Phase 3 — DoCommit
+    await log.write(f"COMMIT {tx_id}")
+    await retry_all(lambda: [p.do_commit(tx_id) for p in participants])
+    return "COMMITTED"
+
+
+# On the participant side: if do_commit doesn't arrive within a timeout
+# AND we already acked PreCommit, query peers. If any peer also reached
+# PreCommit, finish the commit. Otherwise abort. That cooperative
+# recovery is what 2PC lacks.`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "three_phase_commit.cpp",
+      code: `// 3PC coordinator. Adds a PreCommit phase between CanCommit and DoCommit.
+#include <future>
+#include <string>
+#include <vector>
+
+enum class Vote { YES, NO };
+
+struct Participant {
+  virtual std::future<Vote> canCommit(const std::string& txId) = 0;
+  virtual std::future<std::string> preCommit(const std::string& txId) = 0; // "ACK"
+  virtual std::future<void> doCommit(const std::string& txId) = 0;
+  virtual std::future<void> abort(const std::string& txId) = 0;
+  virtual ~Participant() = default;
+};
+
+struct Log {
+  virtual std::future<void> write(const std::string& line) = 0;
+  virtual ~Log() = default;
+};
+
+std::string threePhaseCommit(
+    const std::string& txId,
+    std::vector<Participant*>& participants,
+    Log& log) {
+  log.write("BEGIN " + txId).get();
 
   // Phase 1 — CanCommit (lightweight feasibility check)
-  let votes: Vote[];
+  std::vector<Vote> votes;
   try {
-    votes = await withTimeout(
-      Promise.all(participants.map(p => p.canCommit(txId))),
-    );
-  } catch {
-    await abortAll(txId, participants, log);
+    votes = withTimeout<std::vector<Vote>>([&] {
+      std::vector<std::future<Vote>> fs;
+      for (auto* p : participants) fs.push_back(p->canCommit(txId));
+      std::vector<Vote> out;
+      for (auto& f : fs) out.push_back(f.get());
+      return out;
+    });
+  } catch (...) {
+    abortAll(txId, participants, log);
     return "ABORTED";
   }
-  if (votes.some(v => v === "NO")) {
-    await abortAll(txId, participants, log);
-    return "ABORTED";
+  for (auto v : votes) {
+    if (v == Vote::NO) {
+      abortAll(txId, participants, log);
+      return "ABORTED";
+    }
   }
 
   // Phase 2 — PreCommit (the new phase that prevents blocking)
-  await log.write(\`PRECOMMIT \${txId}\`);
+  log.write("PRECOMMIT " + txId).get();
   try {
-    await withTimeout(
-      Promise.all(participants.map(p => p.preCommit(txId))),
-    );
-  } catch {
-    await abortAll(txId, participants, log);
+    withTimeout<void>([&] {
+      std::vector<std::future<std::string>> fs;
+      for (auto* p : participants) fs.push_back(p->preCommit(txId));
+      for (auto& f : fs) f.get();
+    });
+  } catch (...) {
+    abortAll(txId, participants, log);
     return "ABORTED";
   }
 
   // Phase 3 — DoCommit
-  await log.write(\`COMMIT \${txId}\`);
-  await retryAll(() => participants.map(p => p.doCommit(txId)));
+  log.write("COMMIT " + txId).get();
+  retryAll([&] {
+    std::vector<std::future<void>> fs;
+    for (auto* p : participants) fs.push_back(p->doCommit(txId));
+    return fs;
+  });
   return "COMMITTED";
 }
 
@@ -172,7 +415,8 @@ async function threePhaseCommit(
 // AND we already acked PreCommit, query peers. If any peer also reached
 // PreCommit, finish the commit. Otherwise abort. That cooperative
 // recovery is what 2PC lacks.`,
-  },
+    },
+  ],
 
   furtherReading: [
     {

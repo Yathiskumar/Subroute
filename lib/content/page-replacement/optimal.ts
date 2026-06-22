@@ -90,37 +90,191 @@ export const optimal: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "optimal.ts",
-    code: `// Optimal (Belady's) page replacement — needs the full future trace.
-function optimal(refs: number[], frames: number) {
-  const resident: number[] = [];
-  let faults = 0, hits = 0;
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "optimal.go",
+      code: `// Optimal (Belady's) page replacement — needs the full future trace.
+package optimal
 
-  // distance to the next use of \`page\`, searching from index \`from\`
-  const nextUse = (page: number, from: number): number => {
-    for (let k = from; k < refs.length; k++) if (refs[k] === page) return k;
-    return Infinity;                         // never used again
-  };
+import "math"
 
-  refs.forEach((page, i) => {
-    if (resident.includes(page)) { hits++; return; }   // hit
-    faults++;
-    if (resident.length < frames) { resident.push(page); return; } // free frame
+// Run returns (faults, hits); faults is the provable minimum.
+func Run(refs []int, frames int) (int, int) {
+	var resident []int
+	faults, hits := 0, 0
 
-    // evict the resident page whose next use is furthest in the future
-    let victim = 0, best = -1;
-    for (let f = 0; f < resident.length; f++) {
-      const d = nextUse(resident[f], i + 1);
-      if (d > best) { best = d; victim = f; }
-    }
-    resident[victim] = page;
-  });
+	// distance to the next use of page, searching from index from
+	nextUse := func(page, from int) int {
+		for k := from; k < len(refs); k++ {
+			if refs[k] == page {
+				return k
+			}
+		}
+		return math.MaxInt // never used again
+	}
 
-  return { faults, hits };                   // faults is the provable minimum
+	contains := func(page int) bool {
+		for _, p := range resident {
+			if p == page {
+				return true
+			}
+		}
+		return false
+	}
+
+	for i, page := range refs {
+		if contains(page) { // hit
+			hits++
+			continue
+		}
+		faults++
+		if len(resident) < frames { // free frame
+			resident = append(resident, page)
+			continue
+		}
+
+		// evict the resident page whose next use is furthest in the future
+		victim, best := 0, -1
+		for f := 0; f < len(resident); f++ {
+			d := nextUse(resident[f], i+1)
+			if d > best {
+				best = d
+				victim = f
+			}
+		}
+		resident[victim] = page
+	}
+
+	return faults, hits
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "Optimal.java",
+      code: `// Optimal (Belady's) page replacement — needs the full future trace.
+import java.util.*;
+
+class Optimal {
+    // returns {faults, hits}; faults is the provable minimum
+    static int[] run(int[] refs, int frames) {
+        List<Integer> resident = new ArrayList<>();
+        int faults = 0, hits = 0;
+
+        for (int i = 0; i < refs.length; i++) {
+            int page = refs[i];
+            if (resident.contains(page)) { hits++; continue; }   // hit
+            faults++;
+            if (resident.size() < frames) { resident.add(page); continue; } // free frame
+
+            // evict the resident page whose next use is furthest in the future
+            int victim = 0, best = -1;
+            for (int f = 0; f < resident.size(); f++) {
+                int d = nextUse(refs, resident.get(f), i + 1);
+                if (d > best) { best = d; victim = f; }
+            }
+            resident.set(victim, page);
+        }
+
+        return new int[] { faults, hits };
+    }
+
+    // distance to the next use of page, searching from index from
+    private static int nextUse(int[] refs, int page, int from) {
+        for (int k = from; k < refs.length; k++) if (refs[k] == page) return k;
+        return Integer.MAX_VALUE;                // never used again
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "optimal.py",
+      code: `# Optimal (Belady's) page replacement — needs the full future trace.
+import math
+
+
+def optimal(refs: list[int], frames: int) -> tuple[int, int]:
+    resident: list[int] = []
+    faults = hits = 0
+
+    # distance to the next use of page, searching from index 'start'
+    def next_use(page: int, start: int) -> float:
+        for k in range(start, len(refs)):
+            if refs[k] == page:
+                return k
+        return math.inf  # never used again
+
+    for i, page in enumerate(refs):
+        if page in resident:  # hit
+            hits += 1
+            continue
+        faults += 1
+        if len(resident) < frames:  # free frame
+            resident.append(page)
+            continue
+
+        # evict the resident page whose next use is furthest in the future
+        victim, best = 0, -1.0
+        for f in range(len(resident)):
+            d = next_use(resident[f], i + 1)
+            if d > best:
+                best = d
+                victim = f
+        resident[victim] = page
+
+    return faults, hits  # faults is the provable minimum`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "optimal.cpp",
+      code: `// Optimal (Belady's) page replacement — needs the full future trace.
+#include <algorithm>
+#include <limits>
+#include <utility>
+#include <vector>
+
+// distance to the next use of 'page', searching from index 'from'
+static long long nextUse(const std::vector<int>& refs, int page, std::size_t from) {
+    for (std::size_t k = from; k < refs.size(); k++)
+        if (refs[k] == page) return static_cast<long long>(k);
+    return std::numeric_limits<long long>::max();   // never used again
+}
+
+// returns {faults, hits}; faults is the provable minimum
+std::pair<int, int> optimal(const std::vector<int>& refs, int frames) {
+    std::vector<int> resident;
+    int faults = 0, hits = 0;
+
+    for (std::size_t i = 0; i < refs.size(); i++) {
+        int page = refs[i];
+        if (std::find(resident.begin(), resident.end(), page) != resident.end()) {
+            hits++;                                 // hit
+            continue;
+        }
+        faults++;
+        if (static_cast<int>(resident.size()) < frames) { // free frame
+            resident.push_back(page);
+            continue;
+        }
+
+        // evict the resident page whose next use is furthest in the future
+        std::size_t victim = 0;
+        long long best = -1;
+        for (std::size_t f = 0; f < resident.size(); f++) {
+            long long d = nextUse(refs, resident[f], i + 1);
+            if (d > best) { best = d; victim = f; }
+        }
+        resident[victim] = page;
+    }
+
+    return {faults, hits};
+}`,
+    },
+  ],
 
   furtherReading: [
     {

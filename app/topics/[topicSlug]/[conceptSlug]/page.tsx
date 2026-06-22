@@ -13,6 +13,7 @@ import { Breadcrumb } from "@/components/shared/Breadcrumb";
 import { DifficultyBadge } from "@/components/shared/DifficultyBadge";
 import { Callout } from "@/components/shared/Callout";
 import { CodeBlock } from "@/components/shared/CodeBlock";
+import { MultiCodeBlock } from "@/components/shared/MultiCodeBlock";
 import { SectionHeading } from "@/components/shared/SectionHeading";
 import { ConceptNav } from "@/components/shared/ConceptNav";
 import { FeedbackWidget } from "@/components/shared/FeedbackWidget";
@@ -247,7 +248,9 @@ export default async function ConceptDetailPage({
                 className="mb-6"
               />
               <div className="grid gap-6">
-                {content?.code ? (
+                {content?.codeSamples?.length ? (
+                  <MultiCodeBlock samples={content.codeSamples} />
+                ) : content?.code ? (
                   <CodeBlock
                     filename={content.code.filename}
                     language={content.code.language}

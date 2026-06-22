@@ -115,55 +115,270 @@ export const zookeeper: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "zk-election.ts",
-    code: `// ZooKeeper leader election (predecessor-watch recipe).
-// The ZooKeeper client API is abstracted; in production, use Apache Curator.
-type ZkPath = string;
-interface ZkClient {
-  createEphemeralSequential(parent: ZkPath, data: Uint8Array): Promise<ZkPath>;
-  /** Returns the full paths of every child, sorted by sequence number. */
-  getChildrenSorted(parent: ZkPath): Promise<ZkPath[]>;
-  /** Set a one-shot watch; resolves when the watched node is deleted. */
-  watchNodeDeletion(path: ZkPath): Promise<void>;
-  /** Returns true if the path still exists. */
-  exists(path: ZkPath): Promise<boolean>;
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "zk_election.go",
+      code: `// ZooKeeper leader election (predecessor-watch recipe).
+// The ZooKeeper client API is abstracted; in production, use go-zookeeper or Curator.
+package election
+
+import "errors"
+
+type ZkPath = string
+
+type ZkClient interface {
+	CreateEphemeralSequential(parent ZkPath, data []byte) (ZkPath, error)
+	// GetChildrenSorted returns the full paths of every child, sorted by sequence number.
+	GetChildrenSorted(parent ZkPath) ([]ZkPath, error)
+	// WatchNodeDeletion sets a one-shot watch; returns when the watched node is deleted.
+	WatchNodeDeletion(path ZkPath) error
+	// Exists returns true if the path still exists.
+	Exists(path ZkPath) (bool, error)
 }
 
-class ZkLeader {
-  private myZnode: ZkPath | null = null;
+type ZkLeader struct {
+	zk      ZkClient
+	base    ZkPath
+	myZnode ZkPath
+}
 
-  constructor(private readonly zk: ZkClient, private readonly base = "/election") {}
+func NewZkLeader(zk ZkClient, base ZkPath) *ZkLeader {
+	if base == "" {
+		base = "/election"
+	}
+	return &ZkLeader{zk: zk, base: base}
+}
 
-  /** Join the election and block until we become leader. */
-  async leadOrBlock(): Promise<void> {
-    this.myZnode = await this.zk.createEphemeralSequential(this.base, new Uint8Array());
+// LeadOrBlock joins the election and blocks until we become leader.
+func (z *ZkLeader) LeadOrBlock() error {
+	znode, err := z.zk.CreateEphemeralSequential(z.base, nil)
+	if err != nil {
+		return err
+	}
+	z.myZnode = znode
 
-    // Loop: re-check who's smallest after each predecessor death.
-    while (true) {
-      const children = await this.zk.getChildrenSorted(this.base);
-      const myIdx = children.indexOf(this.myZnode);
-      if (myIdx === -1) throw new Error("my znode vanished — session expired?");
-      if (myIdx === 0) return;                          // smallest → leader
+	// Loop: re-check who's smallest after each predecessor death.
+	for {
+		children, err := z.zk.GetChildrenSorted(z.base)
+		if err != nil {
+			return err
+		}
+		myIdx := indexOf(children, z.myZnode)
+		if myIdx == -1 {
+			return errors.New("my znode vanished - session expired?")
+		}
+		if myIdx == 0 {
+			return nil // smallest -> leader
+		}
 
-      const predecessor = children[myIdx - 1];
-      // Watch only the predecessor — herd avoidance.
-      if (await this.zk.exists(predecessor)) {
-        await this.zk.watchNodeDeletion(predecessor);   // resolves on delete
-      }
-      // The predecessor died. Loop back, re-check, possibly re-watch.
-    }
-  }
+		predecessor := children[myIdx-1]
+		// Watch only the predecessor - herd avoidance.
+		ok, err := z.zk.Exists(predecessor)
+		if err != nil {
+			return err
+		}
+		if ok {
+			if err := z.zk.WatchNodeDeletion(predecessor); err != nil { // returns on delete
+				return err
+			}
+		}
+		// The predecessor died. Loop back, re-check, possibly re-watch.
+	}
+}
 
-  /** Voluntary step-down. */
-  async resign(): Promise<void> {
-    // Deleting the ephemeral znode triggers the watch on our successor.
-    this.myZnode = null;
-    // (Equivalent: close the session — ZK deletes it for us.)
-  }
+// Resign is a voluntary step-down.
+func (z *ZkLeader) Resign() {
+	// Deleting the ephemeral znode triggers the watch on our successor.
+	z.myZnode = ""
+	// (Equivalent: close the session - ZK deletes it for us.)
+}
+
+func indexOf(paths []ZkPath, target ZkPath) int {
+	for i, p := range paths {
+		if p == target {
+			return i
+		}
+	}
+	return -1
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "ZkElection.java",
+      code: `// ZooKeeper leader election (predecessor-watch recipe).
+// The ZooKeeper client API is abstracted; in production, use Apache Curator.
+import java.util.List;
+
+class ZkLeader {
+    interface ZkClient {
+        String createEphemeralSequential(String parent, byte[] data) throws Exception;
+        /** Returns the full paths of every child, sorted by sequence number. */
+        List<String> getChildrenSorted(String parent) throws Exception;
+        /** Set a one-shot watch; returns when the watched node is deleted. */
+        void watchNodeDeletion(String path) throws Exception;
+        /** Returns true if the path still exists. */
+        boolean exists(String path) throws Exception;
+    }
+
+    private final ZkClient zk;
+    private final String base;
+    private String myZnode = null;
+
+    ZkLeader(ZkClient zk) { this(zk, "/election"); }
+    ZkLeader(ZkClient zk, String base) {
+        this.zk = zk;
+        this.base = base;
+    }
+
+    /** Join the election and block until we become leader. */
+    void leadOrBlock() throws Exception {
+        myZnode = zk.createEphemeralSequential(base, new byte[0]);
+
+        // Loop: re-check who's smallest after each predecessor death.
+        while (true) {
+            List<String> children = zk.getChildrenSorted(base);
+            int myIdx = children.indexOf(myZnode);
+            if (myIdx == -1) throw new IllegalStateException("my znode vanished - session expired?");
+            if (myIdx == 0) return;                       // smallest -> leader
+
+            String predecessor = children.get(myIdx - 1);
+            // Watch only the predecessor - herd avoidance.
+            if (zk.exists(predecessor)) {
+                zk.watchNodeDeletion(predecessor);        // returns on delete
+            }
+            // The predecessor died. Loop back, re-check, possibly re-watch.
+        }
+    }
+
+    /** Voluntary step-down. */
+    void resign() {
+        // Deleting the ephemeral znode triggers the watch on our successor.
+        myZnode = null;
+        // (Equivalent: close the session - ZK deletes it for us.)
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "zk_election.py",
+      code: `# ZooKeeper leader election (predecessor-watch recipe).
+# The ZooKeeper client API is abstracted; in production, use Kazoo.
+from typing import Optional, Protocol
+
+
+class ZkClient(Protocol):
+    def create_ephemeral_sequential(self, parent: str, data: bytes) -> str: ...
+    # Returns the full paths of every child, sorted by sequence number.
+    def get_children_sorted(self, parent: str) -> list[str]: ...
+    # Set a one-shot watch; returns when the watched node is deleted.
+    def watch_node_deletion(self, path: str) -> None: ...
+    # Returns True if the path still exists.
+    def exists(self, path: str) -> bool: ...
+
+
+class ZkLeader:
+    def __init__(self, zk: ZkClient, base: str = "/election") -> None:
+        self.zk = zk
+        self.base = base
+        self.my_znode: Optional[str] = None
+
+    def lead_or_block(self) -> None:
+        """Join the election and block until we become leader."""
+        self.my_znode = self.zk.create_ephemeral_sequential(self.base, b"")
+
+        # Loop: re-check who's smallest after each predecessor death.
+        while True:
+            children = self.zk.get_children_sorted(self.base)
+            try:
+                my_idx = children.index(self.my_znode)
+            except ValueError:
+                raise RuntimeError("my znode vanished - session expired?")
+            if my_idx == 0:
+                return  # smallest -> leader
+
+            predecessor = children[my_idx - 1]
+            # Watch only the predecessor - herd avoidance.
+            if self.zk.exists(predecessor):
+                self.zk.watch_node_deletion(predecessor)  # returns on delete
+            # The predecessor died. Loop back, re-check, possibly re-watch.
+
+    def resign(self) -> None:
+        """Voluntary step-down."""
+        # Deleting the ephemeral znode triggers the watch on our successor.
+        self.my_znode = None
+        # (Equivalent: close the session - ZK deletes it for us.)`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "zk_election.cpp",
+      code: `// ZooKeeper leader election (predecessor-watch recipe).
+// The ZooKeeper client API is abstracted; in production, use the C zookeeper client.
+#include <algorithm>
+#include <optional>
+#include <stdexcept>
+#include <string>
+#include <vector>
+
+using ZkPath = std::string;
+
+struct ZkClient {
+    virtual ZkPath createEphemeralSequential(const ZkPath& parent,
+                                             const std::vector<unsigned char>& data) = 0;
+    // Returns the full paths of every child, sorted by sequence number.
+    virtual std::vector<ZkPath> getChildrenSorted(const ZkPath& parent) = 0;
+    // Set a one-shot watch; returns when the watched node is deleted.
+    virtual void watchNodeDeletion(const ZkPath& path) = 0;
+    // Returns true if the path still exists.
+    virtual bool exists(const ZkPath& path) = 0;
+    virtual ~ZkClient() = default;
+};
+
+class ZkLeader {
+public:
+    explicit ZkLeader(ZkClient& zk, ZkPath base = "/election")
+        : zk_(zk), base_(std::move(base)) {}
+
+    // Join the election and block until we become leader.
+    void leadOrBlock() {
+        myZnode_ = zk_.createEphemeralSequential(base_, {});
+
+        // Loop: re-check who's smallest after each predecessor death.
+        while (true) {
+            std::vector<ZkPath> children = zk_.getChildrenSorted(base_);
+            auto it = std::find(children.begin(), children.end(), myZnode_);
+            if (it == children.end())
+                throw std::runtime_error("my znode vanished - session expired?");
+            auto myIdx = it - children.begin();
+            if (myIdx == 0) return;                       // smallest -> leader
+
+            const ZkPath& predecessor = children[myIdx - 1];
+            // Watch only the predecessor - herd avoidance.
+            if (zk_.exists(predecessor)) {
+                zk_.watchNodeDeletion(predecessor);       // returns on delete
+            }
+            // The predecessor died. Loop back, re-check, possibly re-watch.
+        }
+    }
+
+    // Voluntary step-down.
+    void resign() {
+        // Deleting the ephemeral znode triggers the watch on our successor.
+        myZnode_.reset();
+        // (Equivalent: close the session - ZK deletes it for us.)
+    }
+
+private:
+    ZkClient& zk_;
+    ZkPath base_;
+    std::optional<ZkPath> myZnode_;
+};`,
+    },
+  ],
 
   furtherReading: [
     {

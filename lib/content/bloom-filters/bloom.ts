@@ -111,10 +111,12 @@ export const bloom: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "bloom-filter.ts",
-    code: `// A teaching Bloom filter — k hashes, m bits, no deletion.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "bloom-filter.ts",
+      code: `// A teaching Bloom filter — k hashes, m bits, no deletion.
 class BloomFilter {
   private bits: Uint8Array;
 
@@ -160,7 +162,169 @@ const filter = new BloomFilter(m, k);
 filter.add("alice@example.com");
 filter.has("alice@example.com");  // true (was added)
 filter.has("bob@example.com");    // almost certainly false`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "BloomFilter.java",
+      code: `// A teaching Bloom filter — k hashes, m bits, no deletion.
+class BloomFilter {
+    private final byte[] bits;
+    private final int m;   // bit-array size
+    private final int k;   // number of hash functions
+
+    BloomFilter(int m, int k) {
+        this.m = m;
+        this.k = k;
+        this.bits = new byte[m];
+    }
+
+    void add(String item) {
+        for (int i : indices(item)) bits[i] = 1;
+    }
+
+    boolean has(String item) {
+        for (int i : indices(item)) {
+            if (bits[i] == 0) return false;   // definitely-not
+        }
+        return true;                          // maybe-yes
+    }
+
+    // Double-hashing: produce k indices from two base hashes,
+    // following Kirsch & Mitzenmacher's "Less Hashing, Same Performance."
+    private int[] indices(String item) {
+        long h1 = fnv1a(item);
+        long h2 = murmur3(item);
+        int[] out = new int[k];
+        for (int i = 0; i < k; i++) {
+            out[i] = (int) Math.floorMod(h1 + (long) i * h2, m);
+        }
+        return out;
+    }
+
+    // Optimal sizing for n items at false-positive rate p.
+    static int[] optimalSize(int n, double p) {
+        double ln2 = Math.log(2);
+        int m = (int) Math.ceil(-(n * Math.log(p)) / (ln2 * ln2));
+        int k = Math.max(1, (int) Math.round((double) m / n * ln2));
+        return new int[] { m, k };
+    }
+}
+
+// Example: 1M items at 1% FPR → m ≈ 9.6 MB of bits, k = 7
+int[] mk = BloomFilter.optimalSize(1_000_000, 0.01);
+BloomFilter filter = new BloomFilter(mk[0], mk[1]);
+filter.add("alice@example.com");
+filter.has("alice@example.com");  // true (was added)
+filter.has("bob@example.com");    // almost certainly false`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "bloom_filter.py",
+      code: `import math
+from typing import Iterator
+
+
+class BloomFilter:
+    """A teaching Bloom filter — k hashes, m bits, no deletion."""
+
+    def __init__(self, m: int, k: int) -> None:
+        self.m = m                      # bit-array size
+        self.k = k                      # number of hash functions
+        self.bits = bytearray(m)
+
+    def add(self, item: str) -> None:
+        for i in self._indices(item):
+            self.bits[i] = 1
+
+    def has(self, item: str) -> bool:
+        for i in self._indices(item):
+            if self.bits[i] == 0:
+                return False            # definitely-not
+        return True                     # maybe-yes
+
+    # Double-hashing: produce k indices from two base hashes,
+    # following Kirsch & Mitzenmacher's "Less Hashing, Same Performance."
+    def _indices(self, item: str) -> Iterator[int]:
+        h1 = fnv1a(item)
+        h2 = murmur3(item)
+        for i in range(self.k):
+            yield abs((h1 + i * h2) % self.m)
+
+    # Optimal sizing for n items at false-positive rate p.
+    @staticmethod
+    def optimal_size(n: int, p: float) -> tuple[int, int]:
+        m = math.ceil(-(n * math.log(p)) / (math.log(2) ** 2))
+        k = max(1, round((m / n) * math.log(2)))
+        return m, k
+
+
+# Example: 1M items at 1% FPR → m ≈ 9.6 MB of bits, k = 7
+m, k = BloomFilter.optimal_size(1_000_000, 0.01)
+flt = BloomFilter(m, k)
+flt.add("alice@example.com")
+flt.has("alice@example.com")  # True (was added)
+flt.has("bob@example.com")    # almost certainly False`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "bloom_filter.cpp",
+      code: `// A teaching Bloom filter — k hashes, m bits, no deletion.
+#include <cmath>
+#include <cstdint>
+#include <vector>
+
+class BloomFilter {
+    std::vector<uint8_t> bits_;
+    int m_;   // bit-array size
+    int k_;   // number of hash functions
+
+public:
+    BloomFilter(int m, int k) : bits_(m, 0), m_(m), k_(k) {}
+
+    void add(const std::string& item) {
+        for (int i : indices(item)) bits_[i] = 1;
+    }
+
+    bool has(const std::string& item) const {
+        for (int i : indices(item)) {
+            if (bits_[i] == 0) return false;   // definitely-not
+        }
+        return true;                           // maybe-yes
+    }
+
+    // Optimal sizing for n items at false-positive rate p.
+    static std::pair<int, int> optimalSize(int n, double p) {
+        double ln2 = std::log(2.0);
+        int m = static_cast<int>(std::ceil(-(n * std::log(p)) / (ln2 * ln2)));
+        int k = std::max(1, static_cast<int>(std::lround((double) m / n * ln2)));
+        return { m, k };
+    }
+
+private:
+    // Double-hashing: produce k indices from two base hashes,
+    // following Kirsch & Mitzenmacher's "Less Hashing, Same Performance."
+    std::vector<int> indices(const std::string& item) const {
+        uint64_t h1 = fnv1a(item);
+        uint64_t h2 = murmur3(item);
+        std::vector<int> out(k_);
+        for (int i = 0; i < k_; i++) {
+            out[i] = static_cast<int>((h1 + (uint64_t) i * h2) % m_);
+        }
+        return out;
+    }
+};
+
+// Example: 1M items at 1% FPR → m ≈ 9.6 MB of bits, k = 7
+// auto [m, k] = BloomFilter::optimalSize(1'000'000, 0.01);
+// BloomFilter filter(m, k);
+// filter.add("alice@example.com");
+// filter.has("alice@example.com");  // true (was added)
+// filter.has("bob@example.com");    // almost certainly false`,
+    },
+  ],
 
   furtherReading: [
     {

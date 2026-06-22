@@ -93,52 +93,209 @@ export const markSweep: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "mark-sweep.ts",
-    code: `// Mark & sweep: trace reachability from the roots, then free the rest.
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "mark_sweep.go",
+      code: `// Mark & sweep: trace reachability from the roots, then free the rest.
+package gc
+
+type GcObject struct {
+	marked bool
+	refs   []*GcObject // outgoing pointers
+}
+
+type MarkSweepHeap struct {
+	heap  []*GcObject // every allocated object
+	roots []*GcObject // locals, globals, registers
+}
+
+func (h *MarkSweepHeap) Collect() {
+	h.mark()
+	h.sweep()
+}
+
+// Phase 1: paint everything reachable from the roots.
+func (h *MarkSweepHeap) mark() {
+	worklist := append([]*GcObject{}, h.roots...) // BFS seed
+	for len(worklist) > 0 {
+		obj := worklist[len(worklist)-1]
+		worklist = worklist[:len(worklist)-1]
+		if obj.marked {
+			continue // already visited — breaks cycles
+		}
+		obj.marked = true
+		for _, child := range obj.refs {
+			if !child.marked {
+				worklist = append(worklist, child)
+			}
+		}
+	}
+}
+
+// Phase 2: linear scan — free the unmarked, reset the survivors.
+func (h *MarkSweepHeap) sweep() {
+	survivors := []*GcObject{}
+	for _, obj := range h.heap {
+		if obj.marked {
+			obj.marked = false // reset for the next cycle
+			survivors = append(survivors, obj)
+		} else {
+			// ...return obj's memory to the free list here (left in place).
+		}
+	}
+	h.heap = survivors
+}`,
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "MarkSweep.java",
+      code: `// Mark & sweep: trace reachability from the roots, then free the rest.
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
+import java.util.List;
+
 class GcObject {
-  marked = false;
-  refs: GcObject[] = []; // outgoing pointers
+    boolean marked = false;
+    List<GcObject> refs = new ArrayList<>(); // outgoing pointers
 }
 
 class MarkSweepHeap {
-  private heap: GcObject[] = [];      // every allocated object
-  private roots: GcObject[] = [];     // locals, globals, registers
+    private List<GcObject> heap = new ArrayList<>();  // every allocated object
+    private List<GcObject> roots = new ArrayList<>(); // locals, globals, registers
 
-  collect(): void {
-    this.mark();
-    this.sweep();
-  }
-
-  /** Phase 1: paint everything reachable from the roots. */
-  private mark(): void {
-    const worklist = [...this.roots];     // BFS seed
-    while (worklist.length) {
-      const obj = worklist.pop()!;
-      if (obj.marked) continue;           // already visited — breaks cycles
-      obj.marked = true;
-      for (const child of obj.refs) {
-        if (!child.marked) worklist.push(child);
-      }
+    void collect() {
+        mark();
+        sweep();
     }
-  }
 
-  /** Phase 2: linear scan — free the unmarked, reset the survivors. */
-  private sweep(): void {
-    const survivors: GcObject[] = [];
-    for (const obj of this.heap) {
-      if (obj.marked) {
-        obj.marked = false;               // reset for the next cycle
-        survivors.push(obj);
-      } else {
-        // ...return obj's memory to the free list here (left in place).
-      }
+    /** Phase 1: paint everything reachable from the roots. */
+    private void mark() {
+        Deque<GcObject> worklist = new ArrayDeque<>(roots); // BFS seed
+        while (!worklist.isEmpty()) {
+            GcObject obj = worklist.pop();
+            if (obj.marked) continue;            // already visited — breaks cycles
+            obj.marked = true;
+            for (GcObject child : obj.refs) {
+                if (!child.marked) worklist.push(child);
+            }
+        }
     }
-    this.heap = survivors;
-  }
+
+    /** Phase 2: linear scan — free the unmarked, reset the survivors. */
+    private void sweep() {
+        List<GcObject> survivors = new ArrayList<>();
+        for (GcObject obj : heap) {
+            if (obj.marked) {
+                obj.marked = false;              // reset for the next cycle
+                survivors.add(obj);
+            } else {
+                // ...return obj's memory to the free list here (left in place).
+            }
+        }
+        heap = survivors;
+    }
 }`,
-  },
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "mark_sweep.py",
+      code: `# Mark & sweep: trace reachability from the roots, then free the rest.
+class GcObject:
+    def __init__(self) -> None:
+        self.marked = False
+        self.refs: list["GcObject"] = []  # outgoing pointers
+
+
+class MarkSweepHeap:
+    def __init__(self) -> None:
+        self.heap: list[GcObject] = []   # every allocated object
+        self.roots: list[GcObject] = []  # locals, globals, registers
+
+    def collect(self) -> None:
+        self._mark()
+        self._sweep()
+
+    def _mark(self) -> None:
+        """Phase 1: paint everything reachable from the roots."""
+        worklist = list(self.roots)          # BFS seed
+        while worklist:
+            obj = worklist.pop()
+            if obj.marked:
+                continue                     # already visited — breaks cycles
+            obj.marked = True
+            for child in obj.refs:
+                if not child.marked:
+                    worklist.append(child)
+
+    def _sweep(self) -> None:
+        """Phase 2: linear scan — free the unmarked, reset the survivors."""
+        survivors: list[GcObject] = []
+        for obj in self.heap:
+            if obj.marked:
+                obj.marked = False           # reset for the next cycle
+                survivors.append(obj)
+            else:
+                ...  # return obj's memory to the free list here (left in place).
+        self.heap = survivors`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "mark_sweep.cpp",
+      code: `// Mark & sweep: trace reachability from the roots, then free the rest.
+#include <vector>
+
+struct GcObject {
+    bool marked = false;
+    std::vector<GcObject*> refs; // outgoing pointers
+};
+
+class MarkSweepHeap {
+    std::vector<GcObject*> heap_;  // every allocated object
+    std::vector<GcObject*> roots_; // locals, globals, registers
+
+public:
+    void collect() {
+        mark();
+        sweep();
+    }
+
+private:
+    // Phase 1: paint everything reachable from the roots.
+    void mark() {
+        std::vector<GcObject*> worklist(roots_); // BFS seed
+        while (!worklist.empty()) {
+            GcObject* obj = worklist.back();
+            worklist.pop_back();
+            if (obj->marked) continue;       // already visited — breaks cycles
+            obj->marked = true;
+            for (GcObject* child : obj->refs) {
+                if (!child->marked) worklist.push_back(child);
+            }
+        }
+    }
+
+    // Phase 2: linear scan — free the unmarked, reset the survivors.
+    void sweep() {
+        std::vector<GcObject*> survivors;
+        for (GcObject* obj : heap_) {
+            if (obj->marked) {
+                obj->marked = false;         // reset for the next cycle
+                survivors.push_back(obj);
+            } else {
+                // ...return obj's memory to the free list here (left in place).
+            }
+        }
+        heap_ = survivors;
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

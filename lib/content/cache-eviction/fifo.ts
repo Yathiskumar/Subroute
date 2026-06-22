@@ -77,10 +77,12 @@ export const fifo: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "fifo.ts",
-    code: `// Map preserves insertion order in JS — perfect for FIFO.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "fifo.ts",
+      code: `// Map preserves insertion order in JS — perfect for FIFO.
 // Critically, we do *not* re-insert on get.
 class FIFO<K, V> {
   private store = new Map<K, V>();
@@ -102,7 +104,109 @@ class FIFO<K, V> {
     }
   }
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "FifoCache.java",
+      code: `import java.util.LinkedHashMap;
+
+// LinkedHashMap keeps insertion order — perfect for FIFO.
+// Critically, accessOrder stays false: we do *not* reorder on get.
+class FifoCache<K, V> {
+    private final LinkedHashMap<K, V> store = new LinkedHashMap<>();
+    private final int capacity;
+
+    FifoCache(int capacity) {
+        this.capacity = capacity;
+    }
+
+    V get(K key) {
+        return store.get(key); // age unchanged
+    }
+
+    void set(K key, V value) {
+        if (store.containsKey(key)) {
+            store.put(key, value); // value updated, age unchanged
+            return;
+        }
+        store.put(key, value);
+        if (store.size() > capacity) {
+            K oldest = store.keySet().iterator().next();
+            store.remove(oldest);
+        }
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "fifo_cache.py",
+      code: `from collections import OrderedDict
+from typing import Optional
+
+
+class FIFO:
+    """OrderedDict keeps insertion order — perfect for FIFO.
+
+    Critically, we do *not* move_to_end on get.
+    """
+
+    def __init__(self, capacity: int) -> None:
+        self.store: OrderedDict = OrderedDict()
+        self.capacity = capacity
+
+    def get(self, key) -> Optional[object]:
+        return self.store.get(key)  # age unchanged
+
+    def set(self, key, value) -> None:
+        if key in self.store:
+            self.store[key] = value  # value updated, age unchanged
+            return
+        self.store[key] = value
+        if len(self.store) > self.capacity:
+            self.store.popitem(last=False)  # drop oldest arrival`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "fifo_cache.cpp",
+      code: `// A queue of keys in arrival order + a hash map for O(1) lookup.
+// Critically, we do *not* touch the queue on get.
+#include <queue>
+#include <unordered_map>
+#include <optional>
+
+template <class K, class V>
+class FIFO {
+    size_t capacity_;
+    std::queue<K> order_;                 // arrival order, front = oldest
+    std::unordered_map<K, V> store_;
+
+public:
+    explicit FIFO(size_t capacity) : capacity_(capacity) {}
+
+    std::optional<V> get(const K& key) {
+        auto it = store_.find(key);
+        if (it == store_.end()) return std::nullopt; // age unchanged
+        return it->second;
+    }
+
+    void set(const K& key, const V& value) {
+        if (store_.count(key)) {
+            store_[key] = value; // value updated, age unchanged
+            return;
+        }
+        store_[key] = value;
+        order_.push(key);
+        if (store_.size() > capacity_) {
+            store_.erase(order_.front()); // drop oldest arrival
+            order_.pop();
+        }
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

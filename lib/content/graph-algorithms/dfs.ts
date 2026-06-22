@@ -123,10 +123,12 @@ export const dfs: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "dfs-graph.ts",
-    code: `// Recursive DFS on a graph (adjacency list). Records discovery /
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "dfs-graph.ts",
+      code: `// Recursive DFS on a graph (adjacency list). Records discovery /
 // finish order and classifies each edge as a tree or back edge.
 type Color = "white" | "grey" | "black";
 
@@ -165,7 +167,156 @@ function dfs(adj: Map<string, string[]>, start: string) {
 // disc = pre-order (discovery) time; fin = post-order (finish) time.
 // Reverse the nodes by finish time and you have a topological sort of a DAG.
 // On a graph millions of nodes deep, rewrite this with an explicit stack.`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "DfsGraph.java",
+      code: `import java.util.*;
+
+// Recursive DFS on a graph (adjacency list). Records discovery /
+// finish order and classifies each edge as a tree or back edge.
+// white = unseen, grey = on stack, black = done
+class DfsGraph {
+    final Map<String, List<String>> adj;
+    final Map<String, Character> color = new HashMap<>();
+    final List<String> order = new ArrayList<>();               // discovery order
+    final List<String[]> backEdges = new ArrayList<>();         // each one closes a cycle
+    final Map<String, Integer> disc = new HashMap<>();
+    final Map<String, Integer> fin = new HashMap<>();
+    int time = 0;
+
+    DfsGraph(Map<String, List<String>> adj) { this.adj = adj; }
+
+    void dfs(String start) { visit(start, null); }
+
+    void visit(String u, String parent) {
+        color.put(u, 'g');                   // push: discovered, now on the stack
+        disc.put(u, ++time);
+        order.add(u);
+
+        for (String v : adj.getOrDefault(u, List.of())) {
+            if (v.equals(parent)) continue;  // skip the undirected edge we arrived on
+            char c = color.getOrDefault(v, 'w');
+            if (c == 'w') {
+                visit(v, u);                 // tree edge — recurse deeper
+            } else if (c == 'g') {
+                backEdges.add(new String[]{u, v});  // back edge → cycle
+            }
+            // black: already finished — nothing to do
+        }
+
+        color.put(u, 'b');                   // pop: this frame returns, node finished
+        fin.put(u, ++time);
+    }
+}
+
+// disc = pre-order (discovery) time; fin = post-order (finish) time.
+// Reverse the nodes by finish time and you have a topological sort of a DAG.
+// On a graph millions of nodes deep, rewrite this with an explicit stack.`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "dfs_graph.py",
+      code: `def dfs(adj: dict[str, list[str]], start: str):
+    """Recursive DFS on a graph (adjacency list). Records discovery /
+    finish order and classifies each edge as a tree or back edge."""
+    color: dict[str, str] = {}   # white = unseen, grey = on stack, black = done
+    order: list[str] = []        # discovery order
+    back_edges: list[tuple[str, str]] = []  # each one closes a cycle
+    disc: dict[str, int] = {}
+    fin: dict[str, int] = {}
+    time = 0
+
+    def visit(u: str, parent: str | None) -> None:
+        nonlocal time
+        color[u] = "grey"        # push: discovered, now on the stack
+        time += 1
+        disc[u] = time
+        order.append(u)
+
+        for v in adj.get(u, []):
+            if v == parent:
+                continue         # skip the undirected edge we arrived on
+            c = color.get(v, "white")
+            if c == "white":
+                visit(v, u)      # tree edge — recurse deeper
+            elif c == "grey":
+                back_edges.append((u, v))  # back edge → cycle
+            # black: already finished — nothing to do
+
+        color[u] = "black"       # pop: this frame returns, node finished
+        time += 1
+        fin[u] = time
+
+    visit(start, None)
+    return order, back_edges, disc, fin
+
+
+# disc = pre-order (discovery) time; fin = post-order (finish) time.
+# Reverse the nodes by finish time and you have a topological sort of a DAG.
+# On a graph millions of nodes deep, rewrite this with an explicit stack
+# (and raise the recursion limit, or Python will refuse to go that deep).`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "dfs_graph.cpp",
+      code: `// Recursive DFS on a graph (adjacency list). Records discovery /
+// finish order and classifies each edge as a tree or back edge.
+#include <functional>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+// color: 'w' = unseen, 'g' = on stack, 'b' = done
+struct DfsResult {
+    std::vector<std::string> order;                            // discovery order
+    std::vector<std::pair<std::string, std::string>> backEdges; // each one closes a cycle
+    std::unordered_map<std::string, int> disc, fin;
+};
+
+DfsResult dfs(
+    const std::unordered_map<std::string, std::vector<std::string>> &adj,
+    const std::string &start) {
+    DfsResult r;
+    std::unordered_map<std::string, char> color;
+    int time = 0;
+
+    std::function<void(const std::string &, const std::string *)> visit =
+        [&](const std::string &u, const std::string *parent) {
+            color[u] = 'g';              // push: discovered, now on the stack
+            r.disc[u] = ++time;
+            r.order.push_back(u);
+
+            auto it = adj.find(u);
+            if (it != adj.end()) {
+                for (const auto &v : it->second) {
+                    if (parent && v == *parent) continue;  // skip the edge we arrived on
+                    char c = color.count(v) ? color[v] : 'w';
+                    if (c == 'w') {
+                        visit(v, &u);    // tree edge — recurse deeper
+                    } else if (c == 'g') {
+                        r.backEdges.push_back({u, v});  // back edge → cycle
+                    }
+                    // 'b': already finished — nothing to do
+                }
+            }
+
+            color[u] = 'b';              // pop: this frame returns, node finished
+            r.fin[u] = ++time;
+        };
+
+    visit(start, nullptr);
+    return r;
+}
+
+// disc = pre-order (discovery) time; fin = post-order (finish) time.
+// Reverse the nodes by finish time and you have a topological sort of a DAG.
+// On a graph millions of nodes deep, rewrite this with an explicit stack.`,
+    },
+  ],
 
   furtherReading: [
     {

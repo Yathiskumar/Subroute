@@ -98,10 +98,12 @@ export const leakyBucket: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "leaky-bucket.ts",
-    code: `// A simple leaky bucket (FIFO queue + steady drain).
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "leaky-bucket.ts",
+      code: `// A simple leaky bucket (FIFO queue + steady drain).
 class LeakyBucket {
   private queue: (() => void)[] = [];
 
@@ -129,7 +131,132 @@ const bucket = new LeakyBucket(50, 100);
 if (!bucket.enqueue(() => handleRequest(req))) {
   // queue full — drop the request
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "LeakyBucket.java",
+      code: `// A simple leaky bucket (FIFO queue + steady drain).
+import java.util.ArrayDeque;
+import java.util.Queue;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
+class LeakyBucket {
+    private final Queue<Runnable> queue = new ArrayDeque<>();
+    private final int capacity;
+
+    LeakyBucket(int capacity, long leakIntervalMs) {
+        this.capacity = capacity;
+        ScheduledExecutorService leaker = Executors.newSingleThreadScheduledExecutor();
+        leaker.scheduleAtFixedRate(this::leak, 0, leakIntervalMs, TimeUnit.MILLISECONDS);
+    }
+
+    synchronized boolean enqueue(Runnable work) {
+        if (queue.size() >= capacity) return false;
+        queue.add(work);
+        return true;
+    }
+
+    private synchronized void leak() {
+        Runnable next = queue.poll();
+        if (next != null) next.run();
+    }
+}
+
+// Process at exactly 10 requests per second, max queue 50.
+LeakyBucket bucket = new LeakyBucket(50, 100);
+if (!bucket.enqueue(() -> handleRequest(req))) {
+    // queue full — drop the request
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "leaky_bucket.py",
+      code: `import threading
+from collections import deque
+from typing import Callable
+
+
+class LeakyBucket:
+    """A simple leaky bucket (FIFO queue + steady drain)."""
+
+    def __init__(self, capacity: int, leak_interval_s: float) -> None:
+        self.capacity = capacity
+        self.queue: deque[Callable[[], None]] = deque()
+        self.lock = threading.Lock()
+        self._schedule(leak_interval_s)
+
+    def enqueue(self, work: Callable[[], None]) -> bool:
+        with self.lock:
+            if len(self.queue) >= self.capacity:
+                return False
+            self.queue.append(work)
+            return True
+
+    def _leak(self) -> None:
+        with self.lock:
+            work = self.queue.popleft() if self.queue else None
+        if work:
+            work()
+
+    def _schedule(self, interval_s: float) -> None:
+        threading.Timer(interval_s, self._tick, [interval_s]).start()
+
+    def _tick(self, interval_s: float) -> None:
+        self._leak()
+        self._schedule(interval_s)
+
+
+# Process at exactly 10 requests per second, max queue 50.
+bucket = LeakyBucket(50, 0.1)
+if not bucket.enqueue(lambda: handle_request(req)):
+    ...  # queue full — drop the request`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "leaky_bucket.cpp",
+      code: `// A simple leaky bucket (FIFO queue + steady drain).
+#include <functional>
+#include <mutex>
+#include <queue>
+
+class LeakyBucket {
+    std::queue<std::function<void()>> queue_;
+    std::mutex mu_;
+    std::size_t capacity_;
+
+public:
+    explicit LeakyBucket(std::size_t capacity) : capacity_(capacity) {}
+
+    bool enqueue(std::function<void()> work) {
+        std::lock_guard<std::mutex> lock(mu_);
+        if (queue_.size() >= capacity_) return false;
+        queue_.push(std::move(work));
+        return true;
+    }
+
+    // Call leak() from a timer thread every leakIntervalMs.
+    void leak() {
+        std::function<void()> next;
+        {
+            std::lock_guard<std::mutex> lock(mu_);
+            if (queue_.empty()) return;
+            next = std::move(queue_.front());
+            queue_.pop();
+        }
+        next();
+    }
+};
+
+// Process at exactly 10 requests per second, max queue 50.
+// LeakyBucket bucket(50);
+// if (!bucket.enqueue([&]{ handleRequest(req); })) { /* drop */ }`,
+    },
+  ],
 
   furtherReading: [
     {

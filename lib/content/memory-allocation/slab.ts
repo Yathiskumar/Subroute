@@ -110,46 +110,246 @@ export const slab: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "slab.ts",
-    code: `interface Slab { slots: (string | null)[]; }      // null = free slot
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "slab.go",
+      code: `package alloc
+
+type Slab struct {
+	Slots []string // "" = free slot
+}
+
+type Cache struct {
+	ObjectSize   int
+	SlotsPerSlab int
+	Slabs        []*Slab
+}
+
+func (c *Cache) state(s *Slab) string {
+	used := 0
+	for _, v := range s.Slots {
+		if v != "" {
+			used++
+		}
+	}
+	switch {
+	case used == 0:
+		return "empty"
+	case used == len(s.Slots):
+		return "full"
+	default:
+		return "partial"
+	}
+}
+
+// Alloc claims a free slot in O(1), preferring a partial slab; grows only if needed.
+func (c *Cache) Alloc(objID string) {
+	var slab *Slab
+	for _, s := range c.Slabs { // prefer a partial slab
+		if c.state(s) == "partial" {
+			slab = s
+			break
+		}
+	}
+	if slab == nil {
+		for _, s := range c.Slabs { // else an empty slab
+			if c.state(s) == "empty" {
+				slab = s
+				break
+			}
+		}
+	}
+	if slab == nil { // grow: new slab from page allocator
+		slab = &Slab{Slots: make([]string, c.SlotsPerSlab)}
+		c.Slabs = append(c.Slabs, slab)
+	}
+	for i := range slab.Slots { // take the first free slot
+		if slab.Slots[i] == "" {
+			slab.Slots[i] = objID
+			break
+		}
+	}
+}
+
+// Free releases the slot in O(1); reclaims the slab if it becomes empty.
+func (c *Cache) Free(objID string) {
+	for si, slab := range c.Slabs {
+		for i, v := range slab.Slots {
+			if v == objID {
+				slab.Slots[i] = ""
+				if c.state(slab) == "empty" { // return memory to the OS
+					c.Slabs = append(c.Slabs[:si], c.Slabs[si+1:]...)
+				}
+				return
+			}
+		}
+	}
+}`,
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "Slab.java",
+      code: `import java.util.ArrayList;
+import java.util.List;
+
+class Slab {
+    String[] slots;                       // null = free slot
+    Slab(int n) { slots = new String[n]; }
+}
 
 class Cache {
-  slabs: Slab[] = [];
-  constructor(public objectSize: number, public slotsPerSlab: number) {}
+    final int objectSize, slotsPerSlab;
+    List<Slab> slabs = new ArrayList<>();
 
-  private state(s: Slab) {
-    const used = s.slots.filter(Boolean).length;
-    return used === 0 ? "empty" : used === s.slots.length ? "full" : "partial";
-  }
-
-  /** O(1): claim a free slot, preferring a partial slab; grow only if needed. */
-  alloc(objId: string): void {
-    let slab = this.slabs.find((s) => this.state(s) === "partial")
-            ?? this.slabs.find((s) => this.state(s) === "empty");
-    if (!slab) {                                   // grow: new slab from page allocator
-      slab = { slots: Array(this.slotsPerSlab).fill(null) };
-      this.slabs.push(slab);
+    Cache(int objectSize, int slotsPerSlab) {
+        this.objectSize = objectSize;
+        this.slotsPerSlab = slotsPerSlab;
     }
-    slab.slots[slab.slots.indexOf(null)] = objId;  // take the first free slot
-  }
 
-  /** O(1): release the slot; reclaim the slab if it becomes empty. */
-  free(objId: string): void {
-    for (const slab of this.slabs) {
-      const i = slab.slots.indexOf(objId);
-      if (i !== -1) {
-        slab.slots[i] = null;
-        if (this.state(slab) === "empty") {        // return memory to the OS
-          this.slabs = this.slabs.filter((s) => s !== slab);
+    private String state(Slab s) {
+        int used = 0;
+        for (String v : s.slots) if (v != null) used++;
+        if (used == 0) return "empty";
+        if (used == s.slots.length) return "full";
+        return "partial";
+    }
+
+    /** O(1): claim a free slot, preferring a partial slab; grow only if needed. */
+    void alloc(String objId) {
+        Slab slab = null;
+        for (Slab s : slabs) if (state(s).equals("partial")) { slab = s; break; }
+        if (slab == null)
+            for (Slab s : slabs) if (state(s).equals("empty")) { slab = s; break; }
+        if (slab == null) {                          // grow: new slab from page allocator
+            slab = new Slab(slotsPerSlab);
+            slabs.add(slab);
         }
-        return;
-      }
+        for (int i = 0; i < slab.slots.length; i++)  // take the first free slot
+            if (slab.slots[i] == null) { slab.slots[i] = objId; break; }
     }
-  }
+
+    /** O(1): release the slot; reclaim the slab if it becomes empty. */
+    void free(String objId) {
+        for (Slab slab : slabs) {
+            for (int i = 0; i < slab.slots.length; i++) {
+                if (objId.equals(slab.slots[i])) {
+                    slab.slots[i] = null;
+                    if (state(slab).equals("empty"))  // return memory to the OS
+                        slabs.remove(slab);
+                    return;
+                }
+            }
+        }
+    }
 }`,
-  },
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "slab.py",
+      code: `class Slab:
+    def __init__(self, n: int) -> None:
+        self.slots: list[str | None] = [None] * n   # None = free slot
+
+
+class Cache:
+    def __init__(self, object_size: int, slots_per_slab: int) -> None:
+        self.object_size = object_size
+        self.slots_per_slab = slots_per_slab
+        self.slabs: list[Slab] = []
+
+    def _state(self, s: Slab) -> str:
+        used = sum(1 for v in s.slots if v is not None)
+        if used == 0:
+            return "empty"
+        if used == len(s.slots):
+            return "full"
+        return "partial"
+
+    def alloc(self, obj_id: str) -> None:
+        """O(1): claim a free slot, preferring a partial slab; grow only if needed."""
+        slab = next((s for s in self.slabs if self._state(s) == "partial"), None)
+        if slab is None:
+            slab = next((s for s in self.slabs if self._state(s) == "empty"), None)
+        if slab is None:                            # grow: new slab from page allocator
+            slab = Slab(self.slots_per_slab)
+            self.slabs.append(slab)
+        slab.slots[slab.slots.index(None)] = obj_id  # take the first free slot
+
+    def free(self, obj_id: str) -> None:
+        """O(1): release the slot; reclaim the slab if it becomes empty."""
+        for slab in self.slabs:
+            if obj_id in slab.slots:
+                slab.slots[slab.slots.index(obj_id)] = None
+                if self._state(slab) == "empty":     # return memory to the OS
+                    self.slabs.remove(slab)
+                return`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "slab.cpp",
+      code: `#include <algorithm>
+#include <optional>
+#include <string>
+#include <vector>
+
+struct Slab {
+    std::vector<std::optional<std::string>> slots;   // nullopt = free slot
+    explicit Slab(int n) : slots(n) {}
+};
+
+class Cache {
+    int objectSize_;
+    int slotsPerSlab_;
+    std::vector<Slab> slabs_;
+
+    std::string state(const Slab& s) const {
+        int used = 0;
+        for (const auto& v : s.slots) if (v) ++used;
+        if (used == 0) return "empty";
+        if (used == static_cast<int>(s.slots.size())) return "full";
+        return "partial";
+    }
+
+public:
+    Cache(int objectSize, int slotsPerSlab)
+        : objectSize_(objectSize), slotsPerSlab_(slotsPerSlab) {}
+
+    // O(1): claim a free slot, preferring a partial slab; grow only if needed.
+    void alloc(const std::string& objId) {
+        Slab* slab = nullptr;
+        for (auto& s : slabs_) if (state(s) == "partial") { slab = &s; break; }
+        if (!slab)
+            for (auto& s : slabs_) if (state(s) == "empty") { slab = &s; break; }
+        if (!slab) {                                  // grow: new slab from page allocator
+            slabs_.emplace_back(slotsPerSlab_);
+            slab = &slabs_.back();
+        }
+        for (auto& slot : slab->slots)                // take the first free slot
+            if (!slot) { slot = objId; break; }
+    }
+
+    // O(1): release the slot; reclaim the slab if it becomes empty.
+    void free(const std::string& objId) {
+        for (std::size_t si = 0; si < slabs_.size(); ++si) {
+            auto& slab = slabs_[si];
+            for (auto& slot : slab.slots) {
+                if (slot == objId) {
+                    slot.reset();
+                    if (state(slab) == "empty")        // return memory to the OS
+                        slabs_.erase(slabs_.begin() + si);
+                    return;
+                }
+            }
+        }
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

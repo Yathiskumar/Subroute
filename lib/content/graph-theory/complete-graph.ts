@@ -104,10 +104,12 @@ export const completeGraph: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "complete-graph.ts",
-    code: `// The complete graph K_n: every pair of vertices is joined.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "complete-graph.ts",
+      code: `// The complete graph K_n: every pair of vertices is joined.
 // Densest simple graph possible — n(n-1)/2 edges, every degree n-1.
 class CompleteGraph {
   readonly n: number;
@@ -149,7 +151,172 @@ class CompleteGraph {
     return max === 0 ? 0 : edges / max; // 1.0 means complete
   }
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "CompleteGraph.java",
+      code: `// The complete graph K_n: every pair of vertices is joined.
+// Densest simple graph possible — n(n-1)/2 edges, every degree n-1.
+import java.util.*;
+
+class CompleteGraph {
+    final int n;
+    final List<Integer> vertices;
+
+    CompleteGraph(int n) {
+        if (n < 0) throw new IllegalArgumentException("n must be non-negative");
+        this.n = n;
+        this.vertices = new ArrayList<>();
+        for (int i = 0; i < n; i++) vertices.add(i);
+    }
+
+    // All unordered pairs {i, j} with i < j — exactly the edges of K_n.
+    List<int[]> edges() {
+        List<int[]> result = new ArrayList<>();
+        for (int i = 0; i < n; i++)
+            for (int j = i + 1; j < n; j++) result.add(new int[] { i, j });
+        return result;
+    }
+
+    // n(n-1)/2 — derived, not counted.
+    int edgeCount() {
+        return (n * (n - 1)) / 2;
+    }
+
+    // Every vertex touches all the others, so the graph is (n-1)-regular.
+    int degree(int v) {
+        return n - 1;
+    }
+
+    // Place vertices evenly on a circle so K_n draws as a symmetric web.
+    double[][] layout(double cx, double cy, double radius) {
+        double[][] points = new double[n][2];
+        for (int i = 0; i < n; i++) {
+            double angle = -Math.PI / 2 + (i * 2 * Math.PI) / n;
+            points[i][0] = cx + radius * Math.cos(angle);
+            points[i][1] = cy + radius * Math.sin(angle);
+        }
+        return points;
+    }
+
+    // Density: how close another graph's edge count is to the K_n ceiling.
+    static double density(int vertices, int edges) {
+        double max = (vertices * (vertices - 1)) / 2.0;
+        return max == 0 ? 0 : edges / max; // 1.0 means complete
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "complete_graph.py",
+      code: `import math
+from typing import Iterator
+
+
+class CompleteGraph:
+    """The complete graph K_n: every pair of vertices is joined.
+
+    Densest simple graph possible — n(n-1)/2 edges, every degree n-1.
+    """
+
+    def __init__(self, n: int) -> None:
+        if n < 0:
+            raise ValueError("n must be non-negative")
+        self.n = n
+        self.vertices = list(range(n))
+
+    def edges(self) -> Iterator[tuple[int, int]]:
+        # All unordered pairs (i, j) with i < j — exactly the edges of K_n.
+        for i in range(self.n):
+            for j in range(i + 1, self.n):
+                yield (i, j)
+
+    def edge_count(self) -> int:
+        # n(n-1)/2 — derived, not counted.
+        return (self.n * (self.n - 1)) // 2
+
+    def degree(self, v: int) -> int:
+        # Every vertex touches all the others, so the graph is (n-1)-regular.
+        return self.n - 1
+
+    def layout(self, cx: float = 280, cy: float = 145,
+               radius: float = 120) -> list[tuple[float, float]]:
+        # Place vertices evenly on a circle so K_n draws as a symmetric web.
+        points = []
+        for i in self.vertices:
+            angle = -math.pi / 2 + (i * 2 * math.pi) / self.n
+            points.append((cx + radius * math.cos(angle),
+                           cy + radius * math.sin(angle)))
+        return points
+
+    @staticmethod
+    def density(vertices: int, edges: int) -> float:
+        # Density: how close another graph's edge count is to the K_n ceiling.
+        max_edges = (vertices * (vertices - 1)) / 2
+        return 0 if max_edges == 0 else edges / max_edges  # 1.0 means complete`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "complete_graph.cpp",
+      code: `// The complete graph K_n: every pair of vertices is joined.
+// Densest simple graph possible — n(n-1)/2 edges, every degree n-1.
+#include <cmath>
+#include <stdexcept>
+#include <utility>
+#include <vector>
+
+class CompleteGraph {
+public:
+    const int n;
+    std::vector<int> vertices;
+
+    explicit CompleteGraph(int n) : n(n) {
+        if (n < 0) throw std::invalid_argument("n must be non-negative");
+        vertices.resize(n);
+        for (int i = 0; i < n; i++) vertices[i] = i;
+    }
+
+    // All unordered pairs {i, j} with i < j — exactly the edges of K_n.
+    std::vector<std::pair<int, int>> edges() const {
+        std::vector<std::pair<int, int>> result;
+        for (int i = 0; i < n; i++)
+            for (int j = i + 1; j < n; j++) result.emplace_back(i, j);
+        return result;
+    }
+
+    // n(n-1)/2 — derived, not counted.
+    int edgeCount() const {
+        return (n * (n - 1)) / 2;
+    }
+
+    // Every vertex touches all the others, so the graph is (n-1)-regular.
+    int degree(int v) const {
+        return n - 1;
+    }
+
+    // Place vertices evenly on a circle so K_n draws as a symmetric web.
+    std::vector<std::pair<double, double>> layout(double cx = 280, double cy = 145,
+                                                  double radius = 120) const {
+        std::vector<std::pair<double, double>> points;
+        for (int i : vertices) {
+            double angle = -M_PI / 2 + (i * 2 * M_PI) / n;
+            points.emplace_back(cx + radius * std::cos(angle),
+                                cy + radius * std::sin(angle));
+        }
+        return points;
+    }
+
+    // Density: how close another graph's edge count is to the K_n ceiling.
+    static double density(int vertices, int edges) {
+        double max = (vertices * (vertices - 1)) / 2.0;
+        return max == 0 ? 0 : edges / max; // 1.0 means complete
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

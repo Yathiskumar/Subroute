@@ -112,10 +112,12 @@ export const topologicalSort: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "topological-sort.ts",
-    code: `// Kahn's algorithm — BFS-flavoured topological sort with cycle detection.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "topological-sort.ts",
+      code: `// Kahn's algorithm — BFS-flavoured topological sort with cycle detection.
 function topoSortKahn(adj: Map<string, string[]>): string[] {
   // Step 1: compute in-degrees.
   const inDeg = new Map<string, number>();
@@ -156,7 +158,177 @@ function topoSortDfs(adj: Map<string, string[]>): string[] {
   for (const u of adj.keys()) if (!seen.has(u)) dfs(u);
   return out.reverse();     // reverse post-order is a topological order
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "TopologicalSort.java",
+      code: `import java.util.*;
+
+class TopologicalSort {
+    // Kahn's algorithm — BFS-flavoured topological sort with cycle detection.
+    List<String> topoSortKahn(Map<String, List<String>> adj) {
+        // Step 1: compute in-degrees.
+        Map<String, Integer> inDeg = new HashMap<>();
+        for (String u : adj.keySet()) inDeg.put(u, 0);
+        for (List<String> nbs : adj.values())
+            for (String v : nbs) inDeg.merge(v, 1, Integer::sum);
+
+        // Step 2: seed the queue with every zero-in-degree node.
+        Deque<String> queue = new ArrayDeque<>();
+        for (var e : inDeg.entrySet()) if (e.getValue() == 0) queue.add(e.getKey());
+
+        List<String> order = new ArrayList<>();
+        while (!queue.isEmpty()) {
+            String u = queue.poll();
+            order.add(u);
+            for (String v : adj.getOrDefault(u, List.of())) {
+                int d = inDeg.get(v) - 1;
+                inDeg.put(v, d);
+                if (d == 0) queue.add(v);
+            }
+        }
+
+        // Step 3: cycle check.
+        if (order.size() != adj.size())
+            throw new IllegalStateException("cycle detected — no topological order exists");
+        return order;
+    }
+
+    // DFS post-order — same answer, three extra lines on top of DFS.
+    List<String> topoSortDfs(Map<String, List<String>> adj) {
+        Set<String> seen = new HashSet<>();
+        List<String> out = new ArrayList<>();
+        for (String u : adj.keySet())
+            if (!seen.contains(u)) dfs(u, adj, seen, out);
+        Collections.reverse(out);   // reverse post-order is a topological order
+        return out;
+    }
+
+    private void dfs(String u, Map<String, List<String>> adj,
+                     Set<String> seen, List<String> out) {
+        seen.add(u);
+        for (String v : adj.getOrDefault(u, List.of()))
+            if (!seen.contains(v)) dfs(v, adj, seen, out);
+        out.add(u);                 // on the way back up — post-order
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "topological_sort.py",
+      code: `from collections import deque
+
+
+def topo_sort_kahn(adj: dict[str, list[str]]) -> list[str]:
+    """Kahn's algorithm — BFS-flavoured topological sort with cycle detection."""
+    # Step 1: compute in-degrees.
+    in_deg = {u: 0 for u in adj}
+    for nbs in adj.values():
+        for v in nbs:
+            in_deg[v] = in_deg.get(v, 0) + 1
+
+    # Step 2: seed the queue with every zero-in-degree node.
+    queue = deque(u for u, d in in_deg.items() if d == 0)
+
+    order: list[str] = []
+    while queue:
+        u = queue.popleft()
+        order.append(u)
+        for v in adj.get(u, []):
+            in_deg[v] -= 1
+            if in_deg[v] == 0:
+                queue.append(v)
+
+    # Step 3: cycle check.
+    if len(order) != len(adj):
+        raise ValueError("cycle detected — no topological order exists")
+    return order
+
+
+def topo_sort_dfs(adj: dict[str, list[str]]) -> list[str]:
+    """DFS post-order — same answer, three extra lines on top of DFS."""
+    seen: set[str] = set()
+    out: list[str] = []
+
+    def dfs(u: str) -> None:
+        seen.add(u)
+        for v in adj.get(u, []):
+            if v not in seen:
+                dfs(v)
+        out.append(u)           # on the way back up — post-order
+
+    for u in adj:
+        if u not in seen:
+            dfs(u)
+    out.reverse()               # reverse post-order is a topological order
+    return out`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "topological_sort.cpp",
+      code: `// Kahn's algorithm — BFS-flavoured topological sort with cycle detection.
+#include <algorithm>
+#include <functional>
+#include <queue>
+#include <stdexcept>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+
+using Adj = std::unordered_map<std::string, std::vector<std::string>>;
+
+std::vector<std::string> topoSortKahn(const Adj &adj) {
+    // Step 1: compute in-degrees.
+    std::unordered_map<std::string, int> inDeg;
+    for (const auto &kv : adj) inDeg.emplace(kv.first, 0);
+    for (const auto &kv : adj)
+        for (const auto &v : kv.second) inDeg[v]++;
+
+    // Step 2: seed the queue with every zero-in-degree node.
+    std::queue<std::string> queue;
+    for (const auto &kv : inDeg) if (kv.second == 0) queue.push(kv.first);
+
+    std::vector<std::string> order;
+    while (!queue.empty()) {
+        std::string u = queue.front();
+        queue.pop();
+        order.push_back(u);
+        auto it = adj.find(u);
+        if (it == adj.end()) continue;
+        for (const auto &v : it->second) {
+            if (--inDeg[v] == 0) queue.push(v);
+        }
+    }
+
+    // Step 3: cycle check.
+    if (order.size() != adj.size())
+        throw std::runtime_error("cycle detected — no topological order exists");
+    return order;
+}
+
+// DFS post-order — same answer, three extra lines on top of DFS.
+std::vector<std::string> topoSortDfs(const Adj &adj) {
+    std::unordered_set<std::string> seen;
+    std::vector<std::string> out;
+    std::function<void(const std::string &)> dfs = [&](const std::string &u) {
+        seen.insert(u);
+        auto it = adj.find(u);
+        if (it != adj.end())
+            for (const auto &v : it->second)
+                if (!seen.count(v)) dfs(v);
+        out.push_back(u);       // on the way back up — post-order
+    };
+    for (const auto &kv : adj)
+        if (!seen.count(kv.first)) dfs(kv.first);
+    std::reverse(out.begin(), out.end());  // reverse post-order is a topological order
+    return out;
+}`,
+    },
+  ],
 
   furtherReading: [
     {

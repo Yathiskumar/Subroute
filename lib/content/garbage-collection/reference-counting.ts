@@ -97,50 +97,205 @@ export const referenceCounting: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "reference-counting.ts",
-    code: `// Reference counting: every object tracks how many references point at it.
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "reference_counting.go",
+      code: `// Reference counting: every object tracks how many references point at it.
 // When the count hits zero, free it — and decrement everything it pointed to.
+package gc
+
+type RcObject struct {
+	rc   int
+	refs []*RcObject // outgoing references this object holds
+}
+
+type RefCountedHeap struct{}
+
+// Retain is called whenever a new reference to obj is created (b = a).
+func (h *RefCountedHeap) Retain(obj *RcObject) {
+	obj.rc++
+}
+
+// Release is called whenever a reference to obj is dropped (b = null).
+func (h *RefCountedHeap) Release(obj *RcObject) {
+	obj.rc--
+	if obj.rc == 0 {
+		h.free(obj)
+	}
+}
+
+// Assign field = target, maintaining counts on both sides.
+func (h *RefCountedHeap) Assign(holder *RcObject, field int, target *RcObject) {
+	old := holder.refs[field]
+	if target != nil {
+		h.Retain(target) // count the new edge first...
+	}
+	if old != nil {
+		h.Release(old) // ...then drop the old one (may free it)
+	}
+	holder.refs[field] = target
+}
+
+func (h *RefCountedHeap) free(obj *RcObject) {
+	// Before reclaiming, drop the references this object held.
+	// This is what makes freeing cascade through a structure.
+	for _, child := range obj.refs {
+		if child != nil {
+			h.Release(child)
+		}
+	}
+	obj.refs = nil
+	// ...return obj's memory to the allocator here.
+	// NOTE: a cycle (A.refs=[B], B.refs=[A]) never reaches this path —
+	// both counts stay at 1 forever. That is the leak.
+}`,
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "ReferenceCounting.java",
+      code: `// Reference counting: every object tracks how many references point at it.
+// When the count hits zero, free it — and decrement everything it pointed to.
+import java.util.ArrayList;
+import java.util.List;
+
 class RcObject {
-  rc = 0;
-  refs: RcObject[] = []; // outgoing references this object holds
+    int rc = 0;
+    List<RcObject> refs = new ArrayList<>(); // outgoing references this object holds
 }
 
 class RefCountedHeap {
-  /** Called whenever a new reference to \`obj\` is created (b = a). */
-  retain(obj: RcObject): void {
-    obj.rc++;
-  }
-
-  /** Called whenever a reference to \`obj\` is dropped (b = null). */
-  release(obj: RcObject): void {
-    if (--obj.rc === 0) {
-      this.free(obj);
+    /** Called whenever a new reference to obj is created (b = a). */
+    void retain(RcObject obj) {
+        obj.rc++;
     }
-  }
 
-  /** Assign \`field = target\`, maintaining counts on both sides. */
-  assign(holder: RcObject, field: number, target: RcObject | null): void {
-    const old = holder.refs[field];
-    if (target) this.retain(target);   // count the new edge first...
-    if (old) this.release(old);        // ...then drop the old one (may free it)
-    holder.refs[field] = target as RcObject;
-  }
-
-  private free(obj: RcObject): void {
-    // Before reclaiming, drop the references this object held.
-    // This is what makes freeing cascade through a structure.
-    for (const child of obj.refs) {
-      if (child) this.release(child);
+    /** Called whenever a reference to obj is dropped (b = null). */
+    void release(RcObject obj) {
+        if (--obj.rc == 0) {
+            free(obj);
+        }
     }
-    obj.refs = [];
-    // ...return obj's memory to the allocator here.
-    // NOTE: a cycle (A.refs=[B], B.refs=[A]) never reaches this path —
-    // both counts stay at 1 forever. That is the leak.
-  }
+
+    /** Assign field = target, maintaining counts on both sides. */
+    void assign(RcObject holder, int field, RcObject target) {
+        RcObject old = holder.refs.get(field);
+        if (target != null) retain(target);   // count the new edge first...
+        if (old != null) release(old);         // ...then drop the old one (may free it)
+        holder.refs.set(field, target);
+    }
+
+    private void free(RcObject obj) {
+        // Before reclaiming, drop the references this object held.
+        // This is what makes freeing cascade through a structure.
+        for (RcObject child : obj.refs) {
+            if (child != null) release(child);
+        }
+        obj.refs = new ArrayList<>();
+        // ...return obj's memory to the allocator here.
+        // NOTE: a cycle (A.refs=[B], B.refs=[A]) never reaches this path —
+        // both counts stay at 1 forever. That is the leak.
+    }
 }`,
-  },
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "reference_counting.py",
+      code: `# Reference counting: every object tracks how many references point at it.
+# When the count hits zero, free it — and decrement everything it pointed to.
+from typing import Optional
+
+
+class RcObject:
+    def __init__(self) -> None:
+        self.rc = 0
+        self.refs: list[Optional["RcObject"]] = []  # outgoing references this object holds
+
+
+class RefCountedHeap:
+    def retain(self, obj: RcObject) -> None:
+        """Called whenever a new reference to obj is created (b = a)."""
+        obj.rc += 1
+
+    def release(self, obj: RcObject) -> None:
+        """Called whenever a reference to obj is dropped (b = None)."""
+        obj.rc -= 1
+        if obj.rc == 0:
+            self._free(obj)
+
+    def assign(self, holder: RcObject, field: int, target: Optional[RcObject]) -> None:
+        """Assign field = target, maintaining counts on both sides."""
+        old = holder.refs[field]
+        if target:
+            self.retain(target)   # count the new edge first...
+        if old:
+            self.release(old)     # ...then drop the old one (may free it)
+        holder.refs[field] = target
+
+    def _free(self, obj: RcObject) -> None:
+        # Before reclaiming, drop the references this object held.
+        # This is what makes freeing cascade through a structure.
+        for child in obj.refs:
+            if child:
+                self.release(child)
+        obj.refs = []
+        # ...return obj's memory to the allocator here.
+        # NOTE: a cycle (A.refs=[B], B.refs=[A]) never reaches this path —
+        # both counts stay at 1 forever. That is the leak.`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "reference_counting.cpp",
+      code: `// Reference counting: every object tracks how many references point at it.
+// When the count hits zero, free it — and decrement everything it pointed to.
+#include <vector>
+
+struct RcObject {
+    int rc = 0;
+    std::vector<RcObject*> refs; // outgoing references this object holds
+};
+
+class RefCountedHeap {
+public:
+    // Called whenever a new reference to obj is created (b = a).
+    void retain(RcObject* obj) {
+        obj->rc++;
+    }
+
+    // Called whenever a reference to obj is dropped (b = nullptr).
+    void release(RcObject* obj) {
+        if (--obj->rc == 0) {
+            free(obj);
+        }
+    }
+
+    // Assign field = target, maintaining counts on both sides.
+    void assign(RcObject* holder, int field, RcObject* target) {
+        RcObject* old = holder->refs[field];
+        if (target) retain(target);   // count the new edge first...
+        if (old) release(old);        // ...then drop the old one (may free it)
+        holder->refs[field] = target;
+    }
+
+private:
+    void free(RcObject* obj) {
+        // Before reclaiming, drop the references this object held.
+        // This is what makes freeing cascade through a structure.
+        for (RcObject* child : obj->refs) {
+            if (child) release(child);
+        }
+        obj->refs.clear();
+        // ...return obj's memory to the allocator here.
+        // NOTE: a cycle (A.refs=[B], B.refs=[A]) never reaches this path —
+        // both counts stay at 1 forever. That is the leak.
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

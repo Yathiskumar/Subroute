@@ -106,10 +106,12 @@ export const lirs: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "lirs.ts",
-    code: `// Sketch only — full LIRS needs careful stack pruning.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "lirs.ts",
+      code: `// Sketch only — full LIRS needs careful stack pruning.
 // LIR keys + some HIR keys live in stack S (LRU order).
 // Resident HIR keys also live in queue Q (FIFO).
 type Status = "LIR" | "RESIDENT_HIR" | "NON_RESIDENT_HIR";
@@ -145,7 +147,169 @@ class LIRS<K, V> {
   private bumpInStack(_: K) { /* move key to top of s */ }
   private promoteToLIR(_: K) { /* LIR/HIR boundary management */ }
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "LirsCache.java",
+      code: `import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+// Sketch only — full LIRS needs careful stack pruning.
+// LIR keys + some HIR keys live in stack S (LRU order).
+// Resident HIR keys also live in queue Q (FIFO).
+class LirsCache<K, V> {
+    private enum Status { LIR, RESIDENT_HIR, NON_RESIDENT_HIR }
+
+    private final Map<K, V> values = new HashMap<>();      // only resident
+    private final Map<K, Status> status = new HashMap<>();
+    private final List<K> s = new ArrayList<>();           // LRU-ordered stack (end = MRU)
+    private final List<K> q = new ArrayList<>();           // FIFO of resident HIRs
+    private final int lirCap;
+    private final int hirCap;
+
+    LirsCache(int lirCap, int hirCap) {
+        this.lirCap = lirCap;
+        this.hirCap = hirCap;
+    }
+
+    V get(K key) {
+        if (!values.containsKey(key)) return null;
+        Status st = status.get(key);
+        if (st == Status.LIR) {
+            bumpInStack(key);
+        } else if (st == Status.RESIDENT_HIR) {
+            if (s.contains(key)) {
+                // Promote: HIR -> LIR; demote bottom LIR -> HIR
+                promoteToLIR(key);
+            } else {
+                bumpInStack(key);
+            }
+        }
+        return values.get(key);
+    }
+
+    void set(K key, V value) {
+        // ... see paper for full insert + stack pruning rules
+        values.put(key, value);
+    }
+
+    private void bumpInStack(K key) { /* move key to top of s */ }
+    private void promoteToLIR(K key) { /* LIR/HIR boundary management */ }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "lirs_cache.py",
+      code: `from enum import Enum
+from typing import Optional
+
+
+class Status(Enum):
+    LIR = "LIR"
+    RESIDENT_HIR = "RESIDENT_HIR"
+    NON_RESIDENT_HIR = "NON_RESIDENT_HIR"
+
+
+class LIRS:
+    """Sketch only — full LIRS needs careful stack pruning.
+
+    LIR keys + some HIR keys live in stack S (LRU order).
+    Resident HIR keys also live in queue Q (FIFO).
+    """
+
+    def __init__(self, lir_cap: int, hir_cap: int) -> None:
+        self.values: dict = {}   # only resident
+        self.status: dict = {}
+        self.s: list = []        # LRU-ordered stack (end = MRU)
+        self.q: list = []        # FIFO of resident HIRs
+        self.lir_cap = lir_cap
+        self.hir_cap = hir_cap
+
+    def get(self, key) -> Optional[object]:
+        if key not in self.values:
+            return None
+        st = self.status.get(key)
+        if st == Status.LIR:
+            self._bump_in_stack(key)
+        elif st == Status.RESIDENT_HIR:
+            if key in self.s:
+                # Promote: HIR -> LIR; demote bottom LIR -> HIR
+                self._promote_to_lir(key)
+            else:
+                self._bump_in_stack(key)
+        return self.values.get(key)
+
+    def set(self, key, value) -> None:
+        # ... see paper for full insert + stack pruning rules
+        self.values[key] = value
+
+    def _bump_in_stack(self, key) -> None:
+        pass  # move key to top of s
+
+    def _promote_to_lir(self, key) -> None:
+        pass  # LIR/HIR boundary management`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "lirs_cache.cpp",
+      code: `// Sketch only — full LIRS needs careful stack pruning.
+// LIR keys + some HIR keys live in stack S (LRU order).
+// Resident HIR keys also live in queue Q (FIFO).
+#include <list>
+#include <unordered_map>
+#include <algorithm>
+#include <optional>
+
+enum class Status { LIR, RESIDENT_HIR, NON_RESIDENT_HIR };
+
+template <class K, class V>
+class LIRS {
+    std::unordered_map<K, V> values_;       // only resident
+    std::unordered_map<K, Status> status_;
+    std::list<K> s_;                        // LRU-ordered stack (back = MRU)
+    std::list<K> q_;                        // FIFO of resident HIRs
+    size_t lirCap_, hirCap_;
+
+    bool inStack(const K& key) const {
+        return std::find(s_.begin(), s_.end(), key) != s_.end();
+    }
+
+public:
+    LIRS(size_t lirCap, size_t hirCap) : lirCap_(lirCap), hirCap_(hirCap) {}
+
+    std::optional<V> get(const K& key) {
+        auto it = values_.find(key);
+        if (it == values_.end()) return std::nullopt;
+        Status st = status_[key];
+        if (st == Status::LIR) {
+            bumpInStack(key);
+        } else if (st == Status::RESIDENT_HIR) {
+            if (inStack(key)) {
+                // Promote: HIR -> LIR; demote bottom LIR -> HIR
+                promoteToLIR(key);
+            } else {
+                bumpInStack(key);
+            }
+        }
+        return it->second;
+    }
+
+    void set(const K& key, const V& value) {
+        // ... see paper for full insert + stack pruning rules
+        values_[key] = value;
+    }
+
+private:
+    void bumpInStack(const K& key) { /* move key to top of s */ }
+    void promoteToLIR(const K& key) { /* LIR/HIR boundary management */ }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

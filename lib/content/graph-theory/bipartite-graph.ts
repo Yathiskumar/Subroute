@@ -110,10 +110,12 @@ export const bipartiteGraph: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "bipartite-graph.ts",
-    code: `// Test whether an undirected graph is bipartite by 2-colouring it
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "bipartite-graph.ts",
+      code: `// Test whether an undirected graph is bipartite by 2-colouring it
 // with a BFS. Returns the two sides on success, or null if an odd
 // cycle is found (i.e. the graph is not bipartite).
 function bipartition(
@@ -145,7 +147,137 @@ function bipartition(
   for (const [v, c] of colour) (c === 0 ? side0 : side1).push(v);
   return [side0, side1];
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "BipartiteGraph.java",
+      code: `// Test whether an undirected graph is bipartite by 2-colouring it
+// with a BFS. Returns the two sides on success, or null if an odd
+// cycle is found (i.e. the graph is not bipartite).
+import java.util.*;
+
+class BipartiteGraph {
+    // Returns a 2-element list {side0, side1}, or null if not bipartite.
+    static List<List<String>> bipartition(Map<String, List<String>> adj) {
+        Map<String, Integer> colour = new HashMap<>();
+
+        for (String start : adj.keySet()) {
+            if (colour.containsKey(start)) continue;  // already handled this component
+            colour.put(start, 0);
+            Deque<String> queue = new ArrayDeque<>();
+            queue.add(start);
+
+            while (!queue.isEmpty()) {
+                String u = queue.poll();
+                int next = colour.get(u) ^ 1;          // opposite colour
+                for (String v : adj.getOrDefault(u, List.of())) {
+                    if (!colour.containsKey(v)) {
+                        colour.put(v, next);           // paint neighbour the other colour
+                        queue.add(v);
+                    } else if (colour.get(v).equals(colour.get(u))) {
+                        return null;                   // same colour across an edge -> odd cycle
+                    }
+                }
+            }
+        }
+
+        // No conflicts: the two colour classes are the two sides.
+        List<String> side0 = new ArrayList<>(), side1 = new ArrayList<>();
+        for (var e : colour.entrySet())
+            (e.getValue() == 0 ? side0 : side1).add(e.getKey());
+        return List.of(side0, side1);
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "bipartite_graph.py",
+      code: `from collections import deque
+
+
+def bipartition(adj: dict[str, list[str]]) -> tuple[list[str], list[str]] | None:
+    """Test whether an undirected graph is bipartite by 2-colouring it
+    with a BFS. Returns the two sides on success, or None if an odd
+    cycle is found (i.e. the graph is not bipartite).
+    """
+    colour: dict[str, int] = {}
+
+    for start in adj:
+        if start in colour:
+            continue                     # already handled this component
+        colour[start] = 0
+        queue = deque([start])
+
+        while queue:
+            u = queue.popleft()
+            nxt = colour[u] ^ 1          # opposite colour
+            for v in adj.get(u, ()):
+                if v not in colour:
+                    colour[v] = nxt      # paint neighbour the other colour
+                    queue.append(v)
+                elif colour[v] == colour[u]:
+                    return None          # same colour across an edge -> odd cycle
+
+    # No conflicts: the two colour classes are the two sides.
+    side0: list[str] = []
+    side1: list[str] = []
+    for v, c in colour.items():
+        (side0 if c == 0 else side1).append(v)
+    return side0, side1`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "bipartite_graph.cpp",
+      code: `// Test whether an undirected graph is bipartite by 2-colouring it
+// with a BFS. Returns the two sides on success, or false if an odd
+// cycle is found (i.e. the graph is not bipartite).
+#include <string>
+#include <unordered_map>
+#include <vector>
+#include <queue>
+#include <optional>
+
+using Adj = std::unordered_map<std::string, std::vector<std::string>>;
+using Sides = std::pair<std::vector<std::string>, std::vector<std::string>>;
+
+std::optional<Sides> bipartition(const Adj& adj) {
+    std::unordered_map<std::string, int> colour;
+
+    for (const auto& [start, _] : adj) {
+        if (colour.count(start)) continue;     // already handled this component
+        colour[start] = 0;
+        std::queue<std::string> queue;
+        queue.push(start);
+
+        while (!queue.empty()) {
+            std::string u = queue.front();
+            queue.pop();
+            int next = colour[u] ^ 1;          // opposite colour
+            auto it = adj.find(u);
+            if (it == adj.end()) continue;
+            for (const auto& v : it->second) {
+                auto found = colour.find(v);
+                if (found == colour.end()) {
+                    colour[v] = next;          // paint neighbour the other colour
+                    queue.push(v);
+                } else if (found->second == colour[u]) {
+                    return std::nullopt;       // same colour across an edge -> odd cycle
+                }
+            }
+        }
+    }
+
+    // No conflicts: the two colour classes are the two sides.
+    Sides sides;
+    for (const auto& [v, c] : colour)
+        (c == 0 ? sides.first : sides.second).push_back(v);
+    return sides;
+}`,
+    },
+  ],
 
   furtherReading: [
     {

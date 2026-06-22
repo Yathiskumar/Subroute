@@ -113,61 +113,338 @@ export const raft: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "raft.ts",
-    code: `// Simplified Raft RPC handlers. The protocol fits in two messages:
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "raft.go",
+      code: `// Simplified Raft RPC handlers. The protocol fits in two messages:
 // RequestVote (elections) and AppendEntries (heartbeats + replication).
-type LogEntry = { term: number; cmd: string };
-type Role = "follower" | "candidate" | "leader";
+package raft
 
-class RaftServer {
-  currentTerm = 0;
-  votedFor: number | null = null;
-  log: LogEntry[] = [];
-  commitIndex = -1;
-  role: Role = "follower";
+type LogEntry struct {
+	Term int
+	Cmd  string
+}
+
+type Role int
+
+const (
+	Follower Role = iota
+	Candidate
+	Leader
+)
+
+type RaftServer struct {
+	currentTerm int
+	votedFor    int // -1 means none
+	log         []LogEntry
+	commitIndex int // -1 means empty
+	role        Role
+}
+
+func NewRaftServer() *RaftServer {
+	return &RaftServer{votedFor: -1, commitIndex: -1, role: Follower}
+}
+
+type RequestVoteReq struct {
+	Term, CandidateID, LastLogIndex, LastLogTerm int
+}
+type RequestVoteResp struct {
+	Term        int
+	VoteGranted bool
+}
+
+// --- election ---
+func (s *RaftServer) OnRequestVote(req RequestVoteReq) RequestVoteResp {
+	if req.Term > s.currentTerm {
+		s.currentTerm = req.Term
+		s.votedFor = -1
+		s.role = Follower
+	}
+	myLastTerm := 0
+	if len(s.log) > 0 {
+		myLastTerm = s.log[len(s.log)-1].Term
+	}
+	myLastIdx := len(s.log) - 1
+	upToDate := req.LastLogTerm > myLastTerm ||
+		(req.LastLogTerm == myLastTerm && req.LastLogIndex >= myLastIdx)
+	free := s.votedFor == -1 || s.votedFor == req.CandidateID
+	grant := req.Term == s.currentTerm && free && upToDate
+	if grant {
+		s.votedFor = req.CandidateID
+	}
+	return RequestVoteResp{Term: s.currentTerm, VoteGranted: grant}
+}
+
+type AppendEntriesReq struct {
+	Term, LeaderID, PrevLogIndex, PrevLogTerm int
+	Entries                                   []LogEntry
+	LeaderCommit                              int
+}
+type AppendEntriesResp struct {
+	Term    int
+	Success bool
+}
+
+// --- replication ---
+func (s *RaftServer) OnAppendEntries(req AppendEntriesReq) AppendEntriesResp {
+	if req.Term < s.currentTerm {
+		return AppendEntriesResp{Term: s.currentTerm, Success: false}
+	}
+	if req.Term > s.currentTerm {
+		s.currentTerm = req.Term
+		s.votedFor = -1
+	}
+	s.role = Follower
+
+	// log consistency check
+	if req.PrevLogIndex >= 0 {
+		if req.PrevLogIndex >= len(s.log) || s.log[req.PrevLogIndex].Term != req.PrevLogTerm {
+			return AppendEntriesResp{Term: s.currentTerm, Success: false}
+		}
+	}
+	// truncate any conflicting suffix, then append
+	s.log = append(s.log[:req.PrevLogIndex+1], req.Entries...)
+
+	if req.LeaderCommit > s.commitIndex {
+		s.commitIndex = req.LeaderCommit
+		if last := len(s.log) - 1; last < s.commitIndex {
+			s.commitIndex = last
+		}
+		s.applyToStateMachine()
+	}
+	return AppendEntriesResp{Term: s.currentTerm, Success: true}
+}
+
+func (s *RaftServer) applyToStateMachine() { /* apply log[0..commitIndex] in order */ }`,
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "Raft.java",
+      code: `// Simplified Raft RPC handlers. The protocol fits in two messages:
+// RequestVote (elections) and AppendEntries (heartbeats + replication).
+import java.util.ArrayList;
+import java.util.List;
+
+record LogEntry(int term, String cmd) {}
+
+enum Role { FOLLOWER, CANDIDATE, LEADER }
+
+record RequestVoteReq(int term, int candidateId, int lastLogIndex, int lastLogTerm) {}
+record RequestVoteResp(int term, boolean voteGranted) {}
+
+record AppendEntriesReq(
+    int term, int leaderId, int prevLogIndex, int prevLogTerm,
+    List<LogEntry> entries, int leaderCommit) {}
+record AppendEntriesResp(int term, boolean success) {}
+
+public class Raft {
+  int currentTerm = 0;
+  Integer votedFor = null;       // null means none
+  List<LogEntry> log = new ArrayList<>();
+  int commitIndex = -1;
+  Role role = Role.FOLLOWER;
 
   // --- election ---
-  onRequestVote(req: { term: number; candidateId: number; lastLogIndex: number; lastLogTerm: number }) {
-    if (req.term > this.currentTerm) { this.currentTerm = req.term; this.votedFor = null; this.role = "follower"; }
-    const myLastTerm = this.log.at(-1)?.term ?? 0;
-    const myLastIdx  = this.log.length - 1;
-    const upToDate = req.lastLogTerm > myLastTerm
-      || (req.lastLogTerm === myLastTerm && req.lastLogIndex >= myLastIdx);
-    const free = this.votedFor === null || this.votedFor === req.candidateId;
-    const grant = req.term === this.currentTerm && free && upToDate;
-    if (grant) this.votedFor = req.candidateId;
-    return { term: this.currentTerm, voteGranted: grant };
+  RequestVoteResp onRequestVote(RequestVoteReq req) {
+    if (req.term() > currentTerm) { currentTerm = req.term(); votedFor = null; role = Role.FOLLOWER; }
+    int myLastTerm = log.isEmpty() ? 0 : log.get(log.size() - 1).term();
+    int myLastIdx  = log.size() - 1;
+    boolean upToDate = req.lastLogTerm() > myLastTerm
+        || (req.lastLogTerm() == myLastTerm && req.lastLogIndex() >= myLastIdx);
+    boolean free = votedFor == null || votedFor == req.candidateId();
+    boolean grant = req.term() == currentTerm && free && upToDate;
+    if (grant) votedFor = req.candidateId();
+    return new RequestVoteResp(currentTerm, grant);
   }
 
   // --- replication ---
-  onAppendEntries(req: {
-    term: number; leaderId: number; prevLogIndex: number; prevLogTerm: number;
-    entries: LogEntry[]; leaderCommit: number;
-  }) {
-    if (req.term < this.currentTerm) return { term: this.currentTerm, success: false };
-    if (req.term > this.currentTerm) { this.currentTerm = req.term; this.votedFor = null; }
-    this.role = "follower";
+  AppendEntriesResp onAppendEntries(AppendEntriesReq req) {
+    if (req.term() < currentTerm) return new AppendEntriesResp(currentTerm, false);
+    if (req.term() > currentTerm) { currentTerm = req.term(); votedFor = null; }
+    role = Role.FOLLOWER;
 
     // log consistency check
-    const prev = this.log[req.prevLogIndex];
-    if (req.prevLogIndex >= 0 && (!prev || prev.term !== req.prevLogTerm)) {
-      return { term: this.currentTerm, success: false };
+    if (req.prevLogIndex() >= 0) {
+      if (req.prevLogIndex() >= log.size() || log.get(req.prevLogIndex()).term() != req.prevLogTerm()) {
+        return new AppendEntriesResp(currentTerm, false);
+      }
     }
     // truncate any conflicting suffix, then append
-    this.log = this.log.slice(0, req.prevLogIndex + 1).concat(req.entries);
+    log = new ArrayList<>(log.subList(0, req.prevLogIndex() + 1));
+    log.addAll(req.entries());
 
-    if (req.leaderCommit > this.commitIndex) {
-      this.commitIndex = Math.min(req.leaderCommit, this.log.length - 1);
-      this.applyToStateMachine();
+    if (req.leaderCommit() > commitIndex) {
+      commitIndex = Math.min(req.leaderCommit(), log.size() - 1);
+      applyToStateMachine();
     }
-    return { term: this.currentTerm, success: true };
+    return new AppendEntriesResp(currentTerm, true);
   }
 
-  private applyToStateMachine() { /* apply log[0..commitIndex] in order */ }
+  private void applyToStateMachine() { /* apply log[0..commitIndex] in order */ }
 }`,
-  },
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "raft.py",
+      code: `# Simplified Raft RPC handlers. The protocol fits in two messages:
+# RequestVote (elections) and AppendEntries (heartbeats + replication).
+from dataclasses import dataclass, field
+from enum import Enum
+
+
+@dataclass
+class LogEntry:
+    term: int
+    cmd: str
+
+
+class Role(Enum):
+    FOLLOWER = "follower"
+    CANDIDATE = "candidate"
+    LEADER = "leader"
+
+
+class RaftServer:
+    def __init__(self):
+        self.current_term = 0
+        self.voted_for: int | None = None
+        self.log: list[LogEntry] = []
+        self.commit_index = -1
+        self.role = Role.FOLLOWER
+
+    # --- election ---
+    def on_request_vote(self, term, candidate_id, last_log_index, last_log_term):
+        if term > self.current_term:
+            self.current_term = term
+            self.voted_for = None
+            self.role = Role.FOLLOWER
+        my_last_term = self.log[-1].term if self.log else 0
+        my_last_idx = len(self.log) - 1
+        up_to_date = last_log_term > my_last_term or (
+            last_log_term == my_last_term and last_log_index >= my_last_idx
+        )
+        free = self.voted_for is None or self.voted_for == candidate_id
+        grant = term == self.current_term and free and up_to_date
+        if grant:
+            self.voted_for = candidate_id
+        return {"term": self.current_term, "vote_granted": grant}
+
+    # --- replication ---
+    def on_append_entries(
+        self, term, leader_id, prev_log_index, prev_log_term, entries, leader_commit
+    ):
+        if term < self.current_term:
+            return {"term": self.current_term, "success": False}
+        if term > self.current_term:
+            self.current_term = term
+            self.voted_for = None
+        self.role = Role.FOLLOWER
+
+        # log consistency check
+        if prev_log_index >= 0:
+            if prev_log_index >= len(self.log) or self.log[prev_log_index].term != prev_log_term:
+                return {"term": self.current_term, "success": False}
+        # truncate any conflicting suffix, then append
+        self.log = self.log[: prev_log_index + 1] + entries
+
+        if leader_commit > self.commit_index:
+            self.commit_index = min(leader_commit, len(self.log) - 1)
+            self._apply_to_state_machine()
+        return {"term": self.current_term, "success": True}
+
+    def _apply_to_state_machine(self):
+        pass  # apply log[0..commit_index] in order`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "raft.cpp",
+      code: `// Simplified Raft RPC handlers. The protocol fits in two messages:
+// RequestVote (elections) and AppendEntries (heartbeats + replication).
+#include <algorithm>
+#include <optional>
+#include <string>
+#include <vector>
+
+struct LogEntry {
+    int term;
+    std::string cmd;
+};
+
+enum class Role { Follower, Candidate, Leader };
+
+struct RequestVoteReq {
+    int term, candidateId, lastLogIndex, lastLogTerm;
+};
+struct RequestVoteResp {
+    int term;
+    bool voteGranted;
+};
+
+struct AppendEntriesReq {
+    int term, leaderId, prevLogIndex, prevLogTerm;
+    std::vector<LogEntry> entries;
+    int leaderCommit;
+};
+struct AppendEntriesResp {
+    int term;
+    bool success;
+};
+
+class RaftServer {
+public:
+    int currentTerm = 0;
+    std::optional<int> votedFor;  // empty means none
+    std::vector<LogEntry> log;
+    int commitIndex = -1;
+    Role role = Role::Follower;
+
+    // --- election ---
+    RequestVoteResp onRequestVote(const RequestVoteReq& req) {
+        if (req.term > currentTerm) { currentTerm = req.term; votedFor.reset(); role = Role::Follower; }
+        int myLastTerm = log.empty() ? 0 : log.back().term;
+        int myLastIdx  = static_cast<int>(log.size()) - 1;
+        bool upToDate = req.lastLogTerm > myLastTerm
+            || (req.lastLogTerm == myLastTerm && req.lastLogIndex >= myLastIdx);
+        bool free = !votedFor.has_value() || *votedFor == req.candidateId;
+        bool grant = req.term == currentTerm && free && upToDate;
+        if (grant) votedFor = req.candidateId;
+        return { currentTerm, grant };
+    }
+
+    // --- replication ---
+    AppendEntriesResp onAppendEntries(const AppendEntriesReq& req) {
+        if (req.term < currentTerm) return { currentTerm, false };
+        if (req.term > currentTerm) { currentTerm = req.term; votedFor.reset(); }
+        role = Role::Follower;
+
+        // log consistency check
+        if (req.prevLogIndex >= 0) {
+            if (req.prevLogIndex >= static_cast<int>(log.size())
+                || log[req.prevLogIndex].term != req.prevLogTerm) {
+                return { currentTerm, false };
+            }
+        }
+        // truncate any conflicting suffix, then append
+        log.resize(req.prevLogIndex + 1);
+        log.insert(log.end(), req.entries.begin(), req.entries.end());
+
+        if (req.leaderCommit > commitIndex) {
+            commitIndex = std::min(req.leaderCommit, static_cast<int>(log.size()) - 1);
+            applyToStateMachine();
+        }
+        return { currentTerm, true };
+    }
+
+private:
+    void applyToStateMachine() { /* apply log[0..commitIndex] in order */ }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

@@ -92,10 +92,12 @@ export const clock: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "clock.ts",
-    code: `// Circular buffer + one bit per slot.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "clock.ts",
+      code: `// Circular buffer + one bit per slot.
 // O(1) amortized; only the eviction loop walks the ring.
 class Clock<K, V> {
   private slots: Array<{ key: K; value: V; ref: boolean } | null>;
@@ -132,7 +134,157 @@ class Clock<K, V> {
     this.hand = (this.hand + 1) % this.capacity;
   }
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "ClockCache.java",
+      code: `import java.util.HashMap;
+import java.util.Map;
+
+// Circular buffer + one bit per slot.
+// O(1) amortized; only the eviction loop walks the ring.
+class ClockCache<K, V> {
+    private static final class Slot<K, V> {
+        K key;
+        V value;
+        boolean ref;
+        Slot(K key, V value, boolean ref) { this.key = key; this.value = value; this.ref = ref; }
+    }
+
+    private final Object[] slots; // Slot<K, V>[]
+    private final Map<K, Integer> index = new HashMap<>();
+    private int hand = 0;
+    private final int capacity;
+
+    ClockCache(int capacity) {
+        this.capacity = capacity;
+        this.slots = new Object[capacity];
+    }
+
+    @SuppressWarnings("unchecked")
+    private Slot<K, V> slot(int i) { return (Slot<K, V>) slots[i]; }
+
+    V get(K key) {
+        Integer i = index.get(key);
+        if (i == null) return null;
+        slot(i).ref = true; // second-chance flag
+        return slot(i).value;
+    }
+
+    void set(K key, V value) {
+        Integer existing = index.get(key);
+        if (existing != null) {
+            slot(existing).value = value;
+            slot(existing).ref = true;
+            return;
+        }
+        // Find a victim: walk until we see a ref bit at 0
+        while (slots[hand] != null && slot(hand).ref) {
+            slot(hand).ref = false;
+            hand = (hand + 1) % capacity;
+        }
+        Slot<K, V> victim = slot(hand);
+        if (victim != null) index.remove(victim.key);
+        slots[hand] = new Slot<>(key, value, true);
+        index.put(key, hand);
+        hand = (hand + 1) % capacity;
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "clock_cache.py",
+      code: `from typing import Optional
+
+
+class Clock:
+    """Circular buffer + one bit per slot.
+
+    O(1) amortized; only the eviction loop walks the ring.
+    """
+
+    def __init__(self, capacity: int) -> None:
+        self.capacity = capacity
+        # each slot is [key, value, ref] or None
+        self.slots: list = [None] * capacity
+        self.index: dict = {}
+        self.hand = 0
+
+    def get(self, key) -> Optional[object]:
+        i = self.index.get(key)
+        if i is None:
+            return None
+        self.slots[i][2] = True  # second-chance flag
+        return self.slots[i][1]
+
+    def set(self, key, value) -> None:
+        existing = self.index.get(key)
+        if existing is not None:
+            self.slots[existing][1] = value
+            self.slots[existing][2] = True
+            return
+        # Find a victim: walk until we see a ref bit at 0
+        while self.slots[self.hand] is not None and self.slots[self.hand][2]:
+            self.slots[self.hand][2] = False
+            self.hand = (self.hand + 1) % self.capacity
+        victim = self.slots[self.hand]
+        if victim is not None:
+            del self.index[victim[0]]
+        self.slots[self.hand] = [key, value, True]
+        self.index[key] = self.hand
+        self.hand = (self.hand + 1) % self.capacity`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "clock_cache.cpp",
+      code: `// Circular buffer + one bit per slot.
+// O(1) amortized; only the eviction loop walks the ring.
+#include <vector>
+#include <unordered_map>
+#include <optional>
+
+template <class K, class V>
+class Clock {
+    struct Slot { K key; V value; bool ref; bool used = false; };
+
+    size_t capacity_;
+    std::vector<Slot> slots_;
+    std::unordered_map<K, size_t> index_;
+    size_t hand_ = 0;
+
+public:
+    explicit Clock(size_t capacity) : capacity_(capacity), slots_(capacity) {}
+
+    std::optional<V> get(const K& key) {
+        auto it = index_.find(key);
+        if (it == index_.end()) return std::nullopt;
+        slots_[it->second].ref = true; // second-chance flag
+        return slots_[it->second].value;
+    }
+
+    void set(const K& key, const V& value) {
+        auto it = index_.find(key);
+        if (it != index_.end()) {
+            slots_[it->second].value = value;
+            slots_[it->second].ref = true;
+            return;
+        }
+        // Find a victim: walk until we see a ref bit at 0
+        while (slots_[hand_].used && slots_[hand_].ref) {
+            slots_[hand_].ref = false;
+            hand_ = (hand_ + 1) % capacity_;
+        }
+        if (slots_[hand_].used) index_.erase(slots_[hand_].key);
+        slots_[hand_] = Slot{key, value, true, true};
+        index_[key] = hand_;
+        hand_ = (hand_ + 1) % capacity_;
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

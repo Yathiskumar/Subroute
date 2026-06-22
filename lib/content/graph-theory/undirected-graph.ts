@@ -105,10 +105,12 @@ export const undirectedGraph: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "undirected-graph.ts",
-    code: `// An undirected graph as an adjacency list.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "undirected-graph.ts",
+      code: `// An undirected graph as an adjacency list.
 // The key invariant: every edge is stored on BOTH endpoints.
 class UndirectedGraph {
   private adj = new Map<string, Set<string>>();
@@ -152,7 +154,184 @@ class UndirectedGraph {
     return path;
   }
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "UndirectedGraph.java",
+      code: `// An undirected graph as an adjacency list.
+// The key invariant: every edge is stored on BOTH endpoints.
+import java.util.*;
+
+class UndirectedGraph {
+    private final Map<String, Set<String>> adj = new HashMap<>();
+
+    void addVertex(String v) {
+        adj.putIfAbsent(v, new LinkedHashSet<>());
+    }
+
+    void addEdge(String u, String v) {
+        addVertex(u);
+        addVertex(v);
+        adj.get(u).add(v);   // u knows v ...
+        adj.get(v).add(u);   // ... and v knows u (symmetric!)
+    }
+
+    int degree(String v) {
+        return adj.containsKey(v) ? adj.get(v).size() : 0;
+    }
+
+    // Handshake lemma: this always equals 2 * (edge count).
+    int sumOfDegrees() {
+        int s = 0;
+        for (Set<String> nbrs : adj.values()) s += nbrs.size();
+        return s;
+    }
+
+    // Shortest path by edge count (BFS) — undirected, so we follow edges both ways.
+    List<String> shortestPath(String start, String goal) {
+        Map<String, String> prev = new HashMap<>();
+        prev.put(start, null);
+        Deque<String> queue = new ArrayDeque<>();
+        queue.add(start);
+        while (!queue.isEmpty()) {
+            String u = queue.poll();
+            if (u.equals(goal)) break;
+            for (String w : adj.getOrDefault(u, Set.of())) {
+                if (!prev.containsKey(w)) { prev.put(w, u); queue.add(w); }
+            }
+        }
+        if (!prev.containsKey(goal)) return null;   // different component
+        LinkedList<String> path = new LinkedList<>();
+        for (String c = goal; c != null; c = prev.get(c)) path.addFirst(c);
+        return path;
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "undirected_graph.py",
+      code: `from collections import deque
+
+
+class UndirectedGraph:
+    """An undirected graph as an adjacency list.
+
+    The key invariant: every edge is stored on BOTH endpoints.
+    """
+
+    def __init__(self) -> None:
+        self.adj: dict[str, set[str]] = {}
+
+    def add_vertex(self, v: str) -> None:
+        self.adj.setdefault(v, set())
+
+    def add_edge(self, u: str, v: str) -> None:
+        self.add_vertex(u)
+        self.add_vertex(v)
+        self.adj[u].add(v)   # u knows v ...
+        self.adj[v].add(u)   # ... and v knows u (symmetric!)
+
+    def degree(self, v: str) -> int:
+        return len(self.adj.get(v, ()))
+
+    def sum_of_degrees(self) -> int:
+        # Handshake lemma: this always equals 2 * (edge count).
+        return sum(len(nbrs) for nbrs in self.adj.values())
+
+    def shortest_path(self, start: str, goal: str) -> list[str] | None:
+        # Shortest path by edge count (BFS) — undirected, follow edges both ways.
+        prev: dict[str, str | None] = {start: None}
+        queue = deque([start])
+        while queue:
+            u = queue.popleft()
+            if u == goal:
+                break
+            for w in self.adj.get(u, ()):
+                if w not in prev:
+                    prev[w] = u
+                    queue.append(w)
+        if goal not in prev:
+            return None              # different component
+        path: list[str] = []
+        c: str | None = goal
+        while c is not None:
+            path.insert(0, c)
+            c = prev[c]
+        return path`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "undirected_graph.cpp",
+      code: `// An undirected graph as an adjacency list.
+// The key invariant: every edge is stored on BOTH endpoints.
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+#include <queue>
+#include <algorithm>
+
+class UndirectedGraph {
+    std::unordered_map<std::string, std::unordered_set<std::string>> adj_;
+
+public:
+    void addVertex(const std::string& v) {
+        adj_.try_emplace(v);
+    }
+
+    void addEdge(const std::string& u, const std::string& v) {
+        addVertex(u);
+        addVertex(v);
+        adj_[u].insert(v);   // u knows v ...
+        adj_[v].insert(u);   // ... and v knows u (symmetric!)
+    }
+
+    int degree(const std::string& v) const {
+        auto it = adj_.find(v);
+        return it == adj_.end() ? 0 : static_cast<int>(it->second.size());
+    }
+
+    // Handshake lemma: this always equals 2 * (edge count).
+    int sumOfDegrees() const {
+        int s = 0;
+        for (const auto& [v, nbrs] : adj_) s += static_cast<int>(nbrs.size());
+        return s;
+    }
+
+    // Shortest path by edge count (BFS) — undirected, follow edges both ways.
+    // Returns an empty vector if the goal is unreachable.
+    std::vector<std::string> shortestPath(const std::string& start,
+                                          const std::string& goal) const {
+        // prev maps each seen vertex to its predecessor; the start maps to itself.
+        std::unordered_map<std::string, std::string> prev;
+        prev[start] = start;
+        std::queue<std::string> queue;
+        queue.push(start);
+        while (!queue.empty()) {
+            std::string u = queue.front();
+            queue.pop();
+            if (u == goal) break;
+            auto it = adj_.find(u);
+            if (it == adj_.end()) continue;
+            for (const auto& w : it->second) {
+                if (!prev.count(w)) { prev[w] = u; queue.push(w); }
+            }
+        }
+        if (!prev.count(goal)) return {};   // different component
+        std::vector<std::string> path;
+        for (std::string c = goal; ; c = prev[c]) {
+            path.push_back(c);
+            if (c == start) break;          // start is its own predecessor
+        }
+        std::reverse(path.begin(), path.end());
+        return path;
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

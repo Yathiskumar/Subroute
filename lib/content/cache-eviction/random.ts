@@ -89,10 +89,12 @@ export const random: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "random.ts",
-    code: `// True random replacement. Stupidly simple, surprisingly effective.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "random.ts",
+      code: `// True random replacement. Stupidly simple, surprisingly effective.
 class RandomCache<K, V> {
   private store = new Map<K, V>();
   constructor(private capacity: number) {}
@@ -134,7 +136,195 @@ class SampledLRU<K, V> {
     this.store.set(key, { value, lastUsed: ++this.clock });
   }
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "RandomCache.java",
+      code: `import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ThreadLocalRandom;
+
+// True random replacement. Stupidly simple, surprisingly effective.
+class RandomCache<K, V> {
+    private final Map<K, V> store = new HashMap<>();
+    private final int capacity;
+
+    RandomCache(int capacity) {
+        this.capacity = capacity;
+    }
+
+    V get(K key) {
+        return store.get(key);
+    }
+
+    void set(K key, V value) {
+        if (!store.containsKey(key) && store.size() >= capacity) {
+            // Pick a random key and evict it.
+            List<K> keys = new ArrayList<>(store.keySet());
+            K victim = keys.get(ThreadLocalRandom.current().nextInt(keys.size()));
+            store.remove(victim);
+        }
+        store.put(key, value);
+    }
+}
+
+// Redis-style "sample N, evict oldest of N" — random as N -> 1,
+// approaches LRU as N -> cache size.
+class SampledLRU<K, V> {
+    private record Entry<V>(V value, long lastUsed) {}
+
+    private final Map<K, Entry<V>> store = new HashMap<>();
+    private long clock = 0;
+    private final int capacity;
+    private final int samples;
+
+    SampledLRU(int capacity, int samples) {
+        this.capacity = capacity;
+        this.samples = samples;
+    }
+
+    void set(K key, V value) {
+        if (!store.containsKey(key) && store.size() >= capacity) {
+            List<K> keys = new ArrayList<>(store.keySet());
+            var rng = ThreadLocalRandom.current();
+            K victim = keys.get(rng.nextInt(keys.size()));
+            for (int i = 1; i < samples; i++) {
+                K candidate = keys.get(rng.nextInt(keys.size()));
+                if (store.get(candidate).lastUsed() < store.get(victim).lastUsed()) {
+                    victim = candidate;
+                }
+            }
+            store.remove(victim);
+        }
+        store.put(key, new Entry<>(value, ++clock));
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "random_cache.py",
+      code: `import random
+from typing import Optional
+
+
+class RandomCache:
+    """True random replacement. Stupidly simple, surprisingly effective."""
+
+    def __init__(self, capacity: int) -> None:
+        self.store: dict = {}
+        self.capacity = capacity
+
+    def get(self, key) -> Optional[object]:
+        return self.store.get(key)
+
+    def set(self, key, value) -> None:
+        if key not in self.store and len(self.store) >= self.capacity:
+            # Pick a random key and evict it.
+            victim = random.choice(list(self.store.keys()))
+            del self.store[victim]
+        self.store[key] = value
+
+
+class SampledLRU:
+    """Redis-style 'sample N, evict oldest of N' — random as N -> 1,
+    approaches LRU as N -> cache size.
+    """
+
+    def __init__(self, capacity: int, samples: int = 5) -> None:
+        self.store: dict = {}  # key -> (value, last_used)
+        self.clock = 0
+        self.capacity = capacity
+        self.samples = samples
+
+    def set(self, key, value) -> None:
+        if key not in self.store and len(self.store) >= self.capacity:
+            keys = list(self.store.keys())
+            victim = random.choice(keys)
+            for _ in range(1, self.samples):
+                candidate = random.choice(keys)
+                if self.store[candidate][1] < self.store[victim][1]:
+                    victim = candidate
+            del self.store[victim]
+        self.clock += 1
+        self.store[key] = (value, self.clock)`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "random_cache.cpp",
+      code: `// True random replacement. Stupidly simple, surprisingly effective.
+#include <unordered_map>
+#include <vector>
+#include <random>
+#include <optional>
+
+template <class K, class V>
+class RandomCache {
+    size_t capacity_;
+    std::unordered_map<K, V> store_;
+    std::mt19937 rng_{std::random_device{}()};
+
+public:
+    explicit RandomCache(size_t capacity) : capacity_(capacity) {}
+
+    std::optional<V> get(const K& key) {
+        auto it = store_.find(key);
+        if (it == store_.end()) return std::nullopt;
+        return it->second;
+    }
+
+    void set(const K& key, const V& value) {
+        if (!store_.count(key) && store_.size() >= capacity_) {
+            // Pick a random key and evict it.
+            std::vector<K> keys;
+            keys.reserve(store_.size());
+            for (const auto& [k, v] : store_) keys.push_back(k);
+            std::uniform_int_distribution<size_t> dist(0, keys.size() - 1);
+            store_.erase(keys[dist(rng_)]);
+        }
+        store_[key] = value;
+    }
+};
+
+// Redis-style "sample N, evict oldest of N" — random as N -> 1,
+// approaches LRU as N -> cache size.
+template <class K, class V>
+class SampledLRU {
+    struct Entry { V value; long lastUsed; };
+    size_t capacity_;
+    int samples_;
+    long clock_ = 0;
+    std::unordered_map<K, Entry> store_;
+    std::mt19937 rng_{std::random_device{}()};
+
+public:
+    SampledLRU(size_t capacity, int samples = 5)
+        : capacity_(capacity), samples_(samples) {}
+
+    void set(const K& key, const V& value) {
+        if (!store_.count(key) && store_.size() >= capacity_) {
+            std::vector<K> keys;
+            keys.reserve(store_.size());
+            for (const auto& [k, v] : store_) keys.push_back(k);
+            std::uniform_int_distribution<size_t> dist(0, keys.size() - 1);
+            K victim = keys[dist(rng_)];
+            for (int i = 1; i < samples_; i++) {
+                const K& candidate = keys[dist(rng_)];
+                if (store_[candidate].lastUsed < store_[victim].lastUsed) {
+                    victim = candidate;
+                }
+            }
+            store_.erase(victim);
+        }
+        store_[key] = Entry{value, ++clock_};
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

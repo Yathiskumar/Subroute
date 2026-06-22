@@ -94,10 +94,12 @@ export const lru: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "lru.ts",
-    code: `// Classic O(1) LRU using a Map.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "lru.ts",
+      code: `// Classic O(1) LRU using a Map.
 // In JS, Map preserves insertion order — we delete and re-set
 // to push an entry to the "most recent" end. Two lines of code,
 // no DLL needed.
@@ -122,7 +124,114 @@ class LRU<K, V> {
     }
   }
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "LruCache.java",
+      code: `import java.util.LinkedHashMap;
+import java.util.Map;
+
+// Classic O(1) LRU using LinkedHashMap.
+// accessOrder=true reorders an entry to the "most recent" end on
+// every get/put — and removeEldestEntry drops the oldest. No DLL needed.
+class LruCache<K, V> extends LinkedHashMap<K, V> {
+    private final int capacity;
+
+    LruCache(int capacity) {
+        super(16, 0.75f, true); // accessOrder = true
+        this.capacity = capacity;
+    }
+
+    V get(Object key) {
+        return super.get(key); // moves entry to most-recent
+    }
+
+    V set(K key, V value) {
+        return super.put(key, value);
+    }
+
+    @Override
+    protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {
+        return size() > capacity; // evict least-recent when over capacity
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "lru_cache.py",
+      code: `from collections import OrderedDict
+from typing import Optional
+
+
+class LRU:
+    """Classic O(1) LRU using an OrderedDict.
+
+    move_to_end pushes an entry to the "most recent" end; popitem(last=False)
+    drops the oldest. Two calls, no doubly-linked list needed.
+    """
+
+    def __init__(self, capacity: int) -> None:
+        self.store: OrderedDict = OrderedDict()
+        self.capacity = capacity
+
+    def get(self, key) -> Optional[object]:
+        if key not in self.store:
+            return None
+        self.store.move_to_end(key)  # re-insert as most-recent
+        return self.store[key]
+
+    def set(self, key, value) -> None:
+        if key in self.store:
+            self.store.move_to_end(key)
+        self.store[key] = value
+        if len(self.store) > self.capacity:
+            self.store.popitem(last=False)  # drop oldest`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "lru_cache.cpp",
+      code: `// Classic O(1) LRU: a list in access order + a hash map of iterators.
+// splice() moves a node to the "most recent" front; the back is oldest.
+#include <list>
+#include <unordered_map>
+#include <optional>
+
+template <class K, class V>
+class LRU {
+    size_t capacity_;
+    std::list<std::pair<K, V>> order_;                                  // front = most-recent
+    std::unordered_map<K, typename std::list<std::pair<K, V>>::iterator> index_;
+
+public:
+    explicit LRU(size_t capacity) : capacity_(capacity) {}
+
+    std::optional<V> get(const K& key) {
+        auto it = index_.find(key);
+        if (it == index_.end()) return std::nullopt;
+        order_.splice(order_.begin(), order_, it->second); // move to front
+        return it->second->second;
+    }
+
+    void set(const K& key, const V& value) {
+        auto it = index_.find(key);
+        if (it != index_.end()) {
+            it->second->second = value;
+            order_.splice(order_.begin(), order_, it->second);
+            return;
+        }
+        order_.emplace_front(key, value);
+        index_[key] = order_.begin();
+        if (index_.size() > capacity_) {
+            index_.erase(order_.back().first); // drop oldest
+            order_.pop_back();
+        }
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

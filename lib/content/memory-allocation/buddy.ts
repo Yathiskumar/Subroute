@@ -103,39 +103,180 @@ export const buddy: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "buddy.ts",
-    code: `const MIN = 64;
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "buddy.go",
+      code: `package alloc
 
-function nextPow2(n: number): number {
-  let p = MIN;
-  while (p < n) p *= 2;
-  return p;
+const MIN = 64
+
+func nextPow2(n int) int {
+	p := MIN
+	for p < n {
+		p *= 2
+	}
+	return p
 }
 
-interface Block { start: number; size: number; free: boolean; }
-
-/** The buddy of a block: flip the single bit equal to its size. */
-function buddyAddress(start: number, size: number): number {
-  return start ^ size;          // XOR — O(1), no search
+type Block struct {
+	Start int
+	Size  int
+	Free  bool
 }
 
-/** On free, coalesce upward while the buddy is also free. */
-function freeAndMerge(blocks: Map<number, Block>, start: number, size: number, total: number) {
-  let s = start, sz = size;
-  while (sz < total) {
-    const b = buddyAddress(s, sz);
-    const buddy = blocks.get(b);
-    if (!buddy || !buddy.free || buddy.size !== sz) break; // buddy busy/split → stop
-    blocks.delete(b);
-    blocks.delete(s);
-    s = Math.min(s, b);          // merged block starts at the lower address
-    sz *= 2;                     // ascend one size class and check again
-  }
-  blocks.set(s, { start: s, size: sz, free: true });
+// buddyAddress finds the buddy of a block: flip the single bit equal to its size.
+func buddyAddress(start, size int) int {
+	return start ^ size // XOR — O(1), no search
+}
+
+// freeAndMerge coalesces upward while the buddy is also free.
+func freeAndMerge(blocks map[int]Block, start, size, total int) {
+	s, sz := start, size
+	for sz < total {
+		b := buddyAddress(s, sz)
+		buddy, ok := blocks[b]
+		if !ok || !buddy.Free || buddy.Size != sz { // buddy busy/split → stop
+			break
+		}
+		delete(blocks, b)
+		delete(blocks, s)
+		if b < s { // merged block starts at the lower address
+			s = b
+		}
+		sz *= 2 // ascend one size class and check again
+	}
+	blocks[s] = Block{Start: s, Size: sz, Free: true}
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "Buddy.java",
+      code: `import java.util.Map;
+
+class Block {
+    int start, size;
+    boolean free;
+    Block(int start, int size, boolean free) { this.start = start; this.size = size; this.free = free; }
+}
+
+class Buddy {
+    static final int MIN = 64;
+
+    static int nextPow2(int n) {
+        int p = MIN;
+        while (p < n) p *= 2;
+        return p;
+    }
+
+    /** The buddy of a block: flip the single bit equal to its size. */
+    static int buddyAddress(int start, int size) {
+        return start ^ size;          // XOR — O(1), no search
+    }
+
+    /** On free, coalesce upward while the buddy is also free. */
+    static void freeAndMerge(Map<Integer, Block> blocks, int start, int size, int total) {
+        int s = start, sz = size;
+        while (sz < total) {
+            int b = buddyAddress(s, sz);
+            Block buddy = blocks.get(b);
+            if (buddy == null || !buddy.free || buddy.size != sz) break; // buddy busy/split → stop
+            blocks.remove(b);
+            blocks.remove(s);
+            s = Math.min(s, b);       // merged block starts at the lower address
+            sz *= 2;                  // ascend one size class and check again
+        }
+        blocks.put(s, new Block(s, sz, true));
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "buddy.py",
+      code: `from dataclasses import dataclass
+
+MIN = 64
+
+
+def next_pow2(n: int) -> int:
+    p = MIN
+    while p < n:
+        p *= 2
+    return p
+
+
+@dataclass
+class Block:
+    start: int
+    size: int
+    free: bool
+
+
+def buddy_address(start: int, size: int) -> int:
+    """The buddy of a block: flip the single bit equal to its size."""
+    return start ^ size              # XOR — O(1), no search
+
+
+def free_and_merge(blocks: dict[int, Block], start: int, size: int, total: int) -> None:
+    """On free, coalesce upward while the buddy is also free."""
+    s, sz = start, size
+    while sz < total:
+        b = buddy_address(s, sz)
+        buddy = blocks.get(b)
+        if buddy is None or not buddy.free or buddy.size != sz:  # buddy busy/split → stop
+            break
+        del blocks[b]
+        del blocks[s]
+        s = min(s, b)                # merged block starts at the lower address
+        sz *= 2                      # ascend one size class and check again
+    blocks[s] = Block(start=s, size=sz, free=True)`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "buddy.cpp",
+      code: `#include <algorithm>
+#include <unordered_map>
+
+constexpr int MIN = 64;
+
+int nextPow2(int n) {
+    int p = MIN;
+    while (p < n) p *= 2;
+    return p;
+}
+
+struct Block {
+    int start;
+    int size;
+    bool free;
+};
+
+// The buddy of a block: flip the single bit equal to its size.
+int buddyAddress(int start, int size) {
+    return start ^ size;          // XOR — O(1), no search
+}
+
+// On free, coalesce upward while the buddy is also free.
+void freeAndMerge(std::unordered_map<int, Block>& blocks, int start, int size, int total) {
+    int s = start, sz = size;
+    while (sz < total) {
+        int b = buddyAddress(s, sz);
+        auto it = blocks.find(b);
+        if (it == blocks.end() || !it->second.free || it->second.size != sz)
+            break;                // buddy busy/split → stop
+        blocks.erase(b);
+        blocks.erase(s);
+        s = std::min(s, b);       // merged block starts at the lower address
+        sz *= 2;                  // ascend one size class and check again
+    }
+    blocks[s] = Block{s, sz, true};
+}`,
+    },
+  ],
 
   furtherReading: [
     {

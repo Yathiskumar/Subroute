@@ -88,10 +88,12 @@ export const lfu: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "lfu.ts",
-    code: `// O(1) LFU sketch — frequency buckets keyed by count.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "lfu.ts",
+      code: `// O(1) LFU sketch — frequency buckets keyed by count.
 // Each bucket is an ordered set so we can break ties by recency.
 class LFU<K, V> {
   private values = new Map<K, V>();
@@ -142,7 +144,188 @@ class LFU<K, V> {
     return this.buckets.get(f)!;
   }
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "LfuCache.java",
+      code: `import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.Map;
+
+// O(1) LFU sketch — frequency buckets keyed by count.
+// Each bucket is an ordered set (LinkedHashSet) so we break ties by recency.
+class LfuCache<K, V> {
+    private final Map<K, V> values = new HashMap<>();
+    private final Map<K, Integer> freq = new HashMap<>();
+    private final Map<Integer, LinkedHashSet<K>> buckets = new HashMap<>(); // freq -> keys
+    private int minFreq = 0;
+    private final int capacity;
+
+    LfuCache(int capacity) {
+        this.capacity = capacity;
+    }
+
+    V get(K key) {
+        if (!values.containsKey(key)) return null;
+        touch(key);
+        return values.get(key);
+    }
+
+    void set(K key, V value) {
+        if (capacity == 0) return;
+        if (values.containsKey(key)) {
+            values.put(key, value);
+            touch(key);
+            return;
+        }
+        if (values.size() >= capacity) evict();
+        values.put(key, value);
+        freq.put(key, 1);
+        bucket(1).add(key);
+        minFreq = 1;
+    }
+
+    private void touch(K key) {
+        int f = freq.get(key);
+        bucket(f).remove(key);
+        if (bucket(f).isEmpty() && f == minFreq) minFreq++;
+        freq.put(key, f + 1);
+        bucket(f + 1).add(key);
+    }
+
+    private void evict() {
+        LinkedHashSet<K> victims = bucket(minFreq);
+        K victim = victims.iterator().next(); // oldest at min freq
+        victims.remove(victim);
+        values.remove(victim);
+        freq.remove(victim);
+    }
+
+    private LinkedHashSet<K> bucket(int f) {
+        return buckets.computeIfAbsent(f, k -> new LinkedHashSet<>());
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "lfu_cache.py",
+      code: `from collections import OrderedDict, defaultdict
+from typing import Optional
+
+
+class LFU:
+    """O(1) LFU sketch — frequency buckets keyed by count.
+
+    Each bucket is an ordered set (OrderedDict) so we break ties by recency.
+    """
+
+    def __init__(self, capacity: int) -> None:
+        self.capacity = capacity
+        self.values: dict = {}
+        self.freq: dict = {}
+        # freq -> ordered keys at that freq
+        self.buckets: defaultdict = defaultdict(OrderedDict)
+        self.min_freq = 0
+
+    def get(self, key) -> Optional[object]:
+        if key not in self.values:
+            return None
+        self._touch(key)
+        return self.values[key]
+
+    def set(self, key, value) -> None:
+        if self.capacity == 0:
+            return
+        if key in self.values:
+            self.values[key] = value
+            self._touch(key)
+            return
+        if len(self.values) >= self.capacity:
+            self._evict()
+        self.values[key] = value
+        self.freq[key] = 1
+        self.buckets[1][key] = True
+        self.min_freq = 1
+
+    def _touch(self, key) -> None:
+        f = self.freq[key]
+        del self.buckets[f][key]
+        if not self.buckets[f] and f == self.min_freq:
+            self.min_freq += 1
+        self.freq[key] = f + 1
+        self.buckets[f + 1][key] = True
+
+    def _evict(self) -> None:
+        victim, _ = self.buckets[self.min_freq].popitem(last=False)  # oldest at min freq
+        del self.values[victim]
+        del self.freq[victim]`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "lfu_cache.cpp",
+      code: `// O(1) LFU sketch — frequency buckets keyed by count.
+// Each bucket is a std::list so we can break ties by recency (front = oldest).
+#include <list>
+#include <unordered_map>
+#include <optional>
+
+template <class K, class V>
+class LFU {
+    size_t capacity_;
+    int minFreq_ = 0;
+    std::unordered_map<K, V> values_;
+    std::unordered_map<K, int> freq_;
+    std::unordered_map<int, std::list<K>> buckets_;                     // freq -> keys
+    std::unordered_map<K, typename std::list<K>::iterator> position_;   // key -> node
+
+public:
+    explicit LFU(size_t capacity) : capacity_(capacity) {}
+
+    std::optional<V> get(const K& key) {
+        auto it = values_.find(key);
+        if (it == values_.end()) return std::nullopt;
+        touch(key);
+        return it->second;
+    }
+
+    void set(const K& key, const V& value) {
+        if (capacity_ == 0) return;
+        if (values_.count(key)) {
+            values_[key] = value;
+            touch(key);
+            return;
+        }
+        if (values_.size() >= capacity_) evict();
+        values_[key] = value;
+        freq_[key] = 1;
+        buckets_[1].push_back(key);
+        position_[key] = std::prev(buckets_[1].end());
+        minFreq_ = 1;
+    }
+
+private:
+    void touch(const K& key) {
+        int f = freq_[key];
+        buckets_[f].erase(position_[key]);
+        if (buckets_[f].empty() && f == minFreq_) minFreq_++;
+        freq_[key] = f + 1;
+        buckets_[f + 1].push_back(key);
+        position_[key] = std::prev(buckets_[f + 1].end());
+    }
+
+    void evict() {
+        K victim = buckets_[minFreq_].front(); // oldest at min freq
+        buckets_[minFreq_].pop_front();
+        values_.erase(victim);
+        freq_.erase(victim);
+        position_.erase(victim);
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

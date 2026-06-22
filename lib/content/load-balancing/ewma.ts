@@ -96,43 +96,218 @@ export const ewma: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "peak-ewma.ts",
-    code: `// Peak EWMA: smooth recent latency, score by ewma * (active + 1).
-type Backend = { id: string; active: number; ewmaMs: number };
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "peak_ewma.go",
+      code: `package lb
 
-class PeakEwmaBalancer {
-  private backends: Backend[];
-  constructor(ids: string[], private alpha = 0.3, private defaultRtMs = 1500) {
-    this.backends = ids.map((id) => ({ id, active: 0, ewmaMs: 0 }));
-  }
+// Peak EWMA: smooth recent latency, score by ewma * (active + 1).
+type Backend struct {
+	id     string
+	active int
+	ewmaMs float64
+}
 
-  private score(b: Backend): number {
-    const rt = b.ewmaMs || this.defaultRtMs;
-    return (rt / 1000) * (b.active + 1);
-  }
+type PeakEwmaBalancer struct {
+	backends     []*Backend
+	alpha        float64
+	defaultRtMs  float64
+}
 
-  acquire(): Backend {
-    let best = this.backends[0];
-    for (const b of this.backends) {
-      if (this.score(b) < this.score(best)) best = b;
-    }
-    best.active++;
-    return best;
-  }
+func NewPeakEwmaBalancer(ids []string, alpha, defaultRtMs float64) *PeakEwmaBalancer {
+	bs := make([]*Backend, len(ids))
+	for i, id := range ids {
+		bs[i] = &Backend{id: id}
+	}
+	return &PeakEwmaBalancer{backends: bs, alpha: alpha, defaultRtMs: defaultRtMs}
+}
 
-  // Fold the observed RTT into the exponentially-weighted average.
-  release(b: Backend, rtMs: number): void {
-    b.active--;
-    b.ewmaMs = b.ewmaMs === 0
-      ? rtMs
-      : this.alpha * rtMs + (1 - this.alpha) * b.ewmaMs;
-  }
+func (lb *PeakEwmaBalancer) score(b *Backend) float64 {
+	rt := b.ewmaMs
+	if rt == 0 {
+		rt = lb.defaultRtMs
+	}
+	return (rt / 1000) * float64(b.active+1)
+}
+
+func (lb *PeakEwmaBalancer) Acquire() *Backend {
+	best := lb.backends[0]
+	for _, b := range lb.backends {
+		if lb.score(b) < lb.score(best) {
+			best = b
+		}
+	}
+	best.active++
+	return best
+}
+
+// Release folds the observed RTT into the exponentially-weighted average.
+func (lb *PeakEwmaBalancer) Release(b *Backend, rtMs float64) {
+	b.active--
+	if b.ewmaMs == 0 {
+		b.ewmaMs = rtMs
+	} else {
+		b.ewmaMs = lb.alpha*rtMs + (1-lb.alpha)*b.ewmaMs
+	}
 }
 
 // half-life in samples ≈ ln(0.5) / ln(1 - alpha)`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "PeakEwma.java",
+      code: `import java.util.ArrayList;
+import java.util.List;
+
+// Peak EWMA: smooth recent latency, score by ewma * (active + 1).
+class PeakEwmaBalancer {
+    static final class Backend {
+        final String id;
+        int active = 0;
+        double ewmaMs = 0;
+
+        Backend(String id) { this.id = id; }
+    }
+
+    private final List<Backend> backends = new ArrayList<>();
+    private final double alpha;
+    private final double defaultRtMs;
+
+    PeakEwmaBalancer(String[] ids, double alpha, double defaultRtMs) {
+        this.alpha = alpha;
+        this.defaultRtMs = defaultRtMs;
+        for (String id : ids) backends.add(new Backend(id));
+    }
+
+    private double score(Backend b) {
+        double rt = b.ewmaMs == 0 ? defaultRtMs : b.ewmaMs;
+        return (rt / 1000) * (b.active + 1);
+    }
+
+    Backend acquire() {
+        Backend best = backends.get(0);
+        for (Backend b : backends) {
+            if (score(b) < score(best)) best = b;
+        }
+        best.active++;
+        return best;
+    }
+
+    // Fold the observed RTT into the exponentially-weighted average.
+    void release(Backend b, double rtMs) {
+        b.active--;
+        b.ewmaMs = b.ewmaMs == 0
+            ? rtMs
+            : alpha * rtMs + (1 - alpha) * b.ewmaMs;
+    }
+}
+
+// half-life in samples ≈ ln(0.5) / ln(1 - alpha)`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "peak_ewma.py",
+      code: `from dataclasses import dataclass
+
+
+# Peak EWMA: smooth recent latency, score by ewma * (active + 1).
+@dataclass
+class Backend:
+    id: str
+    active: int = 0
+    ewma_ms: float = 0
+
+
+class PeakEwmaBalancer:
+    def __init__(
+        self, ids: list[str], alpha: float = 0.3, default_rt_ms: float = 1500
+    ) -> None:
+        self.backends = [Backend(id) for id in ids]
+        self.alpha = alpha
+        self.default_rt_ms = default_rt_ms
+
+    def _score(self, b: Backend) -> float:
+        rt = b.ewma_ms or self.default_rt_ms
+        return (rt / 1000) * (b.active + 1)
+
+    def acquire(self) -> Backend:
+        best = self.backends[0]
+        for b in self.backends:
+            if self._score(b) < self._score(best):
+                best = b
+        best.active += 1
+        return best
+
+    def release(self, b: Backend, rt_ms: float) -> None:
+        """Fold the observed RTT into the exponentially-weighted average."""
+        b.active -= 1
+        b.ewma_ms = (
+            rt_ms
+            if b.ewma_ms == 0
+            else self.alpha * rt_ms + (1 - self.alpha) * b.ewma_ms
+        )
+
+
+# half-life in samples ≈ ln(0.5) / ln(1 - alpha)`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "peak_ewma.cpp",
+      code: `// Peak EWMA: smooth recent latency, score by ewma * (active + 1).
+#include <string>
+#include <vector>
+
+class PeakEwmaBalancer {
+public:
+    struct Backend {
+        std::string id;
+        int active = 0;
+        double ewmaMs = 0;
+    };
+
+private:
+    std::vector<Backend> backends_;
+    double alpha_;
+    double defaultRtMs_;
+
+    double score(const Backend& b) const {
+        double rt = b.ewmaMs == 0 ? defaultRtMs_ : b.ewmaMs;
+        return (rt / 1000) * (b.active + 1);
+    }
+
+public:
+    PeakEwmaBalancer(const std::vector<std::string>& ids,
+                     double alpha = 0.3, double defaultRtMs = 1500)
+        : alpha_(alpha), defaultRtMs_(defaultRtMs) {
+        for (const auto& id : ids) backends_.push_back({id});
+    }
+
+    Backend* acquire() {
+        Backend* best = &backends_[0];
+        for (auto& b : backends_) {
+            if (score(b) < score(*best)) best = &b;
+        }
+        best->active++;
+        return best;
+    }
+
+    // Fold the observed RTT into the exponentially-weighted average.
+    void release(Backend* b, double rtMs) {
+        b->active--;
+        b->ewmaMs = b->ewmaMs == 0
+            ? rtMs
+            : alpha_ * rtMs + (1 - alpha_) * b->ewmaMs;
+    }
+};
+
+// half-life in samples ≈ ln(0.5) / ln(1 - alpha)`,
+    },
+  ],
 
   furtherReading: [
     {

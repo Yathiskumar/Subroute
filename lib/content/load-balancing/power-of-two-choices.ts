@@ -91,35 +91,157 @@ export const powerOfTwoChoices: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "power-of-two-choices.ts",
-    code: `// Power of two choices: sample two at random, route to the lighter one.
-class P2CBalancer {
-  private active: number[];
-  constructor(private servers: string[]) {
-    this.active = servers.map(() => 0);
-  }
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "power_of_two_choices.go",
+      code: `package lb
 
-  acquire(): number {
-    const n = this.servers.length;
-    const a = Math.floor(Math.random() * n);
-    let b = Math.floor(Math.random() * n);
-    while (b === a && n > 1) b = Math.floor(Math.random() * n);
+import "math/rand"
 
-    const winner = this.active[a] <= this.active[b] ? a : b;
-    this.active[winner]++;       // reserve eagerly, like least-conn
-    return winner;
-  }
+// Power of two choices: sample two at random, route to the lighter one.
+type P2CBalancer struct {
+	servers []string
+	active  []int
+}
 
-  release(i: number): void {
-    this.active[i]--;
-  }
+func NewP2CBalancer(servers []string) *P2CBalancer {
+	return &P2CBalancer{
+		servers: servers,
+		active:  make([]int, len(servers)),
+	}
+}
+
+func (b *P2CBalancer) Acquire() int {
+	n := len(b.servers)
+	a := rand.Intn(n)
+	c := rand.Intn(n)
+	for c == a && n > 1 {
+		c = rand.Intn(n)
+	}
+
+	winner := c
+	if b.active[a] <= b.active[c] {
+		winner = a
+	}
+	b.active[winner]++ // reserve eagerly, like least-conn
+	return winner
+}
+
+func (b *P2CBalancer) Release(i int) {
+	b.active[i]--
 }
 
 // The load signal is pluggable: compare EWMA latency instead of
 // active count and you have Finagle's p2cPeakEwma.`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "PowerOfTwoChoices.java",
+      code: `import java.util.concurrent.ThreadLocalRandom;
+
+// Power of two choices: sample two at random, route to the lighter one.
+class P2CBalancer {
+    private final String[] servers;
+    private final int[] active;
+
+    P2CBalancer(String[] servers) {
+        this.servers = servers;
+        this.active = new int[servers.length];
+    }
+
+    synchronized int acquire() {
+        int n = servers.length;
+        ThreadLocalRandom rnd = ThreadLocalRandom.current();
+        int a = rnd.nextInt(n);
+        int b = rnd.nextInt(n);
+        while (b == a && n > 1) b = rnd.nextInt(n);
+
+        int winner = active[a] <= active[b] ? a : b;
+        active[winner]++;        // reserve eagerly, like least-conn
+        return winner;
+    }
+
+    synchronized void release(int i) {
+        active[i]--;
+    }
+}
+
+// The load signal is pluggable: compare EWMA latency instead of
+// active count and you have Finagle's p2cPeakEwma.`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "power_of_two_choices.py",
+      code: `import random
+
+
+# Power of two choices: sample two at random, route to the lighter one.
+class P2CBalancer:
+    def __init__(self, servers: list[str]) -> None:
+        self.servers = servers
+        self.active = [0] * len(servers)
+
+    def acquire(self) -> int:
+        n = len(self.servers)
+        a = random.randrange(n)
+        b = random.randrange(n)
+        while b == a and n > 1:
+            b = random.randrange(n)
+
+        winner = a if self.active[a] <= self.active[b] else b
+        self.active[winner] += 1   # reserve eagerly, like least-conn
+        return winner
+
+    def release(self, i: int) -> None:
+        self.active[i] -= 1
+
+
+# The load signal is pluggable: compare EWMA latency instead of
+# active count and you have Finagle's p2cPeakEwma.`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "power_of_two_choices.cpp",
+      code: `// Power of two choices: sample two at random, route to the lighter one.
+#include <random>
+#include <string>
+#include <vector>
+
+class P2CBalancer {
+    std::vector<std::string> servers_;
+    std::vector<int> active_;
+    std::mt19937 rng_{std::random_device{}()};
+
+public:
+    explicit P2CBalancer(std::vector<std::string> servers)
+        : servers_(std::move(servers)), active_(servers_.size(), 0) {}
+
+    int acquire() {
+        int n = static_cast<int>(servers_.size());
+        std::uniform_int_distribution<int> dist(0, n - 1);
+        int a = dist(rng_);
+        int b = dist(rng_);
+        while (b == a && n > 1) b = dist(rng_);
+
+        int winner = active_[a] <= active_[b] ? a : b;
+        active_[winner]++;       // reserve eagerly, like least-conn
+        return winner;
+    }
+
+    void release(int i) {
+        active_[i]--;
+    }
+};
+
+// The load signal is pluggable: compare EWMA latency instead of
+// active count and you have Finagle's p2cPeakEwma.`,
+    },
+  ],
 
   furtherReading: [
     {

@@ -112,10 +112,12 @@ export const selection: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "selection-sort.ts",
-    code: `// Selection sort — minimum writes, O(n²) comparisons.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "selection-sort.ts",
+      code: `// Selection sort — minimum writes, O(n²) comparisons.
 // In-place, not stable, predictable O(n²) on every input.
 function selectionSort<T>(a: T[]): T[] {
   const n = a.length;
@@ -137,7 +139,91 @@ function selectionSort<T>(a: T[]): T[] {
 selectionSort([29, 10, 14, 37, 13]);
 // → [10, 13, 14, 29, 37]
 // Comparisons: 4+3+2+1 = 10. Swaps: at most 4.`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "SelectionSort.java",
+      code: `// Selection sort — minimum writes, O(n²) comparisons.
+// In-place, not stable, predictable O(n²) on every input.
+static <T extends Comparable<T>> T[] selectionSort(T[] a) {
+    int n = a.length;
+    for (int i = 0; i < n - 1; i++) {
+        // Find the index of the smallest value in a[i..n-1].
+        int minIdx = i;
+        for (int j = i + 1; j < n; j++) {
+            if (a[j].compareTo(a[minIdx]) < 0) minIdx = j;
+        }
+        // One swap per outer iteration — at most.
+        if (minIdx != i) {
+            T tmp = a[i]; a[i] = a[minIdx]; a[minIdx] = tmp;
+        }
+    }
+    return a;
+}
+
+// Example
+selectionSort(new Integer[]{29, 10, 14, 37, 13});
+// → [10, 13, 14, 29, 37]
+// Comparisons: 4+3+2+1 = 10. Swaps: at most 4.`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "selection_sort.py",
+      code: `def selection_sort(a: list) -> list:
+    """Selection sort — minimum writes, O(n²) comparisons.
+    In-place, not stable, predictable O(n²) on every input."""
+    n = len(a)
+    for i in range(n - 1):
+        # Find the index of the smallest value in a[i..n-1].
+        min_idx = i
+        for j in range(i + 1, n):
+            if a[j] < a[min_idx]:
+                min_idx = j
+        # One swap per outer iteration — at most.
+        if min_idx != i:
+            a[i], a[min_idx] = a[min_idx], a[i]
+    return a
+
+
+# Example
+selection_sort([29, 10, 14, 37, 13])
+# → [10, 13, 14, 29, 37]
+# Comparisons: 4+3+2+1 = 10. Swaps: at most 4.`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "selection_sort.cpp",
+      code: `// Selection sort — minimum writes, O(n²) comparisons.
+// In-place, not stable, predictable O(n²) on every input.
+#include <vector>
+#include <utility>
+
+template <typename T>
+std::vector<T> selectionSort(std::vector<T> a) {
+    int n = a.size();
+    for (int i = 0; i < n - 1; i++) {
+        // Find the index of the smallest value in a[i..n-1].
+        int minIdx = i;
+        for (int j = i + 1; j < n; j++) {
+            if (a[j] < a[minIdx]) minIdx = j;
+        }
+        // One swap per outer iteration — at most.
+        if (minIdx != i) {
+            std::swap(a[i], a[minIdx]);
+        }
+    }
+    return a;
+}
+
+// Example
+// selectionSort<int>({29, 10, 14, 37, 13});
+// → [10, 13, 14, 29, 37]
+// Comparisons: 4+3+2+1 = 10. Swaps: at most 4.`,
+    },
+  ],
 
   furtherReading: [
     {

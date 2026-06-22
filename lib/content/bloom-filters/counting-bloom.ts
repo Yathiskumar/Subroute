@@ -116,10 +116,12 @@ export const countingBloom: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "counting-bloom-filter.ts",
-    code: `// Counting Bloom filter — 4-bit counters, supports delete.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "counting-bloom-filter.ts",
+      code: `// Counting Bloom filter — 4-bit counters, supports delete.
 class CountingBloomFilter {
   private readonly cells: Uint8Array;        // each cell holds 0..15
   private static readonly MAX = 15;
@@ -164,7 +166,161 @@ class CountingBloomFilter {
     }
   }
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "CountingBloomFilter.java",
+      code: `// Counting Bloom filter — 4-bit counters, supports delete.
+class CountingBloomFilter {
+    private final byte[] cells;          // each cell holds 0..15
+    private static final int MAX = 15;
+    private final int m;                 // number of cells
+    private final int k;                 // hash functions
+
+    CountingBloomFilter(int m, int k) {
+        this.m = m;
+        this.k = k;
+        this.cells = new byte[m];        // 1 byte each (4 bits used)
+    }
+
+    void add(String item) {
+        for (int i : indices(item)) {
+            if (cells[i] < MAX) cells[i]++;
+            // else: leave at MAX — never decrement a saturated cell.
+        }
+    }
+
+    boolean remove(String item) {
+        // Refuse to remove items that aren't present (would corrupt the filter).
+        if (!has(item)) return false;
+        for (int i : indices(item)) {
+            if (cells[i] < MAX) {
+                cells[i]--;              // pinned cells stay pinned
+            }
+        }
+        return true;
+    }
+
+    boolean has(String item) {
+        for (int i : indices(item)) {
+            if (cells[i] == 0) return false; // definitely-not
+        }
+        return true;                         // maybe-yes
+    }
+
+    private int[] indices(String item) {
+        long h1 = fnv1a(item);
+        long h2 = murmur3(item);
+        int[] out = new int[k];
+        for (int i = 0; i < k; i++) {
+            out[i] = (int) Math.floorMod(h1 + (long) i * h2, m);
+        }
+        return out;
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "counting_bloom_filter.py",
+      code: `from typing import Iterator
+
+
+class CountingBloomFilter:
+    """Counting Bloom filter — 4-bit counters, supports delete."""
+
+    MAX = 15
+
+    def __init__(self, m: int, k: int) -> None:
+        self.m = m                       # number of cells
+        self.k = k                       # hash functions
+        self.cells = bytearray(m)        # 1 byte each (4 bits used)
+
+    def add(self, item: str) -> None:
+        for i in self._indices(item):
+            if self.cells[i] < self.MAX:
+                self.cells[i] += 1
+            # else: leave at MAX — never decrement a saturated cell.
+
+    def remove(self, item: str) -> bool:
+        # Refuse to remove items that aren't present (would corrupt the filter).
+        if not self.has(item):
+            return False
+        for i in self._indices(item):
+            if self.cells[i] < self.MAX:
+                self.cells[i] -= 1       # pinned cells stay pinned
+        return True
+
+    def has(self, item: str) -> bool:
+        for i in self._indices(item):
+            if self.cells[i] == 0:
+                return False             # definitely-not
+        return True                      # maybe-yes
+
+    def _indices(self, item: str) -> Iterator[int]:
+        h1 = fnv1a(item)
+        h2 = murmur3(item)
+        for i in range(self.k):
+            yield abs((h1 + i * h2) % self.m)`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "counting_bloom_filter.cpp",
+      code: `// Counting Bloom filter — 4-bit counters, supports delete.
+#include <cstdint>
+#include <string>
+#include <vector>
+
+class CountingBloomFilter {
+    std::vector<uint8_t> cells_;          // each cell holds 0..15
+    static constexpr int MAX = 15;
+    int m_;                               // number of cells
+    int k_;                               // hash functions
+
+public:
+    CountingBloomFilter(int m, int k)
+        : cells_(m, 0), m_(m), k_(k) {}   // 1 byte each (4 bits used)
+
+    void add(const std::string& item) {
+        for (int i : indices(item)) {
+            if (cells_[i] < MAX) cells_[i]++;
+            // else: leave at MAX — never decrement a saturated cell.
+        }
+    }
+
+    bool remove(const std::string& item) {
+        // Refuse to remove items that aren't present (would corrupt the filter).
+        if (!has(item)) return false;
+        for (int i : indices(item)) {
+            if (cells_[i] < MAX) {
+                cells_[i]--;              // pinned cells stay pinned
+            }
+        }
+        return true;
+    }
+
+    bool has(const std::string& item) const {
+        for (int i : indices(item)) {
+            if (cells_[i] == 0) return false; // definitely-not
+        }
+        return true;                          // maybe-yes
+    }
+
+private:
+    std::vector<int> indices(const std::string& item) const {
+        uint64_t h1 = fnv1a(item);
+        uint64_t h2 = murmur3(item);
+        std::vector<int> out(k_);
+        for (int i = 0; i < k_; i++) {
+            out[i] = static_cast<int>((h1 + (uint64_t) i * h2) % m_);
+        }
+        return out;
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

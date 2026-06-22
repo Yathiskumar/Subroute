@@ -114,10 +114,12 @@ export const prim: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "prim.ts",
-    code: `// Prim's MST — lazy variant with a binary heap.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "prim.ts",
+      code: `// Prim's MST — lazy variant with a binary heap.
 // Push every cut-crossing edge; skip stale entries on pop.
 type Edge = { to: number; w: number };
 type HeapEntry = [number, number, number];   // [weight, from, to]
@@ -153,7 +155,140 @@ function prim(graph: Map<number, Edge[]>, start: number): HeapEntry[] {
 // Real implementations: replace shift/sort with a proper binary heap
 // (Python: heapq, Java: PriorityQueue, C++: priority_queue with reverse comparator).
 // Eager variant: keep only the cheapest current edge per outside node — O(V) heap entries.`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "Prim.java",
+      code: `import java.util.*;
+
+// Prim's MST — lazy variant with a binary heap.
+// Push every cut-crossing edge; skip stale entries on pop.
+record Edge(int to, int w) {}
+
+// Heap entry [weight, from, to]; PriorityQueue keeps it a real min-heap.
+List<int[]> prim(Map<Integer, List<Edge>> graph, int start) {
+    Set<Integer> inTree = new HashSet<>();
+    inTree.add(start);
+    PriorityQueue<int[]> heap =
+        new PriorityQueue<>(Comparator.comparingInt(e -> e[0]));
+
+    // Seed: push every edge from start.
+    for (Edge e : graph.getOrDefault(start, List.of()))
+        heap.add(new int[]{e.w(), start, e.to()});
+
+    List<int[]> mst = new ArrayList<>();
+    while (!heap.isEmpty() && mst.size() < graph.size() - 1) {
+        int[] e = heap.poll();        // heap.pop()
+        int v = e[2];
+        if (inTree.contains(v)) continue;   // stale — cycle would form
+
+        inTree.add(v);
+        mst.add(e);
+
+        // Push every edge from v to a not-yet-in-tree node.
+        for (Edge nx : graph.getOrDefault(v, List.of())) {
+            if (!inTree.contains(nx.to())) {
+                heap.add(new int[]{nx.w(), v, nx.to()});   // heap.push()
+            }
+        }
+    }
+    return mst;
+}
+
+// PriorityQueue is the proper binary heap.
+// Eager variant: keep only the cheapest current edge per outside node — O(V) heap entries.`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "prim.py",
+      code: `import heapq
+
+
+def prim(graph: dict[int, list[tuple[int, int]]], start: int) -> list[tuple[int, int, int]]:
+    """Prim's MST — lazy variant with a binary heap.
+    Push every cut-crossing edge; skip stale entries on pop.
+    graph maps node -> list of (to, weight); returns (weight, from, to) tuples."""
+    in_tree: set[int] = {start}
+    heap: list[tuple[int, int, int]] = []   # (weight, from, to) — heapq keeps it sorted
+
+    # Seed: push every edge from start.
+    for to, w in graph.get(start, []):
+        heapq.heappush(heap, (w, start, to))
+
+    mst: list[tuple[int, int, int]] = []
+    while heap and len(mst) < len(graph) - 1:
+        w, u, v = heapq.heappop(heap)       # heap.pop()
+        if v in in_tree:
+            continue                        # stale — cycle would form
+
+        in_tree.add(v)
+        mst.append((w, u, v))
+
+        # Push every edge from v to a not-yet-in-tree node.
+        for to, ew in graph.get(v, []):
+            if to not in in_tree:
+                heapq.heappush(heap, (ew, v, to))   # heap.push()
+    return mst
+
+
+# heapq is the proper binary heap.
+# Eager variant: keep only the cheapest current edge per outside node — O(V) heap entries.`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "prim.cpp",
+      code: `// Prim's MST — lazy variant with a binary heap.
+// Push every cut-crossing edge; skip stale entries on pop.
+#include <array>
+#include <functional>
+#include <queue>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+
+struct Edge { int to, w; };
+
+// Heap entry [weight, from, to]; tuple ordering sorts by weight first.
+using Entry = std::array<int, 3>;
+
+std::vector<Entry> prim(
+    const std::unordered_map<int, std::vector<Edge>> &graph, int start) {
+    std::unordered_set<int> inTree{start};
+    // Min-heap via greater comparator on the weight (entry[0]).
+    auto cmp = [](const Entry &a, const Entry &b) { return a[0] > b[0]; };
+    std::priority_queue<Entry, std::vector<Entry>, decltype(cmp)> heap(cmp);
+
+    // Seed: push every edge from start.
+    auto sit = graph.find(start);
+    if (sit != graph.end())
+        for (const auto &e : sit->second) heap.push({e.w, start, e.to});
+
+    std::vector<Entry> mst;
+    while (!heap.empty() && static_cast<int>(mst.size()) < static_cast<int>(graph.size()) - 1) {
+        Entry e = heap.top();         // heap.pop()
+        heap.pop();
+        int v = e[2];
+        if (inTree.count(v)) continue;   // stale — cycle would form
+
+        inTree.insert(v);
+        mst.push_back(e);
+
+        // Push every edge from v to a not-yet-in-tree node.
+        auto vit = graph.find(v);
+        if (vit != graph.end())
+            for (const auto &nx : vit->second)
+                if (!inTree.count(nx.to)) heap.push({nx.w, v, nx.to});  // heap.push()
+    }
+    return mst;
+}
+
+// priority_queue with a greater comparator is the proper binary min-heap.
+// Eager variant: keep only the cheapest current edge per outside node — O(V) heap entries.`,
+    },
+  ],
 
   furtherReading: [
     {

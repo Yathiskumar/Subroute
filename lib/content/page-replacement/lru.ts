@@ -90,35 +90,144 @@ export const lru: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "lru.ts",
-    code: `// Exact LRU with a Map (insertion order = recency order in JS Maps).
-class LRU {
-  private frames: number;
-  private cache = new Map<number, true>(); // oldest entry first
-  faults = 0;
-  hits = 0;
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "lru.go",
+      code: `// Exact LRU with a doubly-linked list + map for O(1) recency tracking.
+package lru
 
-  constructor(frames: number) { this.frames = frames; }
+import "container/list"
 
-  access(page: number): "hit" | "fault" {
-    if (this.cache.has(page)) {
-      this.cache.delete(page);
-      this.cache.set(page, true);          // re-insert => now most recent
-      this.hits++;
-      return "hit";
-    }
-    this.faults++;
-    if (this.cache.size >= this.frames) {
-      const lru = this.cache.keys().next().value!; // first key = least recent
-      this.cache.delete(lru);                       // evict it
-    }
-    this.cache.set(page, true);            // load as most recent
-    return "fault";
-  }
+type LRU struct {
+	frames int
+	order  *list.List         // front = most recent, back = least recent
+	nodes  map[int]*list.Element // page -> its node
+	Faults int
+	Hits   int
+}
+
+func NewLRU(frames int) *LRU {
+	return &LRU{frames: frames, order: list.New(), nodes: make(map[int]*list.Element)}
+}
+
+func (c *LRU) Access(page int) string {
+	if el, ok := c.nodes[page]; ok {
+		c.order.MoveToFront(el) // re-insert => now most recent
+		c.Hits++
+		return "hit"
+	}
+	c.Faults++
+	if c.order.Len() >= c.frames {
+		lru := c.order.Back() // back = least recent
+		c.order.Remove(lru)   // evict it
+		delete(c.nodes, lru.Value.(int))
+	}
+	c.nodes[page] = c.order.PushFront(page) // load as most recent
+	return "fault"
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "Lru.java",
+      code: `// Exact LRU with a LinkedHashMap (access-order iteration = recency order).
+import java.util.*;
+
+class Lru {
+    private final int frames;
+    // access-order map: eldest entry first = least recent
+    private final LinkedHashMap<Integer, Boolean> cache =
+        new LinkedHashMap<>(16, 0.75f, true);
+    int faults = 0;
+    int hits = 0;
+
+    Lru(int frames) { this.frames = frames; }
+
+    String access(int page) {
+        if (cache.containsKey(page)) {
+            cache.get(page);          // access reorders => now most recent
+            hits++;
+            return "hit";
+        }
+        faults++;
+        if (cache.size() >= frames) {
+            int lru = cache.keySet().iterator().next(); // first key = least recent
+            cache.remove(lru);                          // evict it
+        }
+        cache.put(page, true);        // load as most recent
+        return "fault";
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "lru.py",
+      code: `# Exact LRU with an OrderedDict (move_to_end tracks recency in O(1)).
+from collections import OrderedDict
+
+
+class LRU:
+    def __init__(self, frames: int) -> None:
+        self.frames = frames
+        self.cache: "OrderedDict[int, bool]" = OrderedDict()  # oldest entry first
+        self.faults = 0
+        self.hits = 0
+
+    def access(self, page: int) -> str:
+        if page in self.cache:
+            self.cache.move_to_end(page)  # re-insert => now most recent
+            self.hits += 1
+            return "hit"
+        self.faults += 1
+        if len(self.cache) >= self.frames:
+            # popitem(last=False) removes the first key = least recent
+            self.cache.popitem(last=False)  # evict it
+        self.cache[page] = True           # load as most recent
+        return "fault"`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "lru.cpp",
+      code: `// Exact LRU with a list + hash map for O(1) recency tracking.
+#include <list>
+#include <string>
+#include <unordered_map>
+
+class LRU {
+    int frames_;
+    std::list<int> order_; // front = most recent, back = least recent
+    std::unordered_map<int, std::list<int>::iterator> nodes_;
+
+public:
+    int faults = 0;
+    int hits = 0;
+
+    explicit LRU(int frames) : frames_(frames) {}
+
+    std::string access(int page) {
+        auto it = nodes_.find(page);
+        if (it != nodes_.end()) {
+            order_.splice(order_.begin(), order_, it->second); // now most recent
+            hits++;
+            return "hit";
+        }
+        faults++;
+        if (static_cast<int>(order_.size()) >= frames_) {
+            int lru = order_.back(); // back = least recent
+            order_.pop_back();       // evict it
+            nodes_.erase(lru);
+        }
+        order_.push_front(page); // load as most recent
+        nodes_[page] = order_.begin();
+        return "fault";
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

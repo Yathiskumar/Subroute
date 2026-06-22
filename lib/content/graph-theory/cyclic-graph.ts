@@ -112,10 +112,12 @@ export const cyclicGraph: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "cyclic-graph.ts",
-    code: `// Undirected cycle detection by DFS.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "cyclic-graph.ts",
+      code: `// Undirected cycle detection by DFS.
 // A cycle exists iff DFS finds an edge to a vertex that is
 // STILL ON THE STACK (i.e. an ancestor) and isn't the parent.
 function hasCycle(adj: Map<string, string[]>): boolean {
@@ -143,7 +145,135 @@ function hasCycle(adj: Map<string, string[]>): boolean {
 
 // To return the cycle itself, keep an explicit array stack and, on the
 // back edge u->v, slice it from the first occurrence of v up to u.`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "CyclicGraph.java",
+      code: `// Undirected cycle detection by DFS.
+// A cycle exists iff DFS finds an edge to a vertex that is
+// STILL ON THE STACK (i.e. an ancestor) and isn't the parent.
+import java.util.*;
+
+class CyclicGraph {
+    private final Map<String, List<String>> adj;
+    private final Set<String> onStack = new HashSet<>();   // current DFS path
+    private final Set<String> done = new HashSet<>();      // fully explored
+
+    CyclicGraph(Map<String, List<String>> adj) {
+        this.adj = adj;
+    }
+
+    boolean hasCycle() {
+        // Restart for every component so disconnected pieces are covered.
+        for (String start : adj.keySet()) {
+            if (!done.contains(start) && dfs(start, null)) return true;
+        }
+        return false;
+    }
+
+    private boolean dfs(String u, String parent) {
+        onStack.add(u);                          // push: u is on the path now
+        for (String v : adj.getOrDefault(u, List.of())) {
+            if (v.equals(parent)) continue;      // edge back to parent is NOT a cycle
+            if (onStack.contains(v)) return true; // back edge -> ancestor -> cycle!
+            if (!done.contains(v) && dfs(v, u)) return true;
+        }
+        onStack.remove(u);                       // pop: u and its subtree are finished
+        done.add(u);
+        return false;
+    }
+}
+
+// To return the cycle itself, keep an explicit array stack and, on the
+// back edge u->v, slice it from the first occurrence of v up to u.`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "cyclic_graph.py",
+      code: `def has_cycle(adj: dict[str, list[str]]) -> bool:
+    """Undirected cycle detection by DFS.
+
+    A cycle exists iff DFS finds an edge to a vertex that is
+    STILL ON THE STACK (i.e. an ancestor) and isn't the parent.
+    """
+    on_stack: set[str] = set()   # vertices on the current DFS path
+    done: set[str] = set()       # fully explored vertices
+
+    def dfs(u: str, parent: str | None) -> bool:
+        on_stack.add(u)                  # push: u is on the path now
+        for v in adj.get(u, ()):
+            if v == parent:
+                continue                 # edge back to parent is NOT a cycle
+            if v in on_stack:
+                return True              # back edge -> ancestor -> cycle!
+            if v not in done and dfs(v, u):
+                return True
+        on_stack.discard(u)              # pop: u and its subtree are finished
+        done.add(u)
+        return False
+
+    # Restart for every component so disconnected pieces are covered.
+    for start in adj:
+        if start not in done and dfs(start, None):
+            return True
+    return False
+
+
+# To return the cycle itself, keep an explicit list stack and, on the
+# back edge u->v, slice it from the first occurrence of v up to u.`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "cyclic_graph.cpp",
+      code: `// Undirected cycle detection by DFS.
+// A cycle exists iff DFS finds an edge to a vertex that is
+// STILL ON THE STACK (i.e. an ancestor) and isn't the parent.
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+
+class CyclicGraph {
+    const std::unordered_map<std::string, std::vector<std::string>>& adj_;
+    std::unordered_set<std::string> onStack_;   // current DFS path
+    std::unordered_set<std::string> done_;      // fully explored vertices
+
+    bool dfs(const std::string& u, const std::string* parent) {
+        onStack_.insert(u);                     // push: u is on the path now
+        auto it = adj_.find(u);
+        if (it != adj_.end()) {
+            for (const auto& v : it->second) {
+                if (parent && v == *parent) continue; // edge to parent is NOT a cycle
+                if (onStack_.count(v)) return true;   // back edge -> ancestor -> cycle!
+                if (!done_.count(v) && dfs(v, &u)) return true;
+            }
+        }
+        onStack_.erase(u);                      // pop: u and its subtree are finished
+        done_.insert(u);
+        return false;
+    }
+
+public:
+    explicit CyclicGraph(
+        const std::unordered_map<std::string, std::vector<std::string>>& adj)
+        : adj_(adj) {}
+
+    bool hasCycle() {
+        // Restart for every component so disconnected pieces are covered.
+        for (const auto& [start, _] : adj_) {
+            if (!done_.count(start) && dfs(start, nullptr)) return true;
+        }
+        return false;
+    }
+};
+
+// To return the cycle itself, keep an explicit vector stack and, on the
+// back edge u->v, slice it from the first occurrence of v up to u.`,
+    },
+  ],
 
   furtherReading: [
     {

@@ -88,10 +88,12 @@ export const mru: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "mru.ts",
-    code: `// MRU: same as LRU, but evict from the most-recent end.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "mru.ts",
+      code: `// MRU: same as LRU, but evict from the most-recent end.
 // In JS, Map preserves insertion order — last key in is the
 // most-recently-used. Drop *that* on overflow.
 class MRU<K, V> {
@@ -119,7 +121,117 @@ class MRU<K, V> {
     this.store.set(key, value);
   }
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "MruCache.java",
+      code: `import java.util.LinkedHashMap;
+
+// MRU: same as LRU, but evict from the most-recent end.
+// LinkedHashMap preserves access order — last key in is the
+// most-recently-used. Drop *that* on overflow.
+class MruCache<K, V> {
+    private final LinkedHashMap<K, V> store = new LinkedHashMap<>(16, 0.75f, true);
+    private final int capacity;
+
+    MruCache(int capacity) {
+        this.capacity = capacity;
+    }
+
+    V get(K key) {
+        return store.get(key); // accessOrder moves it to most-recent
+    }
+
+    void set(K key, V value) {
+        if (store.containsKey(key)) {
+            store.remove(key);
+        } else if (store.size() >= capacity) {
+            // Evict the most-recently-used: the last key in iteration order.
+            // We have to walk to the end since there is no "last" accessor.
+            K lastKey = null;
+            for (K k : store.keySet()) lastKey = k;
+            if (lastKey != null) store.remove(lastKey);
+        }
+        store.put(key, value);
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "mru_cache.py",
+      code: `from collections import OrderedDict
+from typing import Optional
+
+
+class MRU:
+    """MRU: same as LRU, but evict from the most-recent end.
+
+    OrderedDict preserves insertion order — the last key in is the
+    most-recently-used. Drop *that* on overflow.
+    """
+
+    def __init__(self, capacity: int) -> None:
+        self.store: OrderedDict = OrderedDict()
+        self.capacity = capacity
+
+    def get(self, key) -> Optional[object]:
+        if key not in self.store:
+            return None
+        self.store.move_to_end(key)  # re-insert as most-recent
+        return self.store[key]
+
+    def set(self, key, value) -> None:
+        if key in self.store:
+            del self.store[key]
+        elif len(self.store) >= self.capacity:
+            # Evict the most-recently-used: the last key in the ordering.
+            self.store.popitem(last=True)
+        self.store[key] = value`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "mru_cache.cpp",
+      code: `// MRU: same as LRU, but evict from the most-recent end.
+// A list in access order (front = most-recent) + a hash map of iterators.
+#include <list>
+#include <unordered_map>
+#include <optional>
+
+template <class K, class V>
+class MRU {
+    size_t capacity_;
+    std::list<std::pair<K, V>> order_;                                 // front = most-recent
+    std::unordered_map<K, typename std::list<std::pair<K, V>>::iterator> index_;
+
+public:
+    explicit MRU(size_t capacity) : capacity_(capacity) {}
+
+    std::optional<V> get(const K& key) {
+        auto it = index_.find(key);
+        if (it == index_.end()) return std::nullopt;
+        order_.splice(order_.begin(), order_, it->second); // move to front
+        return it->second->second;
+    }
+
+    void set(const K& key, const V& value) {
+        auto it = index_.find(key);
+        if (it != index_.end()) {
+            order_.erase(it->second);
+            index_.erase(it);
+        } else if (index_.size() >= capacity_) {
+            // Evict the most-recently-used: the front of the list.
+            index_.erase(order_.front().first);
+            order_.pop_front();
+        }
+        order_.emplace_front(key, value);
+        index_[key] = order_.begin();
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

@@ -113,10 +113,12 @@ export const floydWarshall: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "floyd-warshall.ts",
-    code: `// Floyd-Warshall — all-pairs shortest paths in O(V³).
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "floyd-warshall.ts",
+      code: `// Floyd-Warshall — all-pairs shortest paths in O(V³).
 // Handles negative edges; detects negative cycles via diagonal.
 function floydWarshall(weight: number[][]): number[][] {
   const n = weight.length;
@@ -148,7 +150,132 @@ function floydWarshall(weight: number[][]): number[][] {
 
 // To reconstruct paths, keep a \`next[i][j]\` matrix:
 // next[i][j] starts as j (direct edge); update to next[i][k] when k improves dist[i][j].`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "FloydWarshall.java",
+      code: `// Floyd-Warshall — all-pairs shortest paths in O(V³).
+// Handles negative edges; detects negative cycles via diagonal.
+// Use Double.POSITIVE_INFINITY for missing edges in the input matrix.
+double[][] floydWarshall(double[][] weight) {
+    int n = weight.length;
+    // Copy so we don't mutate the input.
+    double[][] dist = new double[n][];
+    for (int i = 0; i < n; i++) dist[i] = weight[i].clone();
+
+    // Initialise: distance to self is 0, missing edges already ∞.
+    for (int i = 0; i < n; i++) dist[i][i] = 0;
+
+    // The triple loop — k MUST be outermost.
+    for (int k = 0; k < n; k++) {
+        for (int i = 0; i < n; i++) {
+            // Tiny win: skip rows that can't reach k.
+            if (dist[i][k] == Double.POSITIVE_INFINITY) continue;
+            for (int j = 0; j < n; j++) {
+                double through = dist[i][k] + dist[k][j];
+                if (through < dist[i][j]) dist[i][j] = through;
+            }
+        }
+    }
+
+    // Negative-cycle check: any negative diagonal entry means
+    // that node sits on a negative cycle.
+    for (int i = 0; i < n; i++) {
+        if (dist[i][i] < 0) throw new IllegalStateException("negative cycle detected");
+    }
+    return dist;
+}
+
+// To reconstruct paths, keep a \`next[i][j]\` matrix:
+// next[i][j] starts as j (direct edge); update to next[i][k] when k improves dist[i][j].`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "floyd_warshall.py",
+      code: `from math import inf
+
+
+def floyd_warshall(weight: list[list[float]]) -> list[list[float]]:
+    """Floyd-Warshall — all-pairs shortest paths in O(V³).
+    Handles negative edges; detects negative cycles via diagonal.
+    Use float('inf') for missing edges in the input matrix."""
+    n = len(weight)
+    # Copy so we don't mutate the input.
+    dist = [row[:] for row in weight]
+
+    # Initialise: distance to self is 0, missing edges already ∞.
+    for i in range(n):
+        dist[i][i] = 0
+
+    # The triple loop — k MUST be outermost.
+    for k in range(n):
+        for i in range(n):
+            # Tiny win: skip rows that can't reach k.
+            if dist[i][k] == inf:
+                continue
+            for j in range(n):
+                through = dist[i][k] + dist[k][j]
+                if through < dist[i][j]:
+                    dist[i][j] = through
+
+    # Negative-cycle check: any negative diagonal entry means
+    # that node sits on a negative cycle.
+    for i in range(n):
+        if dist[i][i] < 0:
+            raise ValueError("negative cycle detected")
+    return dist
+
+
+# To reconstruct paths, keep a \`next[i][j]\` matrix:
+# next[i][j] starts as j (direct edge); update to next[i][k] when k improves dist[i][j].`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "floyd_warshall.cpp",
+      code: `// Floyd-Warshall — all-pairs shortest paths in O(V³).
+// Handles negative edges; detects negative cycles via diagonal.
+// Use a large sentinel (not overflow-prone) for missing edges.
+#include <limits>
+#include <stdexcept>
+#include <vector>
+
+std::vector<std::vector<double>> floydWarshall(
+    const std::vector<std::vector<double>> &weight) {
+    const double INF = std::numeric_limits<double>::infinity();
+    int n = static_cast<int>(weight.size());
+    // Copy so we don't mutate the input.
+    std::vector<std::vector<double>> dist = weight;
+
+    // Initialise: distance to self is 0, missing edges already ∞.
+    for (int i = 0; i < n; i++) dist[i][i] = 0;
+
+    // The triple loop — k MUST be outermost.
+    for (int k = 0; k < n; k++) {
+        for (int i = 0; i < n; i++) {
+            // Tiny win: skip rows that can't reach k.
+            if (dist[i][k] == INF) continue;
+            for (int j = 0; j < n; j++) {
+                double through = dist[i][k] + dist[k][j];
+                if (through < dist[i][j]) dist[i][j] = through;
+            }
+        }
+    }
+
+    // Negative-cycle check: any negative diagonal entry means
+    // that node sits on a negative cycle.
+    for (int i = 0; i < n; i++) {
+        if (dist[i][i] < 0) throw std::runtime_error("negative cycle detected");
+    }
+    return dist;
+}
+
+// To reconstruct paths, keep a \`next[i][j]\` matrix:
+// next[i][j] starts as j (direct edge); update to next[i][k] when k improves dist[i][j].`,
+    },
+  ],
 
   furtherReading: [
     {

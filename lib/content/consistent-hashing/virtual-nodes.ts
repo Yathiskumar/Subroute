@@ -96,52 +96,263 @@ export const virtualNodes: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "vnode-ring.ts",
-    code: `// Consistent-hashing ring with virtual nodes.
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "vnode_ring.go",
+      code: `// Consistent-hashing ring with virtual nodes.
 // Each physical server is placed at V points; a map leads each point home.
-class VNodeRing {
-  private ring: { hash: number; server: string }[] = [];
+package main
 
-  constructor(private vnodes = 100) {}
+import (
+	"fmt"
+	"sort"
+)
 
-  private hash(s: string): number {
-    let h = 2166136261 >>> 0;
-    for (let i = 0; i < s.length; i++) {
-      h ^= s.charCodeAt(i);
-      h = Math.imul(h, 16777619) >>> 0;
-    }
-    return h >>> 0;
-  }
-
-  addServer(name: string, weight = 1): void {
-    // weight just scales how many points this server gets
-    const points = this.vnodes * weight;
-    for (let i = 0; i < points; i++) {
-      this.ring.push({ hash: this.hash(\`\${name}#\${i}\`), server: name });
-    }
-    this.ring.sort((a, b) => a.hash - b.hash);
-  }
-
-  removeServer(name: string): void {
-    this.ring = this.ring.filter((e) => e.server !== name);
-  }
-
-  getServer(key: string): string | null {
-    if (this.ring.length === 0) return null;
-    const h = this.hash(key);
-    // first vnode clockwise; wrap to 0 if past the end
-    const hit = this.ring.find((e) => e.hash >= h) ?? this.ring[0];
-    return hit.server; // the map from point -> physical server
-  }
+type entry struct {
+	hash   uint32
+	server string
 }
 
-const ring = new VNodeRing(150);
-ring.addServer("alpha");
-ring.addServer("beta", 2); // twice the capacity -> twice the points
-ring.getServer("user:42");`,
-  },
+type VNodeRing struct {
+	ring   []entry
+	vnodes int
+}
+
+func NewVNodeRing(vnodes int) *VNodeRing {
+	return &VNodeRing{vnodes: vnodes}
+}
+
+func (r *VNodeRing) hash(s string) uint32 {
+	var h uint32 = 2166136261
+	for i := 0; i < len(s); i++ {
+		h ^= uint32(s[i])
+		h *= 16777619
+	}
+	return h
+}
+
+func (r *VNodeRing) AddServer(name string, weight int) {
+	// weight just scales how many points this server gets
+	points := r.vnodes * weight
+	for i := 0; i < points; i++ {
+		label := fmt.Sprintf("%s#%d", name, i)
+		r.ring = append(r.ring, entry{hash: r.hash(label), server: name})
+	}
+	sort.Slice(r.ring, func(i, j int) bool {
+		return r.ring[i].hash < r.ring[j].hash
+	})
+}
+
+func (r *VNodeRing) RemoveServer(name string) {
+	out := r.ring[:0]
+	for _, e := range r.ring {
+		if e.server != name {
+			out = append(out, e)
+		}
+	}
+	r.ring = out
+}
+
+func (r *VNodeRing) GetServer(key string) (string, bool) {
+	if len(r.ring) == 0 {
+		return "", false
+	}
+	h := r.hash(key)
+	// first vnode clockwise; wrap to 0 if past the end
+	i := sort.Search(len(r.ring), func(i int) bool { return r.ring[i].hash >= h })
+	if i == len(r.ring) {
+		i = 0
+	}
+	return r.ring[i].server, true // the map from point -> physical server
+}
+
+func main() {
+	ring := NewVNodeRing(150)
+	ring.AddServer("alpha", 1)
+	ring.AddServer("beta", 2) // twice the capacity -> twice the points
+	ring.GetServer("user:42")
+}`,
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "VNodeRing.java",
+      code: `import java.util.ArrayList;
+import java.util.List;
+
+// Consistent-hashing ring with virtual nodes.
+// Each physical server is placed at V points; a map leads each point home.
+class VNodeRing {
+    private record Entry(long hash, String server) {}
+
+    private final List<Entry> ring = new ArrayList<>();
+    private final int vnodes;
+
+    VNodeRing(int vnodes) {
+        this.vnodes = vnodes;
+    }
+
+    private long hash(String s) {
+        long h = 2166136261L;
+        for (int i = 0; i < s.length(); i++) {
+            h ^= s.charAt(i);
+            h = (h * 16777619L) & 0xFFFFFFFFL;
+        }
+        return h;
+    }
+
+    void addServer(String name, int weight) {
+        // weight just scales how many points this server gets
+        int points = vnodes * weight;
+        for (int i = 0; i < points; i++) {
+            ring.add(new Entry(hash(name + "#" + i), name));
+        }
+        ring.sort((a, b) -> Long.compare(a.hash(), b.hash()));
+    }
+
+    void removeServer(String name) {
+        ring.removeIf(e -> e.server().equals(name));
+    }
+
+    String getServer(String key) {
+        if (ring.isEmpty()) return null;
+        long h = hash(key);
+        // first vnode clockwise; wrap to 0 if past the end
+        for (Entry e : ring) {
+            if (e.hash() >= h) return e.server();
+        }
+        return ring.get(0).server(); // the map from point -> physical server
+    }
+}
+
+// Usage:
+// VNodeRing ring = new VNodeRing(150);
+// ring.addServer("alpha", 1);
+// ring.addServer("beta", 2); // twice the capacity -> twice the points
+// ring.getServer("user:42");`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "vnode_ring.py",
+      code: `import bisect
+
+
+class VNodeRing:
+    """Consistent-hashing ring with virtual nodes.
+
+    Each physical server is placed at V points; a map leads each point home.
+    """
+
+    def __init__(self, vnodes: int = 100) -> None:
+        self.vnodes = vnodes
+        self.hashes: list[int] = []   # sorted vnode hashes
+        self.servers: list[str] = []  # parallel: physical server per hash
+
+    def _hash(self, s: str) -> int:
+        h = 2166136261
+        for ch in s:
+            h ^= ord(ch)
+            h = (h * 16777619) & 0xFFFFFFFF
+        return h
+
+    def add_server(self, name: str, weight: int = 1) -> None:
+        # weight just scales how many points this server gets
+        points = self.vnodes * weight
+        for i in range(points):
+            h = self._hash(f"{name}#{i}")
+            j = bisect.bisect_left(self.hashes, h)
+            self.hashes.insert(j, h)
+            self.servers.insert(j, name)
+
+    def remove_server(self, name: str) -> None:
+        kept = [(h, s) for h, s in zip(self.hashes, self.servers) if s != name]
+        self.hashes = [h for h, _ in kept]
+        self.servers = [s for _, s in kept]
+
+    def get_server(self, key: str) -> str | None:
+        if not self.hashes:
+            return None
+        h = self._hash(key)
+        # first vnode clockwise; wrap to 0 if past the end
+        i = bisect.bisect_left(self.hashes, h)
+        if i == len(self.hashes):
+            i = 0
+        return self.servers[i]  # the map from point -> physical server
+
+
+ring = VNodeRing(150)
+ring.add_server("alpha")
+ring.add_server("beta", 2)  # twice the capacity -> twice the points
+ring.get_server("user:42")`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "vnode_ring.cpp",
+      code: `// Consistent-hashing ring with virtual nodes.
+// Each physical server is placed at V points; a map leads each point home.
+#include <algorithm>
+#include <cstdint>
+#include <string>
+#include <vector>
+
+class VNodeRing {
+    struct Entry {
+        uint32_t hash;
+        std::string server;
+    };
+    std::vector<Entry> ring_;
+    int vnodes_;
+
+    uint32_t hash(const std::string& s) const {
+        uint32_t h = 2166136261u;
+        for (char c : s) {
+            h ^= static_cast<unsigned char>(c);
+            h *= 16777619u;
+        }
+        return h;
+    }
+
+public:
+    explicit VNodeRing(int vnodes = 100) : vnodes_(vnodes) {}
+
+    void addServer(const std::string& name, int weight = 1) {
+        // weight just scales how many points this server gets
+        int points = vnodes_ * weight;
+        for (int i = 0; i < points; i++) {
+            ring_.push_back({hash(name + "#" + std::to_string(i)), name});
+        }
+        std::sort(ring_.begin(), ring_.end(),
+                  [](const Entry& a, const Entry& b) { return a.hash < b.hash; });
+    }
+
+    void removeServer(const std::string& name) {
+        ring_.erase(std::remove_if(ring_.begin(), ring_.end(),
+                                   [&](const Entry& e) { return e.server == name; }),
+                    ring_.end());
+    }
+
+    const std::string* getServer(const std::string& key) const {
+        if (ring_.empty()) return nullptr;
+        uint32_t h = hash(key);
+        // first vnode clockwise; wrap to 0 if past the end
+        auto it = std::lower_bound(ring_.begin(), ring_.end(), h,
+                                   [](const Entry& e, uint32_t v) { return e.hash < v; });
+        if (it == ring_.end()) it = ring_.begin();
+        return &it->server; // the map from point -> physical server
+    }
+};
+
+// Usage:
+// VNodeRing ring(150);
+// ring.addServer("alpha");
+// ring.addServer("beta", 2); // twice the capacity -> twice the points
+// ring.getServer("user:42");`,
+    },
+  ],
 
   furtherReading: [
     {

@@ -95,23 +95,64 @@ export const roundRobin: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "round-robin.ts",
-    code: `// Round robin: a single index that walks the pool and wraps.
-class RoundRobinBalancer {
-  private next = 0;
-  constructor(private servers: string[]) {}
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "round_robin.go",
+      code: `package lb
 
-  pick(): string {
-    const server = this.servers[this.next];
-    this.next = (this.next + 1) % this.servers.length;
-    return server;
-  }
+// Round robin: a single index that walks the pool and wraps.
+type RoundRobinBalancer struct {
+	servers []string
+	next    int
+}
+
+func NewRoundRobinBalancer(servers []string) *RoundRobinBalancer {
+	return &RoundRobinBalancer{servers: servers}
+}
+
+func (b *RoundRobinBalancer) Pick() string {
+	server := b.servers[b.next]
+	b.next = (b.next + 1) % len(b.servers)
+	return server
 }
 
 // Usage
-const lb = new RoundRobinBalancer(["s1", "s2", "s3", "s4"]);
+// lb := NewRoundRobinBalancer([]string{"s1", "s2", "s3", "s4"})
+// lb.Pick() // "s1"
+// lb.Pick() // "s2"
+// lb.Pick() // "s3"
+// lb.Pick() // "s4"
+// lb.Pick() // "s1"  (wraps around)
+
+// Note: for global ordering across multiple LB instances,
+// 'next' must be a shared, atomically-incremented counter
+// (e.g. Redis INCR) — otherwise each instance cycles on its own.`,
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "RoundRobin.java",
+      code: `// Round robin: a single index that walks the pool and wraps.
+class RoundRobinBalancer {
+    private final String[] servers;
+    private int next = 0;
+
+    RoundRobinBalancer(String[] servers) {
+        this.servers = servers;
+    }
+
+    String pick() {
+        String server = servers[next];
+        next = (next + 1) % servers.length;
+        return server;
+    }
+}
+
+// Usage
+RoundRobinBalancer lb =
+    new RoundRobinBalancer(new String[] {"s1", "s2", "s3", "s4"});
 lb.pick(); // "s1"
 lb.pick(); // "s2"
 lb.pick(); // "s3"
@@ -121,7 +162,71 @@ lb.pick(); // "s1"  (wraps around)
 // Note: for global ordering across multiple LB instances,
 // 'next' must be a shared, atomically-incremented counter
 // (e.g. Redis INCR) — otherwise each instance cycles on its own.`,
-  },
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "round_robin.py",
+      code: `# Round robin: a single index that walks the pool and wraps.
+class RoundRobinBalancer:
+    def __init__(self, servers: list[str]) -> None:
+        self.servers = servers
+        self.next = 0
+
+    def pick(self) -> str:
+        server = self.servers[self.next]
+        self.next = (self.next + 1) % len(self.servers)
+        return server
+
+
+# Usage
+lb = RoundRobinBalancer(["s1", "s2", "s3", "s4"])
+lb.pick()  # "s1"
+lb.pick()  # "s2"
+lb.pick()  # "s3"
+lb.pick()  # "s4"
+lb.pick()  # "s1"  (wraps around)
+
+# Note: for global ordering across multiple LB instances,
+# 'next' must be a shared, atomically-incremented counter
+# (e.g. Redis INCR) — otherwise each instance cycles on its own.`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "round_robin.cpp",
+      code: `// Round robin: a single index that walks the pool and wraps.
+#include <string>
+#include <vector>
+
+class RoundRobinBalancer {
+    std::vector<std::string> servers_;
+    size_t next_ = 0;
+
+public:
+    explicit RoundRobinBalancer(std::vector<std::string> servers)
+        : servers_(std::move(servers)) {}
+
+    std::string pick() {
+        std::string server = servers_[next_];
+        next_ = (next_ + 1) % servers_.size();
+        return server;
+    }
+};
+
+// Usage
+// RoundRobinBalancer lb({"s1", "s2", "s3", "s4"});
+// lb.pick(); // "s1"
+// lb.pick(); // "s2"
+// lb.pick(); // "s3"
+// lb.pick(); // "s4"
+// lb.pick(); // "s1"  (wraps around)
+
+// Note: for global ordering across multiple LB instances,
+// 'next_' must be a shared, atomically-incremented counter
+// (e.g. Redis INCR) — otherwise each instance cycles on its own.`,
+    },
+  ],
 
   furtherReading: [
     {

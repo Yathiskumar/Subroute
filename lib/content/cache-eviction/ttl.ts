@@ -97,10 +97,12 @@ export const ttl: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "ttl.ts",
-    code: `// TTL with lazy + active expiry. Compose with another policy
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "ttl.ts",
+      code: `// TTL with lazy + active expiry. Compose with another policy
 // for capacity-based eviction.
 class TTLCache<K, V> {
   private store = new Map<K, { value: V; expiresAt: number }>();
@@ -135,7 +137,177 @@ class TTLCache<K, V> {
     }
   }
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "TtlCache.java",
+      code: `import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
+
+// TTL with lazy + active expiry. Compose with another policy
+// for capacity-based eviction.
+class TtlCache<K, V> {
+    private record Entry<V>(V value, long expiresAt) {}
+
+    private final Map<K, Entry<V>> store = new HashMap<>();
+    private final long defaultTtlMs;
+
+    TtlCache(long defaultTtlMs) {
+        this.defaultTtlMs = defaultTtlMs;
+        // Active sweep: every 1s, drop a sample of expired keys.
+        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+        scheduler.scheduleAtFixedRate(this::activeSweep, 1, 1, TimeUnit.SECONDS);
+    }
+
+    void set(K key, V value) {
+        set(key, value, defaultTtlMs);
+    }
+
+    void set(K key, V value, long ttlMs) {
+        store.put(key, new Entry<>(value, System.currentTimeMillis() + ttlMs));
+    }
+
+    V get(K key) {
+        Entry<V> entry = store.get(key);
+        if (entry == null) return null;
+        if (System.currentTimeMillis() >= entry.expiresAt()) {
+            store.remove(key); // lazy expiry on read
+            return null;
+        }
+        return entry.value();
+    }
+
+    private synchronized void activeSweep() {
+        long now = System.currentTimeMillis();
+        // Sample a few random keys and evict those that expired.
+        List<K> keys = new ArrayList<>(store.keySet());
+        var rng = ThreadLocalRandom.current();
+        for (int i = 0; i < Math.min(20, keys.size()); i++) {
+            K k = keys.get(rng.nextInt(keys.size()));
+            Entry<V> entry = store.get(k);
+            if (entry != null && now >= entry.expiresAt()) store.remove(k);
+        }
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "ttl_cache.py",
+      code: `import random
+import threading
+import time
+from typing import Optional
+
+
+class TTLCache:
+    """TTL with lazy + active expiry. Compose with another policy
+    for capacity-based eviction.
+    """
+
+    def __init__(self, default_ttl_s: float) -> None:
+        self.store: dict = {}  # key -> (value, expires_at)
+        self.default_ttl_s = default_ttl_s
+        # Active sweep: every 1s, drop a sample of expired keys.
+        self._schedule_sweep()
+
+    def set(self, key, value, ttl_s: Optional[float] = None) -> None:
+        ttl = self.default_ttl_s if ttl_s is None else ttl_s
+        self.store[key] = (value, time.monotonic() + ttl)
+
+    def get(self, key) -> Optional[object]:
+        entry = self.store.get(key)
+        if entry is None:
+            return None
+        value, expires_at = entry
+        if time.monotonic() >= expires_at:
+            del self.store[key]  # lazy expiry on read
+            return None
+        return value
+
+    def _active_sweep(self) -> None:
+        now = time.monotonic()
+        # Sample a few random keys and evict those that expired.
+        keys = list(self.store.keys())
+        for _ in range(min(20, len(keys))):
+            k = random.choice(keys)
+            entry = self.store.get(k)
+            if entry and now >= entry[1]:
+                del self.store[k]
+        self._schedule_sweep()
+
+    def _schedule_sweep(self) -> None:
+        timer = threading.Timer(1.0, self._active_sweep)
+        timer.daemon = True
+        timer.start()`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "ttl_cache.cpp",
+      code: `// TTL with lazy + active expiry. Compose with another policy
+// for capacity-based eviction.
+#include <unordered_map>
+#include <vector>
+#include <chrono>
+#include <random>
+#include <optional>
+
+template <class K, class V>
+class TTLCache {
+    using Clock = std::chrono::steady_clock;
+    struct Entry { V value; Clock::time_point expiresAt; };
+
+    std::chrono::milliseconds defaultTtl_;
+    std::unordered_map<K, Entry> store_;
+    std::mt19937 rng_{std::random_device{}()};
+
+public:
+    explicit TTLCache(std::chrono::milliseconds defaultTtl)
+        : defaultTtl_(defaultTtl) {
+        // Run activeSweep() from a background timer every 1s in real code.
+    }
+
+    void set(const K& key, const V& value) { set(key, value, defaultTtl_); }
+
+    void set(const K& key, const V& value, std::chrono::milliseconds ttl) {
+        store_[key] = Entry{value, Clock::now() + ttl};
+    }
+
+    std::optional<V> get(const K& key) {
+        auto it = store_.find(key);
+        if (it == store_.end()) return std::nullopt;
+        if (Clock::now() >= it->second.expiresAt) {
+            store_.erase(it); // lazy expiry on read
+            return std::nullopt;
+        }
+        return it->second.value;
+    }
+
+    void activeSweep() {
+        auto now = Clock::now();
+        // Sample a few random keys and evict those that expired.
+        std::vector<K> keys;
+        keys.reserve(store_.size());
+        for (const auto& [k, e] : store_) keys.push_back(k);
+        if (keys.empty()) return;
+        std::uniform_int_distribution<size_t> dist(0, keys.size() - 1);
+        for (size_t i = 0; i < std::min<size_t>(20, keys.size()); i++) {
+            const K& k = keys[dist(rng_)];
+            auto it = store_.find(k);
+            if (it != store_.end() && now >= it->second.expiresAt) store_.erase(it);
+        }
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

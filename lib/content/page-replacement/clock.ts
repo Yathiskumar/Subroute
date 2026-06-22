@@ -90,34 +90,161 @@ export const clock: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "clock.ts",
-    code: `// Clock: Second Chance with a fixed ring and a moving hand.
-interface Slot { page: number; ref: 0 | 1; }
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "clock.go",
+      code: `// Clock: Second Chance with a fixed ring and a moving hand.
+package clock
+
+type slot struct {
+	page int
+	ref  int // 0 or 1
+}
+
+type Clock struct {
+	slots  []*slot // fixed ring; nil = empty
+	hand   int
+	Faults int
+	Hits   int
+}
+
+func NewClock(frames int) *Clock {
+	return &Clock{slots: make([]*slot, frames)}
+}
+
+func (c *Clock) Access(page int) string {
+	for _, s := range c.slots {
+		if s != nil && s.page == page {
+			s.ref = 1 // set bit, hand stays
+			c.Hits++
+			return "hit"
+		}
+	}
+	c.Faults++
+	// sweep clockwise: clear set bits, evict the first cleared one
+	for c.slots[c.hand] != nil && c.slots[c.hand].ref == 1 {
+		c.slots[c.hand].ref = 0 // second chance
+		c.hand = (c.hand + 1) % len(c.slots)
+	}
+	c.slots[c.hand] = &slot{page: page, ref: 1} // evict here (was nil or ref 0)
+	c.hand = (c.hand + 1) % len(c.slots)
+	return "fault"
+}`,
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "Clock.java",
+      code: `// Clock: Second Chance with a fixed ring and a moving hand.
+class Clock {
+    private static final class Slot {
+        int page;
+        int ref; // 0 or 1
+        Slot(int page, int ref) { this.page = page; this.ref = ref; }
+    }
+
+    private final Slot[] slots;
+    private int hand = 0;
+    int faults = 0;
+    int hits = 0;
+
+    Clock(int frames) { this.slots = new Slot[frames]; }
+
+    String access(int page) {
+        for (Slot s : slots) {
+            if (s != null && s.page == page) { s.ref = 1; hits++; return "hit"; } // set bit, hand stays
+        }
+        faults++;
+        // sweep clockwise: clear set bits, evict the first cleared one
+        while (slots[hand] != null && slots[hand].ref == 1) {
+            slots[hand].ref = 0;          // second chance
+            hand = (hand + 1) % slots.length;
+        }
+        slots[hand] = new Slot(page, 1);  // evict here (was null or ref 0)
+        hand = (hand + 1) % slots.length;
+        return "fault";
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "clock.py",
+      code: `# Clock: Second Chance with a fixed ring and a moving hand.
+from dataclasses import dataclass
+
+
+@dataclass
+class Slot:
+    page: int
+    ref: int  # 0 or 1
+
+
+class Clock:
+    def __init__(self, frames: int) -> None:
+        self.slots: list[Slot | None] = [None] * frames  # fixed ring
+        self.hand = 0
+        self.faults = 0
+        self.hits = 0
+
+    def access(self, page: int) -> str:
+        for s in self.slots:
+            if s is not None and s.page == page:
+                s.ref = 1  # set bit, hand stays
+                self.hits += 1
+                return "hit"
+        self.faults += 1
+        # sweep clockwise: clear set bits, evict the first cleared one
+        while self.slots[self.hand] is not None and self.slots[self.hand].ref == 1:
+            self.slots[self.hand].ref = 0  # second chance
+            self.hand = (self.hand + 1) % len(self.slots)
+        self.slots[self.hand] = Slot(page, 1)  # evict here (was None or ref 0)
+        self.hand = (self.hand + 1) % len(self.slots)
+        return "fault"`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "clock.cpp",
+      code: `// Clock: Second Chance with a fixed ring and a moving hand.
+#include <optional>
+#include <string>
+#include <vector>
 
 class Clock {
-  private slots: (Slot | null)[];
-  private hand = 0;
-  faults = 0; hits = 0;
+    struct Slot {
+        int page;
+        int ref; // 0 or 1
+    };
 
-  constructor(frames: number) { this.slots = Array(frames).fill(null); }
+    std::vector<std::optional<Slot>> slots_; // fixed ring; nullopt = empty
+    int hand_ = 0;
 
-  access(page: number): "hit" | "fault" {
-    const hit = this.slots.find((s) => s?.page === page);
-    if (hit) { hit.ref = 1; this.hits++; return "hit"; } // set bit, hand stays
-    this.faults++;
-    // sweep clockwise: clear set bits, evict the first cleared one
-    while (this.slots[this.hand] && this.slots[this.hand]!.ref === 1) {
-      this.slots[this.hand]!.ref = 0;          // second chance
-      this.hand = (this.hand + 1) % this.slots.length;
+public:
+    int faults = 0;
+    int hits = 0;
+
+    explicit Clock(int frames) : slots_(frames) {}
+
+    std::string access(int page) {
+        for (auto& s : slots_) {
+            if (s && s->page == page) { s->ref = 1; hits++; return "hit"; } // set bit, hand stays
+        }
+        faults++;
+        // sweep clockwise: clear set bits, evict the first cleared one
+        while (slots_[hand_] && slots_[hand_]->ref == 1) {
+            slots_[hand_]->ref = 0;                  // second chance
+            hand_ = (hand_ + 1) % slots_.size();
+        }
+        slots_[hand_] = Slot{page, 1};               // evict here (was empty or ref 0)
+        hand_ = (hand_ + 1) % slots_.size();
+        return "fault";
     }
-    this.slots[this.hand] = { page, ref: 1 };  // evict here (was null or ref 0)
-    this.hand = (this.hand + 1) % this.slots.length;
-    return "fault";
-  }
-}`,
-  },
+};`,
+    },
+  ],
 
   furtherReading: [
     {

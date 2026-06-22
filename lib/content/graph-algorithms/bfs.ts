@@ -107,10 +107,12 @@ export const bfs: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "bfs.ts",
-    code: `// BFS on an adjacency list. Returns shortest-path distances
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "bfs.ts",
+      code: `// BFS on an adjacency list. Returns shortest-path distances
 // (in edges) from \`start\` to every reachable node.
 function bfs(adj: Map<string, string[]>, start: string): Map<string, number> {
   const dist = new Map<string, number>();
@@ -133,7 +135,105 @@ function bfs(adj: Map<string, string[]>, start: string): Map<string, number> {
 // To reconstruct the shortest path, store a \`parent\` map alongside \`dist\`
 // and walk parents back from the target.
 // Real-world use: ring buffer / Deque instead of \`shift()\` (O(1) vs O(n)).`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "Bfs.java",
+      code: `import java.util.*;
+
+// BFS on an adjacency list. Returns shortest-path distances
+// (in edges) from \`start\` to every reachable node.
+Map<String, Integer> bfs(Map<String, List<String>> adj, String start) {
+    Map<String, Integer> dist = new HashMap<>();
+    Deque<String> queue = new ArrayDeque<>();
+    queue.add(start);
+    dist.put(start, 0);
+
+    while (!queue.isEmpty()) {
+        String node = queue.poll();           // dequeue front
+        for (String nb : adj.getOrDefault(node, List.of())) {
+            // Mark on enqueue, NOT on dequeue — prevents re-adds.
+            if (!dist.containsKey(nb)) {
+                dist.put(nb, dist.get(node) + 1);
+                queue.add(nb);                // enqueue back
+            }
+        }
+    }
+    return dist;
+}
+
+// To reconstruct the shortest path, store a \`parent\` map alongside \`dist\`
+// and walk parents back from the target.
+// ArrayDeque already gives O(1) enqueue/dequeue — the right pick here.`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "bfs.py",
+      code: `from collections import deque
+
+
+def bfs(adj: dict[str, list[str]], start: str) -> dict[str, int]:
+    """BFS on an adjacency list. Returns shortest-path distances
+    (in edges) from \`start\` to every reachable node."""
+    dist: dict[str, int] = {start: 0}
+    queue: deque[str] = deque([start])
+
+    while queue:
+        node = queue.popleft()                # dequeue front
+        for nb in adj.get(node, []):
+            # Mark on enqueue, NOT on dequeue — prevents re-adds.
+            if nb not in dist:
+                dist[nb] = dist[node] + 1
+                queue.append(nb)              # enqueue back
+    return dist
+
+
+# To reconstruct the shortest path, store a \`parent\` map alongside \`dist\`
+# and walk parents back from the target.
+# collections.deque gives O(1) popleft — use it instead of a list.`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "bfs.cpp",
+      code: `// BFS on an adjacency list. Returns shortest-path distances
+// (in edges) from \`start\` to every reachable node.
+#include <queue>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+std::unordered_map<std::string, int> bfs(
+    const std::unordered_map<std::string, std::vector<std::string>> &adj,
+    const std::string &start) {
+    std::unordered_map<std::string, int> dist;
+    std::queue<std::string> queue;
+    queue.push(start);
+    dist[start] = 0;
+
+    while (!queue.empty()) {
+        std::string node = queue.front();     // dequeue front
+        queue.pop();
+        auto it = adj.find(node);
+        if (it == adj.end()) continue;
+        for (const auto &nb : it->second) {
+            // Mark on enqueue, NOT on dequeue — prevents re-adds.
+            if (dist.find(nb) == dist.end()) {
+                dist[nb] = dist[node] + 1;
+                queue.push(nb);               // enqueue back
+            }
+        }
+    }
+    return dist;
+}
+
+// To reconstruct the shortest path, store a \`parent\` map alongside \`dist\`
+// and walk parents back from the target.
+// std::queue already gives O(1) push/pop — the right pick here.`,
+    },
+  ],
 
   furtherReading: [
     {

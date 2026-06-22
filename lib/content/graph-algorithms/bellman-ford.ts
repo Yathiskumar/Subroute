@@ -111,10 +111,12 @@ export const bellmanFord: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "bellman-ford.ts",
-    code: `// Bellman-Ford — single-source shortest paths.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "bellman-ford.ts",
+      code: `// Bellman-Ford — single-source shortest paths.
 // Handles negative edges; detects negative cycles.
 type Edge = { from: string; to: string; w: number };
 
@@ -148,7 +150,130 @@ function bellmanFord(
   }
   return dist;
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "BellmanFord.java",
+      code: `import java.util.*;
+
+// Bellman-Ford — single-source shortest paths.
+// Handles negative edges; detects negative cycles.
+record Edge(String from, String to, int w) {}
+
+Map<String, Long> bellmanFord(List<String> nodes, List<Edge> edges, String start) {
+    final long INF = Long.MAX_VALUE;
+    Map<String, Long> dist = new HashMap<>();
+    for (String u : nodes) dist.put(u, INF);
+    dist.put(start, 0L);
+
+    // V-1 passes — every shortest path is found by the V-1'th pass.
+    for (int i = 0; i < nodes.size() - 1; i++) {
+        boolean updated = false;
+        for (Edge e : edges) {
+            if (dist.get(e.from()) == INF) continue;   // unreachable, skip
+            long nd = dist.get(e.from()) + e.w();
+            if (nd < dist.get(e.to())) {
+                dist.put(e.to(), nd);
+                updated = true;
+            }
+        }
+        if (!updated) break;    // optimisation: settled early
+    }
+
+    // V-th pass: any further improvement means a reachable negative cycle.
+    for (Edge e : edges) {
+        if (dist.get(e.from()) != INF
+                && dist.get(e.from()) + e.w() < dist.get(e.to())) {
+            throw new IllegalStateException(
+                "graph contains a negative cycle reachable from start");
+        }
+    }
+    return dist;
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "bellman_ford.py",
+      code: `from math import inf
+
+
+def bellman_ford(
+    nodes: list[str],
+    edges: list[tuple[str, str, int]],   # (from, to, weight)
+    start: str,
+) -> dict[str, float]:
+    """Bellman-Ford — single-source shortest paths.
+    Handles negative edges; detects negative cycles."""
+    dist: dict[str, float] = {u: inf for u in nodes}
+    dist[start] = 0
+
+    # V-1 passes — every shortest path is found by the V-1'th pass.
+    for _ in range(len(nodes) - 1):
+        updated = False
+        for frm, to, w in edges:
+            nd = dist[frm] + w
+            if nd < dist[to]:
+                dist[to] = nd
+                updated = True
+        if not updated:
+            break               # optimisation: settled early
+
+    # V-th pass: any further improvement means a reachable negative cycle.
+    for frm, to, w in edges:
+        if dist[frm] + w < dist[to]:
+            raise ValueError("graph contains a negative cycle reachable from start")
+    return dist`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "bellman_ford.cpp",
+      code: `// Bellman-Ford — single-source shortest paths.
+// Handles negative edges; detects negative cycles.
+#include <limits>
+#include <stdexcept>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+struct Edge { std::string from, to; int w; };
+
+std::unordered_map<std::string, long long> bellmanFord(
+    const std::vector<std::string> &nodes,
+    const std::vector<Edge> &edges,
+    const std::string &start) {
+    const long long INF = std::numeric_limits<long long>::max();
+    std::unordered_map<std::string, long long> dist;
+    for (const auto &u : nodes) dist[u] = INF;
+    dist[start] = 0;
+
+    // V-1 passes — every shortest path is found by the V-1'th pass.
+    for (size_t i = 0; i + 1 < nodes.size(); i++) {
+        bool updated = false;
+        for (const auto &e : edges) {
+            if (dist[e.from] == INF) continue;    // unreachable, skip
+            long long nd = dist[e.from] + e.w;
+            if (nd < dist[e.to]) {
+                dist[e.to] = nd;
+                updated = true;
+            }
+        }
+        if (!updated) break;    // optimisation: settled early
+    }
+
+    // V-th pass: any further improvement means a reachable negative cycle.
+    for (const auto &e : edges) {
+        if (dist[e.from] != INF && dist[e.from] + e.w < dist[e.to]) {
+            throw std::runtime_error(
+                "graph contains a negative cycle reachable from start");
+        }
+    }
+    return dist;
+}`,
+    },
+  ],
 
   furtherReading: [
     {

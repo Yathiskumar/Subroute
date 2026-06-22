@@ -98,78 +98,432 @@ export const timeBased: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "time-based.ts",
-    code: `// Time-based circuit breaker: trip on the failure rate over the last W seconds.
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "time_based.go",
+      code: `// Time-based circuit breaker: trip on the failure rate over the last W seconds.
 // Implemented with one bucket per second — bucketing keeps everything O(1).
-class TimeBasedBreaker {
-  private state: "CLOSED" | "OPEN" | "HALF" = "CLOSED";
-  private buckets: Array<{ ok: number; fail: number; sec: number }> = [];
-  private trials: boolean[] = [];
-  private openUntil = 0;
+package breaker
 
-  constructor(
-    private windowSec = 10,
-    private threshold = 0.5,
-    private cooldownMs = 5000,
-    private trialCount = 3,
-    private minCalls = 5,
-  ) {}
+import (
+	"errors"
+	"time"
+)
 
-  async call<T>(work: () => Promise<T>): Promise<T> {
-    if (this.state === "OPEN" && Date.now() >= this.openUntil) {
-      this.state = "HALF"; this.trials = [];
-    }
-    if (this.state === "OPEN") throw new Error("circuit open");
+var ErrOpen = errors.New("circuit open")
 
-    try {
-      const result = await work();
-      this.record(true);
-      return result;
-    } catch (err) {
-      this.record(false);
-      throw err;
-    }
-  }
+type bucket struct {
+	ok, fail int
+	sec      int64
+}
 
-  private record(ok: boolean) {
-    if (this.state === "HALF") {
-      this.trials.push(ok);
-      if (this.trials.length >= this.trialCount) {
-        const fails = this.trials.filter(x => !x).length;
-        if (fails / this.trials.length >= this.threshold) this.trip();
-        else this.close();
-      }
-      return;
-    }
-    const sec = Math.floor(Date.now() / 1000);
-    let b = this.buckets[this.buckets.length - 1];
-    if (!b || b.sec !== sec) {
-      b = { ok: 0, fail: 0, sec };
-      this.buckets.push(b);
-    }
-    if (ok) b.ok++; else b.fail++;
-    this.prune(sec);
-    this.maybeTrip();
-  }
+type TimeBasedBreaker struct {
+	state     string // "CLOSED" | "OPEN" | "HALF"
+	buckets   []bucket
+	trials    []bool
+	openUntil time.Time
 
-  private prune(now: number) {
-    const lo = now - this.windowSec + 1;
-    while (this.buckets.length && this.buckets[0].sec < lo) this.buckets.shift();
-  }
+	windowSec  int64
+	threshold  float64
+	cooldown   time.Duration
+	trialCount int
+	minCalls   int
+}
 
-  private maybeTrip() {
-    let ok = 0, fail = 0;
-    for (const b of this.buckets) { ok += b.ok; fail += b.fail; }
-    const total = ok + fail;
-    if (total >= this.minCalls && fail / total >= this.threshold) this.trip();
-  }
+func NewTimeBasedBreaker() *TimeBasedBreaker {
+	return &TimeBasedBreaker{
+		state:      "CLOSED",
+		windowSec:  10,
+		threshold:  0.5,
+		cooldown:   5000 * time.Millisecond,
+		trialCount: 3,
+		minCalls:   5,
+	}
+}
 
-  private trip()  { this.state = "OPEN"; this.openUntil = Date.now() + this.cooldownMs; this.trials = []; }
-  private close() { this.state = "CLOSED"; this.buckets = []; this.trials = []; }
+func (cb *TimeBasedBreaker) Call(work func() error) error {
+	if cb.state == "OPEN" && !time.Now().Before(cb.openUntil) {
+		cb.state = "HALF"
+		cb.trials = nil
+	}
+	if cb.state == "OPEN" {
+		return ErrOpen
+	}
+	if err := work(); err != nil {
+		cb.record(false)
+		return err
+	}
+	cb.record(true)
+	return nil
+}
+
+func (cb *TimeBasedBreaker) record(ok bool) {
+	if cb.state == "HALF" {
+		cb.trials = append(cb.trials, ok)
+		if len(cb.trials) >= cb.trialCount {
+			fails := 0
+			for _, t := range cb.trials {
+				if !t {
+					fails++
+				}
+			}
+			if float64(fails)/float64(len(cb.trials)) >= cb.threshold {
+				cb.trip()
+			} else {
+				cb.close()
+			}
+		}
+		return
+	}
+	sec := time.Now().Unix()
+	if len(cb.buckets) == 0 || cb.buckets[len(cb.buckets)-1].sec != sec {
+		cb.buckets = append(cb.buckets, bucket{sec: sec})
+	}
+	b := &cb.buckets[len(cb.buckets)-1]
+	if ok {
+		b.ok++
+	} else {
+		b.fail++
+	}
+	cb.prune(sec)
+	cb.maybeTrip()
+}
+
+func (cb *TimeBasedBreaker) prune(now int64) {
+	lo := now - cb.windowSec + 1
+	for len(cb.buckets) > 0 && cb.buckets[0].sec < lo {
+		cb.buckets = cb.buckets[1:]
+	}
+}
+
+func (cb *TimeBasedBreaker) maybeTrip() {
+	ok, fail := 0, 0
+	for _, b := range cb.buckets {
+		ok += b.ok
+		fail += b.fail
+	}
+	total := ok + fail
+	if total >= cb.minCalls && float64(fail)/float64(total) >= cb.threshold {
+		cb.trip()
+	}
+}
+
+func (cb *TimeBasedBreaker) trip() {
+	cb.state = "OPEN"
+	cb.openUntil = time.Now().Add(cb.cooldown)
+	cb.trials = nil
+}
+
+func (cb *TimeBasedBreaker) close() {
+	cb.state = "CLOSED"
+	cb.buckets = nil
+	cb.trials = nil
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "TimeBasedBreaker.java",
+      code: `// Time-based circuit breaker: trip on the failure rate over the last W seconds.
+// Implemented with one bucket per second — bucketing keeps everything O(1).
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.concurrent.Callable;
+
+class TimeBasedBreaker {
+    private static final class Bucket {
+        int ok, fail;
+        final long sec;
+        Bucket(long sec) { this.sec = sec; }
+    }
+
+    private String state = "CLOSED";              // "CLOSED" | "OPEN" | "HALF"
+    private final Deque<Bucket> buckets = new ArrayDeque<>();
+    private final Deque<Boolean> trials = new ArrayDeque<>();
+    private long openUntil = 0;
+
+    private final long windowSec;
+    private final double threshold;
+    private final long cooldownMs;
+    private final int trialCount;
+    private final int minCalls;
+
+    TimeBasedBreaker(long windowSec, double threshold, long cooldownMs, int trialCount, int minCalls) {
+        this.windowSec = windowSec;
+        this.threshold = threshold;
+        this.cooldownMs = cooldownMs;
+        this.trialCount = trialCount;
+        this.minCalls = minCalls;
+    }
+
+    <T> T call(Callable<T> work) throws Exception {
+        if (state.equals("OPEN") && System.currentTimeMillis() >= openUntil) {
+            state = "HALF"; trials.clear();
+        }
+        if (state.equals("OPEN")) throw new IllegalStateException("circuit open");
+
+        try {
+            T result = work.call();
+            record(true);
+            return result;
+        } catch (Exception err) {
+            record(false);
+            throw err;
+        }
+    }
+
+    private void record(boolean ok) {
+        if (state.equals("HALF")) {
+            trials.addLast(ok);
+            if (trials.size() >= trialCount) {
+                long fails = trials.stream().filter(x -> !x).count();
+                if ((double) fails / trials.size() >= threshold) trip();
+                else close();
+            }
+            return;
+        }
+        long sec = System.currentTimeMillis() / 1000;
+        Bucket b = buckets.peekLast();
+        if (b == null || b.sec != sec) {
+            b = new Bucket(sec);
+            buckets.addLast(b);
+        }
+        if (ok) b.ok++; else b.fail++;
+        prune(sec);
+        maybeTrip();
+    }
+
+    private void prune(long now) {
+        long lo = now - windowSec + 1;
+        while (!buckets.isEmpty() && buckets.peekFirst().sec < lo) buckets.removeFirst();
+    }
+
+    private void maybeTrip() {
+        int ok = 0, fail = 0;
+        for (Bucket b : buckets) { ok += b.ok; fail += b.fail; }
+        int total = ok + fail;
+        if (total >= minCalls && (double) fail / total >= threshold) trip();
+    }
+
+    private void trip() {
+        state = "OPEN";
+        openUntil = System.currentTimeMillis() + cooldownMs;
+        trials.clear();
+    }
+
+    private void close() {
+        state = "CLOSED";
+        buckets.clear();
+        trials.clear();
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "time_based.py",
+      code: `# Time-based circuit breaker: trip on the failure rate over the last W seconds.
+# Implemented with one bucket per second — bucketing keeps everything O(1).
+import time
+from collections import deque
+from dataclasses import dataclass
+from typing import Callable, Deque, TypeVar
+
+T = TypeVar("T")
+
+
+@dataclass
+class Bucket:
+    sec: int
+    ok: int = 0
+    fail: int = 0
+
+
+class TimeBasedBreaker:
+    def __init__(
+        self,
+        window_sec: int = 10,
+        threshold: float = 0.5,
+        cooldown_s: float = 5.0,
+        trial_count: int = 3,
+        min_calls: int = 5,
+    ) -> None:
+        self.state = "CLOSED"       # "CLOSED" | "OPEN" | "HALF"
+        self.buckets: Deque[Bucket] = deque()
+        self.trials: list[bool] = []
+        self.open_until = 0.0
+        self.window_sec = window_sec
+        self.threshold = threshold
+        self.cooldown_s = cooldown_s
+        self.trial_count = trial_count
+        self.min_calls = min_calls
+
+    def call(self, work: Callable[[], T]) -> T:
+        if self.state == "OPEN" and time.monotonic() >= self.open_until:
+            self.state = "HALF"
+            self.trials = []
+        if self.state == "OPEN":
+            raise RuntimeError("circuit open")
+        try:
+            result = work()
+        except Exception:
+            self._record(False)
+            raise
+        self._record(True)
+        return result
+
+    def _record(self, ok: bool) -> None:
+        if self.state == "HALF":
+            self.trials.append(ok)
+            if len(self.trials) >= self.trial_count:
+                fails = sum(1 for t in self.trials if not t)
+                if fails / len(self.trials) >= self.threshold:
+                    self._trip()
+                else:
+                    self._close()
+            return
+        sec = int(time.monotonic())
+        if not self.buckets or self.buckets[-1].sec != sec:
+            self.buckets.append(Bucket(sec=sec))
+        b = self.buckets[-1]
+        if ok:
+            b.ok += 1
+        else:
+            b.fail += 1
+        self._prune(sec)
+        self._maybe_trip()
+
+    def _prune(self, now: int) -> None:
+        lo = now - self.window_sec + 1
+        while self.buckets and self.buckets[0].sec < lo:
+            self.buckets.popleft()
+
+    def _maybe_trip(self) -> None:
+        ok = sum(b.ok for b in self.buckets)
+        fail = sum(b.fail for b in self.buckets)
+        total = ok + fail
+        if total >= self.min_calls and fail / total >= self.threshold:
+            self._trip()
+
+    def _trip(self) -> None:
+        self.state = "OPEN"
+        self.open_until = time.monotonic() + self.cooldown_s
+        self.trials = []
+
+    def _close(self) -> None:
+        self.state = "CLOSED"
+        self.buckets.clear()
+        self.trials = []`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "time_based.cpp",
+      code: `// Time-based circuit breaker: trip on the failure rate over the last W seconds.
+// Implemented with one bucket per second — bucketing keeps everything O(1).
+#include <chrono>
+#include <deque>
+#include <functional>
+#include <stdexcept>
+#include <string>
+
+class TimeBasedBreaker {
+    struct Bucket {
+        long sec;
+        int ok = 0;
+        int fail = 0;
+    };
+
+    std::string state_ = "CLOSED";  // "CLOSED" | "OPEN" | "HALF"
+    std::deque<Bucket> buckets_;
+    std::deque<bool> trials_;
+    std::chrono::steady_clock::time_point openUntil_;
+
+    long windowSec_;
+    double threshold_;
+    std::chrono::milliseconds cooldown_;
+    int trialCount_;
+    int minCalls_;
+
+    static long nowSec() {
+        return std::chrono::duration_cast<std::chrono::seconds>(
+                   std::chrono::steady_clock::now().time_since_epoch())
+            .count();
+    }
+
+public:
+    TimeBasedBreaker(long windowSec = 10, double threshold = 0.5, int cooldownMs = 5000,
+                     int trialCount = 3, int minCalls = 5)
+        : windowSec_(windowSec), threshold_(threshold), cooldown_(cooldownMs),
+          trialCount_(trialCount), minCalls_(minCalls) {}
+
+    // work() returns true on success, throws or returns false on failure.
+    void call(const std::function<bool()>& work) {
+        if (state_ == "OPEN" && std::chrono::steady_clock::now() >= openUntil_) {
+            state_ = "HALF"; trials_.clear();
+        }
+        if (state_ == "OPEN") throw std::runtime_error("circuit open");
+
+        bool ok = false;
+        try {
+            ok = work();
+        } catch (...) {
+            record(false);
+            throw;
+        }
+        record(ok);
+    }
+
+private:
+    void record(bool ok) {
+        if (state_ == "HALF") {
+            trials_.push_back(ok);
+            if (static_cast<int>(trials_.size()) >= trialCount_) {
+                int fails = 0;
+                for (bool t : trials_) if (!t) fails++;
+                if (static_cast<double>(fails) / trials_.size() >= threshold_) trip();
+                else close();
+            }
+            return;
+        }
+        long sec = nowSec();
+        if (buckets_.empty() || buckets_.back().sec != sec) {
+            buckets_.push_back(Bucket{sec});
+        }
+        Bucket& b = buckets_.back();
+        if (ok) b.ok++; else b.fail++;
+        prune(sec);
+        maybeTrip();
+    }
+
+    void prune(long now) {
+        long lo = now - windowSec_ + 1;
+        while (!buckets_.empty() && buckets_.front().sec < lo) buckets_.pop_front();
+    }
+
+    void maybeTrip() {
+        int ok = 0, fail = 0;
+        for (const auto& b : buckets_) { ok += b.ok; fail += b.fail; }
+        int total = ok + fail;
+        if (total >= minCalls_ && static_cast<double>(fail) / total >= threshold_) trip();
+    }
+
+    void trip() {
+        state_ = "OPEN";
+        openUntil_ = std::chrono::steady_clock::now() + cooldown_;
+        trials_.clear();
+    }
+
+    void close() {
+        state_ = "CLOSED";
+        buckets_.clear();
+        trials_.clear();
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

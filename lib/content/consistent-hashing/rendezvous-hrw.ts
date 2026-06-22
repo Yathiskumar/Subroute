@@ -96,49 +96,215 @@ export const rendezvousHrw: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "rendezvous.ts",
-    code: `// Rendezvous (HRW) hashing: score every server, pick the highest.
-class Rendezvous {
-  constructor(private servers: string[]) {}
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "rendezvous.go",
+      code: `// Rendezvous (HRW) hashing: score every server, pick the highest.
+package main
 
-  private hash(s: string): number {
-    let h = 2166136261 >>> 0;
-    for (let i = 0; i < s.length; i++) {
-      h ^= s.charCodeAt(i);
-      h = Math.imul(h, 16777619) >>> 0;
-    }
-    return h >>> 0;
-  }
+import "sort"
 
-  // score combines server + key, so each pair gets its own number
-  private score(server: string, key: string): number {
-    return this.hash(server + "|" + key);
-  }
-
-  getServer(key: string): string | null {
-    let best: string | null = null;
-    let bestScore = -1;
-    for (const s of this.servers) {
-      const v = this.score(s, key);
-      if (v > bestScore) { bestScore = v; best = s; }
-    }
-    return best; // O(N): we looked at every server
-  }
-
-  // Top-R servers => a natural replica set
-  getReplicas(key: string, r: number): string[] {
-    return [...this.servers]
-      .sort((a, b) => this.score(b, key) - this.score(a, key))
-      .slice(0, r);
-  }
+type Rendezvous struct {
+	servers []string
 }
 
-const rv = new Rendezvous(["alpha", "beta", "gamma"]);
-rv.getServer("user:42");        // the highest-scoring server
-rv.getReplicas("user:42", 2);   // its primary + backup`,
-  },
+func (r *Rendezvous) hash(s string) uint32 {
+	var h uint32 = 2166136261
+	for i := 0; i < len(s); i++ {
+		h ^= uint32(s[i])
+		h *= 16777619
+	}
+	return h
+}
+
+// score combines server + key, so each pair gets its own number
+func (r *Rendezvous) score(server, key string) uint32 {
+	return r.hash(server + "|" + key)
+}
+
+func (r *Rendezvous) GetServer(key string) (string, bool) {
+	best, bestScore, found := "", uint32(0), false
+	for _, s := range r.servers {
+		v := r.score(s, key)
+		if !found || v > bestScore {
+			bestScore, best, found = v, s, true
+		}
+	}
+	return best, found // O(N): we looked at every server
+}
+
+// Top-R servers => a natural replica set
+func (r *Rendezvous) GetReplicas(key string, n int) []string {
+	sorted := append([]string(nil), r.servers...)
+	sort.Slice(sorted, func(i, j int) bool {
+		return r.score(sorted[i], key) > r.score(sorted[j], key)
+	})
+	if n > len(sorted) {
+		n = len(sorted)
+	}
+	return sorted[:n]
+}
+
+func main() {
+	rv := &Rendezvous{servers: []string{"alpha", "beta", "gamma"}}
+	rv.GetServer("user:42")      // the highest-scoring server
+	rv.GetReplicas("user:42", 2) // its primary + backup
+}`,
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "Rendezvous.java",
+      code: `import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
+import java.util.stream.Collectors;
+
+// Rendezvous (HRW) hashing: score every server, pick the highest.
+class Rendezvous {
+    private final String[] servers;
+
+    Rendezvous(String[] servers) {
+        this.servers = servers;
+    }
+
+    private long hash(String s) {
+        long h = 2166136261L;
+        for (int i = 0; i < s.length(); i++) {
+            h ^= s.charAt(i);
+            h = (h * 16777619L) & 0xFFFFFFFFL;
+        }
+        return h;
+    }
+
+    // score combines server + key, so each pair gets its own number
+    private long score(String server, String key) {
+        return hash(server + "|" + key);
+    }
+
+    String getServer(String key) {
+        String best = null;
+        long bestScore = -1;
+        for (String s : servers) {
+            long v = score(s, key);
+            if (v > bestScore) { bestScore = v; best = s; }
+        }
+        return best; // O(N): we looked at every server
+    }
+
+    // Top-R servers => a natural replica set
+    List<String> getReplicas(String key, int r) {
+        return Arrays.stream(servers)
+            .sorted(Comparator.comparingLong((String s) -> score(s, key)).reversed())
+            .limit(r)
+            .collect(Collectors.toList());
+    }
+}
+
+// Usage:
+// Rendezvous rv = new Rendezvous(new String[]{"alpha", "beta", "gamma"});
+// rv.getServer("user:42");      // the highest-scoring server
+// rv.getReplicas("user:42", 2); // its primary + backup`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "rendezvous.py",
+      code: `class Rendezvous:
+    """Rendezvous (HRW) hashing: score every server, pick the highest."""
+
+    def __init__(self, servers: list[str]) -> None:
+        self.servers = servers
+
+    def _hash(self, s: str) -> int:
+        h = 2166136261
+        for ch in s:
+            h ^= ord(ch)
+            h = (h * 16777619) & 0xFFFFFFFF
+        return h
+
+    # score combines server + key, so each pair gets its own number
+    def _score(self, server: str, key: str) -> int:
+        return self._hash(server + "|" + key)
+
+    def get_server(self, key: str) -> str | None:
+        best, best_score = None, -1
+        for s in self.servers:
+            v = self._score(s, key)
+            if v > best_score:
+                best_score, best = v, s
+        return best  # O(N): we looked at every server
+
+    # Top-R servers => a natural replica set
+    def get_replicas(self, key: str, r: int) -> list[str]:
+        return sorted(self.servers, key=lambda s: self._score(s, key), reverse=True)[:r]
+
+
+rv = Rendezvous(["alpha", "beta", "gamma"])
+rv.get_server("user:42")      # the highest-scoring server
+rv.get_replicas("user:42", 2)  # its primary + backup`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "rendezvous.cpp",
+      code: `// Rendezvous (HRW) hashing: score every server, pick the highest.
+#include <algorithm>
+#include <cstdint>
+#include <string>
+#include <vector>
+
+class Rendezvous {
+    std::vector<std::string> servers_;
+
+    uint32_t hash(const std::string& s) const {
+        uint32_t h = 2166136261u;
+        for (char c : s) {
+            h ^= static_cast<unsigned char>(c);
+            h *= 16777619u;
+        }
+        return h;
+    }
+
+    // score combines server + key, so each pair gets its own number
+    uint32_t score(const std::string& server, const std::string& key) const {
+        return hash(server + "|" + key);
+    }
+
+public:
+    explicit Rendezvous(std::vector<std::string> servers)
+        : servers_(std::move(servers)) {}
+
+    const std::string* getServer(const std::string& key) const {
+        const std::string* best = nullptr;
+        uint32_t bestScore = 0;
+        for (const auto& s : servers_) {
+            uint32_t v = score(s, key);
+            if (!best || v > bestScore) { bestScore = v; best = &s; }
+        }
+        return best; // O(N): we looked at every server
+    }
+
+    // Top-R servers => a natural replica set
+    std::vector<std::string> getReplicas(const std::string& key, int r) const {
+        std::vector<std::string> sorted = servers_;
+        std::sort(sorted.begin(), sorted.end(),
+                  [&](const std::string& a, const std::string& b) {
+                      return score(a, key) > score(b, key);
+                  });
+        if (r < static_cast<int>(sorted.size())) sorted.resize(r);
+        return sorted;
+    }
+};
+
+// Usage:
+// Rendezvous rv({"alpha", "beta", "gamma"});
+// rv.getServer("user:42");      // the highest-scoring server
+// rv.getReplicas("user:42", 2); // its primary + backup`,
+    },
+  ],
 
   furtherReading: [
     {

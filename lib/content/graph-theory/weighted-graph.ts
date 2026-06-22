@@ -106,10 +106,12 @@ export const weightedGraph: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "weighted-graph.ts",
-    code: `// An undirected weighted graph + Dijkstra's shortest-path.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "weighted-graph.ts",
+      code: `// An undirected weighted graph + Dijkstra's shortest-path.
 // Key idea: distance = SUM OF WEIGHTS, not hop count.
 type Adj = Map<string, Array<{ to: string; w: number }>>;
 
@@ -153,7 +155,189 @@ class WeightedGraph {
     return { cost: dist.get(dst)!, path }; // cheapest, NOT fewest-hops
   }
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "WeightedGraph.java",
+      code: `// An undirected weighted graph + Dijkstra's shortest-path.
+// Key idea: distance = SUM OF WEIGHTS, not hop count.
+import java.util.*;
+
+class WeightedGraph {
+    private record Edge(String to, int w) {}
+
+    private final Map<String, List<Edge>> adj = new HashMap<>();
+
+    void addEdge(String u, String v, int w) {
+        if (w < 0) throw new IllegalArgumentException("Dijkstra needs non-negative weights");
+        adj.computeIfAbsent(u, k -> new ArrayList<>()).add(new Edge(v, w)); // undirected:
+        adj.computeIfAbsent(v, k -> new ArrayList<>()).add(new Edge(u, w)); // same cost both ways
+    }
+
+    // Cheapest path by total cost (Dijkstra). Returns { cost, path }.
+    record Result(int cost, List<String> path) {}
+
+    Result shortestPath(String src, String dst) {
+        Map<String, Integer> dist = new HashMap<>();
+        Map<String, String> prev = new HashMap<>();
+        for (String v : adj.keySet()) dist.put(v, Integer.MAX_VALUE);
+        dist.put(src, 0);
+        prev.put(src, null);
+
+        // tiny "priority queue": settle the cheapest unsettled vertex
+        Set<String> settled = new HashSet<>();
+        while (settled.size() < adj.size()) {
+            String u = null;
+            int best = Integer.MAX_VALUE;
+            for (var e : dist.entrySet())
+                if (!settled.contains(e.getKey()) && e.getValue() < best) {
+                    best = e.getValue();
+                    u = e.getKey();
+                }
+            if (u == null) break;        // remaining vertices unreachable
+            settled.add(u);
+            if (u.equals(dst)) break;    // its distance is now final
+            for (Edge edge : adj.getOrDefault(u, List.of())) {
+                int alt = dist.get(u) + edge.w(); // relax: is going via u cheaper?
+                if (alt < dist.get(edge.to())) {
+                    dist.put(edge.to(), alt);
+                    prev.put(edge.to(), u);
+                }
+            }
+        }
+
+        if (dist.get(dst) == Integer.MAX_VALUE)
+            return new Result(Integer.MAX_VALUE, List.of());
+        LinkedList<String> path = new LinkedList<>();
+        for (String c = dst; c != null; c = prev.get(c)) path.addFirst(c);
+        return new Result(dist.get(dst), path); // cheapest, NOT fewest-hops
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "weighted_graph.py",
+      code: `import math
+
+
+class WeightedGraph:
+    """An undirected weighted graph + Dijkstra's shortest-path.
+
+    Key idea: distance = SUM OF WEIGHTS, not hop count.
+    """
+
+    def __init__(self) -> None:
+        # adj[u] = list of (to, w)
+        self.adj: dict[str, list[tuple[str, float]]] = {}
+
+    def add_edge(self, u: str, v: str, w: float) -> None:
+        if w < 0:
+            raise ValueError("Dijkstra needs non-negative weights")
+        self.adj.setdefault(u, []).append((v, w))  # undirected:
+        self.adj.setdefault(v, []).append((u, w))  # same cost both ways
+
+    def shortest_path(self, src: str, dst: str) -> tuple[float, list[str]]:
+        # Cheapest path by total cost (Dijkstra). Returns (cost, path).
+        dist = {v: math.inf for v in self.adj}
+        prev: dict[str, str | None] = {src: None}
+        dist[src] = 0
+
+        # tiny "priority queue": settle the cheapest unsettled vertex
+        settled: set[str] = set()
+        while len(settled) < len(self.adj):
+            u: str | None = None
+            best = math.inf
+            for v, d in dist.items():
+                if v not in settled and d < best:
+                    best, u = d, v
+            if u is None:
+                break                    # remaining vertices unreachable
+            settled.add(u)
+            if u == dst:
+                break                    # its distance is now final
+            for to, w in self.adj.get(u, ()):
+                alt = dist[u] + w        # relax: is going via u cheaper?
+                if alt < dist[to]:
+                    dist[to] = alt
+                    prev[to] = u
+
+        if dist[dst] == math.inf:
+            return math.inf, []
+        path: list[str] = []
+        c: str | None = dst
+        while c is not None:
+            path.insert(0, c)
+            c = prev[c]
+        return dist[dst], path           # cheapest, NOT fewest-hops`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "weighted_graph.cpp",
+      code: `// An undirected weighted graph + Dijkstra's shortest-path.
+// Key idea: distance = SUM OF WEIGHTS, not hop count.
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+#include <limits>
+#include <stdexcept>
+#include <algorithm>
+
+class WeightedGraph {
+    struct Edge { std::string to; int w; };
+    std::unordered_map<std::string, std::vector<Edge>> adj_;
+
+public:
+    void addEdge(const std::string& u, const std::string& v, int w) {
+        if (w < 0) throw std::invalid_argument("Dijkstra needs non-negative weights");
+        adj_[u].push_back({v, w}); // undirected:
+        adj_[v].push_back({u, w}); // same cost both ways
+    }
+
+    struct Result { int cost; std::vector<std::string> path; };
+
+    // Cheapest path by total cost (Dijkstra). Returns { cost, path }.
+    Result shortestPath(const std::string& src, const std::string& dst) {
+        const int INF = std::numeric_limits<int>::max();
+        std::unordered_map<std::string, int> dist;
+        std::unordered_map<std::string, std::string> prev;
+        for (const auto& [v, _] : adj_) dist[v] = INF;
+        dist[src] = 0;
+        prev[src] = src;               // start is its own predecessor
+
+        // tiny "priority queue": settle the cheapest unsettled vertex
+        std::unordered_set<std::string> settled;
+        while (settled.size() < adj_.size()) {
+            const std::string* u = nullptr;
+            int best = INF;
+            for (const auto& [v, d] : dist)
+                if (!settled.count(v) && d < best) { best = d; u = &v; }
+            if (u == nullptr) break;   // remaining vertices unreachable
+            std::string cur = *u;
+            settled.insert(cur);
+            if (cur == dst) break;     // its distance is now final
+            for (const auto& e : adj_[cur]) {
+                if (dist[cur] == INF) continue;
+                int alt = dist[cur] + e.w; // relax: is going via cur cheaper?
+                if (alt < dist[e.to]) { dist[e.to] = alt; prev[e.to] = cur; }
+            }
+        }
+
+        if (dist[dst] == INF) return { INF, {} };
+        std::vector<std::string> path;
+        for (std::string c = dst; ; c = prev[c]) {
+            path.push_back(c);
+            if (c == src) break;
+        }
+        std::reverse(path.begin(), path.end());
+        return { dist[dst], path };    // cheapest, NOT fewest-hops
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {
