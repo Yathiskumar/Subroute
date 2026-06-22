@@ -114,10 +114,12 @@ export const merge: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "merge-sort.ts",
-    code: `// Merge sort — stable, guaranteed O(n log n), O(n) extra memory.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "merge-sort.ts",
+      code: `// Merge sort — stable, guaranteed O(n log n), O(n) extra memory.
 function mergeSort<T>(a: T[]): T[] {
   if (a.length <= 1) return a;
   const mid = a.length >> 1;
@@ -144,7 +146,114 @@ function merge<T>(left: T[], right: T[]): T[] {
 mergeSort([38, 27, 43, 3, 9, 82, 10]);
 // → [3, 9, 10, 27, 38, 43, 82]
 // Comparisons: O(n log n) on every input.`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "MergeSort.java",
+      code: `// Merge sort — stable, guaranteed O(n log n), O(n) extra memory.
+import java.util.*;
+
+static <T extends Comparable<T>> List<T> mergeSort(List<T> a) {
+    if (a.size() <= 1) return a;
+    int mid = a.size() >> 1;
+    List<T> left = mergeSort(new ArrayList<>(a.subList(0, mid)));
+    List<T> right = mergeSort(new ArrayList<>(a.subList(mid, a.size())));
+    return merge(left, right);
+}
+
+static <T extends Comparable<T>> List<T> merge(List<T> left, List<T> right) {
+    List<T> out = new ArrayList<>();
+    int i = 0, j = 0;
+    while (i < left.size() && j < right.size()) {
+        // Use <= to keep the sort stable: equal elements take from left first.
+        if (left.get(i).compareTo(right.get(j)) <= 0) out.add(left.get(i++));
+        else out.add(right.get(j++));
+    }
+    // One of these is empty; the other gets appended whole.
+    while (i < left.size()) out.add(left.get(i++));
+    while (j < right.size()) out.add(right.get(j++));
+    return out;
+}
+
+// Example
+mergeSort(Arrays.asList(38, 27, 43, 3, 9, 82, 10));
+// → [3, 9, 10, 27, 38, 43, 82]
+// Comparisons: O(n log n) on every input.`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "merge_sort.py",
+      code: `def merge_sort(a: list) -> list:
+    """Merge sort — stable, guaranteed O(n log n), O(n) extra memory."""
+    if len(a) <= 1:
+        return a
+    mid = len(a) >> 1
+    left = merge_sort(a[:mid])
+    right = merge_sort(a[mid:])
+    return merge(left, right)
+
+
+def merge(left: list, right: list) -> list:
+    out: list = []
+    i = j = 0
+    while i < len(left) and j < len(right):
+        # Use <= to keep the sort stable: equal elements take from left first.
+        if left[i] <= right[j]:
+            out.append(left[i])
+            i += 1
+        else:
+            out.append(right[j])
+            j += 1
+    # One of these is empty; the other gets appended whole.
+    out.extend(left[i:])
+    out.extend(right[j:])
+    return out
+
+
+# Example
+merge_sort([38, 27, 43, 3, 9, 82, 10])
+# → [3, 9, 10, 27, 38, 43, 82]
+# Comparisons: O(n log n) on every input.`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "merge_sort.cpp",
+      code: `// Merge sort — stable, guaranteed O(n log n), O(n) extra memory.
+#include <vector>
+
+template <typename T>
+std::vector<T> merge(const std::vector<T>& left, const std::vector<T>& right) {
+    std::vector<T> out;
+    size_t i = 0, j = 0;
+    while (i < left.size() && j < right.size()) {
+        // Use <= to keep the sort stable: equal elements take from left first.
+        if (left[i] <= right[j]) out.push_back(left[i++]);
+        else out.push_back(right[j++]);
+    }
+    // One of these is empty; the other gets appended whole.
+    while (i < left.size()) out.push_back(left[i++]);
+    while (j < right.size()) out.push_back(right[j++]);
+    return out;
+}
+
+template <typename T>
+std::vector<T> mergeSort(const std::vector<T>& a) {
+    if (a.size() <= 1) return a;
+    size_t mid = a.size() >> 1;
+    std::vector<T> left(a.begin(), a.begin() + mid);
+    std::vector<T> right(a.begin() + mid, a.end());
+    return merge(mergeSort(left), mergeSort(right));
+}
+
+// Example
+// mergeSort<int>({38, 27, 43, 3, 9, 82, 10});
+// → [3, 9, 10, 27, 38, 43, 82]
+// Comparisons: O(n log n) on every input.`,
+    },
+  ],
 
   furtherReading: [
     {

@@ -118,10 +118,12 @@ export const counting: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "counting-sort.ts",
-    code: `// Counting sort — stable, O(n + k), not in-place.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "counting-sort.ts",
+      code: `// Counting sort — stable, O(n + k), not in-place.
 // Requires integer keys in [0, k].
 function countingSort(a: number[], k: number): number[] {
   const n = a.length;
@@ -146,7 +148,102 @@ function countingSort(a: number[], k: number): number[] {
 countingSort([4, 2, 2, 8, 3, 3, 1], 8);
 // → [1, 2, 2, 3, 3, 4, 8]
 // Memory: O(n + k). Time: O(n + k).`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "CountingSort.java",
+      code: `// Counting sort — stable, O(n + k), not in-place.
+// Requires integer keys in [0, k].
+static int[] countingSort(int[] a, int k) {
+    int n = a.length;
+    int[] count = new int[k + 1];
+    int[] out = new int[n];
+
+    // Phase 1: tally.
+    for (int i = 0; i < n; i++) count[a[i]]++;
+
+    // Phase 2: prefix-sum into end-position-plus-one.
+    for (int v = 1; v <= k; v++) count[v] += count[v - 1];
+
+    // Phase 3: place, right-to-left for stability.
+    for (int i = n - 1; i >= 0; i--) {
+        int v = a[i];
+        out[--count[v]] = v;
+    }
+    return out;
+}
+
+// Example
+countingSort(new int[]{4, 2, 2, 8, 3, 3, 1}, 8);
+// → [1, 2, 2, 3, 3, 4, 8]
+// Memory: O(n + k). Time: O(n + k).`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "counting_sort.py",
+      code: `def counting_sort(a: list[int], k: int) -> list[int]:
+    """Counting sort — stable, O(n + k), not in-place.
+    Requires integer keys in [0, k]."""
+    n = len(a)
+    count = [0] * (k + 1)
+    out = [0] * n
+
+    # Phase 1: tally.
+    for i in range(n):
+        count[a[i]] += 1
+
+    # Phase 2: prefix-sum into end-position-plus-one.
+    for v in range(1, k + 1):
+        count[v] += count[v - 1]
+
+    # Phase 3: place, right-to-left for stability.
+    for i in range(n - 1, -1, -1):
+        v = a[i]
+        count[v] -= 1
+        out[count[v]] = v
+    return out
+
+
+# Example
+counting_sort([4, 2, 2, 8, 3, 3, 1], 8)
+# → [1, 2, 2, 3, 3, 4, 8]
+# Memory: O(n + k). Time: O(n + k).`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "counting_sort.cpp",
+      code: `// Counting sort — stable, O(n + k), not in-place.
+// Requires integer keys in [0, k].
+#include <vector>
+
+std::vector<int> countingSort(const std::vector<int>& a, int k) {
+    int n = a.size();
+    std::vector<int> count(k + 1, 0);
+    std::vector<int> out(n);
+
+    // Phase 1: tally.
+    for (int i = 0; i < n; i++) count[a[i]]++;
+
+    // Phase 2: prefix-sum into end-position-plus-one.
+    for (int v = 1; v <= k; v++) count[v] += count[v - 1];
+
+    // Phase 3: place, right-to-left for stability.
+    for (int i = n - 1; i >= 0; i--) {
+        int v = a[i];
+        out[--count[v]] = v;
+    }
+    return out;
+}
+
+// Example
+// countingSort({4, 2, 2, 8, 3, 3, 1}, 8);
+// → [1, 2, 2, 3, 3, 4, 8]
+// Memory: O(n + k). Time: O(n + k).`,
+    },
+  ],
 
   furtherReading: [
     {

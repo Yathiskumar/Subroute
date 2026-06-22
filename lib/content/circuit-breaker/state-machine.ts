@@ -103,61 +103,322 @@ export const stateMachine: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "circuit-breaker-state.ts",
-    code: `// The smallest useful circuit breaker — three states, one rule.
-type State = "CLOSED" | "OPEN" | "HALF_OPEN";
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "circuit_breaker_state.go",
+      code: `// The smallest useful circuit breaker — three states, one rule.
+package breaker
+
+import (
+	"errors"
+	"time"
+)
+
+type State int
+
+const (
+	Closed State = iota
+	Open
+	HalfOpen
+)
+
+var ErrOpen = errors.New("circuit open — fail fast")
+
+type CircuitBreaker struct {
+	state     State
+	failures  int    // current window
+	trials    int    // HALF_OPEN successes so far
+	openUntil time.Time
+
+	failThreshold int           // how many fails in CLOSED trip it
+	cooldown      time.Duration // how long OPEN waits before probing
+	trialCount    int           // how many HALF_OPEN trials to decide
+}
+
+func New() *CircuitBreaker {
+	return &CircuitBreaker{
+		state:         Closed,
+		failThreshold: 5,
+		cooldown:      4000 * time.Millisecond,
+		trialCount:    3,
+	}
+}
+
+func (cb *CircuitBreaker) Call(work func() error) error {
+	if cb.state == Open {
+		if !time.Now().Before(cb.openUntil) {
+			cb.state = HalfOpen
+		} else {
+			return ErrOpen
+		}
+	}
+
+	if err := work(); err != nil {
+		cb.onFailure()
+		return err
+	}
+	cb.onSuccess()
+	return nil
+}
+
+func (cb *CircuitBreaker) onSuccess() {
+	if cb.state == HalfOpen {
+		cb.trials++
+		if cb.trials >= cb.trialCount {
+			cb.close()
+		}
+	} else {
+		cb.failures = 0 // reset on a healthy run
+	}
+}
+
+func (cb *CircuitBreaker) onFailure() {
+	if cb.state == HalfOpen {
+		cb.trip() // one bad trial re-opens
+		return
+	}
+	cb.failures++
+	if cb.failures >= cb.failThreshold {
+		cb.trip()
+	}
+}
+
+func (cb *CircuitBreaker) trip() {
+	cb.state = Open
+	cb.openUntil = time.Now().Add(cb.cooldown)
+	cb.trials = 0
+}
+
+func (cb *CircuitBreaker) close() {
+	cb.state = Closed
+	cb.failures = 0
+	cb.trials = 0
+}`,
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "CircuitBreaker.java",
+      code: `// The smallest useful circuit breaker — three states, one rule.
+import java.util.concurrent.Callable;
 
 class CircuitBreaker {
-  private state: State = "CLOSED";
-  private failures = 0;          // current window
-  private trials: boolean[] = [];
-  private openUntil = 0;
+    enum State { CLOSED, OPEN, HALF_OPEN }
 
-  constructor(
-    private failThreshold = 5,   // how many fails in CLOSED trip it
-    private cooldownMs = 4000,   // how long OPEN waits before probing
-    private trialCount = 3,      // how many HALF_OPEN trials to decide
-  ) {}
+    private State state = State.CLOSED;
+    private int failures = 0;          // current window
+    private int trials = 0;            // HALF_OPEN successes so far
+    private long openUntil = 0;
 
-  async call<T>(work: () => Promise<T>): Promise<T> {
-    if (this.state === "OPEN") {
-      if (Date.now() >= this.openUntil) this.state = "HALF_OPEN";
-      else throw new Error("circuit open — fail fast");
+    private final int failThreshold;   // how many fails in CLOSED trip it
+    private final long cooldownMs;     // how long OPEN waits before probing
+    private final int trialCount;      // how many HALF_OPEN trials to decide
+
+    CircuitBreaker(int failThreshold, long cooldownMs, int trialCount) {
+        this.failThreshold = failThreshold;
+        this.cooldownMs = cooldownMs;
+        this.trialCount = trialCount;
     }
 
-    try {
-      const result = await work();
-      this.onSuccess();
-      return result;
-    } catch (err) {
-      this.onFailure();
-      throw err;
-    }
-  }
+    <T> T call(Callable<T> work) throws Exception {
+        if (state == State.OPEN) {
+            if (System.currentTimeMillis() >= openUntil) state = State.HALF_OPEN;
+            else throw new IllegalStateException("circuit open — fail fast");
+        }
 
-  private onSuccess() {
-    if (this.state === "HALF_OPEN") {
-      this.trials.push(true);
-      if (this.trials.length >= this.trialCount) this.close();
-    } else {
-      this.failures = 0;          // reset on a healthy run
+        try {
+            T result = work.call();
+            onSuccess();
+            return result;
+        } catch (Exception err) {
+            onFailure();
+            throw err;
+        }
     }
-  }
 
-  private onFailure() {
-    if (this.state === "HALF_OPEN") {
-      this.trip();                // one bad trial re-opens
-      return;
+    private void onSuccess() {
+        if (state == State.HALF_OPEN) {
+            trials++;
+            if (trials >= trialCount) close();
+        } else {
+            failures = 0;              // reset on a healthy run
+        }
     }
-    if (++this.failures >= this.failThreshold) this.trip();
-  }
 
-  private trip()  { this.state = "OPEN";    this.openUntil = Date.now() + this.cooldownMs; this.trials = []; }
-  private close() { this.state = "CLOSED";  this.failures = 0; this.trials = []; }
+    private void onFailure() {
+        if (state == State.HALF_OPEN) {
+            trip();                    // one bad trial re-opens
+            return;
+        }
+        if (++failures >= failThreshold) trip();
+    }
+
+    private void trip() {
+        state = State.OPEN;
+        openUntil = System.currentTimeMillis() + cooldownMs;
+        trials = 0;
+    }
+
+    private void close() {
+        state = State.CLOSED;
+        failures = 0;
+        trials = 0;
+    }
 }`,
-  },
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "circuit_breaker_state.py",
+      code: `# The smallest useful circuit breaker — three states, one rule.
+import time
+from enum import Enum
+from typing import Callable, TypeVar
+
+T = TypeVar("T")
+
+
+class State(Enum):
+    CLOSED = "CLOSED"
+    OPEN = "OPEN"
+    HALF_OPEN = "HALF_OPEN"
+
+
+class CircuitBreaker:
+    def __init__(
+        self,
+        fail_threshold: int = 5,    # how many fails in CLOSED trip it
+        cooldown_s: float = 4.0,    # how long OPEN waits before probing
+        trial_count: int = 3,       # how many HALF_OPEN trials to decide
+    ) -> None:
+        self.state = State.CLOSED
+        self.failures = 0           # current window
+        self.trials = 0             # HALF_OPEN successes so far
+        self.open_until = 0.0
+        self.fail_threshold = fail_threshold
+        self.cooldown_s = cooldown_s
+        self.trial_count = trial_count
+
+    def call(self, work: Callable[[], T]) -> T:
+        if self.state is State.OPEN:
+            if time.monotonic() >= self.open_until:
+                self.state = State.HALF_OPEN
+            else:
+                raise RuntimeError("circuit open — fail fast")
+
+        try:
+            result = work()
+        except Exception:
+            self._on_failure()
+            raise
+        self._on_success()
+        return result
+
+    def _on_success(self) -> None:
+        if self.state is State.HALF_OPEN:
+            self.trials += 1
+            if self.trials >= self.trial_count:
+                self._close()
+        else:
+            self.failures = 0       # reset on a healthy run
+
+    def _on_failure(self) -> None:
+        if self.state is State.HALF_OPEN:
+            self._trip()            # one bad trial re-opens
+            return
+        self.failures += 1
+        if self.failures >= self.fail_threshold:
+            self._trip()
+
+    def _trip(self) -> None:
+        self.state = State.OPEN
+        self.open_until = time.monotonic() + self.cooldown_s
+        self.trials = 0
+
+    def _close(self) -> None:
+        self.state = State.CLOSED
+        self.failures = 0
+        self.trials = 0`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "circuit_breaker_state.cpp",
+      code: `// The smallest useful circuit breaker — three states, one rule.
+#include <chrono>
+#include <functional>
+#include <stdexcept>
+
+class CircuitBreaker {
+    enum class State { Closed, Open, HalfOpen };
+
+    State state_ = State::Closed;
+    int failures_ = 0;          // current window
+    int trials_ = 0;            // HALF_OPEN successes so far
+    std::chrono::steady_clock::time_point openUntil_;
+
+    int failThreshold_;                  // how many fails in CLOSED trip it
+    std::chrono::milliseconds cooldown_; // how long OPEN waits before probing
+    int trialCount_;                     // how many HALF_OPEN trials to decide
+
+public:
+    CircuitBreaker(int failThreshold = 5, int cooldownMs = 4000, int trialCount = 3)
+        : failThreshold_(failThreshold),
+          cooldown_(cooldownMs),
+          trialCount_(trialCount) {}
+
+    // work() returns true on success, throws or returns false on failure.
+    void call(const std::function<bool()>& work) {
+        if (state_ == State::Open) {
+            if (std::chrono::steady_clock::now() >= openUntil_) state_ = State::HalfOpen;
+            else throw std::runtime_error("circuit open — fail fast");
+        }
+
+        bool ok = false;
+        try {
+            ok = work();
+        } catch (...) {
+            onFailure();
+            throw;
+        }
+        if (ok) onSuccess();
+        else onFailure();
+    }
+
+private:
+    void onSuccess() {
+        if (state_ == State::HalfOpen) {
+            trials_++;
+            if (trials_ >= trialCount_) close();
+        } else {
+            failures_ = 0;          // reset on a healthy run
+        }
+    }
+
+    void onFailure() {
+        if (state_ == State::HalfOpen) {
+            trip();                 // one bad trial re-opens
+            return;
+        }
+        if (++failures_ >= failThreshold_) trip();
+    }
+
+    void trip() {
+        state_ = State::Open;
+        openUntil_ = std::chrono::steady_clock::now() + cooldown_;
+        trials_ = 0;
+    }
+
+    void close() {
+        state_ = State::Closed;
+        failures_ = 0;
+        trials_ = 0;
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

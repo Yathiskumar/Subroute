@@ -115,10 +115,12 @@ export const bst: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "bst.ts",
-    code: `// Minimal generic BST — insert, search, delete, in-order traversal.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "bst.ts",
+      code: `// Minimal generic BST — insert, search, delete, in-order traversal.
 // All operations are O(h) where h is the tree height.
 
 interface BSTNode<T> {
@@ -180,7 +182,256 @@ for (const k of [50, 30, 70, 20, 40, 60, 80]) root = insert(root, k);
 console.log(inOrder(root));  // [20, 30, 40, 50, 60, 70, 80]
 root = remove(root, 30);
 console.log(inOrder(root));  // [20, 40, 50, 60, 70, 80]`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "BinarySearchTree.java",
+      code: `// Minimal generic BST — insert, search, delete, in-order traversal.
+// All operations are O(h) where h is the tree height.
+
+import java.util.ArrayList;
+import java.util.List;
+
+class BstNode<T extends Comparable<T>> {
+    T key;
+    BstNode<T> left, right;
+
+    BstNode(T key) { this.key = key; }
+}
+
+class BinarySearchTree {
+
+    static <T extends Comparable<T>> BstNode<T> insert(BstNode<T> root, T key) {
+        if (root == null) return new BstNode<>(key);
+        int cmp = key.compareTo(root.key);
+        if (cmp < 0) root.left = insert(root.left, key);
+        else if (cmp > 0) root.right = insert(root.right, key);
+        // cmp == 0: duplicate — ignore (or handle as needed)
+        return root;
+    }
+
+    static <T extends Comparable<T>> BstNode<T> search(BstNode<T> root, T key) {
+        if (root == null || root.key.compareTo(key) == 0) return root;
+        return key.compareTo(root.key) < 0
+                ? search(root.left, key)
+                : search(root.right, key);
+    }
+
+    // Returns the node with the minimum key in a subtree.
+    static <T extends Comparable<T>> BstNode<T> min(BstNode<T> node) {
+        return node.left == null ? node : min(node.left);
+    }
+
+    static <T extends Comparable<T>> BstNode<T> remove(BstNode<T> root, T key) {
+        if (root == null) return null;
+
+        int cmp = key.compareTo(root.key);
+        if (cmp < 0) {
+            root.left = remove(root.left, key);
+        } else if (cmp > 0) {
+            root.right = remove(root.right, key);
+        } else {
+            // Found the node to delete.
+            if (root.left == null) return root.right;  // Case 1 or 2 (no left child)
+            if (root.right == null) return root.left;  // Case 2 (no right child)
+
+            // Case 3: two children — replace with in-order successor.
+            BstNode<T> successor = min(root.right);
+            root.key = successor.key;                  // overwrite key in place
+            root.right = remove(root.right, successor.key); // delete successor
+        }
+        return root;
+    }
+
+    // In-order traversal — yields keys in ascending sorted order.
+    static <T extends Comparable<T>> List<T> inOrder(BstNode<T> root, List<T> result) {
+        if (root == null) return result;
+        inOrder(root.left, result);
+        result.add(root.key);
+        inOrder(root.right, result);
+        return result;
+    }
+
+    // Example
+    public static void main(String[] args) {
+        BstNode<Integer> root = null;
+        for (int k : new int[]{50, 30, 70, 20, 40, 60, 80})
+            root = insert(root, k);
+        System.out.println(inOrder(root, new ArrayList<>())); // [20, 30, 40, 50, 60, 70, 80]
+        root = remove(root, 30);
+        System.out.println(inOrder(root, new ArrayList<>())); // [20, 40, 50, 60, 70, 80]
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "bst.py",
+      code: `# Minimal generic BST — insert, search, delete, in-order traversal.
+# All operations are O(h) where h is the tree height.
+
+from __future__ import annotations
+from typing import Generic, List, Optional, TypeVar
+
+T = TypeVar("T")
+
+
+class BstNode(Generic[T]):
+    def __init__(self, key: T) -> None:
+        self.key = key
+        self.left: Optional[BstNode[T]] = None
+        self.right: Optional[BstNode[T]] = None
+
+
+def insert(root: Optional[BstNode[T]], key: T) -> BstNode[T]:
+    if root is None:
+        return BstNode(key)
+    if key < root.key:
+        root.left = insert(root.left, key)
+    elif key > root.key:
+        root.right = insert(root.right, key)
+    # key == root.key: duplicate — ignore (or handle as needed)
+    return root
+
+
+def search(root: Optional[BstNode[T]], key: T) -> Optional[BstNode[T]]:
+    if root is None or root.key == key:
+        return root
+    return search(root.left, key) if key < root.key else search(root.right, key)
+
+
+# Returns the node with the minimum key in a subtree.
+def minimum(node: BstNode[T]) -> BstNode[T]:
+    return node if node.left is None else minimum(node.left)
+
+
+def remove(root: Optional[BstNode[T]], key: T) -> Optional[BstNode[T]]:
+    if root is None:
+        return None
+
+    if key < root.key:
+        root.left = remove(root.left, key)
+    elif key > root.key:
+        root.right = remove(root.right, key)
+    else:
+        # Found the node to delete.
+        if root.left is None:
+            return root.right   # Case 1 or 2 (no left child)
+        if root.right is None:
+            return root.left    # Case 2 (no right child)
+
+        # Case 3: two children — replace with in-order successor.
+        successor = minimum(root.right)
+        root.key = successor.key                     # overwrite key in place
+        root.right = remove(root.right, successor.key)  # delete successor
+    return root
+
+
+# In-order traversal — yields keys in ascending sorted order.
+def in_order(root: Optional[BstNode[T]], result: Optional[List[T]] = None) -> List[T]:
+    if result is None:
+        result = []
+    if root is None:
+        return result
+    in_order(root.left, result)
+    result.append(root.key)
+    in_order(root.right, result)
+    return result
+
+
+# Example
+root: Optional[BstNode[int]] = None
+for k in [50, 30, 70, 20, 40, 60, 80]:
+    root = insert(root, k)
+print(in_order(root))  # [20, 30, 40, 50, 60, 70, 80]
+root = remove(root, 30)
+print(in_order(root))  # [20, 40, 50, 60, 70, 80]`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "bst.cpp",
+      code: `// Minimal generic BST — insert, search, delete, in-order traversal.
+// All operations are O(h) where h is the tree height.
+#include <iostream>
+#include <vector>
+
+template <typename T>
+struct BstNode {
+    T key;
+    BstNode* left = nullptr;
+    BstNode* right = nullptr;
+
+    explicit BstNode(const T& k) : key(k) {}
+};
+
+template <typename T>
+BstNode<T>* insert(BstNode<T>* root, const T& key) {
+    if (root == nullptr) return new BstNode<T>(key);
+    if (key < root->key) root->left = insert(root->left, key);
+    else if (key > root->key) root->right = insert(root->right, key);
+    // key == root->key: duplicate — ignore (or handle as needed)
+    return root;
+}
+
+template <typename T>
+BstNode<T>* search(BstNode<T>* root, const T& key) {
+    if (root == nullptr || root->key == key) return root;
+    return key < root->key ? search(root->left, key) : search(root->right, key);
+}
+
+// Returns the node with the minimum key in a subtree.
+template <typename T>
+BstNode<T>* minNode(BstNode<T>* node) {
+    return node->left == nullptr ? node : minNode(node->left);
+}
+
+template <typename T>
+BstNode<T>* remove(BstNode<T>* root, const T& key) {
+    if (root == nullptr) return nullptr;
+
+    if (key < root->key) {
+        root->left = remove(root->left, key);
+    } else if (key > root->key) {
+        root->right = remove(root->right, key);
+    } else {
+        // Found the node to delete.
+        if (root->left == nullptr) {       // Case 1 or 2 (no left child)
+            BstNode<T>* r = root->right;
+            delete root;
+            return r;
+        }
+        if (root->right == nullptr) {      // Case 2 (no right child)
+            BstNode<T>* l = root->left;
+            delete root;
+            return l;
+        }
+
+        // Case 3: two children — replace with in-order successor.
+        BstNode<T>* successor = minNode(root->right);
+        root->key = successor->key;                      // overwrite key in place
+        root->right = remove(root->right, successor->key); // delete successor
+    }
+    return root;
+}
+
+// In-order traversal — yields keys in ascending sorted order.
+template <typename T>
+void inOrder(BstNode<T>* root, std::vector<T>& result) {
+    if (root == nullptr) return;
+    inOrder(root->left, result);
+    result.push_back(root->key);
+    inOrder(root->right, result);
+}
+
+// Example
+// BstNode<int>* root = nullptr;
+// for (int k : {50, 30, 70, 20, 40, 60, 80}) root = insert(root, k);
+// std::vector<int> out; inOrder(root, out);  // [20, 30, 40, 50, 60, 70, 80]
+// root = remove(root, 30);                    // [20, 40, 50, 60, 70, 80]`,
+    },
+  ],
 
   furtherReading: [
     {

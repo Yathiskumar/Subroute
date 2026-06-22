@@ -114,10 +114,12 @@ export const dijkstra: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "dijkstra.ts",
-    code: `// Dijkstra's algorithm with a binary heap.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "dijkstra.ts",
+      code: `// Dijkstra's algorithm with a binary heap.
 // Returns shortest distances from \`start\` to every reachable node.
 type Edge = { to: string; w: number };
 type Heap = Array<[number, string]>;          // [distance, node]
@@ -149,7 +151,131 @@ function dijkstra(
 // Real implementations: replace shift/push with a proper binary heap
 // (Python: heapq, Java: PriorityQueue, C++: priority_queue with reverse comparator).
 // For a target-only query, return early as soon as you pop the target.`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "Dijkstra.java",
+      code: `import java.util.*;
+
+// Dijkstra's algorithm with a binary heap.
+// Returns shortest distances from \`start\` to every reachable node.
+record Edge(String to, int w) {}
+
+Map<String, Integer> dijkstra(Map<String, List<Edge>> graph, String start) {
+    Map<String, Integer> dist = new HashMap<>();
+    for (String u : graph.keySet()) dist.put(u, Integer.MAX_VALUE);
+    dist.put(start, 0);
+
+    // PriorityQueue is the binary heap: [distance, node].
+    PriorityQueue<int[]> heap =
+        new PriorityQueue<>(Comparator.comparingInt(a -> a[0]));
+    List<String> nodes = new ArrayList<>(graph.keySet());  // index <-> node
+    Map<String, Integer> idx = new HashMap<>();
+    for (int i = 0; i < nodes.size(); i++) idx.put(nodes.get(i), i);
+    heap.add(new int[]{0, idx.get(start)});
+
+    while (!heap.isEmpty()) {
+        int[] top = heap.poll();              // sift-down handled by PriorityQueue
+        int d = top[0];
+        String u = nodes.get(top[1]);
+        if (d > dist.get(u)) continue;        // stale entry — skip
+
+        for (Edge e : graph.getOrDefault(u, List.of())) {
+            int nd = d + e.w();
+            if (nd < dist.get(e.to())) {
+                dist.put(e.to(), nd);
+                heap.add(new int[]{nd, idx.get(e.to())});  // sift-up
+            }
+        }
+    }
+    return dist;
+}
+
+// PriorityQueue already gives a proper binary heap.
+// For a target-only query, return early as soon as you pop the target.`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "dijkstra.py",
+      code: `import heapq
+from math import inf
+
+
+def dijkstra(graph: dict[str, list[tuple[str, int]]], start: str) -> dict[str, float]:
+    """Dijkstra's algorithm with a binary heap.
+    Returns shortest distances from \`start\` to every reachable node.
+    graph maps node -> list of (to, weight) edges."""
+    dist: dict[str, float] = {u: inf for u in graph}
+    dist[start] = 0
+
+    heap: list[tuple[float, str]] = [(0, start)]   # (distance, node)
+    while heap:
+        d, u = heapq.heappop(heap)            # sift-down
+        if d > dist[u]:
+            continue                          # stale entry — skip
+
+        for v, w in graph.get(u, []):
+            nd = d + w
+            if nd < dist[v]:
+                dist[v] = nd
+                heapq.heappush(heap, (nd, v))  # sift-up
+    return dist
+
+
+# heapq is the proper binary heap.
+# For a target-only query, return early as soon as you pop the target.`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "dijkstra.cpp",
+      code: `// Dijkstra's algorithm with a binary heap.
+// Returns shortest distances from \`start\` to every reachable node.
+#include <limits>
+#include <queue>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+struct Edge { std::string to; int w; };
+
+std::unordered_map<std::string, long long> dijkstra(
+    const std::unordered_map<std::string, std::vector<Edge>> &graph,
+    const std::string &start) {
+    const long long INF = std::numeric_limits<long long>::max();
+    std::unordered_map<std::string, long long> dist;
+    for (const auto &kv : graph) dist[kv.first] = INF;
+    dist[start] = 0;
+
+    // Min-heap via priority_queue with a reverse (greater) comparator.
+    using Item = std::pair<long long, std::string>;   // [distance, node]
+    std::priority_queue<Item, std::vector<Item>, std::greater<Item>> heap;
+    heap.push({0, start});
+
+    while (!heap.empty()) {
+        auto [d, u] = heap.top();             // sift-down
+        heap.pop();
+        if (d > dist[u]) continue;            // stale entry — skip
+
+        auto it = graph.find(u);
+        if (it == graph.end()) continue;
+        for (const auto &e : it->second) {
+            long long nd = d + e.w;
+            if (nd < dist[e.to]) {
+                dist[e.to] = nd;
+                heap.push({nd, e.to});        // sift-up
+            }
+        }
+    }
+    return dist;
+}
+
+// priority_queue with std::greater is the proper binary min-heap.
+// For a target-only query, return early as soon as you pop the target.`,
+    },
+  ],
 
   furtherReading: [
     {

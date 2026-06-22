@@ -115,10 +115,12 @@ export const astar: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "astar.ts",
-    code: `// A* on a grid with Manhattan-distance heuristic.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "astar.ts",
+      code: `// A* on a grid with Manhattan-distance heuristic.
 type Cell = { x: number; y: number };
 const key = (c: Cell) => \`\${c.x},\${c.y}\`;
 
@@ -160,7 +162,180 @@ function reconstruct(parent: Map<string, Cell>, cur: Cell): Cell[] {
   while (parent.has(key(cur))) { cur = parent.get(key(cur))!; path.unshift(cur); }
   return path;
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "AStar.java",
+      code: `import java.util.*;
+import java.util.function.Predicate;
+
+// A* on a grid with Manhattan-distance heuristic.
+record Cell(int x, int y) {}
+
+class AStar {
+    static String key(Cell c) { return c.x() + "," + c.y(); }
+
+    static int manhattan(Cell a, Cell b) {
+        return Math.abs(a.x() - b.x()) + Math.abs(a.y() - b.y());
+    }
+
+    static List<Cell> astar(Cell start, Cell goal, Predicate<Cell> passable) {
+        Map<String, Integer> g = new HashMap<>();
+        g.put(key(start), 0);
+        Map<String, Cell> parent = new HashMap<>();
+        // Open set is a binary heap keyed on f-score.
+        PriorityQueue<Object[]> open =
+            new PriorityQueue<>(Comparator.comparingInt(a -> (int) a[0]));
+        open.add(new Object[]{manhattan(start, goal), start});
+
+        int[][] dirs = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+        while (!open.isEmpty()) {
+            Cell cur = (Cell) open.poll()[1];   // heap.pop()
+            if (cur.equals(goal)) return reconstruct(parent, cur);
+
+            for (int[] d : dirs) {
+                Cell nb = new Cell(cur.x() + d[0], cur.y() + d[1]);
+                if (!passable.test(nb)) continue;
+                int tentativeG = g.getOrDefault(key(cur), Integer.MAX_VALUE) + 1;
+                if (tentativeG < g.getOrDefault(key(nb), Integer.MAX_VALUE)) {
+                    g.put(key(nb), tentativeG);
+                    parent.put(key(nb), cur);
+                    open.add(new Object[]{tentativeG + manhattan(nb, goal), nb});
+                }
+            }
+        }
+        return null;            // no path
+    }
+
+    static List<Cell> reconstruct(Map<String, Cell> parent, Cell cur) {
+        LinkedList<Cell> path = new LinkedList<>();
+        path.add(cur);
+        while (parent.containsKey(key(cur))) {
+            cur = parent.get(key(cur));
+            path.addFirst(cur);
+        }
+        return path;
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "astar.py",
+      code: `import heapq
+import itertools
+from math import inf
+from typing import Callable, Optional
+
+# A* on a grid with Manhattan-distance heuristic.
+Cell = tuple[int, int]   # (x, y)
+
+
+def manhattan(a: Cell, b: Cell) -> int:
+    return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
+
+def astar(start: Cell, goal: Cell, passable: Callable[[Cell], bool]) -> Optional[list[Cell]]:
+    g: dict[Cell, float] = {start: 0}
+    parent: dict[Cell, Cell] = {}
+    # Open set is a binary heap; a tie-breaker counter keeps cells uncomparable.
+    counter = itertools.count()
+    open_set: list[tuple[int, int, Cell]] = [(manhattan(start, goal), next(counter), start)]
+
+    while open_set:
+        _, _, cur = heapq.heappop(open_set)   # heap.pop()
+        if cur == goal:
+            return reconstruct(parent, cur)
+
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            nb = (cur[0] + dx, cur[1] + dy)
+            if not passable(nb):
+                continue
+            tentative_g = g.get(cur, inf) + 1
+            if tentative_g < g.get(nb, inf):
+                g[nb] = tentative_g
+                parent[nb] = cur
+                heapq.heappush(open_set, (tentative_g + manhattan(nb, goal), next(counter), nb))
+    return None             # no path
+
+
+def reconstruct(parent: dict[Cell, Cell], cur: Cell) -> list[Cell]:
+    path = [cur]
+    while cur in parent:
+        cur = parent[cur]
+        path.insert(0, cur)
+    return path`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "astar.cpp",
+      code: `// A* on a grid with Manhattan-distance heuristic.
+#include <cmath>
+#include <cstdint>
+#include <functional>
+#include <limits>
+#include <queue>
+#include <unordered_map>
+#include <vector>
+
+struct Cell { int x, y; };
+
+static int64_t key(const Cell &c) {           // pack (x,y) into one key
+    return (static_cast<int64_t>(c.x) << 32) ^ static_cast<uint32_t>(c.y);
+}
+
+static int manhattan(const Cell &a, const Cell &b) {
+    return std::abs(a.x - b.x) + std::abs(a.y - b.y);
+}
+
+std::vector<Cell> reconstruct(
+    const std::unordered_map<int64_t, Cell> &parent, Cell cur) {
+    std::vector<Cell> path{cur};
+    auto it = parent.find(key(cur));
+    while (it != parent.end()) {
+        cur = it->second;
+        path.insert(path.begin(), cur);
+        it = parent.find(key(cur));
+    }
+    return path;
+}
+
+std::vector<Cell> astar(Cell start, Cell goal,
+                        const std::function<bool(const Cell &)> &passable) {
+    const int INF = std::numeric_limits<int>::max();
+    std::unordered_map<int64_t, int> g{{key(start), 0}};
+    std::unordered_map<int64_t, Cell> parent;
+    // Open set: min-heap of [f-score, cell] via greater comparator.
+    using Item = std::pair<int, Cell>;
+    auto cmp = [](const Item &a, const Item &b) { return a.first > b.first; };
+    std::priority_queue<Item, std::vector<Item>, decltype(cmp)> open(cmp);
+    open.push({manhattan(start, goal), start});
+
+    const int dirs[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+    while (!open.empty()) {
+        Cell cur = open.top().second;         // heap.pop()
+        open.pop();
+        if (cur.x == goal.x && cur.y == goal.y) return reconstruct(parent, cur);
+
+        for (auto &d : dirs) {
+            Cell nb{cur.x + d[0], cur.y + d[1]};
+            if (!passable(nb)) continue;
+            int gc = g.count(key(cur)) ? g[key(cur)] : INF;
+            int tentativeG = (gc == INF) ? INF : gc + 1;
+            int gn = g.count(key(nb)) ? g[key(nb)] : INF;
+            if (tentativeG < gn) {
+                g[key(nb)] = tentativeG;
+                parent[key(nb)] = cur;
+                open.push({tentativeG + manhattan(nb, goal), nb});
+            }
+        }
+    }
+    return {};              // no path
+}`,
+    },
+  ],
 
   furtherReading: [
     {

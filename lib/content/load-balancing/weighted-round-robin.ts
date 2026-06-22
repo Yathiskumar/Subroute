@@ -92,40 +92,180 @@ export const weightedRoundRobin: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "weighted-round-robin.ts",
-    code: `// Smooth Weighted Round Robin (the algorithm NGINX/Envoy use).
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "weighted_round_robin.go",
+      code: `package lb
+
+// Smooth Weighted Round Robin (the algorithm NGINX/Envoy use).
 // Avoids the bursty "all of S1, then S2..." of naive expansion.
-type Server = { id: string; weight: number; current: number };
+type server struct {
+	id      string
+	weight  int
+	current int
+}
 
-class SmoothWRR {
-  private servers: Server[];
-  constructor(pool: { id: string; weight: number }[]) {
-    this.servers = pool.map((s) => ({ ...s, current: 0 }));
-  }
+type SmoothWRR struct {
+	servers []*server
+}
 
-  pick(): string {
-    const total = this.servers.reduce((sum, s) => sum + s.weight, 0);
-    let best: Server | null = null;
-    for (const s of this.servers) {
-      s.current += s.weight;            // each gains its weight
-      if (!best || s.current > best.current) best = s;
-    }
-    best!.current -= total;             // the winner pays the full total back
-    return best!.id;
-  }
+func NewSmoothWRR(pool []*server) *SmoothWRR {
+	return &SmoothWRR{servers: pool}
+}
+
+func (b *SmoothWRR) Pick() string {
+	total := 0
+	for _, s := range b.servers {
+		total += s.weight
+	}
+	var best *server
+	for _, s := range b.servers {
+		s.current += s.weight // each gains its weight
+		if best == nil || s.current > best.current {
+			best = s
+		}
+	}
+	best.current -= total // the winner pays the full total back
+	return best.id
 }
 
 // weights 3,1,2,1 -> a smooth, interleaved sequence like
 // s1, s3, s1, s2, s1, s3, s4  (still 3:1:2:1 per cycle)
-const lb = new SmoothWRR([
-  { id: "s1", weight: 3 },
-  { id: "s2", weight: 1 },
-  { id: "s3", weight: 2 },
-  { id: "s4", weight: 1 },
-]);`,
-  },
+// lb := NewSmoothWRR([]*server{
+// 	{id: "s1", weight: 3},
+// 	{id: "s2", weight: 1},
+// 	{id: "s3", weight: 2},
+// 	{id: "s4", weight: 1},
+// })`,
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "WeightedRoundRobin.java",
+      code: `import java.util.List;
+
+// Smooth Weighted Round Robin (the algorithm NGINX/Envoy use).
+// Avoids the bursty "all of S1, then S2..." of naive expansion.
+class SmoothWRR {
+    static final class Server {
+        final String id;
+        final int weight;
+        int current = 0;
+
+        Server(String id, int weight) {
+            this.id = id;
+            this.weight = weight;
+        }
+    }
+
+    private final List<Server> servers;
+
+    SmoothWRR(List<Server> pool) {
+        this.servers = pool;
+    }
+
+    String pick() {
+        int total = 0;
+        for (Server s : servers) total += s.weight;
+        Server best = null;
+        for (Server s : servers) {
+            s.current += s.weight;            // each gains its weight
+            if (best == null || s.current > best.current) best = s;
+        }
+        best.current -= total;                // the winner pays the full total back
+        return best.id;
+    }
+}
+
+// weights 3,1,2,1 -> a smooth, interleaved sequence like
+// s1, s3, s1, s2, s1, s3, s4  (still 3:1:2:1 per cycle)
+SmoothWRR lb = new SmoothWRR(List.of(
+    new SmoothWRR.Server("s1", 3),
+    new SmoothWRR.Server("s2", 1),
+    new SmoothWRR.Server("s3", 2),
+    new SmoothWRR.Server("s4", 1)));`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "weighted_round_robin.py",
+      code: `from dataclasses import dataclass
+
+
+# Smooth Weighted Round Robin (the algorithm NGINX/Envoy use).
+# Avoids the bursty "all of S1, then S2..." of naive expansion.
+@dataclass
+class Server:
+    id: str
+    weight: int
+    current: int = 0
+
+
+class SmoothWRR:
+    def __init__(self, pool: list[Server]) -> None:
+        self.servers = pool
+
+    def pick(self) -> str:
+        total = sum(s.weight for s in self.servers)
+        best: Server | None = None
+        for s in self.servers:
+            s.current += s.weight            # each gains its weight
+            if best is None or s.current > best.current:
+                best = s
+        best.current -= total                # the winner pays the full total back
+        return best.id
+
+
+# weights 3,1,2,1 -> a smooth, interleaved sequence like
+# s1, s3, s1, s2, s1, s3, s4  (still 3:1:2:1 per cycle)
+lb = SmoothWRR([
+    Server("s1", 3),
+    Server("s2", 1),
+    Server("s3", 2),
+    Server("s4", 1),
+])`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "weighted_round_robin.cpp",
+      code: `// Smooth Weighted Round Robin (the algorithm NGINX/Envoy use).
+// Avoids the bursty "all of S1, then S2..." of naive expansion.
+#include <string>
+#include <vector>
+
+class SmoothWRR {
+    struct Server {
+        std::string id;
+        int weight;
+        int current = 0;
+    };
+    std::vector<Server> servers_;
+
+public:
+    explicit SmoothWRR(std::vector<Server> pool)
+        : servers_(std::move(pool)) {}
+
+    std::string pick() {
+        int total = 0;
+        for (const auto& s : servers_) total += s.weight;
+        Server* best = nullptr;
+        for (auto& s : servers_) {
+            s.current += s.weight;            // each gains its weight
+            if (!best || s.current > best->current) best = &s;
+        }
+        best->current -= total;               // the winner pays the full total back
+        return best->id;
+    }
+};
+
+// weights 3,1,2,1 -> a smooth, interleaved sequence like
+// s1, s3, s1, s2, s1, s3, s4  (still 3:1:2:1 per cycle)
+// SmoothWRR lb({{"s1", 3}, {"s2", 1}, {"s3", 2}, {"s4", 1}});`,
+    },
+  ],
 
   furtherReading: [
     {

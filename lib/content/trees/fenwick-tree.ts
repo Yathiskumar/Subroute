@@ -128,10 +128,12 @@ export const fenwickTree: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "fenwick-tree.ts",
-    code: `// Fenwick Tree (Binary Indexed Tree) — 1-indexed, point update, prefix sum.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "fenwick-tree.ts",
+      code: `// Fenwick Tree (Binary Indexed Tree) — 1-indexed, point update, prefix sum.
 class FenwickTree {
   private t: number[];
   private n: number;
@@ -183,7 +185,175 @@ console.log(ft.query(8));        // 30  — full prefix
 console.log(ft.rangeQuery(3, 6)); // 16  — a[3]+a[4]+a[5]+a[6]
 ft.update(5, 10);                // a[5] becomes 14
 console.log(ft.query(8));        // 40  — updated prefix`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "FenwickTree.java",
+      code: `// Fenwick Tree (Binary Indexed Tree) — 1-indexed, point update, prefix sum.
+class FenwickTree {
+    private final long[] t;
+    private final int n;
+
+    FenwickTree(int n) {
+        this.n = n;
+        this.t = new long[n + 1];
+    }
+
+    // Build from an existing array a[0..n-1] in O(n log n).
+    static FenwickTree from(int[] a) {
+        FenwickTree ft = new FenwickTree(a.length);
+        for (int i = 0; i < a.length; i++) ft.update(i + 1, a[i]);
+        return ft;
+    }
+
+    // The bit trick: lowest set bit of i.
+    private int lowbit(int i) {
+        return i & -i;
+    }
+
+    // Point update: add delta to position pos (1-indexed).
+    // Hops UP: i += lowbit(i) until i > n.  O(log n).
+    void update(int pos, long delta) {
+        for (int i = pos; i <= n; i += lowbit(i)) {
+            t[i] += delta;
+        }
+    }
+
+    // Prefix sum: sum of a[1..k].
+    // Hops DOWN: i -= lowbit(i) until i <= 0.  O(log n).
+    long query(int k) {
+        long sum = 0;
+        for (int i = k; i > 0; i -= lowbit(i)) {
+            sum += t[i];
+        }
+        return sum;
+    }
+
+    // Range sum: sum of a[l..r] (both 1-indexed).
+    long rangeQuery(int l, int r) {
+        return query(r) - query(l - 1);
+    }
+}
+
+// Usage
+// FenwickTree ft = FenwickTree.from(new int[]{3, 2, 5, 1, 4, 6, 2, 7});
+// System.out.println(ft.query(8));        // 30  — full prefix
+// System.out.println(ft.rangeQuery(3, 6)); // 16  — a[3]+a[4]+a[5]+a[6]
+// ft.update(5, 10);                       // a[5] becomes 14
+// System.out.println(ft.query(8));        // 40  — updated prefix`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "fenwick_tree.py",
+      code: `# Fenwick Tree (Binary Indexed Tree) — 1-indexed, point update, prefix sum.
+class FenwickTree:
+    def __init__(self, n: int) -> None:
+        self.n = n
+        self.t = [0] * (n + 1)
+
+    # Build from an existing array a[0..n-1] in O(n log n).
+    @classmethod
+    def from_array(cls, a: list[int]) -> "FenwickTree":
+        ft = cls(len(a))
+        for i, value in enumerate(a):
+            ft.update(i + 1, value)
+        return ft
+
+    # The bit trick: lowest set bit of i.
+    @staticmethod
+    def _lowbit(i: int) -> int:
+        return i & -i
+
+    # Point update: add delta to position pos (1-indexed).
+    # Hops UP: i += lowbit(i) until i > n.  O(log n).
+    def update(self, pos: int, delta: int) -> None:
+        i = pos
+        while i <= self.n:
+            self.t[i] += delta
+            i += self._lowbit(i)
+
+    # Prefix sum: sum of a[1..k].
+    # Hops DOWN: i -= lowbit(i) until i <= 0.  O(log n).
+    def query(self, k: int) -> int:
+        total = 0
+        i = k
+        while i > 0:
+            total += self.t[i]
+            i -= self._lowbit(i)
+        return total
+
+    # Range sum: sum of a[l..r] (both 1-indexed).
+    def range_query(self, l: int, r: int) -> int:
+        return self.query(r) - self.query(l - 1)
+
+
+# Usage
+ft = FenwickTree.from_array([3, 2, 5, 1, 4, 6, 2, 7])
+print(ft.query(8))         # 30  — full prefix
+print(ft.range_query(3, 6))  # 16  — a[3]+a[4]+a[5]+a[6]
+ft.update(5, 10)           # a[5] becomes 14
+print(ft.query(8))         # 40  — updated prefix`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "fenwick_tree.cpp",
+      code: `// Fenwick Tree (Binary Indexed Tree) — 1-indexed, point update, prefix sum.
+#include <vector>
+
+class FenwickTree {
+    std::vector<long long> t_;
+    int n_;
+
+    // The bit trick: lowest set bit of i.
+    static int lowbit(int i) {
+        return i & -i;
+    }
+
+public:
+    explicit FenwickTree(int n) : t_(n + 1, 0), n_(n) {}
+
+    // Build from an existing array a[0..n-1] in O(n log n).
+    static FenwickTree from(const std::vector<long long>& a) {
+        FenwickTree ft(static_cast<int>(a.size()));
+        for (int i = 0; i < static_cast<int>(a.size()); ++i) ft.update(i + 1, a[i]);
+        return ft;
+    }
+
+    // Point update: add delta to position pos (1-indexed).
+    // Hops UP: i += lowbit(i) until i > n.  O(log n).
+    void update(int pos, long long delta) {
+        for (int i = pos; i <= n_; i += lowbit(i)) {
+            t_[i] += delta;
+        }
+    }
+
+    // Prefix sum: sum of a[1..k].
+    // Hops DOWN: i -= lowbit(i) until i <= 0.  O(log n).
+    long long query(int k) const {
+        long long sum = 0;
+        for (int i = k; i > 0; i -= lowbit(i)) {
+            sum += t_[i];
+        }
+        return sum;
+    }
+
+    // Range sum: sum of a[l..r] (both 1-indexed).
+    long long rangeQuery(int l, int r) const {
+        return query(r) - query(l - 1);
+    }
+};
+
+// Usage
+// FenwickTree ft = FenwickTree::from({3, 2, 5, 1, 4, 6, 2, 7});
+// ft.query(8);        // 30  — full prefix
+// ft.rangeQuery(3, 6); // 16  — a[3]+a[4]+a[5]+a[6]
+// ft.update(5, 10);   // a[5] becomes 14
+// ft.query(8);        // 40  — updated prefix`,
+    },
+  ],
 
   furtherReading: [
     {

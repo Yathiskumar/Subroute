@@ -113,75 +113,404 @@ export const bully: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "bully.ts",
-    code: `// Bully algorithm. Each process can be a candidate. Highest ID always wins.
-type ProcId = number;
-type Msg = { type: "election" | "ok" | "coord"; from: ProcId; to: ProcId };
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "bully_algorithm.go",
+      code: `// Bully algorithm. Each process can be a candidate. Highest ID always wins.
+package election
 
-class BullyProcess {
-  constructor(
-    public readonly id: ProcId,
-    public readonly peers: ProcId[],
-    private send: (m: Msg) => Promise<void>,
-    private alive: (id: ProcId) => boolean,
-  ) {}
+import (
+	"sync"
+	"time"
+)
 
-  private leader: ProcId | null = null;
-  private busy = false;
+const electionTimeout = 500 * time.Millisecond
 
-  /** Called when this process suspects the leader is dead. */
-  async startElection(): Promise<void> {
-    if (this.busy) return;
-    this.busy = true;
-    try {
-      const higher = this.peers.filter(p => p > this.id);
-      if (higher.length === 0) return this.declareSelfLeader();
+type ProcID = int
 
-      const acks = await Promise.race([
-        this.askHigher(higher),
-        sleep(ELECTION_TIMEOUT_MS).then(() => [] as ProcId[]),
-      ]);
-
-      if (acks.length === 0) {
-        // No higher-ID process answered: I am the new leader.
-        await this.declareSelfLeader();
-      }
-      // Otherwise: some higher-ID process took over. Wait for its COORDINATOR.
-    } finally {
-      this.busy = false;
-    }
-  }
-
-  private async askHigher(higher: ProcId[]): Promise<ProcId[]> {
-    const answers: ProcId[] = [];
-    await Promise.all(higher.map(async to => {
-      await this.send({ type: "election", from: this.id, to });
-      if (this.alive(to)) answers.push(to);   // they will reply OK + start their own
-    }));
-    return answers;
-  }
-
-  async onMessage(m: Msg): Promise<void> {
-    if (m.type === "election" && m.from < this.id) {
-      await this.send({ type: "ok", from: this.id, to: m.from });
-      this.startElection();              // I'm higher → take over the election
-    }
-    if (m.type === "coord") this.leader = m.from;
-  }
-
-  private async declareSelfLeader() {
-    this.leader = this.id;
-    await Promise.all(this.peers
-      .filter(p => p !== this.id)
-      .map(p => this.send({ type: "coord", from: this.id, to: p })));
-  }
+type Msg struct {
+	Type string // "election" | "ok" | "coord"
+	From ProcID
+	To   ProcID
 }
 
-const ELECTION_TIMEOUT_MS = 500;
-const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));`,
-  },
+type BullyProcess struct {
+	ID    ProcID
+	Peers []ProcID
+	Send  func(m Msg)
+	Alive func(id ProcID) bool
+
+	mu     sync.Mutex
+	leader ProcID // -1 means none
+	busy   bool
+}
+
+// StartElection is called when this process suspects the leader is dead.
+func (p *BullyProcess) StartElection() {
+	p.mu.Lock()
+	if p.busy {
+		p.mu.Unlock()
+		return
+	}
+	p.busy = true
+	p.mu.Unlock()
+	defer func() {
+		p.mu.Lock()
+		p.busy = false
+		p.mu.Unlock()
+	}()
+
+	var higher []ProcID
+	for _, peer := range p.Peers {
+		if peer > p.ID {
+			higher = append(higher, peer)
+		}
+	}
+	if len(higher) == 0 {
+		p.declareSelfLeader()
+		return
+	}
+
+	// Race the asks against the election timeout.
+	acks := make(chan []ProcID, 1)
+	go func() { acks <- p.askHigher(higher) }()
+
+	select {
+	case answers := <-acks:
+		if len(answers) == 0 {
+			// No higher-ID process answered: I am the new leader.
+			p.declareSelfLeader()
+		}
+		// Otherwise: some higher-ID process took over. Wait for its COORDINATOR.
+	case <-time.After(electionTimeout):
+		// Timed out without an OK: I am the new leader.
+		p.declareSelfLeader()
+	}
+}
+
+func (p *BullyProcess) askHigher(higher []ProcID) []ProcID {
+	var (
+		mu      sync.Mutex
+		wg      sync.WaitGroup
+		answers []ProcID
+	)
+	for _, to := range higher {
+		wg.Add(1)
+		go func(to ProcID) {
+			defer wg.Done()
+			p.Send(Msg{Type: "election", From: p.ID, To: to})
+			if p.Alive(to) { // they will reply OK + start their own
+				mu.Lock()
+				answers = append(answers, to)
+				mu.Unlock()
+			}
+		}(to)
+	}
+	wg.Wait()
+	return answers
+}
+
+func (p *BullyProcess) OnMessage(m Msg) {
+	if m.Type == "election" && m.From < p.ID {
+		p.Send(Msg{Type: "ok", From: p.ID, To: m.From})
+		go p.StartElection() // I'm higher -> take over the election
+	}
+	if m.Type == "coord" {
+		p.mu.Lock()
+		p.leader = m.From
+		p.mu.Unlock()
+	}
+}
+
+func (p *BullyProcess) declareSelfLeader() {
+	p.mu.Lock()
+	p.leader = p.ID
+	p.mu.Unlock()
+	for _, peer := range p.Peers {
+		if peer != p.ID {
+			p.Send(Msg{Type: "coord", From: p.ID, To: peer})
+		}
+	}
+}`,
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "BullyAlgorithm.java",
+      code: `// Bully algorithm. Each process can be a candidate. Highest ID always wins.
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
+import java.util.function.IntPredicate;
+
+class BullyProcess {
+    static final long ELECTION_TIMEOUT_MS = 500;
+
+    record Msg(String type, int from, int to) {} // type: "election" | "ok" | "coord"
+
+    final int id;
+    final List<Integer> peers;
+    private final Consumer<Msg> send;
+    private final IntPredicate alive;
+
+    private Integer leader = null;
+    private boolean busy = false;
+
+    BullyProcess(int id, List<Integer> peers, Consumer<Msg> send, IntPredicate alive) {
+        this.id = id;
+        this.peers = peers;
+        this.send = send;
+        this.alive = alive;
+    }
+
+    /** Called when this process suspects the leader is dead. */
+    synchronized void startElection() {
+        if (busy) return;
+        busy = true;
+        try {
+            List<Integer> higher = new ArrayList<>();
+            for (int p : peers) if (p > id) higher.add(p);
+            if (higher.isEmpty()) { declareSelfLeader(); return; }
+
+            List<Integer> acks = CompletableFuture
+                .supplyAsync(() -> askHigher(higher))
+                .completeOnTimeout(List.of(), ELECTION_TIMEOUT_MS,
+                                   java.util.concurrent.TimeUnit.MILLISECONDS)
+                .join();
+
+            if (acks.isEmpty()) {
+                // No higher-ID process answered: I am the new leader.
+                declareSelfLeader();
+            }
+            // Otherwise: some higher-ID process took over. Wait for its COORDINATOR.
+        } finally {
+            busy = false;
+        }
+    }
+
+    private List<Integer> askHigher(List<Integer> higher) {
+        List<Integer> answers = new ArrayList<>();
+        for (int to : higher) {
+            send.accept(new Msg("election", id, to));
+            if (alive.test(to)) answers.add(to); // they will reply OK + start their own
+        }
+        return answers;
+    }
+
+    void onMessage(Msg m) {
+        if (m.type().equals("election") && m.from() < id) {
+            send.accept(new Msg("ok", id, m.from()));
+            startElection();              // I'm higher -> take over the election
+        }
+        if (m.type().equals("coord")) leader = m.from();
+    }
+
+    private void declareSelfLeader() {
+        leader = id;
+        for (int p : peers) {
+            if (p != id) send.accept(new Msg("coord", id, p));
+        }
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "bully_algorithm.py",
+      code: `# Bully algorithm. Each process can be a candidate. Highest ID always wins.
+import asyncio
+from dataclasses import dataclass
+from typing import Awaitable, Callable, Optional
+
+ELECTION_TIMEOUT_S = 0.5
+
+
+@dataclass
+class Msg:
+    type: str  # "election" | "ok" | "coord"
+    from_: int
+    to: int
+
+
+class BullyProcess:
+    def __init__(
+        self,
+        id: int,
+        peers: list[int],
+        send: Callable[[Msg], Awaitable[None]],
+        alive: Callable[[int], bool],
+    ) -> None:
+        self.id = id
+        self.peers = peers
+        self.send = send
+        self.alive = alive
+        self.leader: Optional[int] = None
+        self.busy = False
+
+    async def start_election(self) -> None:
+        """Called when this process suspects the leader is dead."""
+        if self.busy:
+            return
+        self.busy = True
+        try:
+            higher = [p for p in self.peers if p > self.id]
+            if not higher:
+                await self._declare_self_leader()
+                return
+
+            try:
+                acks = await asyncio.wait_for(
+                    self._ask_higher(higher), timeout=ELECTION_TIMEOUT_S
+                )
+            except asyncio.TimeoutError:
+                acks = []
+
+            if not acks:
+                # No higher-ID process answered: I am the new leader.
+                await self._declare_self_leader()
+            # Otherwise: some higher-ID process took over. Wait for its COORDINATOR.
+        finally:
+            self.busy = False
+
+    async def _ask_higher(self, higher: list[int]) -> list[int]:
+        answers: list[int] = []
+
+        async def ask(to: int) -> None:
+            await self.send(Msg("election", self.id, to))
+            if self.alive(to):  # they will reply OK + start their own
+                answers.append(to)
+
+        await asyncio.gather(*(ask(to) for to in higher))
+        return answers
+
+    async def on_message(self, m: Msg) -> None:
+        if m.type == "election" and m.from_ < self.id:
+            await self.send(Msg("ok", self.id, m.from_))
+            asyncio.create_task(self.start_election())  # I'm higher -> take over
+        if m.type == "coord":
+            self.leader = m.from_
+
+    async def _declare_self_leader(self) -> None:
+        self.leader = self.id
+        await asyncio.gather(
+            *(self.send(Msg("coord", self.id, p)) for p in self.peers if p != self.id)
+        )`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "bully_algorithm.cpp",
+      code: `// Bully algorithm. Each process can be a candidate. Highest ID always wins.
+#include <chrono>
+#include <functional>
+#include <future>
+#include <mutex>
+#include <optional>
+#include <string>
+#include <vector>
+
+using ProcId = int;
+
+struct Msg {
+    std::string type; // "election" | "ok" | "coord"
+    ProcId from;
+    ProcId to;
+};
+
+class BullyProcess {
+public:
+    BullyProcess(ProcId id, std::vector<ProcId> peers,
+                 std::function<void(const Msg&)> send,
+                 std::function<bool(ProcId)> alive)
+        : id_(id), peers_(std::move(peers)),
+          send_(std::move(send)), alive_(std::move(alive)) {}
+
+    // Called when this process suspects the leader is dead.
+    void startElection() {
+        {
+            std::lock_guard<std::mutex> lock(mu_);
+            if (busy_) return;
+            busy_ = true;
+        }
+
+        std::vector<ProcId> higher;
+        for (ProcId p : peers_)
+            if (p > id_) higher.push_back(p);
+
+        if (higher.empty()) {
+            declareSelfLeader();
+            resetBusy();
+            return;
+        }
+
+        // Race the asks against the election timeout.
+        auto fut = std::async(std::launch::async,
+                              [this, higher] { return askHigher(higher); });
+        std::vector<ProcId> acks;
+        if (fut.wait_for(std::chrono::milliseconds(kElectionTimeoutMs)) ==
+            std::future_status::ready) {
+            acks = fut.get();
+        }
+
+        if (acks.empty()) {
+            // No higher-ID process answered: I am the new leader.
+            declareSelfLeader();
+        }
+        // Otherwise: some higher-ID process took over. Wait for its COORDINATOR.
+        resetBusy();
+    }
+
+    void onMessage(const Msg& m) {
+        if (m.type == "election" && m.from < id_) {
+            send_(Msg{"ok", id_, m.from});
+            startElection(); // I'm higher -> take over the election
+        }
+        if (m.type == "coord") {
+            std::lock_guard<std::mutex> lock(mu_);
+            leader_ = m.from;
+        }
+    }
+
+private:
+    static constexpr long kElectionTimeoutMs = 500;
+
+    std::vector<ProcId> askHigher(const std::vector<ProcId>& higher) {
+        std::vector<ProcId> answers;
+        for (ProcId to : higher) {
+            send_(Msg{"election", id_, to});
+            if (alive_(to)) answers.push_back(to); // they reply OK + start their own
+        }
+        return answers;
+    }
+
+    void declareSelfLeader() {
+        {
+            std::lock_guard<std::mutex> lock(mu_);
+            leader_ = id_;
+        }
+        for (ProcId p : peers_)
+            if (p != id_) send_(Msg{"coord", id_, p});
+    }
+
+    void resetBusy() {
+        std::lock_guard<std::mutex> lock(mu_);
+        busy_ = false;
+    }
+
+    ProcId id_;
+    std::vector<ProcId> peers_;
+    std::function<void(const Msg&)> send_;
+    std::function<bool(ProcId)> alive_;
+
+    std::mutex mu_;
+    std::optional<ProcId> leader_;
+    bool busy_ = false;
+};`,
+    },
+  ],
 
   furtherReading: [
     {

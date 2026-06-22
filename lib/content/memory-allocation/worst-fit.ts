@@ -92,32 +92,149 @@ export const worstFit: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "worst-fit.ts",
-    code: `interface Hole { start: number; size: number; }
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "worst_fit.go",
+      code: `package alloc
 
-/** Worst Fit: scan all holes, pick the largest one that fits. */
-function worstFitAlloc(holes: Hole[], request: number): number | null {
-  let worstIdx = -1;
-  let largest = -1;
+type Hole struct {
+	Start int
+	Size  int
+}
 
-  for (let i = 0; i < holes.length; i++) {     // no early stop
-    if (holes[i].size >= request && holes[i].size > largest) {
-      largest = holes[i].size;                 // remember the biggest fitting hole
-      worstIdx = i;
-    }
-  }
-  if (worstIdx === -1) return null;            // nothing fit
+// WorstFitAlloc scans all holes, picking the largest one that fits.
+// It returns the allocated address and ok=false on failure.
+func WorstFitAlloc(holes *[]Hole, request int) (int, bool) {
+	h := *holes
+	worstIdx := -1
+	largest := -1
 
-  const hole = holes[worstIdx];
-  const addr = hole.start;
-  const leftover = hole.size - request;        // intentionally large
-  if (leftover === 0) holes.splice(worstIdx, 1);
-  else { hole.start += request; hole.size = leftover; }
-  return addr;
+	for i := 0; i < len(h); i++ { // no early stop
+		if h[i].Size >= request && h[i].Size > largest {
+			largest = h[i].Size // remember the biggest fitting hole
+			worstIdx = i
+		}
+	}
+	if worstIdx == -1 {
+		return 0, false // nothing fit
+	}
+
+	addr := h[worstIdx].Start
+	leftover := h[worstIdx].Size - request // intentionally large
+	if leftover == 0 {
+		*holes = append(h[:worstIdx], h[worstIdx+1:]...)
+	} else {
+		h[worstIdx].Start += request
+		h[worstIdx].Size = leftover
+	}
+	return addr, true
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "WorstFit.java",
+      code: `import java.util.List;
+
+class Hole {
+    int start, size;
+    Hole(int start, int size) { this.start = start; this.size = size; }
+}
+
+class WorstFit {
+    /** Worst Fit: scan all holes, pick the largest one that fits. Returns null on failure. */
+    static Integer worstFitAlloc(List<Hole> holes, int request) {
+        int worstIdx = -1;
+        int largest = -1;
+
+        for (int i = 0; i < holes.size(); i++) {     // no early stop
+            if (holes.get(i).size >= request && holes.get(i).size > largest) {
+                largest = holes.get(i).size;         // remember the biggest fitting hole
+                worstIdx = i;
+            }
+        }
+        if (worstIdx == -1) return null;             // nothing fit
+
+        Hole hole = holes.get(worstIdx);
+        int addr = hole.start;
+        int leftover = hole.size - request;          // intentionally large
+        if (leftover == 0) holes.remove(worstIdx);
+        else { hole.start += request; hole.size = leftover; }
+        return addr;
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "worst_fit.py",
+      code: `from dataclasses import dataclass
+
+
+@dataclass
+class Hole:
+    start: int
+    size: int
+
+
+def worst_fit_alloc(holes: list[Hole], request: int) -> int | None:
+    """Worst Fit: scan all holes, pick the largest one that fits."""
+    worst_idx = -1
+    largest = -1
+
+    for i, hole in enumerate(holes):     # no early stop
+        if hole.size >= request and hole.size > largest:
+            largest = hole.size          # remember the biggest fitting hole
+            worst_idx = i
+    if worst_idx == -1:
+        return None                      # nothing fit
+
+    hole = holes[worst_idx]
+    addr = hole.start
+    leftover = hole.size - request       # intentionally large
+    if leftover == 0:
+        del holes[worst_idx]
+    else:
+        hole.start += request
+        hole.size = leftover
+    return addr`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "worst_fit.cpp",
+      code: `#include <optional>
+#include <vector>
+
+struct Hole {
+    int start;
+    int size;
+};
+
+// Worst Fit: scan all holes, pick the largest one that fits.
+std::optional<int> worstFitAlloc(std::vector<Hole>& holes, int request) {
+    int worstIdx = -1;
+    int largest = -1;
+
+    for (std::size_t i = 0; i < holes.size(); ++i) {     // no early stop
+        if (holes[i].size >= request && holes[i].size > largest) {
+            largest = holes[i].size;                     // remember the biggest fitting hole
+            worstIdx = static_cast<int>(i);
+        }
+    }
+    if (worstIdx == -1) return std::nullopt;             // nothing fit
+
+    Hole& hole = holes[worstIdx];
+    int addr = hole.start;
+    int leftover = hole.size - request;                  // intentionally large
+    if (leftover == 0) holes.erase(holes.begin() + worstIdx);
+    else { hole.start += request; hole.size = leftover; }
+    return addr;
+}`,
+    },
+  ],
 
   furtherReading: [
     {

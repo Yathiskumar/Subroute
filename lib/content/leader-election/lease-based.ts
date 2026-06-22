@@ -113,63 +113,334 @@ export const leaseBased: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "lease-election.ts",
-    code: `// Lease-based leader election on top of an etcd-like store.
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "lease_election.go",
+      code: `// Lease-based leader election on top of an etcd-like store.
 // The store provides linearizable CAS and returns a monotonically increasing revision.
-type Lease = { holder: string; epoch: number; expiresAt: number };
+package election
 
-interface LeaseStore {
-  read(): Promise<Lease | null>;
-  /** CAS: if current matches \`expected\`, write \`next\` and return new revision. */
-  cas(expected: Lease | null, next: Lease): Promise<{ ok: true; epoch: number } | { ok: false }>;
+import (
+	"errors"
+	"time"
+)
+
+type Lease struct {
+	Holder    string
+	Epoch     int
+	ExpiresAt int64 // unix millis
 }
+
+type CASResult struct {
+	OK    bool
+	Epoch int
+}
+
+type LeaseStore interface {
+	Read() (*Lease, bool)
+	// CAS: if current matches expected, write next and return new revision.
+	CAS(expected *Lease, next Lease) CASResult
+}
+
+type LeaseLeader struct {
+	me       string
+	store    LeaseStore
+	ttlMs    int64
+	now      func() int64
+	epoch    int
+	isLeader bool
+}
+
+func NewLeaseLeader(me string, store LeaseStore, ttlMs int64, now func() int64) *LeaseLeader {
+	return &LeaseLeader{me: me, store: store, ttlMs: ttlMs, now: now}
+}
+
+func (l *LeaseLeader) TryAcquire() bool {
+	cur, present := l.store.Read()
+	expired := !present || cur.ExpiresAt <= l.now()
+	if !expired {
+		return false
+	}
+
+	prevEpoch := 0
+	var expected *Lease
+	if present {
+		prevEpoch = cur.Epoch
+		expected = cur
+	}
+	r := l.store.CAS(expected, Lease{
+		Holder:    l.me,
+		Epoch:     prevEpoch + 1,
+		ExpiresAt: l.now() + l.ttlMs,
+	})
+	if r.OK {
+		l.epoch = r.Epoch
+		l.isLeader = true
+	}
+	return r.OK
+}
+
+// RenewLoop runs forever: renew at TTL/3, give up the role on any CAS failure.
+func (l *LeaseLeader) RenewLoop() {
+	for l.isLeader {
+		time.Sleep(time.Duration(l.ttlMs/3) * time.Millisecond)
+		cur, present := l.store.Read()
+		if !present || cur.Holder != l.me {
+			l.isLeader = false
+			return
+		}
+		next := *cur
+		next.ExpiresAt = l.now() + l.ttlMs
+		if !l.store.CAS(cur, next).OK {
+			l.isLeader = false
+		}
+	}
+}
+
+// LeaderWrite: every leader write must carry the epoch so stale leaders can't sneak through.
+func (l *LeaseLeader) LeaderWrite(write func(epoch int) error) error {
+	if !l.isLeader {
+		return errors.New("not leader")
+	}
+	return write(l.epoch)
+}`,
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "LeaseElection.java",
+      code: `// Lease-based leader election on top of an etcd-like store.
+// The store provides linearizable CAS and returns a monotonically increasing revision.
+import java.util.Optional;
+import java.util.function.IntFunction;
+import java.util.function.LongSupplier;
+
+class LeaseElection {
+
+    record Lease(String holder, int epoch, long expiresAt) {}
+
+    record CasResult(boolean ok, int epoch) {}
+
+    interface LeaseStore {
+        Optional<Lease> read();
+        /** CAS: if current matches expected, write next and return new revision. */
+        CasResult cas(Lease expected, Lease next);
+    }
+
+    static class LeaseLeader {
+        private final String me;
+        private final LeaseStore store;
+        private final long ttlMs;
+        private final LongSupplier now;
+        private int epoch = 0;
+        private boolean isLeader = false;
+
+        LeaseLeader(String me, LeaseStore store, long ttlMs, LongSupplier now) {
+            this.me = me;
+            this.store = store;
+            this.ttlMs = ttlMs;
+            this.now = now;
+        }
+
+        boolean tryAcquire() {
+            Optional<Lease> cur = store.read();
+            boolean expired = cur.isEmpty() || cur.get().expiresAt() <= now.getAsLong();
+            if (!expired) return false;
+
+            int prevEpoch = cur.map(Lease::epoch).orElse(0);
+            Lease expected = cur.orElse(null);
+            CasResult r = store.cas(expected,
+                new Lease(me, prevEpoch + 1, now.getAsLong() + ttlMs));
+            if (r.ok()) { epoch = r.epoch(); isLeader = true; }
+            return r.ok();
+        }
+
+        /** Run forever: renew at TTL/3, give up the role on any CAS failure. */
+        void renewLoop() throws InterruptedException {
+            while (isLeader) {
+                Thread.sleep(ttlMs / 3);
+                Optional<Lease> cur = store.read();
+                if (cur.isEmpty() || !cur.get().holder().equals(me)) {
+                    isLeader = false;
+                    return;
+                }
+                Lease c = cur.get();
+                CasResult r = store.cas(c,
+                    new Lease(c.holder(), c.epoch(), now.getAsLong() + ttlMs));
+                if (!r.ok()) isLeader = false;
+            }
+        }
+
+        /** Every leader write must carry the epoch so stale leaders can't sneak through. */
+        <T> T leaderWrite(IntFunction<T> write) {
+            if (!isLeader) throw new IllegalStateException("not leader");
+            return write.apply(epoch);
+        }
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "lease_election.py",
+      code: `# Lease-based leader election on top of an etcd-like store.
+# The store provides linearizable CAS and returns a monotonically increasing revision.
+import time
+from dataclasses import dataclass, replace
+from typing import Callable, Optional, Protocol, TypeVar
+
+T = TypeVar("T")
+
+
+@dataclass
+class Lease:
+    holder: str
+    epoch: int
+    expires_at: float  # seconds
+
+
+@dataclass
+class CasResult:
+    ok: bool
+    epoch: int = 0
+
+
+class LeaseStore(Protocol):
+    def read(self) -> Optional[Lease]: ...
+    # CAS: if current matches expected, write next and return new revision.
+    def cas(self, expected: Optional[Lease], next: Lease) -> CasResult: ...
+
+
+class LeaseLeader:
+    def __init__(
+        self,
+        me: str,
+        store: LeaseStore,
+        ttl_s: float,
+        now: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self.me = me
+        self.store = store
+        self.ttl_s = ttl_s
+        self.now = now
+        self.epoch = 0
+        self.is_leader = False
+
+    def try_acquire(self) -> bool:
+        cur = self.store.read()
+        expired = cur is None or cur.expires_at <= self.now()
+        if not expired:
+            return False
+
+        prev_epoch = cur.epoch if cur else 0
+        r = self.store.cas(
+            cur if expired else None,
+            Lease(holder=self.me, epoch=prev_epoch + 1, expires_at=self.now() + self.ttl_s),
+        )
+        if r.ok:
+            self.epoch = r.epoch
+            self.is_leader = True
+        return r.ok
+
+    def renew_loop(self) -> None:
+        """Run forever: renew at TTL/3, give up the role on any CAS failure."""
+        while self.is_leader:
+            time.sleep(self.ttl_s / 3)
+            cur = self.store.read()
+            if cur is None or cur.holder != self.me:
+                self.is_leader = False
+                return
+            r = self.store.cas(cur, replace(cur, expires_at=self.now() + self.ttl_s))
+            if not r.ok:
+                self.is_leader = False
+
+    def leader_write(self, write: Callable[[int], T]) -> T:
+        """Every leader write must carry the epoch so stale leaders can't sneak through."""
+        if not self.is_leader:
+            raise RuntimeError("not leader")
+        return write(self.epoch)`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "lease_election.cpp",
+      code: `// Lease-based leader election on top of an etcd-like store.
+// The store provides linearizable CAS and returns a monotonically increasing revision.
+#include <chrono>
+#include <functional>
+#include <optional>
+#include <stdexcept>
+#include <string>
+#include <thread>
+
+struct Lease {
+    std::string holder;
+    int epoch;
+    long long expiresAt; // unix millis
+};
+
+struct CasResult {
+    bool ok;
+    int epoch;
+};
+
+struct LeaseStore {
+    virtual std::optional<Lease> read() = 0;
+    // CAS: if current matches expected, write next and return new revision.
+    virtual CasResult cas(const std::optional<Lease>& expected, const Lease& next) = 0;
+    virtual ~LeaseStore() = default;
+};
 
 class LeaseLeader {
-  private epoch = 0;
-  private isLeader = false;
+public:
+    LeaseLeader(std::string me, LeaseStore& store, long long ttlMs,
+                std::function<long long()> now)
+        : me_(std::move(me)), store_(store), ttlMs_(ttlMs), now_(std::move(now)) {}
 
-  constructor(
-    private readonly me: string,
-    private readonly store: LeaseStore,
-    private readonly ttlMs: number,
-    private readonly now: () => number,
-  ) {}
+    bool tryAcquire() {
+        auto cur = store_.read();
+        bool expired = !cur || cur->expiresAt <= now_();
+        if (!expired) return false;
 
-  async tryAcquire() {
-    const cur = await this.store.read();
-    const expired = !cur || cur.expiresAt <= this.now();
-    if (!expired) return false;
-
-    const r = await this.store.cas(expired ? cur : null, {
-      holder: this.me, epoch: (cur?.epoch ?? 0) + 1,
-      expiresAt: this.now() + this.ttlMs,
-    });
-    if (r.ok) { this.epoch = r.epoch; this.isLeader = true; }
-    return r.ok;
-  }
-
-  /** Run forever: renew at TTL/3, give up the role on any CAS failure. */
-  async renewLoop() {
-    while (this.isLeader) {
-      await sleep(this.ttlMs / 3);
-      const cur = await this.store.read();
-      if (!cur || cur.holder !== this.me) { this.isLeader = false; return; }
-      const r = await this.store.cas(cur, { ...cur, expiresAt: this.now() + this.ttlMs });
-      if (!r.ok) this.isLeader = false;
+        int prevEpoch = cur ? cur->epoch : 0;
+        auto expected = expired ? cur : std::nullopt;
+        CasResult r = store_.cas(expected,
+            Lease{me_, prevEpoch + 1, now_() + ttlMs_});
+        if (r.ok) { epoch_ = r.epoch; isLeader_ = true; }
+        return r.ok;
     }
-  }
 
-  /** Every leader write must carry the epoch so stale leaders can't sneak through. */
-  async leaderWrite<T>(write: (epoch: number) => Promise<T>) {
-    if (!this.isLeader) throw new Error("not leader");
-    return write(this.epoch);
-  }
-}
+    // Run forever: renew at TTL/3, give up the role on any CAS failure.
+    void renewLoop() {
+        while (isLeader_) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(ttlMs_ / 3));
+            auto cur = store_.read();
+            if (!cur || cur->holder != me_) { isLeader_ = false; return; }
+            Lease next = *cur;
+            next.expiresAt = now_() + ttlMs_;
+            if (!store_.cas(cur, next).ok) isLeader_ = false;
+        }
+    }
 
-const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));`,
-  },
+    // Every leader write must carry the epoch so stale leaders can't sneak through.
+    template <typename T>
+    T leaderWrite(const std::function<T(int)>& write) {
+        if (!isLeader_) throw std::runtime_error("not leader");
+        return write(epoch_);
+    }
+
+private:
+    std::string me_;
+    LeaseStore& store_;
+    long long ttlMs_;
+    std::function<long long()> now_;
+    int epoch_ = 0;
+    bool isLeader_ = false;
+};`,
+    },
+  ],
 
   furtherReading: [
     {

@@ -119,56 +119,283 @@ export const zab: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "zab.ts",
-    code: `// Skeleton of ZAB's three modes: discovery, synchronization, broadcast.
-type Zxid = { epoch: number; counter: number };
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "zab.go",
+      code: "// Skeleton of ZAB's three modes: discovery, synchronization, broadcast.\npackage zab\n\nimport (\n  \"errors\"\n  \"sync\"\n)\n\ntype Zxid struct {\n  Epoch   int\n  Counter int\n}\n\ntype LogEntry struct {\n  Zxid      Zxid\n  Txn       string\n  Committed bool\n}\n\n// ZabServer is the peer interface; helpers maxAdvertisedEpoch,\n// collectAcks and majority are provided externally.\ntype ZabServer interface {\n  NewEpoch(epoch int) error\n  LastZxid() (Zxid, error)\n  ApplySync(missing []LogEntry) error\n  Propose(zxid Zxid, txn string) error\n  Commit(zxid Zxid) error\n}\n\ntype ZabLeader struct {\n  epoch   int\n  counter int\n  log     []LogEntry\n  peers   []ZabServer\n  myID    int\n}\n\nfunc NewZabLeader(peers []ZabServer, myID int) *ZabLeader {\n  return &ZabLeader{epoch: 0, peers: peers, myID: myID}\n}\n\n// --- Discovery: claim a fresh epoch ---\nfunc (l *ZabLeader) Discovery() error {\n  highest, err := maxAdvertisedEpoch(l.peers)\n  if err != nil {\n    return err\n  }\n  l.epoch = highest + 1\n  var wg sync.WaitGroup\n  errs := make([]error, len(l.peers))\n  for i, p := range l.peers {\n    wg.Add(1)\n    go func(i int, p ZabServer) {\n      defer wg.Done()\n      errs[i] = p.NewEpoch(l.epoch)\n    }(i, p)\n  }\n  wg.Wait()\n  for _, e := range errs {\n    if e != nil {\n      return e\n    }\n  }\n  return nil\n}\n\n// --- Synchronization: ship missing txns, drop uncommitted strays ---\nfunc (l *ZabLeader) Synchronize() error {\n  for _, p := range l.peers {\n    theirLast, err := p.LastZxid()\n    if err != nil {\n      return err\n    }\n    var missing []LogEntry\n    for _, e := range l.log {\n      if zxidGt(e.Zxid, theirLast) {\n        missing = append(missing, e)\n      }\n    }\n    if err := p.ApplySync(missing); err != nil {\n      return err\n    }\n    // any uncommitted entries on p that we don't have get dropped on p\n  }\n  return nil\n}\n\n// --- Broadcast: Propose -> Ack -> Commit ---\nfunc (l *ZabLeader) Broadcast(txn string) error {\n  l.counter++\n  zxid := Zxid{Epoch: l.epoch, Counter: l.counter}\n  l.log = append(l.log, LogEntry{Zxid: zxid, Txn: txn, Committed: false})\n\n  acks := collectAcks(l.peers, func(p ZabServer) error {\n    return p.Propose(zxid, txn)\n  })\n  if len(acks) < majority(len(l.peers)) {\n    return errors.New(\"no quorum\")\n  }\n\n  var wg sync.WaitGroup\n  for _, p := range l.peers {\n    wg.Add(1)\n    go func(p ZabServer) {\n      defer wg.Done()\n      p.Commit(zxid)\n    }(p)\n  }\n  wg.Wait()\n  for i := range l.log {\n    if zxidEq(l.log[i].Zxid, zxid) {\n      l.log[i].Committed = true\n      break\n    }\n  }\n  return nil\n}\n\nfunc zxidGt(a, b Zxid) bool {\n  return a.Epoch > b.Epoch || (a.Epoch == b.Epoch && a.Counter > b.Counter)\n}\n\nfunc zxidEq(a, b Zxid) bool {\n  return a.Epoch == b.Epoch && a.Counter == b.Counter\n}",
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "ZabLeader.java",
+      code: `// Skeleton of ZAB's three modes: discovery, synchronization, broadcast.
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
+
+record Zxid(int epoch, int counter) {}
+
+class LogEntry {
+  final Zxid zxid;
+  final String txn;
+  boolean committed;
+  LogEntry(Zxid zxid, String txn, boolean committed) {
+    this.zxid = zxid;
+    this.txn = txn;
+    this.committed = committed;
+  }
+}
+
+// ZabServer is the peer interface; helpers maxAdvertisedEpoch,
+// collectAcks and majority are provided externally.
+interface ZabServer {
+  CompletableFuture<Void> newEpoch(int epoch);
+  CompletableFuture<Zxid> lastZxid();
+  CompletableFuture<Void> applySync(List<LogEntry> missing);
+  CompletableFuture<Void> propose(Zxid zxid, String txn);
+  CompletableFuture<Void> commit(Zxid zxid);
+}
 
 class ZabLeader {
-  epoch: number;
-  counter = 0;
-  log: { zxid: Zxid; txn: string; committed: boolean }[] = [];
+  private int epoch;
+  private int counter = 0;
+  private final List<LogEntry> log = new ArrayList<>();
+  private final List<ZabServer> peers;
+  private final int myId;
 
-  constructor(private peers: ZabServer[], private myId: number) {
+  ZabLeader(List<ZabServer> peers, int myId) {
+    this.peers = peers;
+    this.myId = myId;
     this.epoch = 0;
   }
 
   // --- Discovery: claim a fresh epoch ---
-  async discovery() {
-    this.epoch = await maxAdvertisedEpoch(this.peers) + 1;
-    await Promise.all(this.peers.map(p => p.newEpoch(this.epoch)));
+  CompletableFuture<Void> discovery() {
+    return maxAdvertisedEpoch(peers).thenCompose(highest -> {
+      epoch = highest + 1;
+      CompletableFuture<?>[] fs = peers.stream()
+          .map(p -> p.newEpoch(epoch))
+          .toArray(CompletableFuture[]::new);
+      return CompletableFuture.allOf(fs);
+    });
   }
 
   // --- Synchronization: ship missing txns, drop uncommitted strays ---
-  async synchronize() {
-    for (const p of this.peers) {
-      const theirLast = await p.lastZxid();
-      const missing = this.log.filter(e => zxidGt(e.zxid, theirLast));
-      await p.applySync(missing);
+  CompletableFuture<Void> synchronize() {
+    CompletableFuture<Void> chain = CompletableFuture.completedFuture(null);
+    for (ZabServer p : peers) {
+      chain = chain.thenCompose(v -> p.lastZxid()).thenCompose(theirLast -> {
+        List<LogEntry> missing = log.stream()
+            .filter(e -> zxidGt(e.zxid, theirLast))
+            .collect(Collectors.toList());
+        return p.applySync(missing);
+        // any uncommitted entries on p that we don't have get dropped on p
+      });
+    }
+    return chain;
+  }
+
+  // --- Broadcast: Propose -> Ack -> Commit ---
+  CompletableFuture<Void> broadcast(String txn) {
+    counter++;
+    Zxid zxid = new Zxid(epoch, counter);
+    log.add(new LogEntry(zxid, txn, false));
+
+    return collectAcks(peers, p -> p.propose(zxid, txn)).thenCompose(acks -> {
+      if (acks.size() < majority(peers.size())) {
+        throw new RuntimeException("no quorum");
+      }
+      CompletableFuture<?>[] fs = peers.stream()
+          .map(p -> p.commit(zxid))
+          .toArray(CompletableFuture[]::new);
+      return CompletableFuture.allOf(fs).thenRun(() -> {
+        for (LogEntry e : log) {
+          if (zxidEq(e.zxid, zxid)) {
+            e.committed = true;
+            break;
+          }
+        }
+      });
+    });
+  }
+
+  static boolean zxidGt(Zxid a, Zxid b) {
+    return a.epoch() > b.epoch() || (a.epoch() == b.epoch() && a.counter() > b.counter());
+  }
+
+  static boolean zxidEq(Zxid a, Zxid b) {
+    return a.epoch() == b.epoch() && a.counter() == b.counter();
+  }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "zab.py",
+      code: `# Skeleton of ZAB's three modes: discovery, synchronization, broadcast.
+import asyncio
+from dataclasses import dataclass, field
+
+
+@dataclass
+class Zxid:
+    epoch: int
+    counter: int
+
+
+@dataclass
+class LogEntry:
+    zxid: Zxid
+    txn: str
+    committed: bool
+
+
+# ZabServer is the peer protocol; helpers max_advertised_epoch,
+# collect_acks and majority are provided externally.
+class ZabLeader:
+    def __init__(self, peers, my_id):
+        self.peers = peers
+        self.my_id = my_id
+        self.epoch = 0
+        self.counter = 0
+        self.log: list[LogEntry] = []
+
+    # --- Discovery: claim a fresh epoch ---
+    async def discovery(self):
+        self.epoch = await max_advertised_epoch(self.peers) + 1
+        await asyncio.gather(*(p.new_epoch(self.epoch) for p in self.peers))
+
+    # --- Synchronization: ship missing txns, drop uncommitted strays ---
+    async def synchronize(self):
+        for p in self.peers:
+            their_last = await p.last_zxid()
+            missing = [e for e in self.log if zxid_gt(e.zxid, their_last)]
+            await p.apply_sync(missing)
+            # any uncommitted entries on p that we don't have get dropped on p
+
+    # --- Broadcast: Propose -> Ack -> Commit ---
+    async def broadcast(self, txn):
+        self.counter += 1
+        zxid = Zxid(epoch=self.epoch, counter=self.counter)
+        self.log.append(LogEntry(zxid=zxid, txn=txn, committed=False))
+
+        acks = await collect_acks(self.peers, lambda p: p.propose(zxid, txn))
+        if len(acks) < majority(len(self.peers)):
+            raise RuntimeError("no quorum")
+
+        await asyncio.gather(*(p.commit(zxid) for p in self.peers))
+        next(e for e in self.log if zxid_eq(e.zxid, zxid)).committed = True
+
+
+def zxid_gt(a: Zxid, b: Zxid) -> bool:
+    return a.epoch > b.epoch or (a.epoch == b.epoch and a.counter > b.counter)
+
+
+def zxid_eq(a: Zxid, b: Zxid) -> bool:
+    return a.epoch == b.epoch and a.counter == b.counter`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "zab.cpp",
+      code: `// Skeleton of ZAB's three modes: discovery, synchronization, broadcast.
+#include <future>
+#include <stdexcept>
+#include <string>
+#include <vector>
+
+struct Zxid {
+  int epoch;
+  int counter;
+};
+
+struct LogEntry {
+  Zxid zxid;
+  std::string txn;
+  bool committed;
+};
+
+// ZabServer is the peer interface; helpers maxAdvertisedEpoch,
+// collectAcks and majority are provided externally.
+class ZabServer {
+ public:
+  virtual ~ZabServer() = default;
+  virtual void newEpoch(int epoch) = 0;
+  virtual Zxid lastZxid() = 0;
+  virtual void applySync(const std::vector<LogEntry>& missing) = 0;
+  virtual void propose(const Zxid& zxid, const std::string& txn) = 0;
+  virtual void commit(const Zxid& zxid) = 0;
+};
+
+bool zxidGt(const Zxid& a, const Zxid& b) {
+  return a.epoch > b.epoch || (a.epoch == b.epoch && a.counter > b.counter);
+}
+
+bool zxidEq(const Zxid& a, const Zxid& b) {
+  return a.epoch == b.epoch && a.counter == b.counter;
+}
+
+class ZabLeader {
+  int epoch_ = 0;
+  int counter_ = 0;
+  std::vector<LogEntry> log_;
+  std::vector<ZabServer*> peers_;
+  int myId_;
+
+ public:
+  ZabLeader(std::vector<ZabServer*> peers, int myId)
+      : peers_(std::move(peers)), myId_(myId) {}
+
+  // --- Discovery: claim a fresh epoch ---
+  void discovery() {
+    epoch_ = maxAdvertisedEpoch(peers_) + 1;
+    std::vector<std::future<void>> fs;
+    for (auto* p : peers_) {
+      fs.push_back(std::async(std::launch::async, [p, this] { p->newEpoch(epoch_); }));
+    }
+    for (auto& f : fs) f.get();
+  }
+
+  // --- Synchronization: ship missing txns, drop uncommitted strays ---
+  void synchronize() {
+    for (auto* p : peers_) {
+      Zxid theirLast = p->lastZxid();
+      std::vector<LogEntry> missing;
+      for (const auto& e : log_) {
+        if (zxidGt(e.zxid, theirLast)) missing.push_back(e);
+      }
+      p->applySync(missing);
       // any uncommitted entries on p that we don't have get dropped on p
     }
   }
 
   // --- Broadcast: Propose -> Ack -> Commit ---
-  async broadcast(txn: string) {
-    this.counter++;
-    const zxid: Zxid = { epoch: this.epoch, counter: this.counter };
-    this.log.push({ zxid, txn, committed: false });
+  void broadcast(const std::string& txn) {
+    counter_++;
+    Zxid zxid{epoch_, counter_};
+    log_.push_back({zxid, txn, false});
 
-    const acks = await collectAcks(this.peers, p => p.propose(zxid, txn));
-    if (acks.length < majority(this.peers.length)) throw new Error("no quorum");
+    auto acks = collectAcks(peers_, [&](ZabServer* p) { p->propose(zxid, txn); });
+    if (acks.size() < majority(peers_.size())) throw std::runtime_error("no quorum");
 
-    await Promise.all(this.peers.map(p => p.commit(zxid)));
-    this.log.find(e => zxidEq(e.zxid, zxid))!.committed = true;
+    std::vector<std::future<void>> fs;
+    for (auto* p : peers_) {
+      fs.push_back(std::async(std::launch::async, [p, &zxid] { p->commit(zxid); }));
+    }
+    for (auto& f : fs) f.get();
+    for (auto& e : log_) {
+      if (zxidEq(e.zxid, zxid)) {
+        e.committed = true;
+        break;
+      }
+    }
   }
-}
-
-function zxidGt(a: Zxid, b: Zxid) {
-  return a.epoch > b.epoch || (a.epoch === b.epoch && a.counter > b.counter);
-}
-function zxidEq(a: Zxid, b: Zxid) { return a.epoch === b.epoch && a.counter === b.counter; }`,
-  },
+};`,
+    },
+  ],
 
   furtherReading: [
     {

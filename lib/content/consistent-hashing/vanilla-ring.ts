@@ -95,53 +95,253 @@ export const vanillaRing: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "hash-ring.ts",
-    code: `// Vanilla consistent-hashing ring.
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "hash_ring.go",
+      code: `// Vanilla consistent-hashing ring.
 // The ring is just the server hashes kept sorted; lookup is a binary search.
-class HashRing {
-  private ring: { hash: number; server: string }[] = [];
+package main
 
-  private hash(s: string): number {
-    // FNV-1a 32-bit — any stable hash works.
-    let h = 2166136261 >>> 0;
-    for (let i = 0; i < s.length; i++) {
-      h ^= s.charCodeAt(i);
-      h = Math.imul(h, 16777619) >>> 0;
-    }
-    return h >>> 0;
-  }
+import "sort"
 
-  addServer(name: string): void {
-    this.ring.push({ hash: this.hash(name), server: name });
-    this.ring.sort((a, b) => a.hash - b.hash); // keep the ring ordered
-  }
-
-  removeServer(name: string): void {
-    this.ring = this.ring.filter((e) => e.server !== name);
-  }
-
-  // First server clockwise from the key's hash (wrap to index 0).
-  getServer(key: string): string | null {
-    if (this.ring.length === 0) return null;
-    const h = this.hash(key);
-    let lo = 0, hi = this.ring.length - 1, ans = 0;
-    while (lo <= hi) {
-      const mid = (lo + hi) >> 1;
-      if (this.ring[mid].hash >= h) { ans = mid; hi = mid - 1; }
-      else lo = mid + 1;
-    }
-    // if h is past the last server, wrap around to the first
-    if (this.ring[ans].hash < h) ans = 0;
-    return this.ring[ans].server;
-  }
+type entry struct {
+	hash   uint32
+	server string
 }
 
-const ring = new HashRing();
-["alpha", "beta", "gamma"].forEach((s) => ring.addServer(s));
-ring.getServer("user:42"); // -> whichever server is first clockwise`,
-  },
+type HashRing struct {
+	ring []entry
+}
+
+func (r *HashRing) hash(s string) uint32 {
+	// FNV-1a 32-bit — any stable hash works.
+	var h uint32 = 2166136261
+	for i := 0; i < len(s); i++ {
+		h ^= uint32(s[i])
+		h *= 16777619
+	}
+	return h
+}
+
+func (r *HashRing) AddServer(name string) {
+	r.ring = append(r.ring, entry{hash: r.hash(name), server: name})
+	sort.Slice(r.ring, func(i, j int) bool { // keep the ring ordered
+		return r.ring[i].hash < r.ring[j].hash
+	})
+}
+
+func (r *HashRing) RemoveServer(name string) {
+	out := r.ring[:0]
+	for _, e := range r.ring {
+		if e.server != name {
+			out = append(out, e)
+		}
+	}
+	r.ring = out
+}
+
+// First server clockwise from the key's hash (wrap to index 0).
+func (r *HashRing) GetServer(key string) (string, bool) {
+	if len(r.ring) == 0 {
+		return "", false
+	}
+	h := r.hash(key)
+	lo, hi, ans := 0, len(r.ring)-1, 0
+	for lo <= hi {
+		mid := (lo + hi) >> 1
+		if r.ring[mid].hash >= h {
+			ans = mid
+			hi = mid - 1
+		} else {
+			lo = mid + 1
+		}
+	}
+	// if h is past the last server, wrap around to the first
+	if r.ring[ans].hash < h {
+		ans = 0
+	}
+	return r.ring[ans].server, true
+}
+
+func main() {
+	ring := &HashRing{}
+	for _, s := range []string{"alpha", "beta", "gamma"} {
+		ring.AddServer(s)
+	}
+	ring.GetServer("user:42") // -> whichever server is first clockwise
+}`,
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "HashRing.java",
+      code: `import java.util.ArrayList;
+import java.util.List;
+
+// Vanilla consistent-hashing ring.
+// The ring is just the server hashes kept sorted; lookup is a binary search.
+class HashRing {
+    private record Entry(long hash, String server) {}
+
+    private final List<Entry> ring = new ArrayList<>();
+
+    private long hash(String s) {
+        // FNV-1a 32-bit — any stable hash works.
+        long h = 2166136261L;
+        for (int i = 0; i < s.length(); i++) {
+            h ^= s.charAt(i);
+            h = (h * 16777619L) & 0xFFFFFFFFL;
+        }
+        return h;
+    }
+
+    void addServer(String name) {
+        ring.add(new Entry(hash(name), name));
+        ring.sort((a, b) -> Long.compare(a.hash(), b.hash())); // keep the ring ordered
+    }
+
+    void removeServer(String name) {
+        ring.removeIf(e -> e.server().equals(name));
+    }
+
+    // First server clockwise from the key's hash (wrap to index 0).
+    String getServer(String key) {
+        if (ring.isEmpty()) return null;
+        long h = hash(key);
+        int lo = 0, hi = ring.size() - 1, ans = 0;
+        while (lo <= hi) {
+            int mid = (lo + hi) >> 1;
+            if (ring.get(mid).hash() >= h) { ans = mid; hi = mid - 1; }
+            else lo = mid + 1;
+        }
+        // if h is past the last server, wrap around to the first
+        if (ring.get(ans).hash() < h) ans = 0;
+        return ring.get(ans).server();
+    }
+}
+
+// Usage:
+// HashRing ring = new HashRing();
+// for (String s : new String[]{"alpha", "beta", "gamma"}) ring.addServer(s);
+// ring.getServer("user:42"); // -> whichever server is first clockwise`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "hash_ring.py",
+      code: `import bisect
+
+
+class HashRing:
+    """Vanilla consistent-hashing ring.
+
+    The ring is just the server hashes kept sorted; lookup is a binary search.
+    """
+
+    def __init__(self) -> None:
+        self.hashes: list[int] = []   # sorted server hashes
+        self.servers: list[str] = []  # parallel: server for each hash
+
+    def _hash(self, s: str) -> int:
+        # FNV-1a 32-bit — any stable hash works.
+        h = 2166136261
+        for ch in s:
+            h ^= ord(ch)
+            h = (h * 16777619) & 0xFFFFFFFF
+        return h
+
+    def add_server(self, name: str) -> None:
+        h = self._hash(name)
+        i = bisect.bisect_left(self.hashes, h)  # keep the ring ordered
+        self.hashes.insert(i, h)
+        self.servers.insert(i, name)
+
+    def remove_server(self, name: str) -> None:
+        kept = [(h, s) for h, s in zip(self.hashes, self.servers) if s != name]
+        self.hashes = [h for h, _ in kept]
+        self.servers = [s for _, s in kept]
+
+    def get_server(self, key: str) -> str | None:
+        if not self.hashes:
+            return None
+        h = self._hash(key)
+        # first server clockwise; wrap to index 0 if past the end
+        i = bisect.bisect_left(self.hashes, h)
+        if i == len(self.hashes):
+            i = 0
+        return self.servers[i]
+
+
+ring = HashRing()
+for s in ["alpha", "beta", "gamma"]:
+    ring.add_server(s)
+ring.get_server("user:42")  # -> whichever server is first clockwise`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "hash_ring.cpp",
+      code: `// Vanilla consistent-hashing ring.
+// The ring is just the server hashes kept sorted; lookup is a binary search.
+#include <algorithm>
+#include <cstdint>
+#include <string>
+#include <vector>
+
+class HashRing {
+    struct Entry {
+        uint32_t hash;
+        std::string server;
+    };
+    std::vector<Entry> ring_;
+
+    uint32_t hash(const std::string& s) const {
+        // FNV-1a 32-bit — any stable hash works.
+        uint32_t h = 2166136261u;
+        for (char c : s) {
+            h ^= static_cast<unsigned char>(c);
+            h *= 16777619u;
+        }
+        return h;
+    }
+
+public:
+    void addServer(const std::string& name) {
+        ring_.push_back({hash(name), name});
+        std::sort(ring_.begin(), ring_.end(), // keep the ring ordered
+                  [](const Entry& a, const Entry& b) { return a.hash < b.hash; });
+    }
+
+    void removeServer(const std::string& name) {
+        ring_.erase(std::remove_if(ring_.begin(), ring_.end(),
+                                   [&](const Entry& e) { return e.server == name; }),
+                    ring_.end());
+    }
+
+    // First server clockwise from the key's hash (wrap to index 0).
+    const std::string* getServer(const std::string& key) const {
+        if (ring_.empty()) return nullptr;
+        uint32_t h = hash(key);
+        int lo = 0, hi = static_cast<int>(ring_.size()) - 1, ans = 0;
+        while (lo <= hi) {
+            int mid = (lo + hi) >> 1;
+            if (ring_[mid].hash >= h) { ans = mid; hi = mid - 1; }
+            else lo = mid + 1;
+        }
+        // if h is past the last server, wrap around to the first
+        if (ring_[ans].hash < h) ans = 0;
+        return &ring_[ans].server;
+    }
+};
+
+// Usage:
+// HashRing ring;
+// for (auto& s : {"alpha", "beta", "gamma"}) ring.addServer(s);
+// ring.getServer("user:42"); // -> whichever server is first clockwise`,
+    },
+  ],
 
   furtherReading: [
     {

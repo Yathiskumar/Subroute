@@ -98,10 +98,12 @@ export const slidingWindow: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "sliding-window.ts",
-    code: `// Sliding window counter (weighted approximation).
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "sliding-window.ts",
+      code: `// Sliding window counter (weighted approximation).
 class SlidingWindow {
   private windowStart = Date.now();
   private currentCount = 0;
@@ -133,7 +135,130 @@ class SlidingWindow {
 
 // Redis: two keys per client (prev, current) tied to window IDs.
 // INCR is still O(1) — same cost as fixed window.`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "SlidingWindow.java",
+      code: `// Sliding window counter (weighted approximation).
+class SlidingWindow {
+    private long windowStart = System.currentTimeMillis();
+    private int currentCount = 0;
+    private int previousCount = 0;
+    private final int limit;
+    private final long windowSizeMs;
+
+    SlidingWindow(int limit, long windowSizeMs) {
+        this.limit = limit;
+        this.windowSizeMs = windowSizeMs;
+    }
+
+    synchronized boolean allow() {
+        roll();
+        double progress = (System.currentTimeMillis() - windowStart) / (double) windowSizeMs;
+        double estimate = previousCount * (1 - progress) + currentCount;
+        if (estimate >= limit) return false;
+        currentCount++;
+        return true;
+    }
+
+    private void roll() {
+        long now = System.currentTimeMillis();
+        if (now - windowStart >= windowSizeMs) {
+            previousCount = currentCount;
+            currentCount = 0;
+            windowStart = now;
+        }
+    }
+}
+
+// Redis: two keys per client (prev, current) tied to window IDs.
+// INCR is still O(1) — same cost as fixed window.`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "sliding_window.py",
+      code: `import time
+
+
+class SlidingWindow:
+    """Sliding window counter (weighted approximation)."""
+
+    def __init__(self, limit: int, window_size_s: float) -> None:
+        self.limit = limit
+        self.window_size_s = window_size_s
+        self.window_start = time.monotonic()
+        self.current_count = 0
+        self.previous_count = 0
+
+    def allow(self) -> bool:
+        self._roll()
+        progress = (time.monotonic() - self.window_start) / self.window_size_s
+        estimate = self.previous_count * (1 - progress) + self.current_count
+        if estimate >= self.limit:
+            return False
+        self.current_count += 1
+        return True
+
+    def _roll(self) -> None:
+        now = time.monotonic()
+        if now - self.window_start >= self.window_size_s:
+            self.previous_count = self.current_count
+            self.current_count = 0
+            self.window_start = now
+
+
+# Redis: two keys per client (prev, current) tied to window IDs.
+# INCR is still O(1) — same cost as fixed window.`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "sliding_window.cpp",
+      code: `// Sliding window counter (weighted approximation).
+#include <chrono>
+#include <mutex>
+
+class SlidingWindow {
+    using clock = std::chrono::steady_clock;
+    clock::time_point windowStart_ = clock::now();
+    int currentCount_ = 0;
+    int previousCount_ = 0;
+    int limit_;
+    std::chrono::milliseconds windowSize_;
+    std::mutex mu_;
+
+public:
+    SlidingWindow(int limit, std::chrono::milliseconds windowSize)
+        : limit_(limit), windowSize_(windowSize) {}
+
+    bool allow() {
+        std::lock_guard<std::mutex> lock(mu_);
+        roll();
+        double progress = std::chrono::duration<double>(clock::now() - windowStart_).count() /
+                          std::chrono::duration<double>(windowSize_).count();
+        double estimate = previousCount_ * (1 - progress) + currentCount_;
+        if (estimate >= limit_) return false;
+        ++currentCount_;
+        return true;
+    }
+
+private:
+    void roll() {
+        auto now = clock::now();
+        if (now - windowStart_ >= windowSize_) {
+            previousCount_ = currentCount_;
+            currentCount_ = 0;
+            windowStart_ = now;
+        }
+    }
+};
+
+// Redis: two keys per client (prev, current) tied to window IDs.
+// INCR is still O(1) — same cost as fixed window.`,
+    },
+  ],
 
   furtherReading: [
     {

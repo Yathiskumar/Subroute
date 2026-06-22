@@ -112,10 +112,12 @@ export const radix: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "radix-sort.ts",
-    code: `// LSD radix sort for non-negative integers.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "radix-sort.ts",
+      code: `// LSD radix sort for non-negative integers.
 // Stable, O(d · (n + b)) where d = digit count, b = radix.
 function radixSort(a: number[], radix = 10): number[] {
   if (a.length === 0) return a;
@@ -149,7 +151,134 @@ function countingSortByDigit(a: number[], exp: number, b: number): number[] {
 // Example
 radixSort([170, 45, 75, 90, 802, 24, 2, 66]);
 // → [2, 24, 45, 66, 75, 90, 170, 802]`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "RadixSort.java",
+      code: `// LSD radix sort for non-negative integers.
+// Stable, O(d · (n + b)) where d = digit count, b = radix.
+import java.util.*;
+
+static int[] radixSort(int[] a, int radix) {
+    if (a.length == 0) return a;
+    int max = Arrays.stream(a).max().getAsInt();
+    int[] out = a.clone();
+    for (int exp = 1; exp <= max; exp *= radix) {
+        out = countingSortByDigit(out, exp, radix);
+    }
+    return out;
+}
+
+static int[] countingSortByDigit(int[] a, int exp, int b) {
+    int n = a.length;
+    int[] count = new int[b];
+    int[] out = new int[n];
+
+    // Tally by the current digit.
+    for (int i = 0; i < n; i++) count[(a[i] / exp) % b]++;
+
+    // Prefix-sum into end positions.
+    for (int v = 1; v < b; v++) count[v] += count[v - 1];
+
+    // Place right-to-left so the inner sort is stable.
+    for (int i = n - 1; i >= 0; i--) {
+        int d = (a[i] / exp) % b;
+        out[--count[d]] = a[i];
+    }
+    return out;
+}
+
+// Example
+radixSort(new int[]{170, 45, 75, 90, 802, 24, 2, 66}, 10);
+// → [2, 24, 45, 66, 75, 90, 170, 802]`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "radix_sort.py",
+      code: `def radix_sort(a: list[int], radix: int = 10) -> list[int]:
+    """LSD radix sort for non-negative integers.
+    Stable, O(d · (n + b)) where d = digit count, b = radix."""
+    if not a:
+        return a
+    mx = max(a)
+    out = a[:]
+    exp = 1
+    while exp <= mx:
+        out = counting_sort_by_digit(out, exp, radix)
+        exp *= radix
+    return out
+
+
+def counting_sort_by_digit(a: list[int], exp: int, b: int) -> list[int]:
+    n = len(a)
+    count = [0] * b
+    out = [0] * n
+
+    # Tally by the current digit.
+    for i in range(n):
+        count[(a[i] // exp) % b] += 1
+
+    # Prefix-sum into end positions.
+    for v in range(1, b):
+        count[v] += count[v - 1]
+
+    # Place right-to-left so the inner sort is stable.
+    for i in range(n - 1, -1, -1):
+        d = (a[i] // exp) % b
+        count[d] -= 1
+        out[count[d]] = a[i]
+    return out
+
+
+# Example
+radix_sort([170, 45, 75, 90, 802, 24, 2, 66])
+# → [2, 24, 45, 66, 75, 90, 170, 802]`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "radix_sort.cpp",
+      code: `// LSD radix sort for non-negative integers.
+// Stable, O(d · (n + b)) where d = digit count, b = radix.
+#include <vector>
+#include <algorithm>
+
+std::vector<int> countingSortByDigit(const std::vector<int>& a, int exp, int b) {
+    int n = a.size();
+    std::vector<int> count(b, 0);
+    std::vector<int> out(n);
+
+    // Tally by the current digit.
+    for (int i = 0; i < n; i++) count[(a[i] / exp) % b]++;
+
+    // Prefix-sum into end positions.
+    for (int v = 1; v < b; v++) count[v] += count[v - 1];
+
+    // Place right-to-left so the inner sort is stable.
+    for (int i = n - 1; i >= 0; i--) {
+        int d = (a[i] / exp) % b;
+        out[--count[d]] = a[i];
+    }
+    return out;
+}
+
+std::vector<int> radixSort(std::vector<int> a, int radix = 10) {
+    if (a.empty()) return a;
+    int max = *std::max_element(a.begin(), a.end());
+    std::vector<int> out = a;
+    for (int exp = 1; exp <= max; exp *= radix) {
+        out = countingSortByDigit(out, exp, radix);
+    }
+    return out;
+}
+
+// Example
+// radixSort({170, 45, 75, 90, 802, 24, 2, 66});
+// → [2, 24, 45, 66, 75, 90, 170, 802]`,
+    },
+  ],
 
   furtherReading: [
     {

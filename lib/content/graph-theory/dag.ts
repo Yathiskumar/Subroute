@@ -105,10 +105,12 @@ export const dag: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "dag.ts",
-    code: `// Topological sort via Kahn's algorithm.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "dag.ts",
+      code: `// Topological sort via Kahn's algorithm.
 // Returns a valid linear order, or null if the graph has a cycle (not a DAG).
 function topologicalSort(
   vertices: string[],
@@ -144,7 +146,152 @@ function topologicalSort(
 //   ["A", "B", "C", "D", "E", "F"],
 //   [["A","C"],["B","C"],["B","D"],["C","E"],["D","E"],["D","F"],["E","F"]],
 // ); // → ["A","B","C","D","E","F"]  (one of several valid orders)`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "Dag.java",
+      code: `// Topological sort via Kahn's algorithm.
+// Returns a valid linear order, or null if the graph has a cycle (not a DAG).
+import java.util.*;
+
+class Dag {
+    // edges as String[]{from, to} — "from must come before to"
+    static List<String> topologicalSort(List<String> vertices, List<String[]> edges) {
+        // 1. In-degree = number of arrows pointing INTO each vertex.
+        Map<String, Integer> inDegree = new HashMap<>();
+        Map<String, List<String>> out = new HashMap<>();
+        for (String v : vertices) {
+            inDegree.put(v, 0);
+            out.put(v, new ArrayList<>());
+        }
+        for (String[] e : edges) {
+            out.get(e[0]).add(e[1]);
+            inDegree.merge(e[1], 1, Integer::sum);
+        }
+
+        // 2. Seed the ready queue with every in-degree-0 vertex (no prerequisites).
+        Deque<String> ready = new ArrayDeque<>();
+        for (String v : vertices) if (inDegree.get(v) == 0) ready.add(v);
+        List<String> order = new ArrayList<>();
+
+        // 3. Place a ready vertex, then relax its outgoing arrows.
+        while (!ready.isEmpty()) {
+            String u = ready.poll();
+            order.add(u);
+            for (String v : out.get(u)) {
+                inDegree.merge(v, -1, Integer::sum);  // this arrow is now satisfied
+                if (inDegree.get(v) == 0) ready.add(v); // all prerequisites done
+            }
+        }
+
+        // 4. Placed everything => DAG. Otherwise the leftovers form a cycle.
+        return order.size() == vertices.size() ? order : null;
+    }
+}
+
+// List<String> order = Dag.topologicalSort(
+//   List.of("A", "B", "C", "D", "E", "F"),
+//   List.of(new String[]{"A","C"}, new String[]{"B","C"}, new String[]{"B","D"},
+//           new String[]{"C","E"}, new String[]{"D","E"}, new String[]{"D","F"},
+//           new String[]{"E","F"}));
+// -> ["A","B","C","D","E","F"]  (one of several valid orders)`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "dag.py",
+      code: `from collections import deque
+
+
+def topological_sort(
+    vertices: list[str],
+    edges: list[tuple[str, str]],  # (from, to) — "from must come before to"
+) -> list[str] | None:
+    """Topological sort via Kahn's algorithm.
+
+    Returns a valid linear order, or None if the graph has a cycle (not a DAG).
+    """
+    # 1. In-degree = number of arrows pointing INTO each vertex.
+    in_degree = {v: 0 for v in vertices}
+    out: dict[str, list[str]] = {v: [] for v in vertices}
+    for u, v in edges:
+        out[u].append(v)
+        in_degree[v] += 1
+
+    # 2. Seed the ready queue with every in-degree-0 vertex (no prerequisites).
+    ready = deque(v for v in vertices if in_degree[v] == 0)
+    order: list[str] = []
+
+    # 3. Place a ready vertex, then relax its outgoing arrows.
+    while ready:
+        u = ready.popleft()
+        order.append(u)
+        for v in out[u]:
+            in_degree[v] -= 1            # this arrow is now satisfied
+            if in_degree[v] == 0:
+                ready.append(v)          # all prerequisites done
+
+    # 4. Placed everything => DAG. Otherwise the leftovers form a cycle.
+    return order if len(order) == len(vertices) else None
+
+
+# order = topological_sort(
+#     ["A", "B", "C", "D", "E", "F"],
+#     [("A","C"),("B","C"),("B","D"),("C","E"),("D","E"),("D","F"),("E","F")],
+# )  # -> ["A","B","C","D","E","F"]  (one of several valid orders)`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "dag.cpp",
+      code: `// Topological sort via Kahn's algorithm.
+// Returns a valid linear order, or empty optional if the graph has a cycle.
+#include <string>
+#include <unordered_map>
+#include <vector>
+#include <queue>
+#include <optional>
+#include <utility>
+
+std::optional<std::vector<std::string>> topologicalSort(
+    const std::vector<std::string>& vertices,
+    const std::vector<std::pair<std::string, std::string>>& edges) {
+  // 1. In-degree = number of arrows pointing INTO each vertex.
+  std::unordered_map<std::string, int> inDegree;
+  std::unordered_map<std::string, std::vector<std::string>> out;
+  for (const auto& v : vertices) { inDegree[v] = 0; out[v] = {}; }
+  for (const auto& [u, v] : edges) {
+    out[u].push_back(v);
+    inDegree[v]++;
+  }
+
+  // 2. Seed the ready queue with every in-degree-0 vertex (no prerequisites).
+  std::queue<std::string> ready;
+  for (const auto& v : vertices) if (inDegree[v] == 0) ready.push(v);
+  std::vector<std::string> order;
+
+  // 3. Place a ready vertex, then relax its outgoing arrows.
+  while (!ready.empty()) {
+    std::string u = ready.front();
+    ready.pop();
+    order.push_back(u);
+    for (const auto& v : out[u]) {
+      if (--inDegree[v] == 0) ready.push(v); // arrow satisfied; prerequisites done
+    }
+  }
+
+  // 4. Placed everything => DAG. Otherwise the leftovers form a cycle.
+  if (order.size() == vertices.size()) return order;
+  return std::nullopt;
+}
+
+// auto order = topologicalSort(
+//   {"A", "B", "C", "D", "E", "F"},
+//   {{"A","C"},{"B","C"},{"B","D"},{"C","E"},{"D","E"},{"D","F"},{"E","F"}});
+// // -> ["A","B","C","D","E","F"]  (one of several valid orders)`,
+    },
+  ],
 
   furtherReading: [
     {

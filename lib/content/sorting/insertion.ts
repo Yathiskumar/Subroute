@@ -111,10 +111,12 @@ export const insertion: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "insertion-sort.ts",
-    code: `// Insertion sort — adaptive, stable, in-place.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "insertion-sort.ts",
+      code: `// Insertion sort — adaptive, stable, in-place.
 // Best case O(n) on sorted input; worst case O(n²) on reverse-sorted.
 function insertionSort<T>(a: T[]): T[] {
   for (let i = 1; i < a.length; i++) {
@@ -135,7 +137,87 @@ function insertionSort<T>(a: T[]): T[] {
 insertionSort([5, 2, 4, 6, 1, 3]);
 // → [1, 2, 3, 4, 5, 6]
 // On nearly-sorted input, almost every iteration takes O(1).`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "InsertionSort.java",
+      code: `// Insertion sort — adaptive, stable, in-place.
+// Best case O(n) on sorted input; worst case O(n²) on reverse-sorted.
+static <T extends Comparable<T>> T[] insertionSort(T[] a) {
+    for (int i = 1; i < a.length; i++) {
+        T key = a[i];
+        int j = i - 1;
+        // Shift larger elements one slot right.
+        while (j >= 0 && a[j].compareTo(key) > 0) {
+            a[j + 1] = a[j];
+            j--;
+        }
+        // Drop the key into the gap.
+        a[j + 1] = key;
+    }
+    return a;
+}
+
+// Example
+insertionSort(new Integer[]{5, 2, 4, 6, 1, 3});
+// → [1, 2, 3, 4, 5, 6]
+// On nearly-sorted input, almost every iteration takes O(1).`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "insertion_sort.py",
+      code: `def insertion_sort(a: list) -> list:
+    """Insertion sort — adaptive, stable, in-place.
+    Best case O(n) on sorted input; worst case O(n²) on reverse-sorted."""
+    for i in range(1, len(a)):
+        key = a[i]
+        j = i - 1
+        # Shift larger elements one slot right.
+        while j >= 0 and a[j] > key:
+            a[j + 1] = a[j]
+            j -= 1
+        # Drop the key into the gap.
+        a[j + 1] = key
+    return a
+
+
+# Example
+insertion_sort([5, 2, 4, 6, 1, 3])
+# → [1, 2, 3, 4, 5, 6]
+# On nearly-sorted input, almost every iteration takes O(1).`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "insertion_sort.cpp",
+      code: `// Insertion sort — adaptive, stable, in-place.
+// Best case O(n) on sorted input; worst case O(n²) on reverse-sorted.
+#include <vector>
+
+template <typename T>
+std::vector<T> insertionSort(std::vector<T> a) {
+    for (int i = 1; i < (int) a.size(); i++) {
+        T key = a[i];
+        int j = i - 1;
+        // Shift larger elements one slot right.
+        while (j >= 0 && a[j] > key) {
+            a[j + 1] = a[j];
+            j--;
+        }
+        // Drop the key into the gap.
+        a[j + 1] = key;
+    }
+    return a;
+}
+
+// Example
+// insertionSort<int>({5, 2, 4, 6, 1, 3});
+// → [1, 2, 3, 4, 5, 6]
+// On nearly-sorted input, almost every iteration takes O(1).`,
+    },
+  ],
 
   furtherReading: [
     {

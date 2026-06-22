@@ -111,54 +111,292 @@ export const twoPhaseCommit: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "two-phase-commit.ts",
-    code: `// Coordinator-side 2PC. Each participant exposes prepare/commit/abort
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "two_phase_commit.go",
+      code: `// Coordinator-side 2PC. Each participant exposes Prepare/Commit/Abort
 // and persists its decision durably before replying.
-type Vote = "YES" | "NO";
-interface Participant {
-  prepare(txId: string): Promise<Vote>;
-  commit(txId: string): Promise<void>;
-  abort(txId: string): Promise<void>;
+type Vote string
+
+const (
+	VoteYes Vote = "YES"
+	VoteNo  Vote = "NO"
+)
+
+type Participant interface {
+	Prepare(txId string) (Vote, error)
+	Commit(txId string) error
+	Abort(txId string) error
 }
 
-async function twoPhaseCommit(
-  txId: string,
-  participants: Participant[],
-  log: { write(line: string): Promise<void> },
-): Promise<"COMMITTED" | "ABORTED"> {
-  await log.write(\`BEGIN \${txId}\`);
+type Log interface {
+	Write(line string) error
+}
 
-  // Phase 1 — Prepare
-  let votes: Vote[];
-  try {
-    votes = await Promise.all(participants.map(p => p.prepare(txId)));
-  } catch {
-    // a participant failed to prepare — treat as NO
-    await log.write(\`ABORT \${txId}\`);
-    await Promise.allSettled(participants.map(p => p.abort(txId)));
-    return "ABORTED";
-  }
+func twoPhaseCommit(txId string, participants []Participant, log Log) string {
+	log.Write("BEGIN " + txId)
 
-  // Phase 2 — Decide
-  const allYes = votes.every(v => v === "YES");
-  if (allYes) {
-    await log.write(\`COMMIT \${txId}\`); // <- the durable decision
-    // Retry forever; participants must eventually apply the commit.
-    await retryAll(() => participants.map(p => p.commit(txId)));
-    return "COMMITTED";
-  } else {
-    await log.write(\`ABORT \${txId}\`);
-    await retryAll(() => participants.map(p => p.abort(txId)));
-    return "ABORTED";
-  }
+	// Phase 1 — Prepare
+	votes := make([]Vote, len(participants))
+	var mu sync.Mutex
+	g, _ := errgroup.WithContext(context.Background())
+	for i, p := range participants {
+		i, p := i, p
+		g.Go(func() error {
+			v, err := p.Prepare(txId)
+			if err != nil {
+				return err
+			}
+			mu.Lock()
+			votes[i] = v
+			mu.Unlock()
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		// a participant failed to prepare — treat as NO
+		log.Write("ABORT " + txId)
+		abortAll(participants, txId) // best-effort, like Promise.allSettled
+		return "ABORTED"
+	}
+
+	// Phase 2 — Decide
+	allYes := true
+	for _, v := range votes {
+		if v != VoteYes {
+			allYes = false
+			break
+		}
+	}
+	if allYes {
+		log.Write("COMMIT " + txId) // <- the durable decision
+		// Retry forever; participants must eventually apply the commit.
+		retryAll(func() []func() error {
+			calls := make([]func() error, len(participants))
+			for i, p := range participants {
+				p := p
+				calls[i] = func() error { return p.Commit(txId) }
+			}
+			return calls
+		})
+		return "COMMITTED"
+	}
+	log.Write("ABORT " + txId)
+	retryAll(func() []func() error {
+		calls := make([]func() error, len(participants))
+		for i, p := range participants {
+			p := p
+			calls[i] = func() error { return p.Abort(txId) }
+		}
+		return calls
+	})
+	return "ABORTED"
 }
 
 // On recovery, the coordinator reads its log: if it sees COMMIT/ABORT
 // for txId, it replays the broadcast. If it sees BEGIN but no decision,
 // it aborts. That single-source-of-truth log is what makes 2PC atomic.`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "TwoPhaseCommit.java",
+      code: `// Coordinator-side 2PC. Each participant exposes prepare/commit/abort
+// and persists its decision durably before replying.
+enum Vote { YES, NO }
+
+interface Participant {
+    CompletableFuture<Vote> prepare(String txId);
+    CompletableFuture<Void> commit(String txId);
+    CompletableFuture<Void> abort(String txId);
+}
+
+interface Log {
+    CompletableFuture<Void> write(String line);
+}
+
+String twoPhaseCommit(String txId, List<Participant> participants, Log log) {
+    log.write("BEGIN " + txId).join();
+
+    // Phase 1 — Prepare
+    List<Vote> votes;
+    try {
+        List<CompletableFuture<Vote>> prepares = participants.stream()
+            .map(p -> p.prepare(txId))
+            .toList();
+        CompletableFuture.allOf(prepares.toArray(new CompletableFuture[0])).join();
+        votes = prepares.stream().map(CompletableFuture::join).toList();
+    } catch (CompletionException ex) {
+        // a participant failed to prepare — treat as NO
+        log.write("ABORT " + txId).join();
+        // best-effort, like Promise.allSettled
+        participants.forEach(p -> p.abort(txId).exceptionally(t -> null).join());
+        return "ABORTED";
+    }
+
+    // Phase 2 — Decide
+    boolean allYes = votes.stream().allMatch(v -> v == Vote.YES);
+    if (allYes) {
+        log.write("COMMIT " + txId).join(); // <- the durable decision
+        // Retry forever; participants must eventually apply the commit.
+        retryAll(() -> participants.stream()
+            .map(p -> (Supplier<CompletableFuture<Void>>) () -> p.commit(txId))
+            .toList());
+        return "COMMITTED";
+    } else {
+        log.write("ABORT " + txId).join();
+        retryAll(() -> participants.stream()
+            .map(p -> (Supplier<CompletableFuture<Void>>) () -> p.abort(txId))
+            .toList());
+        return "ABORTED";
+    }
+}
+
+// On recovery, the coordinator reads its log: if it sees COMMIT/ABORT
+// for txId, it replays the broadcast. If it sees BEGIN but no decision,
+// it aborts. That single-source-of-truth log is what makes 2PC atomic.`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "two_phase_commit.py",
+      code: `# Coordinator-side 2PC. Each participant exposes prepare/commit/abort
+# and persists its decision durably before replying.
+from enum import Enum
+from typing import Protocol
+import asyncio
+
+
+class Vote(str, Enum):
+    YES = "YES"
+    NO = "NO"
+
+
+class Participant(Protocol):
+    async def prepare(self, tx_id: str) -> Vote: ...
+    async def commit(self, tx_id: str) -> None: ...
+    async def abort(self, tx_id: str) -> None: ...
+
+
+class Log(Protocol):
+    async def write(self, line: str) -> None: ...
+
+
+async def two_phase_commit(
+    tx_id: str,
+    participants: list[Participant],
+    log: Log,
+) -> str:
+    await log.write(f"BEGIN {tx_id}")
+
+    # Phase 1 — Prepare
+    try:
+        votes = await asyncio.gather(*(p.prepare(tx_id) for p in participants))
+    except Exception:
+        # a participant failed to prepare — treat as NO
+        await log.write(f"ABORT {tx_id}")
+        # best-effort, like Promise.allSettled
+        await asyncio.gather(
+            *(p.abort(tx_id) for p in participants), return_exceptions=True
+        )
+        return "ABORTED"
+
+    # Phase 2 — Decide
+    all_yes = all(v == Vote.YES for v in votes)
+    if all_yes:
+        await log.write(f"COMMIT {tx_id}")  # <- the durable decision
+        # Retry forever; participants must eventually apply the commit.
+        await retry_all(lambda: [p.commit(tx_id) for p in participants])
+        return "COMMITTED"
+    else:
+        await log.write(f"ABORT {tx_id}")
+        await retry_all(lambda: [p.abort(tx_id) for p in participants])
+        return "ABORTED"
+
+
+# On recovery, the coordinator reads its log: if it sees COMMIT/ABORT
+# for tx_id, it replays the broadcast. If it sees BEGIN but no decision,
+# it aborts. That single-source-of-truth log is what makes 2PC atomic.`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "two_phase_commit.cpp",
+      code: `// Coordinator-side 2PC. Each participant exposes prepare/commit/abort
+// and persists its decision durably before replying.
+enum class Vote { Yes, No };
+
+struct Participant {
+    virtual std::future<Vote> prepare(const std::string& txId) = 0;
+    virtual std::future<void> commit(const std::string& txId) = 0;
+    virtual std::future<void> abort(const std::string& txId) = 0;
+    virtual ~Participant() = default;
+};
+
+struct Log {
+    virtual void write(const std::string& line) = 0;
+    virtual ~Log() = default;
+};
+
+std::string twoPhaseCommit(
+    const std::string& txId,
+    std::vector<Participant*>& participants,
+    Log& log) {
+    log.write("BEGIN " + txId);
+
+    // Phase 1 — Prepare
+    std::vector<Vote> votes;
+    try {
+        std::vector<std::future<Vote>> prepares;
+        for (auto* p : participants)
+            prepares.push_back(p->prepare(txId)); // fan out
+        for (auto& f : prepares)
+            votes.push_back(f.get()); // join; .get() rethrows on failure
+    } catch (...) {
+        // a participant failed to prepare — treat as NO
+        log.write("ABORT " + txId);
+        // best-effort, like Promise.allSettled
+        std::vector<std::future<void>> aborts;
+        for (auto* p : participants)
+            aborts.push_back(p->abort(txId));
+        for (auto& f : aborts) {
+            try { f.get(); } catch (...) {}
+        }
+        return "ABORTED";
+    }
+
+    // Phase 2 — Decide
+    bool allYes = std::all_of(votes.begin(), votes.end(),
+                              [](Vote v) { return v == Vote::Yes; });
+    if (allYes) {
+        log.write("COMMIT " + txId); // <- the durable decision
+        // Retry forever; participants must eventually apply the commit.
+        retryAll([&] {
+            std::vector<std::function<std::future<void>()>> calls;
+            for (auto* p : participants)
+                calls.push_back([p, &txId] { return p->commit(txId); });
+            return calls;
+        });
+        return "COMMITTED";
+    } else {
+        log.write("ABORT " + txId);
+        retryAll([&] {
+            std::vector<std::function<std::future<void>()>> calls;
+            for (auto* p : participants)
+                calls.push_back([p, &txId] { return p->abort(txId); });
+            return calls;
+        });
+        return "ABORTED";
+    }
+}
+
+// On recovery, the coordinator reads its log: if it sees COMMIT/ABORT
+// for txId, it replays the broadcast. If it sees BEGIN but no decision,
+// it aborts. That single-source-of-truth log is what makes 2PC atomic.`,
+    },
+  ],
 
   furtherReading: [
     {

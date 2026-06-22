@@ -109,85 +109,441 @@ export const adaptive: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "adaptive.ts",
-    code: `// Adaptive breaker: exp-backoff cooldown + ramped recovery.
-type State = "CLOSED" | "OPEN" | "RECOVERING";
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "adaptive.go",
+      code: `// Adaptive breaker: exp-backoff cooldown + ramped recovery.
+package breaker
+
+import (
+	"errors"
+	"math"
+	"math/rand"
+	"time"
+)
+
+var (
+	ErrOpen      = errors.New("circuit open")
+	ErrHeldBack  = errors.New("recovering · held back")
+	admitLevels  = []int{10, 25, 50, 100} // % admission during recovery
+)
+
+type AdaptiveBreaker struct {
+	state     string // "CLOSED" | "OPEN" | "RECOVERING"
+	calls     []bool
+	streak    int // re-trip count, drives backoff
+	cooldown  time.Duration
+	openUntil time.Time
+	rampIdx   int
+	rampOk    int
+
+	size         int
+	threshold    float64
+	base         time.Duration
+	max          time.Duration
+	probesPerStep int
+}
+
+func NewAdaptiveBreaker() *AdaptiveBreaker {
+	base := 3_000 * time.Millisecond
+	return &AdaptiveBreaker{
+		state:         "CLOSED",
+		cooldown:      base,
+		size:          12,
+		threshold:     0.5,
+		base:          base,
+		max:           24_000 * time.Millisecond,
+		probesPerStep: 2,
+	}
+}
+
+func (cb *AdaptiveBreaker) Call(work func() error) error {
+	if cb.state == "OPEN" && !time.Now().Before(cb.openUntil) {
+		cb.toRecovering()
+	}
+	if cb.state == "OPEN" {
+		return ErrOpen
+	}
+
+	if cb.state == "RECOVERING" {
+		// Admit a probabilistic slice; the rest are short-circuited.
+		admit := admitLevels[cb.rampIdx]
+		if rand.Float64()*100 >= float64(admit) {
+			return ErrHeldBack
+		}
+	}
+
+	if err := work(); err != nil {
+		cb.onResult(false)
+		return err
+	}
+	cb.onResult(true)
+	return nil
+}
+
+func (cb *AdaptiveBreaker) onResult(ok bool) {
+	if cb.state == "RECOVERING" {
+		if !ok {
+			cb.trip()
+			return
+		}
+		cb.rampOk++
+		if cb.rampOk >= cb.probesPerStep {
+			if cb.rampIdx < len(admitLevels)-1 {
+				cb.rampIdx++
+				cb.rampOk = 0
+			} else {
+				cb.close()
+			}
+		}
+		return
+	}
+	cb.calls = append(cb.calls, ok)
+	if len(cb.calls) > cb.size {
+		cb.calls = cb.calls[1:]
+	}
+	fails := 0
+	for _, c := range cb.calls {
+		if !c {
+			fails++
+		}
+	}
+	minCalls := cb.size
+	if minCalls > 5 {
+		minCalls = 5
+	}
+	if len(cb.calls) >= minCalls && float64(fails)/float64(len(cb.calls)) >= cb.threshold {
+		cb.trip()
+	}
+}
+
+func (cb *AdaptiveBreaker) trip() {
+	cb.streak++
+	backoff := time.Duration(float64(cb.base) * math.Pow(2, float64(cb.streak-1)))
+	if backoff > cb.max {
+		backoff = cb.max
+	}
+	cb.cooldown = backoff
+	cb.state = "OPEN"
+	cb.openUntil = time.Now().Add(cb.cooldown)
+	cb.rampIdx = 0
+	cb.rampOk = 0
+}
+
+func (cb *AdaptiveBreaker) toRecovering() {
+	cb.state = "RECOVERING"
+	cb.rampIdx = 0
+	cb.rampOk = 0
+}
+
+func (cb *AdaptiveBreaker) close() {
+	cb.state = "CLOSED"
+	cb.calls = nil
+	cb.streak = 0
+	cb.cooldown = cb.base
+	cb.rampIdx = 0
+	cb.rampOk = 0
+}`,
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "AdaptiveBreaker.java",
+      code: `// Adaptive breaker: exp-backoff cooldown + ramped recovery.
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ThreadLocalRandom;
 
 class AdaptiveBreaker {
-  private state: State = "CLOSED";
-  private calls: boolean[] = [];
-  private streak = 0;                 // re-trip count, drives backoff
-  private cooldownMs;
-  private openUntil = 0;
-  private rampIdx = 0;
-  private rampOk = 0;
+    // 10 → 25 → 50 → 100% admission during recovery
+    private static final int[] ADMIT = {10, 25, 50, 100};
 
-  // 10 → 25 → 50 → 100% admission during recovery
-  private static ADMIT = [10, 25, 50, 100];
+    private String state = "CLOSED";              // "CLOSED" | "OPEN" | "RECOVERING"
+    private final Deque<Boolean> calls = new ArrayDeque<>();
+    private int streak = 0;                        // re-trip count, drives backoff
+    private long cooldownMs;
+    private long openUntil = 0;
+    private int rampIdx = 0;
+    private int rampOk = 0;
 
-  constructor(
-    private size = 12,
-    private threshold = 0.5,
-    private baseMs = 3_000,
-    private maxMs = 24_000,
-    private probesPerStep = 2,
-  ) { this.cooldownMs = baseMs; }
+    private final int size;
+    private final double threshold;
+    private final long baseMs;
+    private final long maxMs;
+    private final int probesPerStep;
 
-  async call<T>(work: () => Promise<T>): Promise<T> {
-    if (this.state === "OPEN" && Date.now() >= this.openUntil) this.toRecovering();
-    if (this.state === "OPEN") throw new Error("circuit open");
-
-    if (this.state === "RECOVERING") {
-      // Admit a probabilistic slice; the rest are short-circuited.
-      const admit = AdaptiveBreaker.ADMIT[this.rampIdx];
-      if (Math.random() * 100 >= admit) throw new Error("recovering · held back");
+    AdaptiveBreaker(int size, double threshold, long baseMs, long maxMs, int probesPerStep) {
+        this.size = size;
+        this.threshold = threshold;
+        this.baseMs = baseMs;
+        this.maxMs = maxMs;
+        this.probesPerStep = probesPerStep;
+        this.cooldownMs = baseMs;
     }
 
-    try {
-      const result = await work();
-      this.onResult(true);
-      return result;
-    } catch (err) {
-      this.onResult(false);
-      throw err;
-    }
-  }
+    <T> T call(Callable<T> work) throws Exception {
+        if (state.equals("OPEN") && System.currentTimeMillis() >= openUntil) toRecovering();
+        if (state.equals("OPEN")) throw new IllegalStateException("circuit open");
 
-  private onResult(ok: boolean) {
-    if (this.state === "RECOVERING") {
-      if (!ok) { this.trip(); return; }
-      this.rampOk++;
-      if (this.rampOk >= this.probesPerStep) {
-        if (this.rampIdx < AdaptiveBreaker.ADMIT.length - 1) {
-          this.rampIdx++; this.rampOk = 0;
-        } else { this.close(); }
-      }
-      return;
-    }
-    this.calls.push(ok);
-    if (this.calls.length > this.size) this.calls.shift();
-    const fails = this.calls.filter(c => !c).length;
-    if (this.calls.length >= Math.min(5, this.size) && fails / this.calls.length >= this.threshold) {
-      this.trip();
-    }
-  }
+        if (state.equals("RECOVERING")) {
+            // Admit a probabilistic slice; the rest are short-circuited.
+            int admit = ADMIT[rampIdx];
+            if (ThreadLocalRandom.current().nextDouble() * 100 >= admit) {
+                throw new IllegalStateException("recovering · held back");
+            }
+        }
 
-  private trip() {
-    this.streak++;
-    this.cooldownMs = Math.min(this.baseMs * 2 ** (this.streak - 1), this.maxMs);
-    this.state = "OPEN";
-    this.openUntil = Date.now() + this.cooldownMs;
-    this.rampIdx = 0; this.rampOk = 0;
-  }
-  private toRecovering() { this.state = "RECOVERING"; this.rampIdx = 0; this.rampOk = 0; }
-  private close() {
-    this.state = "CLOSED"; this.calls = []; this.streak = 0;
-    this.cooldownMs = this.baseMs; this.rampIdx = 0; this.rampOk = 0;
-  }
+        try {
+            T result = work.call();
+            onResult(true);
+            return result;
+        } catch (Exception err) {
+            onResult(false);
+            throw err;
+        }
+    }
+
+    private void onResult(boolean ok) {
+        if (state.equals("RECOVERING")) {
+            if (!ok) { trip(); return; }
+            rampOk++;
+            if (rampOk >= probesPerStep) {
+                if (rampIdx < ADMIT.length - 1) { rampIdx++; rampOk = 0; }
+                else close();
+            }
+            return;
+        }
+        calls.addLast(ok);
+        if (calls.size() > size) calls.removeFirst();
+        long fails = calls.stream().filter(c -> !c).count();
+        if (calls.size() >= Math.min(5, size) && (double) fails / calls.size() >= threshold) {
+            trip();
+        }
+    }
+
+    private void trip() {
+        streak++;
+        cooldownMs = Math.min((long) (baseMs * Math.pow(2, streak - 1)), maxMs);
+        state = "OPEN";
+        openUntil = System.currentTimeMillis() + cooldownMs;
+        rampIdx = 0; rampOk = 0;
+    }
+
+    private void toRecovering() { state = "RECOVERING"; rampIdx = 0; rampOk = 0; }
+
+    private void close() {
+        state = "CLOSED"; calls.clear(); streak = 0;
+        cooldownMs = baseMs; rampIdx = 0; rampOk = 0;
+    }
 }`,
-  },
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "adaptive.py",
+      code: `# Adaptive breaker: exp-backoff cooldown + ramped recovery.
+import random
+import time
+from collections import deque
+from typing import Callable, Deque, TypeVar
+
+T = TypeVar("T")
+
+# 10 → 25 → 50 → 100% admission during recovery
+ADMIT = [10, 25, 50, 100]
+
+
+class AdaptiveBreaker:
+    def __init__(
+        self,
+        size: int = 12,
+        threshold: float = 0.5,
+        base_s: float = 3.0,
+        max_s: float = 24.0,
+        probes_per_step: int = 2,
+    ) -> None:
+        self.state = "CLOSED"       # "CLOSED" | "OPEN" | "RECOVERING"
+        self.calls: Deque[bool] = deque()
+        self.streak = 0             # re-trip count, drives backoff
+        self.cooldown_s = base_s
+        self.open_until = 0.0
+        self.ramp_idx = 0
+        self.ramp_ok = 0
+        self.size = size
+        self.threshold = threshold
+        self.base_s = base_s
+        self.max_s = max_s
+        self.probes_per_step = probes_per_step
+
+    def call(self, work: Callable[[], T]) -> T:
+        if self.state == "OPEN" and time.monotonic() >= self.open_until:
+            self._to_recovering()
+        if self.state == "OPEN":
+            raise RuntimeError("circuit open")
+
+        if self.state == "RECOVERING":
+            # Admit a probabilistic slice; the rest are short-circuited.
+            admit = ADMIT[self.ramp_idx]
+            if random.random() * 100 >= admit:
+                raise RuntimeError("recovering · held back")
+
+        try:
+            result = work()
+        except Exception:
+            self._on_result(False)
+            raise
+        self._on_result(True)
+        return result
+
+    def _on_result(self, ok: bool) -> None:
+        if self.state == "RECOVERING":
+            if not ok:
+                self._trip()
+                return
+            self.ramp_ok += 1
+            if self.ramp_ok >= self.probes_per_step:
+                if self.ramp_idx < len(ADMIT) - 1:
+                    self.ramp_idx += 1
+                    self.ramp_ok = 0
+                else:
+                    self._close()
+            return
+        self.calls.append(ok)
+        if len(self.calls) > self.size:
+            self.calls.popleft()
+        fails = sum(1 for c in self.calls if not c)
+        if len(self.calls) >= min(5, self.size) and fails / len(self.calls) >= self.threshold:
+            self._trip()
+
+    def _trip(self) -> None:
+        self.streak += 1
+        self.cooldown_s = min(self.base_s * 2 ** (self.streak - 1), self.max_s)
+        self.state = "OPEN"
+        self.open_until = time.monotonic() + self.cooldown_s
+        self.ramp_idx = 0
+        self.ramp_ok = 0
+
+    def _to_recovering(self) -> None:
+        self.state = "RECOVERING"
+        self.ramp_idx = 0
+        self.ramp_ok = 0
+
+    def _close(self) -> None:
+        self.state = "CLOSED"
+        self.calls.clear()
+        self.streak = 0
+        self.cooldown_s = self.base_s
+        self.ramp_idx = 0
+        self.ramp_ok = 0`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "adaptive.cpp",
+      code: `// Adaptive breaker: exp-backoff cooldown + ramped recovery.
+#include <array>
+#include <chrono>
+#include <cmath>
+#include <deque>
+#include <functional>
+#include <random>
+#include <stdexcept>
+#include <string>
+
+class AdaptiveBreaker {
+    using Clock = std::chrono::steady_clock;
+
+    // 10 → 25 → 50 → 100% admission during recovery
+    static constexpr std::array<int, 4> ADMIT = {10, 25, 50, 100};
+
+    std::string state_ = "CLOSED";  // "CLOSED" | "OPEN" | "RECOVERING"
+    std::deque<bool> calls_;
+    int streak_ = 0;                // re-trip count, drives backoff
+    std::chrono::milliseconds cooldown_;
+    Clock::time_point openUntil_;
+    int rampIdx_ = 0;
+    int rampOk_ = 0;
+
+    int size_;
+    double threshold_;
+    std::chrono::milliseconds base_;
+    std::chrono::milliseconds max_;
+    int probesPerStep_;
+
+    std::mt19937 rng_{std::random_device{}()};
+    std::uniform_real_distribution<double> dist_{0.0, 1.0};
+
+public:
+    AdaptiveBreaker(int size = 12, double threshold = 0.5, int baseMs = 3000,
+                    int maxMs = 24000, int probesPerStep = 2)
+        : cooldown_(baseMs), size_(size), threshold_(threshold),
+          base_(baseMs), max_(maxMs), probesPerStep_(probesPerStep) {}
+
+    // work() returns true on success, throws or returns false on failure.
+    void call(const std::function<bool()>& work) {
+        if (state_ == "OPEN" && Clock::now() >= openUntil_) toRecovering();
+        if (state_ == "OPEN") throw std::runtime_error("circuit open");
+
+        if (state_ == "RECOVERING") {
+            // Admit a probabilistic slice; the rest are short-circuited.
+            int admit = ADMIT[rampIdx_];
+            if (dist_(rng_) * 100 >= admit) throw std::runtime_error("recovering · held back");
+        }
+
+        bool ok = false;
+        try {
+            ok = work();
+        } catch (...) {
+            onResult(false);
+            throw;
+        }
+        onResult(ok);
+    }
+
+private:
+    void onResult(bool ok) {
+        if (state_ == "RECOVERING") {
+            if (!ok) { trip(); return; }
+            rampOk_++;
+            if (rampOk_ >= probesPerStep_) {
+                if (rampIdx_ < static_cast<int>(ADMIT.size()) - 1) { rampIdx_++; rampOk_ = 0; }
+                else close();
+            }
+            return;
+        }
+        calls_.push_back(ok);
+        if (static_cast<int>(calls_.size()) > size_) calls_.pop_front();
+        int fails = 0;
+        for (bool c : calls_) if (!c) fails++;
+        int minCalls = std::min(5, size_);
+        if (static_cast<int>(calls_.size()) >= minCalls &&
+            static_cast<double>(fails) / calls_.size() >= threshold_) {
+            trip();
+        }
+    }
+
+    void trip() {
+        streak_++;
+        auto backoff = std::chrono::milliseconds(
+            static_cast<long>(base_.count() * std::pow(2, streak_ - 1)));
+        cooldown_ = backoff > max_ ? max_ : backoff;
+        state_ = "OPEN";
+        openUntil_ = Clock::now() + cooldown_;
+        rampIdx_ = 0; rampOk_ = 0;
+    }
+
+    void toRecovering() { state_ = "RECOVERING"; rampIdx_ = 0; rampOk_ = 0; }
+
+    void close() {
+        state_ = "CLOSED"; calls_.clear(); streak_ = 0;
+        cooldown_ = base_; rampIdx_ = 0; rampOk_ = 0;
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

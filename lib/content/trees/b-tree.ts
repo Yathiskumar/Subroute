@@ -117,10 +117,12 @@ export const bTree: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "b-tree.ts",
-    code: `// Minimal B-tree: search + insert-with-split. Order is configurable.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "b-tree.ts",
+      code: `// Minimal B-tree: search + insert-with-split. Order is configurable.
 // "Order m" means: max m children, max m-1 keys, min ⌈m/2⌉-1 keys (non-root).
 
 const ORDER = 4; // prototype uses order 4 (max 3 keys/node)
@@ -200,7 +202,282 @@ function splitChild(parent: BNode, i: number): void {
   parent.keys.splice(i, 0, promoted);            // promote
   parent.children.splice(i + 1, 0, right);       // link right sibling
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "BTree.java",
+      code: `// Minimal B-tree: search + insert-with-split. Order is configurable.
+// "Order m" means: max m children, max m-1 keys, min ⌈m/2⌉-1 keys (non-root).
+
+import java.util.ArrayList;
+import java.util.List;
+
+class BTree {
+    static final int ORDER = 4; // prototype uses order 4 (max 3 keys/node)
+    static final int MAX_KEYS = ORDER - 1;                  // 3
+    static final int MIN_KEYS = (int) Math.ceil(ORDER / 2.0) - 1; // 1
+
+    static class BNode {
+        List<Integer> keys = new ArrayList<>();
+        List<BNode> children = new ArrayList<>();
+        boolean isLeaf;
+
+        BNode(boolean isLeaf) { this.isLeaf = isLeaf; }
+    }
+
+    private BNode root = new BNode(true);
+
+    // --- Search ---
+    // Returns true if key exists anywhere in the subtree rooted at node.
+    boolean search(BNode node, int key) {
+        int i = 0;
+        while (i < node.keys.size() && key > node.keys.get(i)) i++;
+
+        if (i < node.keys.size() && key == node.keys.get(i)) return true; // found
+        if (node.isLeaf) return false;                                    // not here
+        return search(node.children.get(i), key);                         // descend
+    }
+
+    // --- Insert (non-full root entry point) ---
+    void insert(int key) {
+        if (root.keys.size() == MAX_KEYS) {
+            // Root is full — split it and grow the tree upward.
+            BNode oldRoot = root;
+            root = new BNode(false);
+            root.children.add(oldRoot);
+            splitChild(root, 0); // split the only child (oldRoot)
+        }
+        insertNonFull(root, key);
+    }
+
+    // Precondition: node has room for at least one more key.
+    private void insertNonFull(BNode node, int key) {
+        int i = node.keys.size() - 1;
+        if (node.isLeaf) {
+            node.keys.add(0); // make room
+            while (i >= 0 && key < node.keys.get(i)) {
+                node.keys.set(i + 1, node.keys.get(i));
+                i--;
+            }
+            node.keys.set(i + 1, key);
+        } else {
+            while (i >= 0 && key < node.keys.get(i)) i--;
+            i++;
+            if (node.children.get(i).keys.size() == MAX_KEYS) {
+                splitChild(node, i);
+                if (key > node.keys.get(i)) i++;
+            }
+            insertNonFull(node.children.get(i), key);
+        }
+    }
+
+    // Split the i-th child of parent (which must be full).
+    // Middle key is promoted into parent; two half-nodes remain.
+    private void splitChild(BNode parent, int i) {
+        BNode full = parent.children.get(i);
+        int mid = MAX_KEYS / 2; // index of the promoted key
+        BNode right = new BNode(full.isLeaf);
+
+        // right half: keys after the middle
+        right.keys = new ArrayList<>(full.keys.subList(mid + 1, full.keys.size()));
+        int promoted = full.keys.get(mid);                  // middle key
+        // trim full to just the left half (keys before mid)
+        full.keys = new ArrayList<>(full.keys.subList(0, mid));
+
+        if (!full.isLeaf) {
+            right.children =
+                new ArrayList<>(full.children.subList(mid + 1, full.children.size()));
+            full.children = new ArrayList<>(full.children.subList(0, mid + 1));
+        }
+
+        parent.keys.add(i, promoted);             // promote
+        parent.children.add(i + 1, right);        // link right sibling
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "b_tree.py",
+      code: `# Minimal B-tree: search + insert-with-split. Order is configurable.
+# "Order m" means: max m children, max m-1 keys, min ⌈m/2⌉-1 keys (non-root).
+
+import math
+
+ORDER = 4  # prototype uses order 4 (max 3 keys/node)
+MAX_KEYS = ORDER - 1                       # 3
+MIN_KEYS = math.ceil(ORDER / 2) - 1        # 1
+
+
+class BNode:
+    def __init__(self, is_leaf: bool) -> None:
+        self.keys: list[int] = []
+        self.children: list["BNode"] = []
+        self.is_leaf = is_leaf
+
+
+# --- Search ---
+# Returns True if key exists anywhere in the subtree rooted at node.
+def search(node: BNode, key: int) -> bool:
+    i = 0
+    while i < len(node.keys) and key > node.keys[i]:
+        i += 1
+
+    if i < len(node.keys) and key == node.keys[i]:
+        return True            # found
+    if node.is_leaf:
+        return False           # not here
+    return search(node.children[i], key)  # descend
+
+
+# --- Insert (non-full root entry point) ---
+root = BNode(is_leaf=True)
+
+
+def insert(key: int) -> None:
+    global root
+    if len(root.keys) == MAX_KEYS:
+        # Root is full — split it and grow the tree upward.
+        old_root = root
+        root = BNode(is_leaf=False)
+        root.children.append(old_root)
+        split_child(root, 0)  # split the only child (old_root)
+    insert_non_full(root, key)
+
+
+# Precondition: node has room for at least one more key.
+def insert_non_full(node: BNode, key: int) -> None:
+    i = len(node.keys) - 1
+    if node.is_leaf:
+        node.keys.append(0)  # make room
+        while i >= 0 and key < node.keys[i]:
+            node.keys[i + 1] = node.keys[i]
+            i -= 1
+        node.keys[i + 1] = key
+    else:
+        while i >= 0 and key < node.keys[i]:
+            i -= 1
+        i += 1
+        if len(node.children[i].keys) == MAX_KEYS:
+            split_child(node, i)
+            if key > node.keys[i]:
+                i += 1
+        insert_non_full(node.children[i], key)
+
+
+# Split the i-th child of parent (which must be full).
+# Middle key is promoted into parent; two half-nodes remain.
+def split_child(parent: BNode, i: int) -> None:
+    full = parent.children[i]
+    mid = MAX_KEYS // 2  # index of the promoted key
+    right = BNode(is_leaf=full.is_leaf)
+
+    right.keys = full.keys[mid + 1:]        # right half
+    promoted = full.keys[mid]               # middle key
+    full.keys = full.keys[:mid]             # left half
+
+    if not full.is_leaf:
+        right.children = full.children[mid + 1:]
+        full.children = full.children[:mid + 1]
+
+    parent.keys.insert(i, promoted)         # promote
+    parent.children.insert(i + 1, right)    # link right sibling`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "b_tree.cpp",
+      code: `// Minimal B-tree: search + insert-with-split. Order is configurable.
+// "Order m" means: max m children, max m-1 keys, min ⌈m/2⌉-1 keys (non-root).
+#include <memory>
+#include <vector>
+
+constexpr int ORDER = 4; // prototype uses order 4 (max 3 keys/node)
+constexpr int MAX_KEYS = ORDER - 1;       // 3
+constexpr int MIN_KEYS = (ORDER + 1) / 2 - 1; // 1 = ceil(ORDER/2) - 1
+
+struct BNode {
+    std::vector<int> keys;
+    std::vector<std::unique_ptr<BNode>> children;
+    bool isLeaf;
+    explicit BNode(bool leaf) : isLeaf(leaf) {}
+};
+
+class BTree {
+    std::unique_ptr<BNode> root = std::make_unique<BNode>(true);
+
+public:
+    // --- Search ---
+    // Returns true if key exists anywhere in the subtree rooted at node.
+    bool search(BNode* node, int key) {
+        int i = 0;
+        while (i < (int)node->keys.size() && key > node->keys[i]) i++;
+
+        if (i < (int)node->keys.size() && key == node->keys[i]) return true; // found
+        if (node->isLeaf) return false;                                      // not here
+        return search(node->children[i].get(), key);                         // descend
+    }
+
+    // --- Insert (non-full root entry point) ---
+    void insert(int key) {
+        if ((int)root->keys.size() == MAX_KEYS) {
+            // Root is full — split it and grow the tree upward.
+            auto newRoot = std::make_unique<BNode>(false);
+            newRoot->children.push_back(std::move(root));
+            root = std::move(newRoot);
+            splitChild(root.get(), 0); // split the only child (oldRoot)
+        }
+        insertNonFull(root.get(), key);
+    }
+
+private:
+    // Precondition: node has room for at least one more key.
+    void insertNonFull(BNode* node, int key) {
+        int i = (int)node->keys.size() - 1;
+        if (node->isLeaf) {
+            node->keys.push_back(0); // make room
+            while (i >= 0 && key < node->keys[i]) {
+                node->keys[i + 1] = node->keys[i];
+                i--;
+            }
+            node->keys[i + 1] = key;
+        } else {
+            while (i >= 0 && key < node->keys[i]) i--;
+            i++;
+            if ((int)node->children[i]->keys.size() == MAX_KEYS) {
+                splitChild(node, i);
+                if (key > node->keys[i]) i++;
+            }
+            insertNonFull(node->children[i].get(), key);
+        }
+    }
+
+    // Split the i-th child of parent (which must be full).
+    // Middle key is promoted into parent; two half-nodes remain.
+    void splitChild(BNode* parent, int i) {
+        BNode* full = parent->children[i].get();
+        int mid = MAX_KEYS / 2; // index of the promoted key
+        auto right = std::make_unique<BNode>(full->isLeaf);
+
+        // right half: keys after the middle
+        right->keys.assign(full->keys.begin() + mid + 1, full->keys.end());
+        int promoted = full->keys[mid];                 // middle key
+        full->keys.resize(mid);                          // left half
+
+        if (!full->isLeaf) {
+            for (int j = mid + 1; j < (int)full->children.size(); j++)
+                right->children.push_back(std::move(full->children[j]));
+            full->children.resize(mid + 1);
+        }
+
+        parent->keys.insert(parent->keys.begin() + i, promoted);  // promote
+        parent->children.insert(parent->children.begin() + i + 1,
+                                std::move(right));                // link right sibling
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

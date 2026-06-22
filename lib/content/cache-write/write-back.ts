@@ -87,10 +87,12 @@ export const writeBack: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "write-back.ts",
-    code: `// Write-back cache: writes touch cache only, flush on evict.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "write-back.ts",
+      code: `// Write-back cache: writes touch cache only, flush on evict.
 // Dirty bit tracks "cache has a newer value than the store".
 type Line<V> = { value: V; dirty: boolean };
 
@@ -138,7 +140,234 @@ class WriteBackCache<K, V> {
     this.cache.set(key, line);
   }
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "WriteBack.java",
+      code: `import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+// Write-back cache: writes touch cache only, flush on evict.
+// Dirty bit tracks "cache has a newer value than the store".
+interface Store<K, V> {
+    V get(K k);
+    void put(K k, V v);
+}
+
+class Line<V> {
+    V value;
+    boolean dirty;
+    Line(V value, boolean dirty) {
+        this.value = value;
+        this.dirty = dirty;
+    }
+}
+
+class WriteBackCache<K, V> {
+    // LinkedHashMap preserves insertion order, so the first entry is the oldest.
+    private final Map<K, Line<V>> cache = new LinkedHashMap<>();
+    private final int capacity;
+    private final Store<K, V> store;
+
+    WriteBackCache(int capacity, Store<K, V> store) {
+        this.capacity = capacity;
+        this.store = store;
+    }
+
+    V get(K key) {
+        Line<V> line = cache.get(key);
+        if (line != null) return line.value;
+        V v = store.get(key);
+        if (v != null) admit(key, new Line<>(v, false));
+        return v;
+    }
+
+    void set(K key, V value) {
+        Line<V> line = cache.get(key);
+        if (line != null) {
+            line.value = value;
+            line.dirty = true;
+            return;
+        }
+        // write-allocate: pull the line in (or just create it) and mark dirty
+        admit(key, new Line<>(value, true));
+    }
+
+    /** Explicit flush — call on shutdown, fsync, checkpoint. */
+    void flushAll() {
+        for (Map.Entry<K, Line<V>> e : cache.entrySet()) {
+            Line<V> line = e.getValue();
+            if (line.dirty) {
+                store.put(e.getKey(), line.value);
+                line.dirty = false;
+            }
+        }
+    }
+
+    private void admit(K key, Line<V> line) {
+        if (cache.size() >= capacity) {
+            Iterator<Map.Entry<K, Line<V>>> it = cache.entrySet().iterator();
+            Map.Entry<K, Line<V>> oldest = it.next();
+            if (oldest.getValue().dirty) {
+                store.put(oldest.getKey(), oldest.getValue().value); // flush on evict
+            }
+            it.remove();
+        }
+        cache.put(key, line);
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "write_back.py",
+      code: `from collections import OrderedDict
+from dataclasses import dataclass
+from typing import Generic, Optional, Protocol, TypeVar
+
+K = TypeVar("K")
+V = TypeVar("V")
+
+
+class Store(Protocol[K, V]):
+    def get(self, k: K) -> Optional[V]: ...
+    def put(self, k: K, v: V) -> None: ...
+
+
+@dataclass
+class Line(Generic[V]):
+    value: V
+    dirty: bool
+
+
+class WriteBackCache(Generic[K, V]):
+    """Write-back cache: writes touch cache only, flush on evict.
+
+    Dirty bit tracks "cache has a newer value than the store".
+    """
+
+    def __init__(self, capacity: int, store: Store[K, V]) -> None:
+        self.capacity = capacity
+        self.store = store
+        # OrderedDict preserves insertion order, so the first entry is the oldest.
+        self.cache: "OrderedDict[K, Line[V]]" = OrderedDict()
+
+    def get(self, key: K) -> Optional[V]:
+        if key in self.cache:
+            return self.cache[key].value
+        v = self.store.get(key)
+        if v is not None:
+            self._admit(key, Line(value=v, dirty=False))
+        return v
+
+    def set(self, key: K, value: V) -> None:
+        if key in self.cache:
+            line = self.cache[key]
+            line.value = value
+            line.dirty = True
+            return
+        # write-allocate: pull the line in (or just create it) and mark dirty
+        self._admit(key, Line(value=value, dirty=True))
+
+    def flush_all(self) -> None:
+        """Explicit flush — call on shutdown, fsync, checkpoint."""
+        for k, line in self.cache.items():
+            if line.dirty:
+                self.store.put(k, line.value)
+                line.dirty = False
+
+    def _admit(self, key: K, line: "Line[V]") -> None:
+        if len(self.cache) >= self.capacity:
+            oldest_k, oldest_l = next(iter(self.cache.items()))
+            if oldest_l.dirty:
+                self.store.put(oldest_k, oldest_l.value)  # flush on evict
+            del self.cache[oldest_k]
+        self.cache[key] = line`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "write_back.cpp",
+      code: `// Write-back cache: writes touch cache only, flush on evict.
+// Dirty bit tracks "cache has a newer value than the store".
+#include <list>
+#include <optional>
+#include <unordered_map>
+#include <utility>
+
+template <typename K, typename V>
+struct Store {
+    virtual std::optional<V> get(const K& k) = 0;
+    virtual void put(const K& k, const V& v) = 0;
+    virtual ~Store() = default;
+};
+
+template <typename V>
+struct Line {
+    V value;
+    bool dirty;
+};
+
+template <typename K, typename V>
+class WriteBackCache {
+    int capacity_;
+    Store<K, V>* store_;
+    // order_ tracks insertion order so the front is the oldest line.
+    std::list<K> order_;
+    std::unordered_map<K, std::pair<Line<V>, typename std::list<K>::iterator>> cache_;
+
+public:
+    WriteBackCache(int capacity, Store<K, V>* store)
+        : capacity_(capacity), store_(store) {}
+
+    std::optional<V> get(const K& key) {
+        auto it = cache_.find(key);
+        if (it != cache_.end()) return it->second.first.value;
+        std::optional<V> v = store_->get(key);
+        if (v) admit(key, Line<V>{*v, false});
+        return v;
+    }
+
+    void set(const K& key, const V& value) {
+        auto it = cache_.find(key);
+        if (it != cache_.end()) {
+            it->second.first.value = value;
+            it->second.first.dirty = true;
+            return;
+        }
+        // write-allocate: pull the line in (or just create it) and mark dirty
+        admit(key, Line<V>{value, true});
+    }
+
+    // Explicit flush — call on shutdown, fsync, checkpoint.
+    void flushAll() {
+        for (auto& [k, entry] : cache_) {
+            if (entry.first.dirty) {
+                store_->put(k, entry.first.value);
+                entry.first.dirty = false;
+            }
+        }
+    }
+
+private:
+    void admit(const K& key, const Line<V>& line) {
+        if (static_cast<int>(cache_.size()) >= capacity_) {
+            const K oldest = order_.front();
+            auto& entry = cache_[oldest];
+            if (entry.first.dirty) {
+                store_->put(oldest, entry.first.value); // flush on evict
+            }
+            cache_.erase(oldest);
+            order_.pop_front();
+        }
+        order_.push_back(key);
+        cache_[key] = {line, std::prev(order_.end())};
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

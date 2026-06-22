@@ -93,72 +93,303 @@ export const markCompact: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "mark-compact.ts",
-    code: `// Sliding (Lisp2-style) mark-compact: mark, compute new addresses,
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "mark_compact.go",
+      code: `// Sliding (Lisp2-style) mark-compact: mark, compute new addresses,
 // fix up every pointer, then slide survivors down to close the gaps.
-type Ref = number; // an index into the heap array
+package gc
 
-interface Cell {
-  marked: boolean;
-  forward: Ref;        // computed new address
-  refs: Ref[];         // outgoing pointers (heap indices)
-  live: boolean;       // occupied slot?
+type Ref = int // an index into the heap array
+
+type Cell struct {
+	marked  bool
+	forward Ref   // computed new address
+	refs    []Ref // outgoing pointers (heap indices)
+	live    bool  // occupied slot?
+}
+
+type MarkCompactHeap struct {
+	heap  []*Cell // nil entries are empty slots
+	roots []Ref
+}
+
+func (h *MarkCompactHeap) Collect() {
+	h.mark()
+	h.computeForwarding()
+	h.updatePointers()
+	h.moveObjects()
+}
+
+func (h *MarkCompactHeap) mark() {
+	work := append([]Ref{}, h.roots...)
+	for len(work) > 0 {
+		i := work[len(work)-1]
+		work = work[:len(work)-1]
+		c := h.heap[i]
+		if c == nil || c.marked {
+			continue
+		}
+		c.marked = true
+		work = append(work, c.refs...)
+	}
+}
+
+// Pass 1: assign each live object its packed destination address.
+func (h *MarkCompactHeap) computeForwarding() {
+	free := 0
+	for i := 0; i < len(h.heap); i++ {
+		c := h.heap[i]
+		if c != nil && c.marked {
+			c.forward = free
+			free++
+		}
+	}
+}
+
+// Pass 2: rewrite roots and references to the forwarding addresses.
+func (h *MarkCompactHeap) updatePointers() {
+	for i, r := range h.roots {
+		h.roots[i] = h.heap[r].forward
+	}
+	for _, c := range h.heap {
+		if c != nil && c.marked {
+			for i, r := range c.refs {
+				c.refs[i] = h.heap[r].forward
+			}
+		}
+	}
+}
+
+// Pass 3: slide each survivor down to its forwarding address.
+func (h *MarkCompactHeap) moveObjects() {
+	next := make([]*Cell, len(h.heap))
+	for _, c := range h.heap {
+		if c != nil && c.marked {
+			c.marked = false      // reset for next cycle
+			next[c.forward] = c   // move (slide) into place
+		}
+	}
+	h.heap = next // everything above the live block is free
+}`,
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "MarkCompact.java",
+      code: `// Sliding (Lisp2-style) mark-compact: mark, compute new addresses,
+// fix up every pointer, then slide survivors down to close the gaps.
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
+import java.util.List;
+
+class Cell {
+    boolean marked;
+    int forward;            // computed new address
+    List<Integer> refs = new ArrayList<>(); // outgoing pointers (heap indices)
+    boolean live;           // occupied slot?
 }
 
 class MarkCompactHeap {
-  heap: (Cell | null)[] = [];
-  roots: Ref[] = [];
+    List<Cell> heap = new ArrayList<>(); // null entries are empty slots
+    List<Integer> roots = new ArrayList<>();
 
-  collect(): void {
-    this.mark();
-    this.computeForwarding();
-    this.updatePointers();
-    this.moveObjects();
-  }
-
-  private mark(): void {
-    const work = [...this.roots];
-    while (work.length) {
-      const i = work.pop()!;
-      const c = this.heap[i];
-      if (!c || c.marked) continue;
-      c.marked = true;
-      work.push(...c.refs);
+    void collect() {
+        mark();
+        computeForwarding();
+        updatePointers();
+        moveObjects();
     }
-  }
 
-  // Pass 1: assign each live object its packed destination address.
-  private computeForwarding(): void {
-    let free = 0;
-    for (let i = 0; i < this.heap.length; i++) {
-      const c = this.heap[i];
-      if (c && c.marked) c.forward = free++;
+    private void mark() {
+        Deque<Integer> work = new ArrayDeque<>(roots);
+        while (!work.isEmpty()) {
+            int i = work.pop();
+            Cell c = heap.get(i);
+            if (c == null || c.marked) continue;
+            c.marked = true;
+            work.addAll(c.refs);
+        }
     }
-  }
 
-  // Pass 2: rewrite roots and references to the forwarding addresses.
-  private updatePointers(): void {
-    this.roots = this.roots.map((r) => this.heap[r]!.forward);
-    for (const c of this.heap) {
-      if (c && c.marked) c.refs = c.refs.map((r) => this.heap[r]!.forward);
+    // Pass 1: assign each live object its packed destination address.
+    private void computeForwarding() {
+        int free = 0;
+        for (int i = 0; i < heap.size(); i++) {
+            Cell c = heap.get(i);
+            if (c != null && c.marked) c.forward = free++;
+        }
     }
-  }
 
-  // Pass 3: slide each survivor down to its forwarding address.
-  private moveObjects(): void {
-    const next: (Cell | null)[] = [];
-    for (const c of this.heap) {
-      if (c && c.marked) {
-        c.marked = false;          // reset for next cycle
-        next[c.forward] = c;       // move (slide) into place
-      }
+    // Pass 2: rewrite roots and references to the forwarding addresses.
+    private void updatePointers() {
+        for (int i = 0; i < roots.size(); i++) {
+            roots.set(i, heap.get(roots.get(i)).forward);
+        }
+        for (Cell c : heap) {
+            if (c != null && c.marked) {
+                for (int i = 0; i < c.refs.size(); i++) {
+                    c.refs.set(i, heap.get(c.refs.get(i)).forward);
+                }
+            }
+        }
     }
-    this.heap = next;              // everything above the live block is free
-  }
+
+    // Pass 3: slide each survivor down to its forwarding address.
+    private void moveObjects() {
+        List<Cell> next = new ArrayList<>();
+        for (int i = 0; i < heap.size(); i++) next.add(null);
+        for (Cell c : heap) {
+            if (c != null && c.marked) {
+                c.marked = false;          // reset for next cycle
+                next.set(c.forward, c);    // move (slide) into place
+            }
+        }
+        heap = next;                       // everything above the live block is free
+    }
 }`,
-  },
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "mark_compact.py",
+      code: `# Sliding (Lisp2-style) mark-compact: mark, compute new addresses,
+# fix up every pointer, then slide survivors down to close the gaps.
+from typing import Optional
+
+Ref = int  # an index into the heap array
+
+
+class Cell:
+    def __init__(self) -> None:
+        self.marked = False
+        self.forward: Ref = 0          # computed new address
+        self.refs: list[Ref] = []      # outgoing pointers (heap indices)
+        self.live = False              # occupied slot?
+
+
+class MarkCompactHeap:
+    def __init__(self) -> None:
+        self.heap: list[Optional[Cell]] = []  # None entries are empty slots
+        self.roots: list[Ref] = []
+
+    def collect(self) -> None:
+        self._mark()
+        self._compute_forwarding()
+        self._update_pointers()
+        self._move_objects()
+
+    def _mark(self) -> None:
+        work = list(self.roots)
+        while work:
+            i = work.pop()
+            c = self.heap[i]
+            if c is None or c.marked:
+                continue
+            c.marked = True
+            work.extend(c.refs)
+
+    def _compute_forwarding(self) -> None:
+        """Pass 1: assign each live object its packed destination address."""
+        free = 0
+        for c in self.heap:
+            if c is not None and c.marked:
+                c.forward = free
+                free += 1
+
+    def _update_pointers(self) -> None:
+        """Pass 2: rewrite roots and references to the forwarding addresses."""
+        self.roots = [self.heap[r].forward for r in self.roots]  # type: ignore[union-attr]
+        for c in self.heap:
+            if c is not None and c.marked:
+                c.refs = [self.heap[r].forward for r in c.refs]  # type: ignore[union-attr]
+
+    def _move_objects(self) -> None:
+        """Pass 3: slide each survivor down to its forwarding address."""
+        nxt: list[Optional[Cell]] = [None] * len(self.heap)
+        for c in self.heap:
+            if c is not None and c.marked:
+                c.marked = False        # reset for next cycle
+                nxt[c.forward] = c      # move (slide) into place
+        self.heap = nxt                 # everything above the live block is free`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "mark_compact.cpp",
+      code: `// Sliding (Lisp2-style) mark-compact: mark, compute new addresses,
+// fix up every pointer, then slide survivors down to close the gaps.
+#include <vector>
+
+using Ref = int; // an index into the heap array
+
+struct Cell {
+    bool marked = false;
+    Ref forward = 0;          // computed new address
+    std::vector<Ref> refs;    // outgoing pointers (heap indices)
+    bool live = false;        // occupied slot?
+};
+
+class MarkCompactHeap {
+public:
+    std::vector<Cell*> heap;  // nullptr entries are empty slots
+    std::vector<Ref> roots;
+
+    void collect() {
+        mark();
+        computeForwarding();
+        updatePointers();
+        moveObjects();
+    }
+
+private:
+    void mark() {
+        std::vector<Ref> work(roots);
+        while (!work.empty()) {
+            Ref i = work.back();
+            work.pop_back();
+            Cell* c = heap[i];
+            if (!c || c->marked) continue;
+            c->marked = true;
+            for (Ref r : c->refs) work.push_back(r);
+        }
+    }
+
+    // Pass 1: assign each live object its packed destination address.
+    void computeForwarding() {
+        int free = 0;
+        for (Cell* c : heap) {
+            if (c && c->marked) c->forward = free++;
+        }
+    }
+
+    // Pass 2: rewrite roots and references to the forwarding addresses.
+    void updatePointers() {
+        for (Ref& r : roots) r = heap[r]->forward;
+        for (Cell* c : heap) {
+            if (c && c->marked) {
+                for (Ref& r : c->refs) r = heap[r]->forward;
+            }
+        }
+    }
+
+    // Pass 3: slide each survivor down to its forwarding address.
+    void moveObjects() {
+        std::vector<Cell*> next(heap.size(), nullptr);
+        for (Cell* c : heap) {
+            if (c && c->marked) {
+                c->marked = false;        // reset for next cycle
+                next[c->forward] = c;     // move (slide) into place
+            }
+        }
+        heap = next;                      // everything above the live block is free
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

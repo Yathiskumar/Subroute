@@ -115,83 +115,461 @@ export const raftElection: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "raft-election.ts",
-    code: `// Raft-style leader election. Two RPCs: RequestVote (election) and AppendEntries (heartbeat).
-type Role = "follower" | "candidate" | "leader";
-type ServerId = number;
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "raft_election.go",
+      code: `// Raft-style leader election. Two RPCs: RequestVote (election) and AppendEntries (heartbeat).
+package election
+
+import (
+	"math/rand"
+	"time"
+)
+
+type Role int
+
+const (
+	Follower Role = iota
+	Candidate
+	Leader
+)
+
+type ServerID = int
+
+type LogEntry struct {
+	Term int
+	Cmd  string
+}
+
+type VoteReply struct {
+	Term    int
+	Granted bool
+}
+
+type RaftElectionServer struct {
+	ID          ServerID
+	Peers       []ServerID
+	CurrentTerm int
+	VotedFor    *ServerID
+	role        Role
+	Log         []LogEntry
+
+	rpc func(to ServerID, kind string, args any) VoteReply
+	now func() int64 // unix millis
+
+	electionDeadline int64
+}
+
+// ResetElectionTimer sets a randomized 150-300ms timer; reset on heartbeat.
+func (s *RaftElectionServer) ResetElectionTimer() {
+	s.electionDeadline = s.now() + 150 + rand.Int63n(150)
+}
+
+// OnAppendEntries is called by AppendEntries (heartbeat) from current leader.
+func (s *RaftElectionServer) OnAppendEntries(term int, leaderID ServerID) (int, bool) {
+	if term < s.CurrentTerm {
+		return s.CurrentTerm, false
+	}
+	if term > s.CurrentTerm {
+		s.CurrentTerm = term
+		s.VotedFor = nil
+	}
+	s.role = Follower
+	s.ResetElectionTimer()
+	return s.CurrentTerm, true
+}
+
+// StartElection is called when our election timer fires.
+func (s *RaftElectionServer) StartElection() {
+	s.role = Candidate
+	s.CurrentTerm++
+	s.VotedFor = &s.ID
+	votes := 1 // myself
+	myLastIdx := len(s.Log) - 1
+	myLastTerm := 0
+	if len(s.Log) > 0 {
+		myLastTerm = s.Log[len(s.Log)-1].Term
+	}
+
+	for _, p := range s.Peers {
+		r := s.rpc(p, "RequestVote", map[string]int{
+			"term": s.CurrentTerm, "candidateId": s.ID,
+			"lastLogIndex": myLastIdx, "lastLogTerm": myLastTerm,
+		})
+		if r.Term > s.CurrentTerm {
+			s.CurrentTerm = r.Term
+			s.role = Follower
+			return
+		}
+		if r.Granted {
+			votes++
+		}
+	}
+
+	if votes >= len(s.Peers)/2+2 { // majority of (peers + self)
+		s.role = Leader
+		// start sending heartbeats
+	} else {
+		// split vote or lost - wait for next randomized timeout
+		s.role = Follower
+		s.ResetElectionTimer()
+	}
+}
+
+// OnRequestVote is called when a peer sends us RequestVote.
+func (s *RaftElectionServer) OnRequestVote(
+	term, candidateID, lastLogIndex, lastLogTerm int,
+) VoteReply {
+	if term > s.CurrentTerm {
+		s.CurrentTerm = term
+		s.VotedFor = nil
+		s.role = Follower
+	}
+	myLastIdx := len(s.Log) - 1
+	myLastTerm := 0
+	if len(s.Log) > 0 {
+		myLastTerm = s.Log[len(s.Log)-1].Term
+	}
+	upToDate := lastLogTerm > myLastTerm ||
+		(lastLogTerm == myLastTerm && lastLogIndex >= myLastIdx)
+	free := s.VotedFor == nil || *s.VotedFor == candidateID
+	grant := term == s.CurrentTerm && free && upToDate
+	if grant {
+		s.VotedFor = &candidateID
+		s.ResetElectionTimer()
+	}
+	return VoteReply{Term: s.CurrentTerm, Granted: grant}
+}
+
+var _ = time.Now`,
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "RaftElection.java",
+      code: `// Raft-style leader election. Two RPCs: RequestVote (election) and AppendEntries (heartbeat).
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.LongSupplier;
 
 class RaftElectionServer {
-  currentTerm = 0;
-  votedFor: ServerId | null = null;
-  role: Role = "follower";
-  log: { term: number; cmd: string }[] = [];
+    enum Role { FOLLOWER, CANDIDATE, LEADER }
 
-  constructor(
-    public readonly id: ServerId,
-    public readonly peers: ServerId[],
-    private rpc: <T>(to: ServerId, kind: string, args: T) => Promise<{ term: number; granted: boolean }>,
-    private now: () => number,
-  ) {}
+    record LogEntry(int term, String cmd) {}
+    record VoteReply(int term, boolean granted) {}
 
-  private electionDeadline = 0;
+    interface Rpc {
+        VoteReply call(int to, String kind, RequestVoteArgs args);
+    }
+    record RequestVoteArgs(int term, int candidateId, int lastLogIndex, int lastLogTerm) {}
 
-  /** Randomized 150–300ms timer; reset on heartbeat. */
-  resetElectionTimer() { this.electionDeadline = this.now() + 150 + Math.random() * 150; }
+    final int id;
+    final List<Integer> peers;
+    int currentTerm = 0;
+    Integer votedFor = null;
+    Role role = Role.FOLLOWER;
+    final List<LogEntry> log = new ArrayList<>();
 
-  /** Called by AppendEntries (heartbeat) from current leader. */
-  onAppendEntries(args: { term: number; leaderId: ServerId }) {
-    if (args.term < this.currentTerm) return { term: this.currentTerm, ok: false };
-    if (args.term > this.currentTerm) { this.currentTerm = args.term; this.votedFor = null; }
-    this.role = "follower";
-    this.resetElectionTimer();
-    return { term: this.currentTerm, ok: true };
-  }
+    private final Rpc rpc;
+    private final LongSupplier now;
+    private long electionDeadline = 0;
 
-  /** Called when our election timer fires. */
-  async startElection() {
-    this.role = "candidate";
-    this.currentTerm++;
-    this.votedFor = this.id;
-    let votes = 1; // myself
-    const myLastIdx = this.log.length - 1;
-    const myLastTerm = this.log.at(-1)?.term ?? 0;
-
-    const replies = await Promise.all(this.peers.map(p =>
-      this.rpc(p, "RequestVote", {
-        term: this.currentTerm, candidateId: this.id, lastLogIndex: myLastIdx, lastLogTerm: myLastTerm,
-      }).catch(() => ({ term: this.currentTerm, granted: false }))));
-
-    for (const r of replies) {
-      if (r.term > this.currentTerm) { this.currentTerm = r.term; this.role = "follower"; return; }
-      if (r.granted) votes++;
+    RaftElectionServer(int id, List<Integer> peers, Rpc rpc, LongSupplier now) {
+        this.id = id;
+        this.peers = peers;
+        this.rpc = rpc;
+        this.now = now;
     }
 
-    if (votes >= Math.floor((this.peers.length + 1) / 2) + 1) {
-      this.role = "leader";
-      // start sending heartbeats
-    } else {
-      // split vote or lost — wait for next randomized timeout
-      this.role = "follower";
-      this.resetElectionTimer();
+    /** Randomized 150-300ms timer; reset on heartbeat. */
+    void resetElectionTimer() {
+        electionDeadline = now.getAsLong() + 150 + ThreadLocalRandom.current().nextInt(150);
     }
-  }
 
-  /** Called when a peer sends us RequestVote. */
-  onRequestVote(args: { term: number; candidateId: ServerId; lastLogIndex: number; lastLogTerm: number }) {
-    if (args.term > this.currentTerm) { this.currentTerm = args.term; this.votedFor = null; this.role = "follower"; }
-    const myLastIdx = this.log.length - 1;
-    const myLastTerm = this.log.at(-1)?.term ?? 0;
-    const upToDate = args.lastLogTerm > myLastTerm
-      || (args.lastLogTerm === myLastTerm && args.lastLogIndex >= myLastIdx);
-    const free = this.votedFor === null || this.votedFor === args.candidateId;
-    const grant = args.term === this.currentTerm && free && upToDate;
-    if (grant) { this.votedFor = args.candidateId; this.resetElectionTimer(); }
-    return { term: this.currentTerm, granted: grant };
-  }
+    /** Called by AppendEntries (heartbeat) from current leader. */
+    VoteReply onAppendEntries(int term, int leaderId) {
+        if (term < currentTerm) return new VoteReply(currentTerm, false);
+        if (term > currentTerm) { currentTerm = term; votedFor = null; }
+        role = Role.FOLLOWER;
+        resetElectionTimer();
+        return new VoteReply(currentTerm, true);
+    }
+
+    /** Called when our election timer fires. */
+    void startElection() {
+        role = Role.CANDIDATE;
+        currentTerm++;
+        votedFor = id;
+        int votes = 1; // myself
+        int myLastIdx = log.size() - 1;
+        int myLastTerm = log.isEmpty() ? 0 : log.get(log.size() - 1).term();
+
+        for (int p : peers) {
+            VoteReply r;
+            try {
+                r = rpc.call(p, "RequestVote",
+                    new RequestVoteArgs(currentTerm, id, myLastIdx, myLastTerm));
+            } catch (Exception e) {
+                r = new VoteReply(currentTerm, false);
+            }
+            if (r.term() > currentTerm) { currentTerm = r.term(); role = Role.FOLLOWER; return; }
+            if (r.granted()) votes++;
+        }
+
+        if (votes >= (peers.size() + 1) / 2 + 1) {
+            role = Role.LEADER;
+            // start sending heartbeats
+        } else {
+            // split vote or lost - wait for next randomized timeout
+            role = Role.FOLLOWER;
+            resetElectionTimer();
+        }
+    }
+
+    /** Called when a peer sends us RequestVote. */
+    VoteReply onRequestVote(int term, int candidateId, int lastLogIndex, int lastLogTerm) {
+        if (term > currentTerm) { currentTerm = term; votedFor = null; role = Role.FOLLOWER; }
+        int myLastIdx = log.size() - 1;
+        int myLastTerm = log.isEmpty() ? 0 : log.get(log.size() - 1).term();
+        boolean upToDate = lastLogTerm > myLastTerm
+            || (lastLogTerm == myLastTerm && lastLogIndex >= myLastIdx);
+        boolean free = votedFor == null || votedFor == candidateId;
+        boolean grant = term == currentTerm && free && upToDate;
+        if (grant) { votedFor = candidateId; resetElectionTimer(); }
+        return new VoteReply(currentTerm, grant);
+    }
 }`,
-  },
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "raft_election.py",
+      code: `# Raft-style leader election. Two RPCs: RequestVote (election) and AppendEntries (heartbeat).
+import random
+import time
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Callable, Optional
+
+
+class Role(Enum):
+    FOLLOWER = "follower"
+    CANDIDATE = "candidate"
+    LEADER = "leader"
+
+
+@dataclass
+class LogEntry:
+    term: int
+    cmd: str
+
+
+@dataclass
+class VoteReply:
+    term: int
+    granted: bool
+
+
+class RaftElectionServer:
+    def __init__(
+        self,
+        id: int,
+        peers: list[int],
+        rpc: Callable[[int, str, dict], VoteReply],
+        now: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self.id = id
+        self.peers = peers
+        self.rpc = rpc
+        self.now = now
+        self.current_term = 0
+        self.voted_for: Optional[int] = None
+        self.role = Role.FOLLOWER
+        self.log: list[LogEntry] = []
+        self.election_deadline = 0.0
+
+    def reset_election_timer(self) -> None:
+        """Randomized 150-300ms timer; reset on heartbeat."""
+        self.election_deadline = self.now() + 0.150 + random.random() * 0.150
+
+    def on_append_entries(self, term: int, leader_id: int) -> VoteReply:
+        """Called by AppendEntries (heartbeat) from current leader."""
+        if term < self.current_term:
+            return VoteReply(self.current_term, False)
+        if term > self.current_term:
+            self.current_term = term
+            self.voted_for = None
+        self.role = Role.FOLLOWER
+        self.reset_election_timer()
+        return VoteReply(self.current_term, True)
+
+    def start_election(self) -> None:
+        """Called when our election timer fires."""
+        self.role = Role.CANDIDATE
+        self.current_term += 1
+        self.voted_for = self.id
+        votes = 1  # myself
+        my_last_idx = len(self.log) - 1
+        my_last_term = self.log[-1].term if self.log else 0
+
+        for p in self.peers:
+            try:
+                r = self.rpc(p, "RequestVote", {
+                    "term": self.current_term, "candidateId": self.id,
+                    "lastLogIndex": my_last_idx, "lastLogTerm": my_last_term,
+                })
+            except Exception:
+                r = VoteReply(self.current_term, False)
+            if r.term > self.current_term:
+                self.current_term = r.term
+                self.role = Role.FOLLOWER
+                return
+            if r.granted:
+                votes += 1
+
+        if votes >= (len(self.peers) + 1) // 2 + 1:
+            self.role = Role.LEADER
+            # start sending heartbeats
+        else:
+            # split vote or lost - wait for next randomized timeout
+            self.role = Role.FOLLOWER
+            self.reset_election_timer()
+
+    def on_request_vote(
+        self, term: int, candidate_id: int, last_log_index: int, last_log_term: int
+    ) -> VoteReply:
+        """Called when a peer sends us RequestVote."""
+        if term > self.current_term:
+            self.current_term = term
+            self.voted_for = None
+            self.role = Role.FOLLOWER
+        my_last_idx = len(self.log) - 1
+        my_last_term = self.log[-1].term if self.log else 0
+        up_to_date = last_log_term > my_last_term or (
+            last_log_term == my_last_term and last_log_index >= my_last_idx
+        )
+        free = self.voted_for is None or self.voted_for == candidate_id
+        grant = term == self.current_term and free and up_to_date
+        if grant:
+            self.voted_for = candidate_id
+            self.reset_election_timer()
+        return VoteReply(self.current_term, grant)`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "raft_election.cpp",
+      code: `// Raft-style leader election. Two RPCs: RequestVote (election) and AppendEntries (heartbeat).
+#include <functional>
+#include <optional>
+#include <random>
+#include <string>
+#include <vector>
+
+using ServerId = int;
+
+enum class Role { Follower, Candidate, Leader };
+
+struct LogEntry {
+    int term;
+    std::string cmd;
+};
+
+struct VoteReply {
+    int term;
+    bool granted;
+};
+
+struct RequestVoteArgs {
+    int term;
+    int candidateId;
+    int lastLogIndex;
+    int lastLogTerm;
+};
+
+class RaftElectionServer {
+public:
+    int currentTerm = 0;
+    std::optional<ServerId> votedFor;
+    Role role = Role::Follower;
+    std::vector<LogEntry> log;
+
+    RaftElectionServer(ServerId id, std::vector<ServerId> peers,
+                       std::function<VoteReply(ServerId, std::string, RequestVoteArgs)> rpc,
+                       std::function<long long()> now)
+        : id_(id), peers_(std::move(peers)),
+          rpc_(std::move(rpc)), now_(std::move(now)), rng_(std::random_device{}()) {}
+
+    // Randomized 150-300ms timer; reset on heartbeat.
+    void resetElectionTimer() {
+        std::uniform_int_distribution<int> jitter(0, 149);
+        electionDeadline_ = now_() + 150 + jitter(rng_);
+    }
+
+    // Called by AppendEntries (heartbeat) from current leader.
+    VoteReply onAppendEntries(int term, ServerId leaderId) {
+        if (term < currentTerm) return {currentTerm, false};
+        if (term > currentTerm) { currentTerm = term; votedFor.reset(); }
+        role = Role::Follower;
+        resetElectionTimer();
+        return {currentTerm, true};
+    }
+
+    // Called when our election timer fires.
+    void startElection() {
+        role = Role::Candidate;
+        currentTerm++;
+        votedFor = id_;
+        int votes = 1; // myself
+        int myLastIdx = static_cast<int>(log.size()) - 1;
+        int myLastTerm = log.empty() ? 0 : log.back().term;
+
+        for (ServerId p : peers_) {
+            VoteReply r = rpc_(p, "RequestVote",
+                {currentTerm, id_, myLastIdx, myLastTerm});
+            if (r.term > currentTerm) { currentTerm = r.term; role = Role::Follower; return; }
+            if (r.granted) votes++;
+        }
+
+        if (votes >= static_cast<int>(peers_.size() + 1) / 2 + 1) {
+            role = Role::Leader;
+            // start sending heartbeats
+        } else {
+            // split vote or lost - wait for next randomized timeout
+            role = Role::Follower;
+            resetElectionTimer();
+        }
+    }
+
+    // Called when a peer sends us RequestVote.
+    VoteReply onRequestVote(int term, ServerId candidateId,
+                            int lastLogIndex, int lastLogTerm) {
+        if (term > currentTerm) {
+            currentTerm = term; votedFor.reset(); role = Role::Follower;
+        }
+        int myLastIdx = static_cast<int>(log.size()) - 1;
+        int myLastTerm = log.empty() ? 0 : log.back().term;
+        bool upToDate = lastLogTerm > myLastTerm
+            || (lastLogTerm == myLastTerm && lastLogIndex >= myLastIdx);
+        bool free = !votedFor.has_value() || *votedFor == candidateId;
+        bool grant = term == currentTerm && free && upToDate;
+        if (grant) { votedFor = candidateId; resetElectionTimer(); }
+        return {currentTerm, grant};
+    }
+
+private:
+    ServerId id_;
+    std::vector<ServerId> peers_;
+    std::function<VoteReply(ServerId, std::string, RequestVoteArgs)> rpc_;
+    std::function<long long()> now_;
+    std::mt19937 rng_;
+    long long electionDeadline_ = 0;
+};`,
+    },
+  ],
 
   furtherReading: [
     {

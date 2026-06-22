@@ -97,39 +97,233 @@ export const nru: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "nru.ts",
-    code: `// NRU: classify by (R, M) bits, evict from the lowest non-empty class.
-interface Slot { page: number; r: 0 | 1; m: 0 | 1; }
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "nru.go",
+      code: `// NRU: classify by (R, M) bits, evict from the lowest non-empty class.
+package nru
+
+type slot struct {
+	page int
+	r    int // 0 or 1 (referenced)
+	m    int // 0 or 1 (modified/dirty)
+}
+
+type NRU struct {
+	slots      []*slot // nil = empty frame
+	Faults     int
+	Hits       int
+	Writebacks int
+}
+
+func NewNRU(frames int) *NRU {
+	return &NRU{slots: make([]*slot, frames)}
+}
+
+func (n *NRU) Tick() { // clear R, keep M
+	for _, s := range n.slots {
+		if s != nil {
+			s.r = 0
+		}
+	}
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+func (n *NRU) Access(page int, write bool) string {
+	for _, s := range n.slots {
+		if s != nil && s.page == page {
+			s.r = 1
+			if write {
+				s.m = 1
+			}
+			n.Hits++
+			return "hit"
+		}
+	}
+	n.Faults++
+	for i, s := range n.slots {
+		if s == nil {
+			n.slots[i] = &slot{page: page, r: 1, m: boolToInt(write)}
+			return "fault"
+		}
+	}
+
+	// class = (R << 1) | M; evict any page from the lowest non-empty class
+	victim, bestClass := 0, 4
+	for i, s := range n.slots {
+		cls := (s.r << 1) | s.m
+		if cls < bestClass {
+			bestClass = cls
+			victim = i
+		}
+	}
+	if n.slots[victim].m == 1 {
+		n.Writebacks++ // dirty: write back
+	}
+	n.slots[victim] = &slot{page: page, r: 1, m: boolToInt(write)}
+	return "fault"
+}`,
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "Nru.java",
+      code: `// NRU: classify by (R, M) bits, evict from the lowest non-empty class.
+class Nru {
+    private static final class Slot {
+        int page;
+        int r; // 0 or 1 (referenced)
+        int m; // 0 or 1 (modified/dirty)
+        Slot(int page, int r, int m) { this.page = page; this.r = r; this.m = m; }
+    }
+
+    private final Slot[] slots;
+    int faults = 0;
+    int hits = 0;
+    int writebacks = 0;
+
+    Nru(int frames) { this.slots = new Slot[frames]; }
+
+    void tick() { for (Slot s : slots) if (s != null) s.r = 0; } // clear R, keep M
+
+    String access(int page, boolean write) {
+        for (Slot s : slots) {
+            if (s != null && s.page == page) {
+                s.r = 1; if (write) s.m = 1; hits++; return "hit";
+            }
+        }
+        faults++;
+        for (int i = 0; i < slots.length; i++) {
+            if (slots[i] == null) {
+                slots[i] = new Slot(page, 1, write ? 1 : 0);
+                return "fault";
+            }
+        }
+
+        // class = (R << 1) | M; evict any page from the lowest non-empty class
+        int victim = 0, bestClass = 4;
+        for (int i = 0; i < slots.length; i++) {
+            int cls = (slots[i].r << 1) | slots[i].m;
+            if (cls < bestClass) { bestClass = cls; victim = i; }
+        }
+        if (slots[victim].m == 1) writebacks++;   // dirty: write back
+        slots[victim] = new Slot(page, 1, write ? 1 : 0);
+        return "fault";
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "nru.py",
+      code: `# NRU: classify by (R, M) bits, evict from the lowest non-empty class.
+from dataclasses import dataclass
+
+
+@dataclass
+class Slot:
+    page: int
+    r: int  # 0 or 1 (referenced)
+    m: int  # 0 or 1 (modified/dirty)
+
+
+class NRU:
+    def __init__(self, frames: int) -> None:
+        self.slots: list[Slot | None] = [None] * frames
+        self.faults = 0
+        self.hits = 0
+        self.writebacks = 0
+
+    def tick(self) -> None:  # clear R, keep M
+        for s in self.slots:
+            if s is not None:
+                s.r = 0
+
+    def access(self, page: int, write: bool = False) -> str:
+        for s in self.slots:
+            if s is not None and s.page == page:
+                s.r = 1
+                if write:
+                    s.m = 1
+                self.hits += 1
+                return "hit"
+        self.faults += 1
+        for i, s in enumerate(self.slots):
+            if s is None:
+                self.slots[i] = Slot(page, 1, 1 if write else 0)
+                return "fault"
+
+        # class = (R << 1) | M; evict any page from the lowest non-empty class
+        victim, best_class = 0, 4
+        for i, s in enumerate(self.slots):
+            cls = (s.r << 1) | s.m
+            if cls < best_class:
+                best_class = cls
+                victim = i
+        if self.slots[victim].m == 1:
+            self.writebacks += 1  # dirty: write back
+        self.slots[victim] = Slot(page, 1, 1 if write else 0)
+        return "fault"`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "nru.cpp",
+      code: `// NRU: classify by (R, M) bits, evict from the lowest non-empty class.
+#include <optional>
+#include <string>
+#include <vector>
 
 class NRU {
-  private slots: (Slot | null)[];
-  faults = 0; hits = 0; writebacks = 0;
+    struct Slot {
+        int page;
+        int r; // 0 or 1 (referenced)
+        int m; // 0 or 1 (modified/dirty)
+    };
 
-  constructor(frames: number) { this.slots = Array(frames).fill(null); }
+    std::vector<std::optional<Slot>> slots_; // nullopt = empty frame
 
-  tick() { for (const s of this.slots) if (s) s.r = 0; } // clear R, keep M
+public:
+    int faults = 0;
+    int hits = 0;
+    int writebacks = 0;
 
-  access(page: number, write = false): "hit" | "fault" {
-    const slot = this.slots.find((s) => s?.page === page);
-    if (slot) { slot.r = 1; if (write) slot.m = 1; this.hits++; return "hit"; }
-    this.faults++;
-    const free = this.slots.indexOf(null);
-    if (free >= 0) { this.slots[free] = { page, r: 1, m: write ? 1 : 0 }; return "fault"; }
+    explicit NRU(int frames) : slots_(frames) {}
 
-    // class = (R << 1) | M; evict any page from the lowest non-empty class
-    let victim = 0, bestClass = 4;
-    this.slots.forEach((s, i) => {
-      const cls = (s!.r << 1) | s!.m;
-      if (cls < bestClass) { bestClass = cls; victim = i; }
-    });
-    if (this.slots[victim]!.m === 1) this.writebacks++;   // dirty: write back
-    this.slots[victim] = { page, r: 1, m: write ? 1 : 0 };
-    return "fault";
-  }
-}`,
-  },
+    void tick() { for (auto& s : slots_) if (s) s->r = 0; } // clear R, keep M
+
+    std::string access(int page, bool write = false) {
+        for (auto& s : slots_) {
+            if (s && s->page == page) {
+                s->r = 1; if (write) s->m = 1; hits++; return "hit";
+            }
+        }
+        faults++;
+        for (auto& s : slots_) {
+            if (!s) { s = Slot{page, 1, write ? 1 : 0}; return "fault"; }
+        }
+
+        // class = (R << 1) | M; evict any page from the lowest non-empty class
+        int victim = 0, bestClass = 4;
+        for (int i = 0; i < static_cast<int>(slots_.size()); i++) {
+            int cls = (slots_[i]->r << 1) | slots_[i]->m;
+            if (cls < bestClass) { bestClass = cls; victim = i; }
+        }
+        if (slots_[victim]->m == 1) writebacks++;   // dirty: write back
+        slots_[victim] = Slot{page, 1, write ? 1 : 0};
+        return "fault";
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

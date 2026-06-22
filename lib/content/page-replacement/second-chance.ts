@@ -90,39 +90,184 @@ export const secondChance: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "second-chance.ts",
-    code: `// Second Chance: FIFO queue + one reference bit per page.
-interface Slot { page: number; ref: 0 | 1; }
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "second_chance.go",
+      code: `// Second Chance: FIFO queue + one reference bit per page.
+package secondchance
+
+type slot struct {
+	page int
+	ref  int // 0 or 1
+}
+
+type SecondChance struct {
+	frames int
+	queue  []*slot // front = index 0 (oldest)
+	Faults int
+	Hits   int
+}
+
+func NewSecondChance(frames int) *SecondChance {
+	return &SecondChance{frames: frames}
+}
+
+func (sc *SecondChance) Access(page int) string {
+	for _, s := range sc.queue {
+		if s.page == page {
+			s.ref = 1 // mark used
+			sc.Hits++
+			return "hit"
+		}
+	}
+	sc.Faults++
+	if len(sc.queue) < sc.frames {
+		sc.queue = append(sc.queue, &slot{page: page, ref: 1}) // free frame
+		return "fault"
+	}
+	// scan from the front, sparing pages whose ref bit is set
+	for sc.queue[0].ref == 1 {
+		spared := sc.queue[0]
+		sc.queue = sc.queue[1:]
+		spared.ref = 0                      // clear the bit...
+		sc.queue = append(sc.queue, spared) // ...and rotate to the back
+	}
+	sc.queue = sc.queue[1:] // first page with ref 0 is evicted
+	sc.queue = append(sc.queue, &slot{page: page, ref: 1})
+	return "fault"
+}`,
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "SecondChance.java",
+      code: `// Second Chance: FIFO queue + one reference bit per page.
+import java.util.*;
 
 class SecondChance {
-  private frames: number;
-  private queue: Slot[] = [];   // front = index 0 (oldest)
-  faults = 0; hits = 0;
-
-  constructor(frames: number) { this.frames = frames; }
-
-  access(page: number): "hit" | "fault" {
-    const slot = this.queue.find((s) => s.page === page);
-    if (slot) { slot.ref = 1; this.hits++; return "hit"; } // mark used
-    this.faults++;
-    if (this.queue.length < this.frames) {
-      this.queue.push({ page, ref: 1 });                   // free frame
-      return "fault";
+    private static final class Slot {
+        int page;
+        int ref; // 0 or 1
+        Slot(int page, int ref) { this.page = page; this.ref = ref; }
     }
-    // scan from the front, sparing pages whose ref bit is set
-    while (this.queue[0].ref === 1) {
-      const spared = this.queue.shift()!;
-      spared.ref = 0;                 // clear the bit...
-      this.queue.push(spared);        // ...and rotate to the back
+
+    private final int frames;
+    private final Deque<Slot> queue = new ArrayDeque<>(); // front = oldest
+    int faults = 0;
+    int hits = 0;
+
+    SecondChance(int frames) { this.frames = frames; }
+
+    String access(int page) {
+        for (Slot s : queue) {
+            if (s.page == page) { s.ref = 1; hits++; return "hit"; } // mark used
+        }
+        faults++;
+        if (queue.size() < frames) {
+            queue.addLast(new Slot(page, 1));                        // free frame
+            return "fault";
+        }
+        // scan from the front, sparing pages whose ref bit is set
+        while (queue.peekFirst().ref == 1) {
+            Slot spared = queue.pollFirst();
+            spared.ref = 0;            // clear the bit...
+            queue.addLast(spared);     // ...and rotate to the back
+        }
+        queue.pollFirst();             // first page with ref 0 is evicted
+        queue.addLast(new Slot(page, 1));
+        return "fault";
     }
-    this.queue.shift();               // first page with ref 0 is evicted
-    this.queue.push({ page, ref: 1 });
-    return "fault";
-  }
 }`,
-  },
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "second_chance.py",
+      code: `# Second Chance: FIFO queue + one reference bit per page.
+from collections import deque
+from dataclasses import dataclass
+
+
+@dataclass
+class Slot:
+    page: int
+    ref: int  # 0 or 1
+
+
+class SecondChance:
+    def __init__(self, frames: int) -> None:
+        self.frames = frames
+        self.queue: deque[Slot] = deque()  # front = leftmost (oldest)
+        self.faults = 0
+        self.hits = 0
+
+    def access(self, page: int) -> str:
+        for s in self.queue:
+            if s.page == page:
+                s.ref = 1  # mark used
+                self.hits += 1
+                return "hit"
+        self.faults += 1
+        if len(self.queue) < self.frames:
+            self.queue.append(Slot(page, 1))  # free frame
+            return "fault"
+        # scan from the front, sparing pages whose ref bit is set
+        while self.queue[0].ref == 1:
+            spared = self.queue.popleft()
+            spared.ref = 0              # clear the bit...
+            self.queue.append(spared)  # ...and rotate to the back
+        self.queue.popleft()           # first page with ref 0 is evicted
+        self.queue.append(Slot(page, 1))
+        return "fault"`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "second_chance.cpp",
+      code: `// Second Chance: FIFO queue + one reference bit per page.
+#include <deque>
+#include <string>
+
+class SecondChance {
+    struct Slot {
+        int page;
+        int ref; // 0 or 1
+    };
+
+    int frames_;
+    std::deque<Slot> queue_; // front = oldest
+
+public:
+    int faults = 0;
+    int hits = 0;
+
+    explicit SecondChance(int frames) : frames_(frames) {}
+
+    std::string access(int page) {
+        for (auto& s : queue_) {
+            if (s.page == page) { s.ref = 1; hits++; return "hit"; } // mark used
+        }
+        faults++;
+        if (static_cast<int>(queue_.size()) < frames_) {
+            queue_.push_back({page, 1});                             // free frame
+            return "fault";
+        }
+        // scan from the front, sparing pages whose ref bit is set
+        while (queue_.front().ref == 1) {
+            Slot spared = queue_.front();
+            queue_.pop_front();
+            spared.ref = 0;              // clear the bit...
+            queue_.push_back(spared);    // ...and rotate to the back
+        }
+        queue_.pop_front();              // first page with ref 0 is evicted
+        queue_.push_back({page, 1});
+        return "fault";
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

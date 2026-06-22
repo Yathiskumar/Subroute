@@ -96,43 +96,204 @@ export const maglev: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "maglev.ts",
-    code: `// Maglev hashing: build a lookup table once, then route in O(1).
-function buildTable(backends: string[], M: number): string[] {
-  // Each backend's preference list is a permutation of [0, M).
-  const prefs = backends.map((name) => {
-    const offset = h(name + ":offset") % M;
-    const skip = (h(name + ":skip") % (M - 1)) + 1; // 1..M-1
-    return Array.from({ length: M }, (_, j) => (offset + j * skip) % M);
-  });
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "maglev.go",
+      code: `// Maglev hashing: build a lookup table once, then route in O(1).
+package main
 
-  const table: (string | null)[] = new Array(M).fill(null);
-  const next = backends.map(() => 0); // cursor into each pref list
-  let filled = 0;
+func h(s string) int { /* any 32-bit hash */ return 0 }
 
-  // Round-robin draft: each backend claims its top free slot, in turn.
-  while (filled < M) {
-    for (let i = 0; i < backends.length; i++) {
-      let slot = prefs[i][next[i]];
-      while (table[slot] !== null) slot = prefs[i][++next[i]]; // skip taken
-      table[slot] = backends[i];
-      next[i]++;
-      if (++filled === M) break;
-    }
-  }
-  return table as string[];
+func buildTable(backends []string, M int) []string {
+	// Each backend's preference list is a permutation of [0, M).
+	prefs := make([][]int, len(backends))
+	for i, name := range backends {
+		offset := h(name+":offset") % M
+		skip := (h(name+":skip") % (M - 1)) + 1 // 1..M-1
+		p := make([]int, M)
+		for j := 0; j < M; j++ {
+			p[j] = (offset + j*skip) % M
+		}
+		prefs[i] = p
+	}
+
+	table := make([]string, M)
+	for i := range table {
+		table[i] = "" // empty slot
+	}
+	next := make([]int, len(backends)) // cursor into each pref list
+	filled := 0
+
+	// Round-robin draft: each backend claims its top free slot, in turn.
+	for filled < M {
+		for i := 0; i < len(backends); i++ {
+			slot := prefs[i][next[i]]
+			for table[slot] != "" { // skip taken
+				next[i]++
+				slot = prefs[i][next[i]]
+			}
+			table[slot] = backends[i]
+			next[i]++
+			filled++
+			if filled == M {
+				break
+			}
+		}
+	}
+	return table
 }
 
-function h(s: string): number { /* any 32-bit hash */ return 0; }
-
-const table = buildTable(["alpha", "beta", "gamma"], 65537);
 // Lookup is now O(1):
-function lookup(key: string, table: string[]): string {
-  return table[h(key) % table.length];
+func lookup(key string, table []string) string {
+	return table[h(key)%len(table)]
+}
+
+func main() {
+	buildTable([]string{"alpha", "beta", "gamma"}, 65537)
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "Maglev.java",
+      code: `// Maglev hashing: build a lookup table once, then route in O(1).
+class Maglev {
+    static int h(String s) { /* any 32-bit hash */ return 0; }
+
+    static String[] buildTable(String[] backends, int M) {
+        int n = backends.length;
+        // Each backend's preference list is a permutation of [0, M).
+        int[][] prefs = new int[n][M];
+        for (int i = 0; i < n; i++) {
+            int offset = h(backends[i] + ":offset") % M;
+            int skip = (h(backends[i] + ":skip") % (M - 1)) + 1; // 1..M-1
+            for (int j = 0; j < M; j++) {
+                prefs[i][j] = (offset + j * skip) % M;
+            }
+        }
+
+        String[] table = new String[M]; // null = empty slot
+        int[] next = new int[n];         // cursor into each pref list
+        int filled = 0;
+
+        // Round-robin draft: each backend claims its top free slot, in turn.
+        while (filled < M) {
+            for (int i = 0; i < n; i++) {
+                int slot = prefs[i][next[i]];
+                while (table[slot] != null) slot = prefs[i][++next[i]]; // skip taken
+                table[slot] = backends[i];
+                next[i]++;
+                if (++filled == M) break;
+            }
+        }
+        return table;
+    }
+
+    // Lookup is now O(1):
+    static String lookup(String key, String[] table) {
+        return table[h(key) % table.length];
+    }
+
+    public static void main(String[] args) {
+        buildTable(new String[]{"alpha", "beta", "gamma"}, 65537);
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "maglev.py",
+      code: `# Maglev hashing: build a lookup table once, then route in O(1).
+def h(s: str) -> int:
+    """any 32-bit hash"""
+    return 0
+
+
+def build_table(backends: list[str], M: int) -> list[str]:
+    # Each backend's preference list is a permutation of [0, M).
+    prefs = []
+    for name in backends:
+        offset = h(name + ":offset") % M
+        skip = (h(name + ":skip") % (M - 1)) + 1  # 1..M-1
+        prefs.append([(offset + j * skip) % M for j in range(M)])
+
+    table: list[str | None] = [None] * M
+    next_ = [0] * len(backends)  # cursor into each pref list
+    filled = 0
+
+    # Round-robin draft: each backend claims its top free slot, in turn.
+    while filled < M:
+        for i in range(len(backends)):
+            slot = prefs[i][next_[i]]
+            while table[slot] is not None:  # skip taken
+                next_[i] += 1
+                slot = prefs[i][next_[i]]
+            table[slot] = backends[i]
+            next_[i] += 1
+            filled += 1
+            if filled == M:
+                break
+    return table  # type: ignore[return-value]
+
+
+# Lookup is now O(1):
+def lookup(key: str, table: list[str]) -> str:
+    return table[h(key) % len(table)]
+
+
+table = build_table(["alpha", "beta", "gamma"], 65537)`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "maglev.cpp",
+      code: `// Maglev hashing: build a lookup table once, then route in O(1).
+#include <string>
+#include <vector>
+
+int h(const std::string& s) { /* any 32-bit hash */ return 0; }
+
+std::vector<std::string> buildTable(const std::vector<std::string>& backends, int M) {
+    int n = static_cast<int>(backends.size());
+    // Each backend's preference list is a permutation of [0, M).
+    std::vector<std::vector<int>> prefs(n, std::vector<int>(M));
+    for (int i = 0; i < n; i++) {
+        int offset = h(backends[i] + ":offset") % M;
+        int skip = (h(backends[i] + ":skip") % (M - 1)) + 1; // 1..M-1
+        for (int j = 0; j < M; j++) {
+            prefs[i][j] = (offset + j * skip) % M;
+        }
+    }
+
+    std::vector<std::string> table(M); // empty string = free slot
+    std::vector<int> next(n, 0);       // cursor into each pref list
+    int filled = 0;
+
+    // Round-robin draft: each backend claims its top free slot, in turn.
+    while (filled < M) {
+        for (int i = 0; i < n; i++) {
+            int slot = prefs[i][next[i]];
+            while (!table[slot].empty()) slot = prefs[i][++next[i]]; // skip taken
+            table[slot] = backends[i];
+            next[i]++;
+            if (++filled == M) break;
+        }
+    }
+    return table;
+}
+
+// Lookup is now O(1):
+const std::string& lookup(const std::string& key,
+                          const std::vector<std::string>& table) {
+    return table[h(key) % table.size()];
+}
+
+// Usage:
+// auto table = buildTable({"alpha", "beta", "gamma"}, 65537);`,
+    },
+  ],
 
   furtherReading: [
     {

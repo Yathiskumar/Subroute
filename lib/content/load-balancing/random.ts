@@ -92,33 +92,186 @@ export const random: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "random.ts",
-    code: `// Uniform random: one draw, no state, no coordination.
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "random.go",
+      code: `package lb
+
+import "math/rand"
+
+// Uniform random: one draw, no state, no coordination.
+type RandomBalancer struct {
+	servers []string
+}
+
+func NewRandomBalancer(servers []string) *RandomBalancer {
+	return &RandomBalancer{servers: servers}
+}
+
+func (b *RandomBalancer) Pick() string {
+	i := rand.Intn(len(b.servers))
+	return b.servers[i]
+}
+
+// Weighted random: draw into the cumulative-weight band.
+type weighted struct {
+	id     string
+	weight float64
+}
+
+type WeightedRandomBalancer struct {
+	pool  []weighted
+	total float64
+}
+
+func NewWeightedRandomBalancer(pool []weighted) *WeightedRandomBalancer {
+	total := 0.0
+	for _, p := range pool {
+		total += p.weight
+	}
+	return &WeightedRandomBalancer{pool: pool, total: total}
+}
+
+func (b *WeightedRandomBalancer) Pick() string {
+	r := rand.Float64() * b.total
+	for _, p := range b.pool {
+		if r -= p.weight; r < 0 {
+			return p.id
+		}
+	}
+	return b.pool[len(b.pool)-1].id // float-rounding guard
+}`,
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "Random.java",
+      code: `import java.util.concurrent.ThreadLocalRandom;
+
+// Uniform random: one draw, no state, no coordination.
 class RandomBalancer {
-  constructor(private servers: string[]) {}
-  pick(): string {
-    const i = Math.floor(Math.random() * this.servers.length);
-    return this.servers[i];
-  }
+    private final String[] servers;
+
+    RandomBalancer(String[] servers) {
+        this.servers = servers;
+    }
+
+    String pick() {
+        int i = ThreadLocalRandom.current().nextInt(servers.length);
+        return servers[i];
+    }
 }
 
 // Weighted random: draw into the cumulative-weight band.
 class WeightedRandomBalancer {
-  private total: number;
-  constructor(private pool: { id: string; weight: number }[]) {
-    this.total = pool.reduce((s, p) => s + p.weight, 0);
-  }
-  pick(): string {
-    let r = Math.random() * this.total;
-    for (const p of this.pool) {
-      if ((r -= p.weight) < 0) return p.id;
+    record Entry(String id, double weight) {}
+
+    private final Entry[] pool;
+    private final double total;
+
+    WeightedRandomBalancer(Entry[] pool) {
+        this.pool = pool;
+        double sum = 0;
+        for (Entry p : pool) sum += p.weight();
+        this.total = sum;
     }
-    return this.pool[this.pool.length - 1].id; // float-rounding guard
-  }
+
+    String pick() {
+        double r = ThreadLocalRandom.current().nextDouble() * total;
+        for (Entry p : pool) {
+            if ((r -= p.weight()) < 0) return p.id();
+        }
+        return pool[pool.length - 1].id(); // float-rounding guard
+    }
 }`,
-  },
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "random_balancer.py",
+      code: `import random
+
+
+# Uniform random: one draw, no state, no coordination.
+class RandomBalancer:
+    def __init__(self, servers: list[str]) -> None:
+        self.servers = servers
+
+    def pick(self) -> str:
+        i = random.randrange(len(self.servers))
+        return self.servers[i]
+
+
+# Weighted random: draw into the cumulative-weight band.
+class WeightedRandomBalancer:
+    def __init__(self, pool: list[tuple[str, float]]) -> None:
+        self.pool = pool
+        self.total = sum(weight for _, weight in pool)
+
+    def pick(self) -> str:
+        r = random.random() * self.total
+        for server_id, weight in self.pool:
+            r -= weight
+            if r < 0:
+                return server_id
+        return self.pool[-1][0]  # float-rounding guard`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "random_balancer.cpp",
+      code: `// Uniform random: one draw, no state, no coordination.
+#include <random>
+#include <string>
+#include <vector>
+
+static std::mt19937& rng() {
+    static thread_local std::mt19937 gen{std::random_device{}()};
+    return gen;
+}
+
+class RandomBalancer {
+    std::vector<std::string> servers_;
+
+public:
+    explicit RandomBalancer(std::vector<std::string> servers)
+        : servers_(std::move(servers)) {}
+
+    std::string pick() {
+        std::uniform_int_distribution<size_t> dist(0, servers_.size() - 1);
+        return servers_[dist(rng())];
+    }
+};
+
+// Weighted random: draw into the cumulative-weight band.
+struct Weighted {
+    std::string id;
+    double weight;
+};
+
+class WeightedRandomBalancer {
+    std::vector<Weighted> pool_;
+    double total_ = 0;
+
+public:
+    explicit WeightedRandomBalancer(std::vector<Weighted> pool)
+        : pool_(std::move(pool)) {
+        for (const auto& p : pool_) total_ += p.weight;
+    }
+
+    std::string pick() {
+        std::uniform_real_distribution<double> dist(0.0, total_);
+        double r = dist(rng());
+        for (const auto& p : pool_) {
+            if ((r -= p.weight) < 0) return p.id;
+        }
+        return pool_.back().id; // float-rounding guard
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

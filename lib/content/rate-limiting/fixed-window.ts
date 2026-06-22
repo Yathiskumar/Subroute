@@ -92,10 +92,12 @@ export const fixedWindow: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "fixed-window.ts",
-    code: `// In-memory fixed window. Production uses Redis INCR + EXPIRE.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "fixed-window.ts",
+      code: `// In-memory fixed window. Production uses Redis INCR + EXPIRE.
 class FixedWindow {
   private windowStart = Date.now();
   private count = 0;
@@ -122,7 +124,112 @@ class FixedWindow {
 // const count = await redis.incr(key);
 // if (count === 1) await redis.expire(key, windowSeconds);
 // return count <= limit;`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "FixedWindow.java",
+      code: `// In-memory fixed window. Production uses Redis INCR + EXPIRE.
+class FixedWindow {
+    private long windowStart = System.currentTimeMillis();
+    private int count = 0;
+    private final int limit;
+    private final long windowSizeMs;
+
+    FixedWindow(int limit, long windowSizeMs) {
+        this.limit = limit;
+        this.windowSizeMs = windowSizeMs;
+    }
+
+    synchronized boolean allow() {
+        long now = System.currentTimeMillis();
+        if (now - windowStart >= windowSizeMs) {
+            windowStart = now;
+            count = 0;
+        }
+        if (count >= limit) return false;
+        count++;
+        return true;
+    }
+}
+
+// Redis equivalent (atomic, distributed):
+//   String key = "rl:" + userId + ":" + (now / windowMs);
+//   long count = jedis.incr(key);
+//   if (count == 1) jedis.expire(key, windowSeconds);
+//   return count <= limit;`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "fixed_window.py",
+      code: `import time
+
+
+class FixedWindow:
+    """In-memory fixed window. Production uses Redis INCR + EXPIRE."""
+
+    def __init__(self, limit: int, window_size_s: float) -> None:
+        self.limit = limit
+        self.window_size_s = window_size_s
+        self.window_start = time.monotonic()
+        self.count = 0
+
+    def allow(self) -> bool:
+        now = time.monotonic()
+        if now - self.window_start >= self.window_size_s:
+            self.window_start = now
+            self.count = 0
+        if self.count >= self.limit:
+            return False
+        self.count += 1
+        return True
+
+
+# Redis equivalent (atomic, distributed):
+#   key = f"rl:{user_id}:{int(time.time() // window_s)}"
+#   count = redis.incr(key)
+#   if count == 1:
+#       redis.expire(key, window_seconds)
+#   allowed = count <= limit`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "fixed_window.cpp",
+      code: `// In-memory fixed window. Production uses Redis INCR + EXPIRE.
+#include <chrono>
+#include <mutex>
+
+class FixedWindow {
+    using clock = std::chrono::steady_clock;
+    clock::time_point windowStart_ = clock::now();
+    int count_ = 0;
+    int limit_;
+    std::chrono::milliseconds windowSize_;
+    std::mutex mu_;
+
+public:
+    FixedWindow(int limit, std::chrono::milliseconds windowSize)
+        : limit_(limit), windowSize_(windowSize) {}
+
+    bool allow() {
+        std::lock_guard<std::mutex> lock(mu_);
+        auto now = clock::now();
+        if (now - windowStart_ >= windowSize_) {
+            windowStart_ = now;
+            count_ = 0;
+        }
+        if (count_ >= limit_) return false;
+        ++count_;
+        return true;
+    }
+};
+
+// Redis equivalent (atomic, distributed): INCR the per-window key,
+// set EXPIRE on first hit, then allow while count <= limit.`,
+    },
+  ],
 
   furtherReading: [
     {

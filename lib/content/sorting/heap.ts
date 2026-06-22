@@ -129,10 +129,12 @@ export const heap: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "heap-sort.ts",
-    code: `// Heap sort — in-place, O(n log n) on every input, not stable.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "heap-sort.ts",
+      code: `// Heap sort — in-place, O(n log n) on every input, not stable.
 function heapSort<T>(a: T[]): T[] {
   const n = a.length;
   // Phase 1: build max-heap bottom-up (O(n), not O(n log n)).
@@ -160,7 +162,114 @@ function siftDown<T>(a: T[], i: number, size: number): void {
 // Example
 heapSort([12, 11, 13, 5, 6, 7]);
 // → [5, 6, 7, 11, 12, 13]`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "HeapSort.java",
+      code: `// Heap sort — in-place, O(n log n) on every input, not stable.
+static <T extends Comparable<T>> T[] heapSort(T[] a) {
+    int n = a.length;
+    // Phase 1: build max-heap bottom-up (O(n), not O(n log n)).
+    for (int i = (n >> 1) - 1; i >= 0; i--) siftDown(a, i, n);
+    // Phase 2: pull the max to the end, shrink, re-heapify.
+    for (int end = n - 1; end > 0; end--) {
+        T tmp = a[0]; a[0] = a[end]; a[end] = tmp;
+        siftDown(a, 0, end);
+    }
+    return a;
+}
+
+static <T extends Comparable<T>> void siftDown(T[] a, int i, int size) {
+    while (true) {
+        int l = 2 * i + 1, r = 2 * i + 2;
+        int largest = i;
+        if (l < size && a[l].compareTo(a[largest]) > 0) largest = l;
+        if (r < size && a[r].compareTo(a[largest]) > 0) largest = r;
+        if (largest == i) break;
+        T tmp = a[i]; a[i] = a[largest]; a[largest] = tmp;
+        i = largest;
+    }
+}
+
+// Example
+heapSort(new Integer[]{12, 11, 13, 5, 6, 7});
+// → [5, 6, 7, 11, 12, 13]`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "heap_sort.py",
+      code: `def heap_sort(a: list) -> list:
+    """Heap sort — in-place, O(n log n) on every input, not stable."""
+    n = len(a)
+    # Phase 1: build max-heap bottom-up (O(n), not O(n log n)).
+    for i in range(n // 2 - 1, -1, -1):
+        sift_down(a, i, n)
+    # Phase 2: pull the max to the end, shrink, re-heapify.
+    for end in range(n - 1, 0, -1):
+        a[0], a[end] = a[end], a[0]
+        sift_down(a, 0, end)
+    return a
+
+
+def sift_down(a: list, i: int, size: int) -> None:
+    while True:
+        l, r = 2 * i + 1, 2 * i + 2
+        largest = i
+        if l < size and a[l] > a[largest]:
+            largest = l
+        if r < size and a[r] > a[largest]:
+            largest = r
+        if largest == i:
+            break
+        a[i], a[largest] = a[largest], a[i]
+        i = largest
+
+
+# Example
+heap_sort([12, 11, 13, 5, 6, 7])
+# → [5, 6, 7, 11, 12, 13]`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "heap_sort.cpp",
+      code: `// Heap sort — in-place, O(n log n) on every input, not stable.
+#include <vector>
+#include <utility>
+
+template <typename T>
+void siftDown(std::vector<T>& a, int i, int size) {
+    while (true) {
+        int l = 2 * i + 1, r = 2 * i + 2;
+        int largest = i;
+        if (l < size && a[l] > a[largest]) largest = l;
+        if (r < size && a[r] > a[largest]) largest = r;
+        if (largest == i) break;
+        std::swap(a[i], a[largest]);
+        i = largest;
+    }
+}
+
+template <typename T>
+std::vector<T> heapSort(std::vector<T> a) {
+    int n = a.size();
+    // Phase 1: build max-heap bottom-up (O(n), not O(n log n)).
+    for (int i = (n >> 1) - 1; i >= 0; i--) siftDown(a, i, n);
+    // Phase 2: pull the max to the end, shrink, re-heapify.
+    for (int end = n - 1; end > 0; end--) {
+        std::swap(a[0], a[end]);
+        siftDown(a, 0, end);
+    }
+    return a;
+}
+
+// Example
+// heapSort<int>({12, 11, 13, 5, 6, 7});
+// → [5, 6, 7, 11, 12, 13]`,
+    },
+  ],
 
   furtherReading: [
     {

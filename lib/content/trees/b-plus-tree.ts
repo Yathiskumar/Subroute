@@ -124,10 +124,12 @@ export const bPlusTree: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "b-plus-tree.ts",
-    code: `// Minimal order-4 B+ tree — search, range scan, and insert sketch.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "b-plus-tree.ts",
+      code: `// Minimal order-4 B+ tree — search, range scan, and insert sketch.
 // All data lives in leaves; internal nodes hold separator keys only.
 
 const ORDER = 4; // max children per internal node
@@ -181,7 +183,228 @@ function rangeScan(root: BPlusNode, lo: number, hi: number): number[] {
 //   • Leaf split → COPY the middle key up (key stays in right leaf too).
 //   • Internal split → PUSH the middle key up (key leaves the child).
 //   • Always rewire leaf.next pointers when splitting a leaf.`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "BPlusTree.java",
+      code: `// Minimal order-4 B+ tree — search, range scan, and insert sketch.
+// All data lives in leaves; internal nodes hold separator keys only.
+
+import java.util.ArrayList;
+import java.util.List;
+
+class BPlusTree {
+    static final int ORDER = 4; // max children per internal node
+
+    // Base node type; "kind" is encoded by the concrete subclass.
+    abstract static class BPlusNode {
+        List<Integer> keys = new ArrayList<>();
+    }
+
+    static class Leaf extends BPlusNode {
+        Leaf next; // linked-list pointer →
+    }
+
+    static class Internal extends BPlusNode {
+        // keys are separator keys (copies from leaf splits)
+        List<BPlusNode> children = new ArrayList<>();
+    }
+
+    boolean search(BPlusNode root, int target) {
+        BPlusNode node = root;
+        while (node instanceof Internal internal) {
+            // Find the first separator key > target; follow child to its left.
+            int i = firstGreater(internal.keys, target);
+            node = i == -1 ? internal.children.get(internal.children.size() - 1)
+                           : internal.children.get(i);
+        }
+        // node is now a leaf — every search descends to a leaf (uniform cost).
+        return node.keys.contains(target);
+    }
+
+    List<Integer> rangeScan(BPlusNode root, int lo, int hi) {
+        // 1. Descend to the first leaf that may contain lo.
+        BPlusNode node = root;
+        while (node instanceof Internal internal) {
+            int i = firstGreater(internal.keys, lo);
+            node = i == -1 ? internal.children.get(internal.children.size() - 1)
+                           : internal.children.get(i);
+        }
+        // 2. Walk the leaf linked list, collecting keys in [lo, hi].
+        List<Integer> results = new ArrayList<>();
+        Leaf leaf = (Leaf) node;
+        while (leaf != null) {
+            for (int k : leaf.keys) {
+                if (k > hi) return results;   // past upper bound — stop early
+                if (k >= lo) results.add(k);
+            }
+            leaf = leaf.next;                 // follow the chain →
+        }
+        return results;
+    }
+
+    // Index of the first key > target, or -1 if none.
+    private int firstGreater(List<Integer> keys, int target) {
+        for (int i = 0; i < keys.size(); i++)
+            if (target < keys.get(i)) return i;
+        return -1;
+    }
+
+    // insert() — full implementation omitted for brevity; key rules:
+    //   • Leaf split → COPY the middle key up (key stays in right leaf too).
+    //   • Internal split → PUSH the middle key up (key leaves the child).
+    //   • Always rewire leaf.next pointers when splitting a leaf.
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "b_plus_tree.py",
+      code: `# Minimal order-4 B+ tree — search, range scan, and insert sketch.
+# All data lives in leaves; internal nodes hold separator keys only.
+
+from typing import List, Optional, Union
+
+ORDER = 4  # max children per internal node
+
+
+class Leaf:
+    def __init__(self) -> None:
+        self.kind = "leaf"
+        self.keys: List[int] = []
+        self.next: Optional["Leaf"] = None  # linked-list pointer →
+
+
+class Internal:
+    def __init__(self) -> None:
+        self.kind = "internal"
+        self.keys: List[int] = []           # separator keys (copies from leaf splits)
+        self.children: List[Union["Internal", Leaf]] = []
+
+
+BPlusNode = Union[Internal, Leaf]
+
+
+def _first_greater(keys: List[int], target: int) -> int:
+    # Index of the first key > target, or -1 if none.
+    for i, k in enumerate(keys):
+        if target < k:
+            return i
+    return -1
+
+
+def search(root: BPlusNode, target: int) -> bool:
+    node = root
+    while node.kind == "internal":
+        # Find the first separator key > target; follow child to its left.
+        i = _first_greater(node.keys, target)
+        node = node.children[-1] if i == -1 else node.children[i]
+    # node is now a leaf — every search descends to a leaf (uniform cost).
+    return target in node.keys
+
+
+def range_scan(root: BPlusNode, lo: int, hi: int) -> List[int]:
+    # 1. Descend to the first leaf that may contain lo.
+    node = root
+    while node.kind == "internal":
+        i = _first_greater(node.keys, lo)
+        node = node.children[-1] if i == -1 else node.children[i]
+    # 2. Walk the leaf linked list, collecting keys in [lo, hi].
+    results: List[int] = []
+    leaf: Optional[Leaf] = node
+    while leaf is not None:
+        for k in leaf.keys:
+            if k > hi:
+                return results          # past upper bound — stop early
+            if k >= lo:
+                results.append(k)
+        leaf = leaf.next                # follow the chain →
+    return results
+
+
+# insert() — full implementation omitted for brevity; key rules:
+#   • Leaf split → COPY the middle key up (key stays in right leaf too).
+#   • Internal split → PUSH the middle key up (key leaves the child).
+#   • Always rewire leaf.next pointers when splitting a leaf.`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "b_plus_tree.cpp",
+      code: `// Minimal order-4 B+ tree — search, range scan, and insert sketch.
+// All data lives in leaves; internal nodes hold separator keys only.
+#include <vector>
+
+constexpr int ORDER = 4; // max children per internal node
+
+enum class Kind { Leaf, Internal };
+
+struct BPlusNode {
+    Kind kind;
+    std::vector<int> keys;
+    explicit BPlusNode(Kind k) : kind(k) {}
+    virtual ~BPlusNode() = default;
+};
+
+struct Leaf : BPlusNode {
+    Leaf* next = nullptr;       // linked-list pointer →
+    Leaf() : BPlusNode(Kind::Leaf) {}
+};
+
+struct Internal : BPlusNode {
+    // keys are separator keys (copies from leaf splits)
+    std::vector<BPlusNode*> children;
+    Internal() : BPlusNode(Kind::Internal) {}
+};
+
+// Index of the first key > target, or -1 if none.
+static int firstGreater(const std::vector<int>& keys, int target) {
+    for (int i = 0; i < (int)keys.size(); i++)
+        if (target < keys[i]) return i;
+    return -1;
+}
+
+bool search(BPlusNode* root, int target) {
+    BPlusNode* node = root;
+    while (node->kind == Kind::Internal) {
+        // Find the first separator key > target; follow child to its left.
+        auto* internal = static_cast<Internal*>(node);
+        int i = firstGreater(internal->keys, target);
+        node = i == -1 ? internal->children.back() : internal->children[i];
+    }
+    // node is now a leaf — every search descends to a leaf (uniform cost).
+    for (int k : node->keys) if (k == target) return true;
+    return false;
+}
+
+std::vector<int> rangeScan(BPlusNode* root, int lo, int hi) {
+    // 1. Descend to the first leaf that may contain lo.
+    BPlusNode* node = root;
+    while (node->kind == Kind::Internal) {
+        auto* internal = static_cast<Internal*>(node);
+        int i = firstGreater(internal->keys, lo);
+        node = i == -1 ? internal->children.back() : internal->children[i];
+    }
+    // 2. Walk the leaf linked list, collecting keys in [lo, hi].
+    std::vector<int> results;
+    Leaf* leaf = static_cast<Leaf*>(node);
+    while (leaf != nullptr) {
+        for (int k : leaf->keys) {
+            if (k > hi) return results;   // past upper bound — stop early
+            if (k >= lo) results.push_back(k);
+        }
+        leaf = leaf->next;                // follow the chain →
+    }
+    return results;
+}
+
+// insert() — full implementation omitted for brevity; key rules:
+//   • Leaf split → COPY the middle key up (key stays in right leaf too).
+//   • Internal split → PUSH the middle key up (key leaves the child).
+//   • Always rewire leaf->next pointers when splitting a leaf.`,
+    },
+  ],
 
   furtherReading: [
     {

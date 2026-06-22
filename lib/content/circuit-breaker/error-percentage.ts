@@ -98,66 +98,346 @@ export const errorPercentage: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "error-percentage.ts",
-    code: `// Hystrix-style breaker: trip only when (a) request volume crosses a minimum
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "error_percentage.go",
+      code: `// Hystrix-style breaker: trip only when (a) request volume crosses a minimum
 // AND (b) error rate crosses the threshold. The volume gate is the whole point.
-class ErrorPercentageBreaker {
-  private state: "CLOSED" | "OPEN" | "HALF" = "CLOSED";
-  private calls: Array<{ t: number; ok: boolean }> = [];
-  private openUntil = 0;
+package breaker
 
-  constructor(
-    private windowMs = 10_000,
-    private minVolume = 20,           // the gate
-    private errorThreshold = 0.5,
-    private cooldownMs = 5_000,
-  ) {}
+import (
+	"errors"
+	"time"
+)
 
-  async call<T>(work: () => Promise<T>): Promise<T> {
-    if (this.state === "OPEN" && Date.now() >= this.openUntil) this.state = "HALF";
-    if (this.state === "OPEN") throw new Error("circuit open");
+var ErrOpen = errors.New("circuit open")
 
-    try {
-      const result = await work();
-      this.onResult(true);
-      return result;
-    } catch (err) {
-      this.onResult(false);
-      throw err;
-    }
-  }
+type callResult struct {
+	t  time.Time
+	ok bool
+}
 
-  private onResult(ok: boolean) {
-    const now = Date.now();
+type ErrorPercentageBreaker struct {
+	state     string // "CLOSED" | "OPEN" | "HALF"
+	calls     []callResult
+	openUntil time.Time
 
-    if (this.state === "HALF") {
-      // Single trial call decides everything.
-      if (ok) { this.state = "CLOSED"; this.calls = []; }
-      else    { this.state = "OPEN"; this.openUntil = now + this.cooldownMs; }
-      return;
-    }
+	window         time.Duration
+	minVolume      int // the gate
+	errorThreshold float64
+	cooldown       time.Duration
+}
 
-    this.calls.push({ t: now, ok });
-    this.prune(now);
+func NewErrorPercentageBreaker() *ErrorPercentageBreaker {
+	return &ErrorPercentageBreaker{
+		state:          "CLOSED",
+		window:         10_000 * time.Millisecond,
+		minVolume:      20,
+		errorThreshold: 0.5,
+		cooldown:       5_000 * time.Millisecond,
+	}
+}
 
-    const total = this.calls.length;
-    if (total < this.minVolume) return;           // GATE 1: volume
+func (cb *ErrorPercentageBreaker) Call(work func() error) error {
+	if cb.state == "OPEN" && !time.Now().Before(cb.openUntil) {
+		cb.state = "HALF"
+	}
+	if cb.state == "OPEN" {
+		return ErrOpen
+	}
+	if err := work(); err != nil {
+		cb.onResult(false)
+		return err
+	}
+	cb.onResult(true)
+	return nil
+}
 
-    const fails = this.calls.filter(c => !c.ok).length;
-    if (fails / total < this.errorThreshold) return;  // GATE 2: error %
+func (cb *ErrorPercentageBreaker) onResult(ok bool) {
+	now := time.Now()
 
-    this.state = "OPEN";
-    this.openUntil = now + this.cooldownMs;
-  }
+	if cb.state == "HALF" {
+		// Single trial call decides everything.
+		if ok {
+			cb.state = "CLOSED"
+			cb.calls = nil
+		} else {
+			cb.state = "OPEN"
+			cb.openUntil = now.Add(cb.cooldown)
+		}
+		return
+	}
 
-  private prune(now: number) {
-    const lo = now - this.windowMs;
-    while (this.calls.length && this.calls[0].t < lo) this.calls.shift();
-  }
+	cb.calls = append(cb.calls, callResult{t: now, ok: ok})
+	cb.prune(now)
+
+	total := len(cb.calls)
+	if total < cb.minVolume { // GATE 1: volume
+		return
+	}
+
+	fails := 0
+	for _, c := range cb.calls {
+		if !c.ok {
+			fails++
+		}
+	}
+	if float64(fails)/float64(total) < cb.errorThreshold { // GATE 2: error %
+		return
+	}
+
+	cb.state = "OPEN"
+	cb.openUntil = now.Add(cb.cooldown)
+}
+
+func (cb *ErrorPercentageBreaker) prune(now time.Time) {
+	lo := now.Add(-cb.window)
+	for len(cb.calls) > 0 && cb.calls[0].t.Before(lo) {
+		cb.calls = cb.calls[1:]
+	}
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "ErrorPercentageBreaker.java",
+      code: `// Hystrix-style breaker: trip only when (a) request volume crosses a minimum
+// AND (b) error rate crosses the threshold. The volume gate is the whole point.
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.concurrent.Callable;
+
+class ErrorPercentageBreaker {
+    private static final class Call {
+        final long t;
+        final boolean ok;
+        Call(long t, boolean ok) { this.t = t; this.ok = ok; }
+    }
+
+    private String state = "CLOSED";              // "CLOSED" | "OPEN" | "HALF"
+    private final Deque<Call> calls = new ArrayDeque<>();
+    private long openUntil = 0;
+
+    private final long windowMs;
+    private final int minVolume;                  // the gate
+    private final double errorThreshold;
+    private final long cooldownMs;
+
+    ErrorPercentageBreaker(long windowMs, int minVolume, double errorThreshold, long cooldownMs) {
+        this.windowMs = windowMs;
+        this.minVolume = minVolume;
+        this.errorThreshold = errorThreshold;
+        this.cooldownMs = cooldownMs;
+    }
+
+    <T> T call(Callable<T> work) throws Exception {
+        if (state.equals("OPEN") && System.currentTimeMillis() >= openUntil) state = "HALF";
+        if (state.equals("OPEN")) throw new IllegalStateException("circuit open");
+
+        try {
+            T result = work.call();
+            onResult(true);
+            return result;
+        } catch (Exception err) {
+            onResult(false);
+            throw err;
+        }
+    }
+
+    private void onResult(boolean ok) {
+        long now = System.currentTimeMillis();
+
+        if (state.equals("HALF")) {
+            // Single trial call decides everything.
+            if (ok) { state = "CLOSED"; calls.clear(); }
+            else    { state = "OPEN"; openUntil = now + cooldownMs; }
+            return;
+        }
+
+        calls.addLast(new Call(now, ok));
+        prune(now);
+
+        int total = calls.size();
+        if (total < minVolume) return;                // GATE 1: volume
+
+        long fails = calls.stream().filter(c -> !c.ok).count();
+        if ((double) fails / total < errorThreshold) return;  // GATE 2: error %
+
+        state = "OPEN";
+        openUntil = now + cooldownMs;
+    }
+
+    private void prune(long now) {
+        long lo = now - windowMs;
+        while (!calls.isEmpty() && calls.peekFirst().t < lo) calls.removeFirst();
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "error_percentage.py",
+      code: `# Hystrix-style breaker: trip only when (a) request volume crosses a minimum
+# AND (b) error rate crosses the threshold. The volume gate is the whole point.
+import time
+from collections import deque
+from dataclasses import dataclass
+from typing import Callable, Deque, TypeVar
+
+T = TypeVar("T")
+
+
+@dataclass
+class Call:
+    t: float
+    ok: bool
+
+
+class ErrorPercentageBreaker:
+    def __init__(
+        self,
+        window_s: float = 10.0,
+        min_volume: int = 20,       # the gate
+        error_threshold: float = 0.5,
+        cooldown_s: float = 5.0,
+    ) -> None:
+        self.state = "CLOSED"       # "CLOSED" | "OPEN" | "HALF"
+        self.calls: Deque[Call] = deque()
+        self.open_until = 0.0
+        self.window_s = window_s
+        self.min_volume = min_volume
+        self.error_threshold = error_threshold
+        self.cooldown_s = cooldown_s
+
+    def call(self, work: Callable[[], T]) -> T:
+        if self.state == "OPEN" and time.monotonic() >= self.open_until:
+            self.state = "HALF"
+        if self.state == "OPEN":
+            raise RuntimeError("circuit open")
+        try:
+            result = work()
+        except Exception:
+            self._on_result(False)
+            raise
+        self._on_result(True)
+        return result
+
+    def _on_result(self, ok: bool) -> None:
+        now = time.monotonic()
+
+        if self.state == "HALF":
+            # Single trial call decides everything.
+            if ok:
+                self.state = "CLOSED"
+                self.calls.clear()
+            else:
+                self.state = "OPEN"
+                self.open_until = now + self.cooldown_s
+            return
+
+        self.calls.append(Call(t=now, ok=ok))
+        self._prune(now)
+
+        total = len(self.calls)
+        if total < self.min_volume:                 # GATE 1: volume
+            return
+
+        fails = sum(1 for c in self.calls if not c.ok)
+        if fails / total < self.error_threshold:    # GATE 2: error %
+            return
+
+        self.state = "OPEN"
+        self.open_until = now + self.cooldown_s
+
+    def _prune(self, now: float) -> None:
+        lo = now - self.window_s
+        while self.calls and self.calls[0].t < lo:
+            self.calls.popleft()`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "error_percentage.cpp",
+      code: `// Hystrix-style breaker: trip only when (a) request volume crosses a minimum
+// AND (b) error rate crosses the threshold. The volume gate is the whole point.
+#include <chrono>
+#include <deque>
+#include <functional>
+#include <stdexcept>
+#include <string>
+
+class ErrorPercentageBreaker {
+    using Clock = std::chrono::steady_clock;
+
+    struct Call {
+        Clock::time_point t;
+        bool ok;
+    };
+
+    std::string state_ = "CLOSED";  // "CLOSED" | "OPEN" | "HALF"
+    std::deque<Call> calls_;
+    Clock::time_point openUntil_;
+
+    std::chrono::milliseconds window_;
+    int minVolume_;                 // the gate
+    double errorThreshold_;
+    std::chrono::milliseconds cooldown_;
+
+public:
+    ErrorPercentageBreaker(int windowMs = 10000, int minVolume = 20,
+                           double errorThreshold = 0.5, int cooldownMs = 5000)
+        : window_(windowMs), minVolume_(minVolume),
+          errorThreshold_(errorThreshold), cooldown_(cooldownMs) {}
+
+    // work() returns true on success, throws or returns false on failure.
+    void call(const std::function<bool()>& work) {
+        if (state_ == "OPEN" && Clock::now() >= openUntil_) state_ = "HALF";
+        if (state_ == "OPEN") throw std::runtime_error("circuit open");
+
+        bool ok = false;
+        try {
+            ok = work();
+        } catch (...) {
+            onResult(false);
+            throw;
+        }
+        onResult(ok);
+    }
+
+private:
+    void onResult(bool ok) {
+        auto now = Clock::now();
+
+        if (state_ == "HALF") {
+            // Single trial call decides everything.
+            if (ok) { state_ = "CLOSED"; calls_.clear(); }
+            else    { state_ = "OPEN"; openUntil_ = now + cooldown_; }
+            return;
+        }
+
+        calls_.push_back(Call{now, ok});
+        prune(now);
+
+        int total = static_cast<int>(calls_.size());
+        if (total < minVolume_) return;               // GATE 1: volume
+
+        int fails = 0;
+        for (const auto& c : calls_) if (!c.ok) fails++;
+        if (static_cast<double>(fails) / total < errorThreshold_) return;  // GATE 2: error %
+
+        state_ = "OPEN";
+        openUntil_ = now + cooldown_;
+    }
+
+    void prune(Clock::time_point now) {
+        auto lo = now - window_;
+        while (!calls_.empty() && calls_.front().t < lo) calls_.pop_front();
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

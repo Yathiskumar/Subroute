@@ -91,44 +91,222 @@ export const aging: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "aging.ts",
-    code: `// Aging: per-page n-bit shift-register counter approximating LRU.
-const BITS = 8;
-interface Slot { page: number; r: 0 | 1; counter: number; }
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "aging.go",
+      code: `// Aging: per-page n-bit shift-register counter approximating LRU.
+package aging
+
+const bits = 8
+
+type slot struct {
+	page    int
+	r       int  // 0 or 1
+	counter uint // n-bit shift register
+}
+
+type Aging struct {
+	slots  []*slot // nil = empty frame
+	Faults int
+	Hits   int
+}
+
+func NewAging(frames int) *Aging {
+	return &Aging{slots: make([]*slot, frames)}
+}
+
+// Tick is called periodically: shift right, drop R into the top bit, clear R.
+func (a *Aging) Tick() {
+	for _, s := range a.slots {
+		if s != nil {
+			s.counter = (s.counter >> 1) | (uint(s.r) << (bits - 1))
+			s.r = 0
+		}
+	}
+}
+
+func (a *Aging) Access(page int) string {
+	for _, s := range a.slots {
+		if s != nil && s.page == page {
+			s.r = 1 // mark referenced
+			a.Hits++
+			return "hit"
+		}
+	}
+	a.Faults++
+	for i, s := range a.slots {
+		if s == nil {
+			a.slots[i] = &slot{page: page, r: 1, counter: 0}
+			return "fault"
+		}
+	}
+
+	// evict the smallest counter: least recently used over the recent window
+	victim := 0
+	for i, s := range a.slots {
+		if s.counter < a.slots[victim].counter {
+			victim = i
+		}
+	}
+	a.slots[victim] = &slot{page: page, r: 1, counter: 0}
+	return "fault"
+}`,
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "Aging.java",
+      code: `// Aging: per-page n-bit shift-register counter approximating LRU.
+class Aging {
+    private static final int BITS = 8;
+
+    private static final class Slot {
+        int page;
+        int r;       // 0 or 1
+        int counter; // n-bit shift register
+        Slot(int page, int r, int counter) { this.page = page; this.r = r; this.counter = counter; }
+    }
+
+    private final Slot[] slots;
+    int faults = 0;
+    int hits = 0;
+
+    Aging(int frames) { this.slots = new Slot[frames]; }
+
+    // called periodically: shift right, drop R into the top bit, clear R
+    void tick() {
+        for (Slot s : slots) if (s != null) {
+            s.counter = (s.counter >>> 1) | (s.r << (BITS - 1));
+            s.r = 0;
+        }
+    }
+
+    String access(int page) {
+        for (Slot s : slots) {
+            if (s != null && s.page == page) { s.r = 1; hits++; return "hit"; } // mark referenced
+        }
+        faults++;
+        for (int i = 0; i < slots.length; i++) {
+            if (slots[i] == null) { slots[i] = new Slot(page, 1, 0); return "fault"; }
+        }
+
+        // evict the smallest counter: least recently used over the recent window
+        int victim = 0;
+        for (int i = 0; i < slots.length; i++) {
+            if (slots[i].counter < slots[victim].counter) victim = i;
+        }
+        slots[victim] = new Slot(page, 1, 0);
+        return "fault";
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "aging.py",
+      code: `# Aging: per-page n-bit shift-register counter approximating LRU.
+from dataclasses import dataclass
+
+BITS = 8
+
+
+@dataclass
+class Slot:
+    page: int
+    r: int        # 0 or 1
+    counter: int  # n-bit shift register
+
+
+class Aging:
+    def __init__(self, frames: int) -> None:
+        self.slots: list[Slot | None] = [None] * frames
+        self.faults = 0
+        self.hits = 0
+
+    def tick(self) -> None:
+        # called periodically: shift right, drop R into the top bit, clear R
+        for s in self.slots:
+            if s is not None:
+                s.counter = (s.counter >> 1) | (s.r << (BITS - 1))
+                s.r = 0
+
+    def access(self, page: int) -> str:
+        for s in self.slots:
+            if s is not None and s.page == page:
+                s.r = 1  # mark referenced
+                self.hits += 1
+                return "hit"
+        self.faults += 1
+        for i, s in enumerate(self.slots):
+            if s is None:
+                self.slots[i] = Slot(page, 1, 0)
+                return "fault"
+
+        # evict the smallest counter: least recently used over the recent window
+        victim = 0
+        for i, s in enumerate(self.slots):
+            if s.counter < self.slots[victim].counter:
+                victim = i
+        self.slots[victim] = Slot(page, 1, 0)
+        return "fault"`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "aging.cpp",
+      code: `// Aging: per-page n-bit shift-register counter approximating LRU.
+#include <cstdint>
+#include <optional>
+#include <string>
+#include <vector>
 
 class Aging {
-  private slots: (Slot | null)[];
-  faults = 0; hits = 0;
+    static constexpr int BITS = 8;
 
-  constructor(frames: number) { this.slots = Array(frames).fill(null); }
+    struct Slot {
+        int page;
+        int r;            // 0 or 1
+        std::uint32_t counter; // n-bit shift register
+    };
 
-  // called periodically: shift right, drop R into the top bit, clear R
-  tick() {
-    for (const s of this.slots) if (s) {
-      s.counter = (s.counter >>> 1) | (s.r << (BITS - 1));
-      s.r = 0;
+    std::vector<std::optional<Slot>> slots_; // nullopt = empty frame
+
+public:
+    int faults = 0;
+    int hits = 0;
+
+    explicit Aging(int frames) : slots_(frames) {}
+
+    // called periodically: shift right, drop R into the top bit, clear R
+    void tick() {
+        for (auto& s : slots_) if (s) {
+            s->counter = (s->counter >> 1) | (static_cast<std::uint32_t>(s->r) << (BITS - 1));
+            s->r = 0;
+        }
     }
-  }
 
-  access(page: number): "hit" | "fault" {
-    const slot = this.slots.find((s) => s?.page === page);
-    if (slot) { slot.r = 1; this.hits++; return "hit"; }   // mark referenced
-    this.faults++;
-    const free = this.slots.indexOf(null);
-    if (free >= 0) { this.slots[free] = { page, r: 1, counter: 0 }; return "fault"; }
+    std::string access(int page) {
+        for (auto& s : slots_) {
+            if (s && s->page == page) { s->r = 1; hits++; return "hit"; } // mark referenced
+        }
+        faults++;
+        for (auto& s : slots_) {
+            if (!s) { s = Slot{page, 1, 0}; return "fault"; }
+        }
 
-    // evict the smallest counter: least recently used over the recent window
-    let victim = 0;
-    this.slots.forEach((s, i) => {
-      if (s!.counter < this.slots[victim]!.counter) victim = i;
-    });
-    this.slots[victim] = { page, r: 1, counter: 0 };
-    return "fault";
-  }
-}`,
-  },
+        // evict the smallest counter: least recently used over the recent window
+        int victim = 0;
+        for (int i = 0; i < static_cast<int>(slots_.size()); i++) {
+            if (slots_[i]->counter < slots_[victim]->counter) victim = i;
+        }
+        slots_[victim] = Slot{page, 1, 0};
+        return "fault";
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

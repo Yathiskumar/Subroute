@@ -92,34 +92,159 @@ export const bestFit: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "best-fit.ts",
-    code: `interface Hole { start: number; size: number; }
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "best_fit.go",
+      code: `package alloc
 
-/** Best Fit: scan all holes, pick the one with the smallest sufficient size. */
-function bestFitAlloc(holes: Hole[], request: number): number | null {
-  let bestIdx = -1;
-  let bestLeftover = Infinity;
+import "math"
 
-  for (let i = 0; i < holes.length; i++) {       // no early stop
-    if (holes[i].size >= request) {
-      const leftover = holes[i].size - request;
-      if (leftover < bestLeftover) {             // tighter fit found
-        bestLeftover = leftover;
-        bestIdx = i;
-      }
-    }
-  }
-  if (bestIdx === -1) return null;               // nothing fit
+type Hole struct {
+	Start int
+	Size  int
+}
 
-  const hole = holes[bestIdx];
-  const addr = hole.start;
-  if (bestLeftover === 0) holes.splice(bestIdx, 1);
-  else { hole.start += request; hole.size = bestLeftover; } // leaves the smallest sliver
-  return addr;
+// BestFitAlloc scans all holes, picking the one with the smallest sufficient size.
+// It returns the allocated address and ok=false on failure.
+func BestFitAlloc(holes *[]Hole, request int) (int, bool) {
+	h := *holes
+	bestIdx := -1
+	bestLeftover := math.MaxInt
+
+	for i := 0; i < len(h); i++ { // no early stop
+		if h[i].Size >= request {
+			leftover := h[i].Size - request
+			if leftover < bestLeftover { // tighter fit found
+				bestLeftover = leftover
+				bestIdx = i
+			}
+		}
+	}
+	if bestIdx == -1 {
+		return 0, false // nothing fit
+	}
+
+	addr := h[bestIdx].Start
+	if bestLeftover == 0 {
+		*holes = append(h[:bestIdx], h[bestIdx+1:]...)
+	} else {
+		h[bestIdx].Start += request    // leaves the smallest sliver
+		h[bestIdx].Size = bestLeftover
+	}
+	return addr, true
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "BestFit.java",
+      code: `import java.util.List;
+
+class Hole {
+    int start, size;
+    Hole(int start, int size) { this.start = start; this.size = size; }
+}
+
+class BestFit {
+    /** Best Fit: scan all holes, pick the one with the smallest sufficient size. Returns null on failure. */
+    static Integer bestFitAlloc(List<Hole> holes, int request) {
+        int bestIdx = -1;
+        int bestLeftover = Integer.MAX_VALUE;
+
+        for (int i = 0; i < holes.size(); i++) {       // no early stop
+            if (holes.get(i).size >= request) {
+                int leftover = holes.get(i).size - request;
+                if (leftover < bestLeftover) {         // tighter fit found
+                    bestLeftover = leftover;
+                    bestIdx = i;
+                }
+            }
+        }
+        if (bestIdx == -1) return null;                // nothing fit
+
+        Hole hole = holes.get(bestIdx);
+        int addr = hole.start;
+        if (bestLeftover == 0) holes.remove(bestIdx);
+        else { hole.start += request; hole.size = bestLeftover; } // leaves the smallest sliver
+        return addr;
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "best_fit.py",
+      code: `from dataclasses import dataclass
+
+
+@dataclass
+class Hole:
+    start: int
+    size: int
+
+
+def best_fit_alloc(holes: list[Hole], request: int) -> int | None:
+    """Best Fit: scan all holes, pick the one with the smallest sufficient size."""
+    best_idx = -1
+    best_leftover = float("inf")
+
+    for i, hole in enumerate(holes):       # no early stop
+        if hole.size >= request:
+            leftover = hole.size - request
+            if leftover < best_leftover:   # tighter fit found
+                best_leftover = leftover
+                best_idx = i
+    if best_idx == -1:
+        return None                        # nothing fit
+
+    hole = holes[best_idx]
+    addr = hole.start
+    if best_leftover == 0:
+        del holes[best_idx]
+    else:                                  # leaves the smallest sliver
+        hole.start += request
+        hole.size = best_leftover
+    return addr`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "best_fit.cpp",
+      code: `#include <limits>
+#include <optional>
+#include <vector>
+
+struct Hole {
+    int start;
+    int size;
+};
+
+// Best Fit: scan all holes, pick the one with the smallest sufficient size.
+std::optional<int> bestFitAlloc(std::vector<Hole>& holes, int request) {
+    int bestIdx = -1;
+    int bestLeftover = std::numeric_limits<int>::max();
+
+    for (std::size_t i = 0; i < holes.size(); ++i) {   // no early stop
+        if (holes[i].size >= request) {
+            int leftover = holes[i].size - request;
+            if (leftover < bestLeftover) {             // tighter fit found
+                bestLeftover = leftover;
+                bestIdx = static_cast<int>(i);
+            }
+        }
+    }
+    if (bestIdx == -1) return std::nullopt;            // nothing fit
+
+    Hole& hole = holes[bestIdx];
+    int addr = hole.start;
+    if (bestLeftover == 0) holes.erase(holes.begin() + bestIdx);
+    else { hole.start += request; hole.size = bestLeftover; } // leaves the smallest sliver
+    return addr;
+}`,
+    },
+  ],
 
   furtherReading: [
     {

@@ -111,10 +111,12 @@ export const unweightedGraph: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "unweighted-graph.ts",
-    code: `// In an unweighted graph every edge costs the same, so "shortest path"
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "unweighted-graph.ts",
+      code: `// In an unweighted graph every edge costs the same, so "shortest path"
 // means "fewest edges" — and BFS reads the distance off directly.
 class UnweightedGraph {
   private adj = new Map<string, Set<string>>();
@@ -161,7 +163,195 @@ class UnweightedGraph {
     return path;                           // path.length - 1 === hop count
   }
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "UnweightedGraph.java",
+      code: `// In an unweighted graph every edge costs the same, so "shortest path"
+// means "fewest edges" — and BFS reads the distance off directly.
+import java.util.*;
+
+class UnweightedGraph {
+    private final Map<String, Set<String>> adj = new HashMap<>();
+
+    void addEdge(String u, String v) {
+        adj.putIfAbsent(u, new LinkedHashSet<>());
+        adj.putIfAbsent(v, new LinkedHashSet<>());
+        adj.get(u).add(v);   // undirected: both directions
+        adj.get(v).add(u);
+    }
+
+    // Hop-distance from source to every reachable vertex.
+    // First time a vertex is dequeued-into = its shortest distance,
+    // because the FIFO queue hands out vertices in distance order.
+    Map<String, Integer> distances(String source) {
+        Map<String, Integer> dist = new HashMap<>();
+        dist.put(source, 0);
+        Deque<String> queue = new ArrayDeque<>();
+        queue.add(source);
+        while (!queue.isEmpty()) {
+            String u = queue.poll();              // front of the frontier
+            for (String v : adj.getOrDefault(u, Set.of())) {
+                if (!dist.containsKey(v)) {        // first sighting = shortest
+                    dist.put(v, dist.get(u) + 1);  // every edge adds exactly 1
+                    queue.add(v);
+                }
+            }
+        }
+        return dist;                              // missing key => unreachable
+    }
+
+    // The fewest-edge path itself, reconstructed from a parent map.
+    List<String> shortestPath(String source, String target) {
+        Map<String, String> prev = new HashMap<>();
+        prev.put(source, null);
+        Deque<String> queue = new ArrayDeque<>();
+        queue.add(source);
+        while (!queue.isEmpty()) {
+            String u = queue.poll();
+            if (u.equals(target)) break;
+            for (String v : adj.getOrDefault(u, Set.of())) {
+                if (!prev.containsKey(v)) { prev.put(v, u); queue.add(v); }
+            }
+        }
+        if (!prev.containsKey(target)) return null;   // different component
+        LinkedList<String> path = new LinkedList<>();
+        for (String c = target; c != null; c = prev.get(c)) path.addFirst(c);
+        return path;                              // path.size() - 1 == hop count
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "unweighted_graph.py",
+      code: `from collections import deque
+
+
+class UnweightedGraph:
+    """In an unweighted graph every edge costs the same, so "shortest path"
+    means "fewest edges" — and BFS reads the distance off directly.
+    """
+
+    def __init__(self) -> None:
+        self.adj: dict[str, set[str]] = {}
+
+    def add_edge(self, u: str, v: str) -> None:
+        self.adj.setdefault(u, set())
+        self.adj.setdefault(v, set())
+        self.adj[u].add(v)   # undirected: both directions
+        self.adj[v].add(u)
+
+    def distances(self, source: str) -> dict[str, int]:
+        # Hop-distance from source to every reachable vertex.
+        # First time a vertex is dequeued-into = its shortest distance,
+        # because the FIFO queue hands out vertices in distance order.
+        dist = {source: 0}
+        queue = deque([source])
+        while queue:
+            u = queue.popleft()              # front of the frontier
+            for v in self.adj.get(u, ()):
+                if v not in dist:            # first sighting = shortest
+                    dist[v] = dist[u] + 1    # every edge adds exactly 1
+                    queue.append(v)
+        return dist                          # missing key => unreachable (inf)
+
+    def shortest_path(self, source: str, target: str) -> list[str] | None:
+        # The fewest-edge path itself, reconstructed from a parent map.
+        prev: dict[str, str | None] = {source: None}
+        queue = deque([source])
+        while queue:
+            u = queue.popleft()
+            if u == target:
+                break
+            for v in self.adj.get(u, ()):
+                if v not in prev:
+                    prev[v] = u
+                    queue.append(v)
+        if target not in prev:
+            return None                      # different component
+        path: list[str] = []
+        c: str | None = target
+        while c is not None:
+            path.insert(0, c)
+            c = prev[c]
+        return path                          # len(path) - 1 == hop count`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "unweighted_graph.cpp",
+      code: `// In an unweighted graph every edge costs the same, so "shortest path"
+// means "fewest edges" — and BFS reads the distance off directly.
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+#include <queue>
+#include <algorithm>
+
+class UnweightedGraph {
+    std::unordered_map<std::string, std::unordered_set<std::string>> adj_;
+
+public:
+    void addEdge(const std::string& u, const std::string& v) {
+        adj_[u].insert(v);   // undirected: both directions
+        adj_[v].insert(u);
+    }
+
+    // Hop-distance from source to every reachable vertex.
+    // First time a vertex is dequeued-into = its shortest distance,
+    // because the FIFO queue hands out vertices in distance order.
+    std::unordered_map<std::string, int> distances(const std::string& source) const {
+        std::unordered_map<std::string, int> dist{{source, 0}};
+        std::queue<std::string> queue;
+        queue.push(source);
+        while (!queue.empty()) {
+            std::string u = queue.front();          // front of the frontier
+            queue.pop();
+            auto it = adj_.find(u);
+            if (it == adj_.end()) continue;
+            for (const auto& v : it->second) {
+                if (!dist.count(v)) {               // first sighting = shortest
+                    dist[v] = dist[u] + 1;          // every edge adds exactly 1
+                    queue.push(v);
+                }
+            }
+        }
+        return dist;                                // missing key => unreachable
+    }
+
+    // The fewest-edge path itself, reconstructed from a parent map.
+    // Returns an empty vector if the target is unreachable.
+    std::vector<std::string> shortestPath(const std::string& source,
+                                          const std::string& target) const {
+        std::unordered_map<std::string, std::string> prev;
+        prev[source] = source;                      // start is its own predecessor
+        std::queue<std::string> queue;
+        queue.push(source);
+        while (!queue.empty()) {
+            std::string u = queue.front();
+            queue.pop();
+            if (u == target) break;
+            auto it = adj_.find(u);
+            if (it == adj_.end()) continue;
+            for (const auto& v : it->second) {
+                if (!prev.count(v)) { prev[v] = u; queue.push(v); }
+            }
+        }
+        if (!prev.count(target)) return {};         // different component
+        std::vector<std::string> path;
+        for (std::string c = target; ; c = prev[c]) {
+            path.push_back(c);
+            if (c == source) break;
+        }
+        std::reverse(path.begin(), path.end());
+        return path;                                // path.size() - 1 == hop count
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

@@ -115,10 +115,12 @@ export const kruskal: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "kruskal.ts",
-    code: `// Kruskal's MST — greedy edge addition with DSU cycle check.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "kruskal.ts",
+      code: `// Kruskal's MST — greedy edge addition with DSU cycle check.
 type Edge = { u: number; v: number; w: number };
 
 function kruskal(n: number, edges: Edge[]): Edge[] {
@@ -151,7 +153,146 @@ function kruskal(n: number, edges: Edge[]): Edge[] {
   }
   return mst;
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "Kruskal.java",
+      code: `import java.util.*;
+
+// Kruskal's MST — greedy edge addition with DSU cycle check.
+class Kruskal {
+    record Edge(int u, int v, int w) {}
+
+    int[] parent, rank;
+
+    int find(int x) {
+        if (parent[x] != x) parent[x] = find(parent[x]);
+        return parent[x];
+    }
+
+    boolean union(int x, int y) {
+        int rx = find(x), ry = find(y);
+        if (rx == ry) return false;
+        if (rank[rx] < rank[ry]) parent[rx] = ry;
+        else if (rank[rx] > rank[ry]) parent[ry] = rx;
+        else { parent[ry] = rx; rank[rx]++; }
+        return true;
+    }
+
+    List<Edge> kruskal(int n, List<Edge> edges) {
+        // 1. Sort edges by weight ascending.
+        List<Edge> sorted = new ArrayList<>(edges);
+        sorted.sort(Comparator.comparingInt(Edge::w));
+
+        // 2. Initialise DSU.
+        parent = new int[n];
+        rank = new int[n];
+        for (int i = 0; i < n; i++) parent[i] = i;
+
+        // 3. Walk sorted edges; accept if it doesn't form a cycle.
+        List<Edge> mst = new ArrayList<>();
+        for (Edge e : sorted) {
+            if (union(e.u(), e.v())) {
+                mst.add(e);
+                if (mst.size() == n - 1) break;   // tree complete
+            }
+        }
+        return mst;
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "kruskal.py",
+      code: `def kruskal(n: int, edges: list[tuple[int, int, int]]) -> list[tuple[int, int, int]]:
+    """Kruskal's MST — greedy edge addition with DSU cycle check.
+    Each edge is (u, v, weight)."""
+    # 1. Sort edges by weight ascending.
+    ordered = sorted(edges, key=lambda e: e[2])
+
+    # 2. Initialise DSU.
+    parent = list(range(n))
+    rank = [0] * n
+
+    def find(x: int) -> int:
+        if parent[x] != x:
+            parent[x] = find(parent[x])
+        return parent[x]
+
+    def union(x: int, y: int) -> bool:
+        rx, ry = find(x), find(y)
+        if rx == ry:
+            return False
+        if rank[rx] < rank[ry]:
+            parent[rx] = ry
+        elif rank[rx] > rank[ry]:
+            parent[ry] = rx
+        else:
+            parent[ry] = rx
+            rank[rx] += 1
+        return True
+
+    # 3. Walk sorted edges; accept if it doesn't form a cycle.
+    mst: list[tuple[int, int, int]] = []
+    for u, v, w in ordered:
+        if union(u, v):
+            mst.append((u, v, w))
+            if len(mst) == n - 1:
+                break               # tree complete
+    return mst`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "kruskal.cpp",
+      code: `// Kruskal's MST — greedy edge addition with DSU cycle check.
+#include <algorithm>
+#include <numeric>
+#include <vector>
+
+struct Edge { int u, v, w; };
+
+struct DSU {
+    std::vector<int> parent, rank;
+    explicit DSU(int n) : parent(n), rank(n, 0) {
+        std::iota(parent.begin(), parent.end(), 0);
+    }
+    int find(int x) {
+        if (parent[x] != x) parent[x] = find(parent[x]);
+        return parent[x];
+    }
+    bool unite(int x, int y) {
+        int rx = find(x), ry = find(y);
+        if (rx == ry) return false;
+        if (rank[rx] < rank[ry]) parent[rx] = ry;
+        else if (rank[rx] > rank[ry]) parent[ry] = rx;
+        else { parent[ry] = rx; rank[rx]++; }
+        return true;
+    }
+};
+
+std::vector<Edge> kruskal(int n, std::vector<Edge> edges) {
+    // 1. Sort edges by weight ascending.
+    std::sort(edges.begin(), edges.end(),
+              [](const Edge &a, const Edge &b) { return a.w < b.w; });
+
+    // 2. Initialise DSU.
+    DSU dsu(n);
+
+    // 3. Walk sorted edges; accept if it doesn't form a cycle.
+    std::vector<Edge> mst;
+    for (const auto &e : edges) {
+        if (dsu.unite(e.u, e.v)) {
+            mst.push_back(e);
+            if (static_cast<int>(mst.size()) == n - 1) break;  // tree complete
+        }
+    }
+    return mst;
+}`,
+    },
+  ],
 
   furtherReading: [
     {

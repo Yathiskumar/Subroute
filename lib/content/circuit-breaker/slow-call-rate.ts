@@ -98,65 +98,351 @@ export const slowCallRate: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "slow-call-rate.ts",
-    code: `// Slow-call-rate breaker: trip when too many calls take longer than D ms.
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "slow_call_rate.go",
+      code: `// Slow-call-rate breaker: trip when too many calls take longer than D ms.
 // Same state machine as the error-rate breaker, just a different signal.
-class SlowCallBreaker {
-  private state: "CLOSED" | "OPEN" | "HALF" = "CLOSED";
-  private durations: number[] = [];   // ms
-  private trials: number[] = [];
-  private openUntil = 0;
+package breaker
 
-  constructor(
-    private size = 10,
-    private slowMs = 500,
-    private rateThreshold = 0.5,
-    private cooldownMs = 5000,
-    private trialCount = 3,
-    private minCalls = 5,
-  ) {}
+import (
+	"errors"
+	"time"
+)
 
-  async call<T>(work: () => Promise<T>): Promise<T> {
-    if (this.state === "OPEN" && Date.now() >= this.openUntil) {
-      this.state = "HALF"; this.trials = [];
-    }
-    if (this.state === "OPEN") throw new Error("circuit open");
+var ErrOpen = errors.New("circuit open")
 
-    const start = performance.now();
-    try {
-      return await work();
-    } finally {
-      this.record(performance.now() - start);   // record even on throw
-    }
-  }
+type SlowCallBreaker struct {
+	state     string          // "CLOSED" | "OPEN" | "HALF"
+	durations []time.Duration // recorded latencies
+	trials    []time.Duration
+	openUntil time.Time
 
-  private record(durationMs: number) {
-    if (this.state === "HALF") {
-      this.trials.push(durationMs);
-      if (this.trials.length >= this.trialCount) {
-        if (this.slowRate(this.trials) >= this.rateThreshold) this.trip();
-        else this.close();
-      }
-      return;
-    }
-    this.durations.push(durationMs);
-    if (this.durations.length > this.size) this.durations.shift();
-    if (this.durations.length >= this.minCalls && this.slowRate(this.durations) >= this.rateThreshold) {
-      this.trip();
-    }
-  }
+	size          int
+	slow          time.Duration
+	rateThreshold float64
+	cooldown      time.Duration
+	trialCount    int
+	minCalls      int
+}
 
-  private slowRate(arr: number[]) {
-    const slow = arr.filter(d => d >= this.slowMs).length;
-    return slow / arr.length;
-  }
+func NewSlowCallBreaker() *SlowCallBreaker {
+	return &SlowCallBreaker{
+		state:         "CLOSED",
+		size:          10,
+		slow:          500 * time.Millisecond,
+		rateThreshold: 0.5,
+		cooldown:      5000 * time.Millisecond,
+		trialCount:    3,
+		minCalls:      5,
+	}
+}
 
-  private trip()  { this.state = "OPEN"; this.openUntil = Date.now() + this.cooldownMs; this.trials = []; }
-  private close() { this.state = "CLOSED"; this.durations = []; this.trials = []; }
+func (cb *SlowCallBreaker) Call(work func() error) error {
+	if cb.state == "OPEN" && !time.Now().Before(cb.openUntil) {
+		cb.state = "HALF"
+		cb.trials = nil
+	}
+	if cb.state == "OPEN" {
+		return ErrOpen
+	}
+
+	start := time.Now()
+	err := work()
+	cb.record(time.Since(start)) // record even on error
+	return err
+}
+
+func (cb *SlowCallBreaker) record(d time.Duration) {
+	if cb.state == "HALF" {
+		cb.trials = append(cb.trials, d)
+		if len(cb.trials) >= cb.trialCount {
+			if cb.slowRate(cb.trials) >= cb.rateThreshold {
+				cb.trip()
+			} else {
+				cb.close()
+			}
+		}
+		return
+	}
+	cb.durations = append(cb.durations, d)
+	if len(cb.durations) > cb.size {
+		cb.durations = cb.durations[1:]
+	}
+	if len(cb.durations) >= cb.minCalls && cb.slowRate(cb.durations) >= cb.rateThreshold {
+		cb.trip()
+	}
+}
+
+func (cb *SlowCallBreaker) slowRate(arr []time.Duration) float64 {
+	slow := 0
+	for _, d := range arr {
+		if d >= cb.slow {
+			slow++
+		}
+	}
+	return float64(slow) / float64(len(arr))
+}
+
+func (cb *SlowCallBreaker) trip() {
+	cb.state = "OPEN"
+	cb.openUntil = time.Now().Add(cb.cooldown)
+	cb.trials = nil
+}
+
+func (cb *SlowCallBreaker) close() {
+	cb.state = "CLOSED"
+	cb.durations = nil
+	cb.trials = nil
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "SlowCallBreaker.java",
+      code: `// Slow-call-rate breaker: trip when too many calls take longer than D ms.
+// Same state machine as the error-rate breaker, just a different signal.
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.concurrent.Callable;
+
+class SlowCallBreaker {
+    private String state = "CLOSED";              // "CLOSED" | "OPEN" | "HALF"
+    private final Deque<Double> durations = new ArrayDeque<>();  // ms
+    private final Deque<Double> trials = new ArrayDeque<>();
+    private long openUntil = 0;
+
+    private final int size;
+    private final double slowMs;
+    private final double rateThreshold;
+    private final long cooldownMs;
+    private final int trialCount;
+    private final int minCalls;
+
+    SlowCallBreaker(int size, double slowMs, double rateThreshold,
+                    long cooldownMs, int trialCount, int minCalls) {
+        this.size = size;
+        this.slowMs = slowMs;
+        this.rateThreshold = rateThreshold;
+        this.cooldownMs = cooldownMs;
+        this.trialCount = trialCount;
+        this.minCalls = minCalls;
+    }
+
+    <T> T call(Callable<T> work) throws Exception {
+        if (state.equals("OPEN") && System.currentTimeMillis() >= openUntil) {
+            state = "HALF"; trials.clear();
+        }
+        if (state.equals("OPEN")) throw new IllegalStateException("circuit open");
+
+        long start = System.nanoTime();
+        try {
+            return work.call();
+        } finally {
+            record((System.nanoTime() - start) / 1_000_000.0);  // record even on throw
+        }
+    }
+
+    private void record(double durationMs) {
+        if (state.equals("HALF")) {
+            trials.addLast(durationMs);
+            if (trials.size() >= trialCount) {
+                if (slowRate(trials) >= rateThreshold) trip();
+                else close();
+            }
+            return;
+        }
+        durations.addLast(durationMs);
+        if (durations.size() > size) durations.removeFirst();
+        if (durations.size() >= minCalls && slowRate(durations) >= rateThreshold) {
+            trip();
+        }
+    }
+
+    private double slowRate(Deque<Double> arr) {
+        long slow = arr.stream().filter(d -> d >= slowMs).count();
+        return (double) slow / arr.size();
+    }
+
+    private void trip() {
+        state = "OPEN";
+        openUntil = System.currentTimeMillis() + cooldownMs;
+        trials.clear();
+    }
+
+    private void close() {
+        state = "CLOSED";
+        durations.clear();
+        trials.clear();
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "slow_call_rate.py",
+      code: `# Slow-call-rate breaker: trip when too many calls take longer than D ms.
+# Same state machine as the error-rate breaker, just a different signal.
+import time
+from collections import deque
+from typing import Callable, Deque, TypeVar
+
+T = TypeVar("T")
+
+
+class SlowCallBreaker:
+    def __init__(
+        self,
+        size: int = 10,
+        slow_ms: float = 500,
+        rate_threshold: float = 0.5,
+        cooldown_s: float = 5.0,
+        trial_count: int = 3,
+        min_calls: int = 5,
+    ) -> None:
+        self.state = "CLOSED"       # "CLOSED" | "OPEN" | "HALF"
+        self.durations: Deque[float] = deque()  # ms
+        self.trials: list[float] = []
+        self.open_until = 0.0
+        self.size = size
+        self.slow_ms = slow_ms
+        self.rate_threshold = rate_threshold
+        self.cooldown_s = cooldown_s
+        self.trial_count = trial_count
+        self.min_calls = min_calls
+
+    def call(self, work: Callable[[], T]) -> T:
+        if self.state == "OPEN" and time.monotonic() >= self.open_until:
+            self.state = "HALF"
+            self.trials = []
+        if self.state == "OPEN":
+            raise RuntimeError("circuit open")
+
+        start = time.monotonic()
+        try:
+            return work()
+        finally:
+            self._record((time.monotonic() - start) * 1000)  # record even on throw
+
+    def _record(self, duration_ms: float) -> None:
+        if self.state == "HALF":
+            self.trials.append(duration_ms)
+            if len(self.trials) >= self.trial_count:
+                if self._slow_rate(self.trials) >= self.rate_threshold:
+                    self._trip()
+                else:
+                    self._close()
+            return
+        self.durations.append(duration_ms)
+        if len(self.durations) > self.size:
+            self.durations.popleft()
+        if len(self.durations) >= self.min_calls and self._slow_rate(self.durations) >= self.rate_threshold:
+            self._trip()
+
+    def _slow_rate(self, arr) -> float:
+        slow = sum(1 for d in arr if d >= self.slow_ms)
+        return slow / len(arr)
+
+    def _trip(self) -> None:
+        self.state = "OPEN"
+        self.open_until = time.monotonic() + self.cooldown_s
+        self.trials = []
+
+    def _close(self) -> None:
+        self.state = "CLOSED"
+        self.durations.clear()
+        self.trials = []`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "slow_call_rate.cpp",
+      code: `// Slow-call-rate breaker: trip when too many calls take longer than D ms.
+// Same state machine as the error-rate breaker, just a different signal.
+#include <chrono>
+#include <deque>
+#include <functional>
+#include <stdexcept>
+#include <string>
+
+class SlowCallBreaker {
+    using Clock = std::chrono::steady_clock;
+
+    std::string state_ = "CLOSED";  // "CLOSED" | "OPEN" | "HALF"
+    std::deque<double> durations_;  // ms
+    std::deque<double> trials_;
+    Clock::time_point openUntil_;
+
+    int size_;
+    double slowMs_;
+    double rateThreshold_;
+    std::chrono::milliseconds cooldown_;
+    int trialCount_;
+    int minCalls_;
+
+public:
+    SlowCallBreaker(int size = 10, double slowMs = 500, double rateThreshold = 0.5,
+                    int cooldownMs = 5000, int trialCount = 3, int minCalls = 5)
+        : size_(size), slowMs_(slowMs), rateThreshold_(rateThreshold),
+          cooldown_(cooldownMs), trialCount_(trialCount), minCalls_(minCalls) {}
+
+    // work() returns true on success, throws or returns false on failure.
+    bool call(const std::function<bool()>& work) {
+        if (state_ == "OPEN" && Clock::now() >= openUntil_) {
+            state_ = "HALF"; trials_.clear();
+        }
+        if (state_ == "OPEN") throw std::runtime_error("circuit open");
+
+        auto start = Clock::now();
+        try {
+            bool result = work();
+            record(std::chrono::duration<double, std::milli>(Clock::now() - start).count());
+            return result;
+        } catch (...) {
+            record(std::chrono::duration<double, std::milli>(Clock::now() - start).count());
+            throw;  // record even on throw
+        }
+    }
+
+private:
+    void record(double durationMs) {
+        if (state_ == "HALF") {
+            trials_.push_back(durationMs);
+            if (static_cast<int>(trials_.size()) >= trialCount_) {
+                if (slowRate(trials_) >= rateThreshold_) trip();
+                else close();
+            }
+            return;
+        }
+        durations_.push_back(durationMs);
+        if (static_cast<int>(durations_.size()) > size_) durations_.pop_front();
+        if (static_cast<int>(durations_.size()) >= minCalls_ && slowRate(durations_) >= rateThreshold_) {
+            trip();
+        }
+    }
+
+    double slowRate(const std::deque<double>& arr) {
+        int slow = 0;
+        for (double d : arr) if (d >= slowMs_) slow++;
+        return static_cast<double>(slow) / arr.size();
+    }
+
+    void trip() {
+        state_ = "OPEN";
+        openUntil_ = Clock::now() + cooldown_;
+        trials_.clear();
+    }
+
+    void close() {
+        state_ = "CLOSED";
+        durations_.clear();
+        trials_.clear();
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

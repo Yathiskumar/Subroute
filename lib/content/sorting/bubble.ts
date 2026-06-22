@@ -110,10 +110,12 @@ export const bubble: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "bubble-sort.ts",
-    code: `// Bubble sort with the early-exit optimization.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "bubble-sort.ts",
+      code: `// Bubble sort with the early-exit optimization.
 // Stable, in-place, O(n) best, O(n²) average and worst.
 function bubbleSort<T>(a: T[]): T[] {
   const n = a.length;
@@ -135,7 +137,93 @@ function bubbleSort<T>(a: T[]): T[] {
 // Example
 bubbleSort([5, 1, 4, 2, 8]); // → [1, 2, 4, 5, 8]
 // On random input of length n, expect ~n²/2 comparisons and ~n²/4 swaps.`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "BubbleSort.java",
+      code: `// Bubble sort with the early-exit optimization.
+// Stable, in-place, O(n) best, O(n²) average and worst.
+static <T extends Comparable<T>> T[] bubbleSort(T[] a) {
+    int n = a.length;
+    for (int i = 0; i < n - 1; i++) {
+        boolean swapped = false;
+        // After pass i, the last i elements are in their final slots.
+        for (int j = 0; j < n - 1 - i; j++) {
+            if (a[j].compareTo(a[j + 1]) > 0) {
+                T tmp = a[j];
+                a[j] = a[j + 1];
+                a[j + 1] = tmp;
+                swapped = true;
+            }
+        }
+        // Zero swaps means the list is already sorted.
+        if (!swapped) break;
+    }
+    return a;
+}
+
+// Example
+bubbleSort(new Integer[]{5, 1, 4, 2, 8}); // → [1, 2, 4, 5, 8]
+// On random input of length n, expect ~n²/2 comparisons and ~n²/4 swaps.`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "bubble_sort.py",
+      code: `def bubble_sort(a: list) -> list:
+    """Bubble sort with the early-exit optimization.
+    Stable, in-place, O(n) best, O(n²) average and worst."""
+    n = len(a)
+    for i in range(n - 1):
+        swapped = False
+        # After pass i, the last i elements are in their final slots.
+        for j in range(n - 1 - i):
+            if a[j] > a[j + 1]:
+                a[j], a[j + 1] = a[j + 1], a[j]
+                swapped = True
+        # Zero swaps means the list is already sorted.
+        if not swapped:
+            break
+    return a
+
+
+# Example
+bubble_sort([5, 1, 4, 2, 8])  # → [1, 2, 4, 5, 8]
+# On random input of length n, expect ~n²/2 comparisons and ~n²/4 swaps.`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "bubble_sort.cpp",
+      code: `// Bubble sort with the early-exit optimization.
+// Stable, in-place, O(n) best, O(n²) average and worst.
+#include <vector>
+#include <utility>
+
+template <typename T>
+std::vector<T> bubbleSort(std::vector<T> a) {
+    int n = a.size();
+    for (int i = 0; i < n - 1; i++) {
+        bool swapped = false;
+        // After pass i, the last i elements are in their final slots.
+        for (int j = 0; j < n - 1 - i; j++) {
+            if (a[j] > a[j + 1]) {
+                std::swap(a[j], a[j + 1]);
+                swapped = true;
+            }
+        }
+        // Zero swaps means the list is already sorted.
+        if (!swapped) break;
+    }
+    return a;
+}
+
+// Example
+// bubbleSort<int>({5, 1, 4, 2, 8}); // → [1, 2, 4, 5, 8]
+// On random input of length n, expect ~n²/2 comparisons and ~n²/4 swaps.`,
+    },
+  ],
 
   furtherReading: [
     {

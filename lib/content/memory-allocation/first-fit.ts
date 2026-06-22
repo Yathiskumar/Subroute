@@ -93,30 +93,129 @@ export const firstFit: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "first-fit.ts",
-    code: `interface Hole { start: number; size: number; }
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "first_fit.go",
+      code: `package alloc
 
-/** First Fit: return the first hole large enough, splitting it. */
-function firstFitAlloc(holes: Hole[], request: number): number | null {
-  for (let i = 0; i < holes.length; i++) {
-    const hole = holes[i];
-    if (hole.size >= request) {        // first one that fits — stop here
-      const addr = hole.start;
-      const leftover = hole.size - request;
-      if (leftover === 0) {
-        holes.splice(i, 1);            // exact fit: remove the hole
-      } else {
-        hole.start += request;         // shrink the hole from the front
-        hole.size = leftover;          // remainder stays free
-      }
-      return addr;                     // address handed to the request
-    }
-  }
-  return null;                         // external fragmentation: no single hole fits
+type Hole struct {
+	Start int
+	Size  int
+}
+
+// FirstFitAlloc returns the first hole large enough, splitting it.
+// It returns the allocated address and ok=false on failure.
+func FirstFitAlloc(holes *[]Hole, request int) (int, bool) {
+	h := *holes
+	for i := 0; i < len(h); i++ {
+		if h[i].Size >= request { // first one that fits — stop here
+			addr := h[i].Start
+			leftover := h[i].Size - request
+			if leftover == 0 {
+				*holes = append(h[:i], h[i+1:]...) // exact fit: remove the hole
+			} else {
+				h[i].Start += request // shrink the hole from the front
+				h[i].Size = leftover  // remainder stays free
+			}
+			return addr, true // address handed to the request
+		}
+	}
+	return 0, false // external fragmentation: no single hole fits
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "FirstFit.java",
+      code: `import java.util.List;
+
+class Hole {
+    int start, size;
+    Hole(int start, int size) { this.start = start; this.size = size; }
+}
+
+class FirstFit {
+    /** First Fit: return the first hole large enough, splitting it. Returns null on failure. */
+    static Integer firstFitAlloc(List<Hole> holes, int request) {
+        for (int i = 0; i < holes.size(); i++) {
+            Hole hole = holes.get(i);
+            if (hole.size >= request) {        // first one that fits — stop here
+                int addr = hole.start;
+                int leftover = hole.size - request;
+                if (leftover == 0) {
+                    holes.remove(i);           // exact fit: remove the hole
+                } else {
+                    hole.start += request;     // shrink the hole from the front
+                    hole.size = leftover;      // remainder stays free
+                }
+                return addr;                   // address handed to the request
+            }
+        }
+        return null;                           // external fragmentation: no single hole fits
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "first_fit.py",
+      code: `from dataclasses import dataclass
+
+
+@dataclass
+class Hole:
+    start: int
+    size: int
+
+
+def first_fit_alloc(holes: list[Hole], request: int) -> int | None:
+    """First Fit: return the first hole large enough, splitting it."""
+    for i, hole in enumerate(holes):
+        if hole.size >= request:        # first one that fits — stop here
+            addr = hole.start
+            leftover = hole.size - request
+            if leftover == 0:
+                del holes[i]            # exact fit: remove the hole
+            else:
+                hole.start += request   # shrink the hole from the front
+                hole.size = leftover    # remainder stays free
+            return addr                 # address handed to the request
+    return None                         # external fragmentation: no single hole fits`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "first_fit.cpp",
+      code: `#include <optional>
+#include <vector>
+
+struct Hole {
+    int start;
+    int size;
+};
+
+// First Fit: return the first hole large enough, splitting it.
+std::optional<int> firstFitAlloc(std::vector<Hole>& holes, int request) {
+    for (std::size_t i = 0; i < holes.size(); ++i) {
+        Hole& hole = holes[i];
+        if (hole.size >= request) {            // first one that fits — stop here
+            int addr = hole.start;
+            int leftover = hole.size - request;
+            if (leftover == 0) {
+                holes.erase(holes.begin() + i); // exact fit: remove the hole
+            } else {
+                hole.start += request;          // shrink the hole from the front
+                hole.size = leftover;           // remainder stays free
+            }
+            return addr;                        // address handed to the request
+        }
+    }
+    return std::nullopt;                         // external fragmentation: no single hole fits
+}`,
+    },
+  ],
 
   furtherReading: [
     {

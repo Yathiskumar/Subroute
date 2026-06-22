@@ -113,10 +113,12 @@ export const unionFind: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "union-find.ts",
-    code: `// Union-Find with union-by-rank + path compression.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "union-find.ts",
+      code: `// Union-Find with union-by-rank + path compression.
 // Both operations amortise to O(α(n)) — effectively constant.
 class DSU {
   parent: number[];
@@ -150,7 +152,126 @@ class DSU {
     return this.find(x) === this.find(y);
   }
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "DSU.java",
+      code: `// Union-Find with union-by-rank + path compression.
+// Both operations amortise to O(α(n)) — effectively constant.
+class DSU {
+    private final int[] parent;
+    private final int[] rank;
+
+    DSU(int n) {
+        parent = new int[n];
+        rank = new int[n];
+        for (int i = 0; i < n; i++) parent[i] = i;
+    }
+
+    int find(int x) {
+        if (parent[x] != x) {
+            // Path compression: point x straight at the root.
+            parent[x] = find(parent[x]);
+        }
+        return parent[x];
+    }
+
+    boolean union(int x, int y) {
+        int rx = find(x);
+        int ry = find(y);
+        if (rx == ry) return false;           // already in the same set
+        // Union by rank: hang the shorter tree under the taller one.
+        if (rank[rx] < rank[ry])      parent[rx] = ry;
+        else if (rank[rx] > rank[ry]) parent[ry] = rx;
+        else { parent[ry] = rx; rank[rx]++; }
+        return true;
+    }
+
+    boolean connected(int x, int y) {
+        return find(x) == find(y);
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "union_find.py",
+      code: `class DSU:
+    """Union-Find with union-by-rank + path compression.
+    Both operations amortise to O(α(n)) — effectively constant."""
+
+    def __init__(self, n: int) -> None:
+        self.parent = list(range(n))
+        self.rank = [0] * n
+
+    def find(self, x: int) -> int:
+        if self.parent[x] != x:
+            # Path compression: point x straight at the root.
+            self.parent[x] = self.find(self.parent[x])
+        return self.parent[x]
+
+    def union(self, x: int, y: int) -> bool:
+        rx = self.find(x)
+        ry = self.find(y)
+        if rx == ry:
+            return False                # already in the same set
+        # Union by rank: hang the shorter tree under the taller one.
+        if self.rank[rx] < self.rank[ry]:
+            self.parent[rx] = ry
+        elif self.rank[rx] > self.rank[ry]:
+            self.parent[ry] = rx
+        else:
+            self.parent[ry] = rx
+            self.rank[rx] += 1
+        return True
+
+    def connected(self, x: int, y: int) -> bool:
+        return self.find(x) == self.find(y)`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "union_find.cpp",
+      code: `// Union-Find with union-by-rank + path compression.
+// Both operations amortise to O(α(n)) — effectively constant.
+#include <numeric>
+#include <vector>
+
+class DSU {
+    std::vector<int> parent_;
+    std::vector<int> rank_;
+
+public:
+    explicit DSU(int n) : parent_(n), rank_(n, 0) {
+        std::iota(parent_.begin(), parent_.end(), 0);
+    }
+
+    int find(int x) {
+        if (parent_[x] != x) {
+            // Path compression: point x straight at the root.
+            parent_[x] = find(parent_[x]);
+        }
+        return parent_[x];
+    }
+
+    bool unite(int x, int y) {
+        int rx = find(x);
+        int ry = find(y);
+        if (rx == ry) return false;           // already in the same set
+        // Union by rank: hang the shorter tree under the taller one.
+        if (rank_[rx] < rank_[ry])      parent_[rx] = ry;
+        else if (rank_[rx] > rank_[ry]) parent_[ry] = rx;
+        else { parent_[ry] = rx; rank_[rx]++; }
+        return true;
+    }
+
+    bool connected(int x, int y) {
+        return find(x) == find(y);
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

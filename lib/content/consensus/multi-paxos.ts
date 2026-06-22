@@ -112,61 +112,397 @@ export const multiPaxos: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "multi-paxos.ts",
-    code: `// Multi-Paxos leader. Election is rare; the steady-state hot path is
-// just propose() which sends a single ACCEPT round-trip per command.
-class MultiPaxosLeader {
-  ballot: number;
-  nextSlot = 0;
-  log: ({ value: string; committed: boolean } | null)[] = [];
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "multi_paxos.go",
+      code: `// Multi-Paxos leader. Election is rare; the steady-state hot path is
+// just Propose() which sends a single ACCEPT round-trip per command.
 
-  constructor(private acceptors: Acceptor[], private myId: number) {
-    this.ballot = 0;
-  }
+// External helpers (defined elsewhere):
+//   func nextHigherBallot(ballot, myID int) int
+//   func majority(n int) int
+//   func collectPendingSlots(promises []*Promise) []PendingSlot
+//   type Acceptor interface {
+//       Prepare(ballot int) *Promise            // nil promise means NACK
+//       Accept(ballot, slot int, value string) string // "ACCEPTED" or other
+//   }
+//   type PendingSlot struct { Slot int; Value string }
 
-  async electSelf(): Promise<boolean> {
-    this.ballot = nextHigherBallot(this.ballot, this.myId);
+type LogEntry struct {
+    Value     string
+    Committed bool
+}
 
-    // ONE prepare covers all future slots.
-    const promises = await Promise.all(
-      this.acceptors.map(a => a.prepare(this.ballot)),
-    );
-    const goodPromises = promises.filter(p => p !== "NACK") as Promise_[];
-    if (goodPromises.length < majority(this.acceptors.length)) return false;
+type MultiPaxosLeader struct {
+    acceptors []Acceptor
+    myID      int
+    ballot    int
+    nextSlot  int
+    log       []*LogEntry
+}
+
+func NewMultiPaxosLeader(acceptors []Acceptor, myID int) *MultiPaxosLeader {
+    return &MultiPaxosLeader{
+        acceptors: acceptors,
+        myID:      myID,
+        ballot:    0,
+        nextSlot:  0,
+    }
+}
+
+func (l *MultiPaxosLeader) ElectSelf() bool {
+    l.ballot = nextHigherBallot(l.ballot, l.myID)
+
+    // ONE prepare covers all future slots. Fan out concurrently.
+    promises := make([]*Promise, len(l.acceptors))
+    var wg sync.WaitGroup
+    for i, a := range l.acceptors {
+        wg.Add(1)
+        go func(i int, a Acceptor) {
+            defer wg.Done()
+            promises[i] = a.Prepare(l.ballot)
+        }(i, a)
+    }
+    wg.Wait()
+
+    goodPromises := make([]*Promise, 0, len(promises))
+    for _, p := range promises {
+        if p != nil { // nil promise == NACK
+            goodPromises = append(goodPromises, p)
+        }
+    }
+    if len(goodPromises) < majority(len(l.acceptors)) {
+        return false
+    }
 
     // Reconcile partially-accepted slots: for each slot, if any promise
     // reported an acceptedV at any ballot, the leader MUST re-propose it.
-    const pendingSlots = collectPendingSlots(goodPromises);
-    for (const { slot, value } of pendingSlots) {
-      await this.runAccept(slot, value);
-      this.log[slot] = { value, committed: true };
+    pendingSlots := collectPendingSlots(goodPromises)
+    for _, ps := range pendingSlots {
+        l.runAccept(ps.Slot, ps.Value)
+        for len(l.log) <= ps.Slot {
+            l.log = append(l.log, nil)
+        }
+        l.log[ps.Slot] = &LogEntry{Value: ps.Value, Committed: true}
     }
-    this.nextSlot = this.log.length;
-    return true;  // leader established; from here on, only Phase 2.
-  }
+    l.nextSlot = len(l.log)
+    return true // leader established; from here on, only Phase 2.
+}
 
-  async propose(value: string): Promise<number> {
-    const slot = this.nextSlot++;
-    this.log[slot] = { value, committed: false };
-    const ok = await this.runAccept(slot, value);
-    if (ok) this.log[slot]!.committed = true;
-    return slot;
-  }
+func (l *MultiPaxosLeader) Propose(value string) int {
+    slot := l.nextSlot
+    l.nextSlot++
+    for len(l.log) <= slot {
+        l.log = append(l.log, nil)
+    }
+    l.log[slot] = &LogEntry{Value: value, Committed: false}
+    ok := l.runAccept(slot, value)
+    if ok {
+        l.log[slot].Committed = true
+    }
+    return slot
+}
 
-  private async runAccept(slot: number, value: string): Promise<boolean> {
-    const replies = await Promise.all(
-      this.acceptors.map(a => a.accept(this.ballot, slot, value)),
-    );
-    return replies.filter(r => r === "ACCEPTED").length
-      >= majority(this.acceptors.length);
-  }
+func (l *MultiPaxosLeader) runAccept(slot int, value string) bool {
+    replies := make([]string, len(l.acceptors))
+    var wg sync.WaitGroup
+    for i, a := range l.acceptors {
+        wg.Add(1)
+        go func(i int, a Acceptor) {
+            defer wg.Done()
+            replies[i] = a.Accept(l.ballot, slot, value)
+        }(i, a)
+    }
+    wg.Wait()
+
+    accepted := 0
+    for _, r := range replies {
+        if r == "ACCEPTED" {
+            accepted++
+        }
+    }
+    return accepted >= majority(len(l.acceptors))
 }
 
 // Notice: hot path is one all-to-all ACCEPT and a quorum count. No
 // Prepare. That's the whole point of Multi-Paxos.`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "MultiPaxos.java",
+      code: `// Multi-Paxos leader. Election is rare; the steady-state hot path is
+// just propose() which sends a single ACCEPT round-trip per command.
+
+// External helpers (defined elsewhere):
+//   static int nextHigherBallot(int ballot, int myId);
+//   static int majority(int n);
+//   static List<PendingSlot> collectPendingSlots(List<Promise> promises);
+//   interface Acceptor {
+//       Promise prepare(int ballot);                 // null promise means NACK
+//       String  accept(int ballot, int slot, String value); // "ACCEPTED" or other
+//   }
+//   record PendingSlot(int slot, String value) {}
+
+class LogEntry {
+    String value;
+    boolean committed;
+    LogEntry(String value, boolean committed) {
+        this.value = value;
+        this.committed = committed;
+    }
+}
+
+class MultiPaxosLeader {
+    private final List<Acceptor> acceptors;
+    private final int myId;
+    private int ballot;
+    private int nextSlot = 0;
+    private final List<LogEntry> log = new ArrayList<>();
+
+    MultiPaxosLeader(List<Acceptor> acceptors, int myId) {
+        this.acceptors = acceptors;
+        this.myId = myId;
+        this.ballot = 0;
+    }
+
+    boolean electSelf() {
+        ballot = nextHigherBallot(ballot, myId);
+
+        // ONE prepare covers all future slots. Fan out concurrently.
+        List<Promise> promises = acceptors.parallelStream()
+            .map(a -> a.prepare(ballot))
+            .collect(Collectors.toList());
+
+        List<Promise> goodPromises = promises.stream()
+            .filter(p -> p != null) // null promise == NACK
+            .collect(Collectors.toList());
+        if (goodPromises.size() < majority(acceptors.size())) return false;
+
+        // Reconcile partially-accepted slots: for each slot, if any promise
+        // reported an acceptedV at any ballot, the leader MUST re-propose it.
+        List<PendingSlot> pendingSlots = collectPendingSlots(goodPromises);
+        for (PendingSlot ps : pendingSlots) {
+            runAccept(ps.slot(), ps.value());
+            ensureSize(ps.slot());
+            log.set(ps.slot(), new LogEntry(ps.value(), true));
+        }
+        nextSlot = log.size();
+        return true;  // leader established; from here on, only Phase 2.
+    }
+
+    int propose(String value) {
+        int slot = nextSlot++;
+        ensureSize(slot);
+        log.set(slot, new LogEntry(value, false));
+        boolean ok = runAccept(slot, value);
+        if (ok) log.get(slot).committed = true;
+        return slot;
+    }
+
+    private boolean runAccept(int slot, String value) {
+        List<String> replies = acceptors.parallelStream()
+            .map(a -> a.accept(ballot, slot, value))
+            .collect(Collectors.toList());
+        long accepted = replies.stream()
+            .filter("ACCEPTED"::equals)
+            .count();
+        return accepted >= majority(acceptors.size());
+    }
+
+    private void ensureSize(int slot) {
+        while (log.size() <= slot) log.add(null);
+    }
+}
+
+// Notice: hot path is one all-to-all ACCEPT and a quorum count. No
+// Prepare. That's the whole point of Multi-Paxos.`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "multi_paxos.py",
+      code: `# Multi-Paxos leader. Election is rare; the steady-state hot path is
+# just propose() which sends a single ACCEPT round-trip per command.
+
+# External helpers (defined elsewhere):
+#   def next_higher_ballot(ballot: int, my_id: int) -> int
+#   def majority(n: int) -> int
+#   def collect_pending_slots(promises: list[Promise]) -> list[PendingSlot]
+#   class Acceptor:
+#       async def prepare(self, ballot: int) -> Promise | None  # None == NACK
+#       async def accept(self, ballot: int, slot: int, value: str) -> str
+#   PendingSlot = namedtuple("PendingSlot", ["slot", "value"])
+
+
+@dataclass
+class LogEntry:
+    value: str
+    committed: bool
+
+
+class MultiPaxosLeader:
+    def __init__(self, acceptors: list[Acceptor], my_id: int) -> None:
+        self.acceptors = acceptors
+        self.my_id = my_id
+        self.ballot = 0
+        self.next_slot = 0
+        self.log: list[LogEntry | None] = []
+
+    async def elect_self(self) -> bool:
+        self.ballot = next_higher_ballot(self.ballot, self.my_id)
+
+        # ONE prepare covers all future slots. Fan out concurrently.
+        promises = await asyncio.gather(
+            *(a.prepare(self.ballot) for a in self.acceptors)
+        )
+        good_promises = [p for p in promises if p is not None]  # None == NACK
+        if len(good_promises) < majority(len(self.acceptors)):
+            return False
+
+        # Reconcile partially-accepted slots: for each slot, if any promise
+        # reported an accepted_v at any ballot, the leader MUST re-propose it.
+        pending_slots = collect_pending_slots(good_promises)
+        for ps in pending_slots:
+            await self._run_accept(ps.slot, ps.value)
+            self._ensure_size(ps.slot)
+            self.log[ps.slot] = LogEntry(value=ps.value, committed=True)
+        self.next_slot = len(self.log)
+        return True  # leader established; from here on, only Phase 2.
+
+    async def propose(self, value: str) -> int:
+        slot = self.next_slot
+        self.next_slot += 1
+        self._ensure_size(slot)
+        self.log[slot] = LogEntry(value=value, committed=False)
+        ok = await self._run_accept(slot, value)
+        if ok:
+            self.log[slot].committed = True
+        return slot
+
+    async def _run_accept(self, slot: int, value: str) -> bool:
+        replies = await asyncio.gather(
+            *(a.accept(self.ballot, slot, value) for a in self.acceptors)
+        )
+        accepted = sum(1 for r in replies if r == "ACCEPTED")
+        return accepted >= majority(len(self.acceptors))
+
+    def _ensure_size(self, slot: int) -> None:
+        while len(self.log) <= slot:
+            self.log.append(None)
+
+
+# Notice: hot path is one all-to-all ACCEPT and a quorum count. No
+# Prepare. That's the whole point of Multi-Paxos.`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "multi_paxos.cpp",
+      code: `// Multi-Paxos leader. Election is rare; the steady-state hot path is
+// just propose() which sends a single ACCEPT round-trip per command.
+
+// External helpers (defined elsewhere):
+//   int nextHigherBallot(int ballot, int myId);
+//   int majority(int n);
+//   std::vector<PendingSlot> collectPendingSlots(const std::vector<Promise>&);
+//   struct Acceptor {
+//       // returns std::nullopt to signal NACK
+//       std::optional<Promise> prepare(int ballot);
+//       std::string accept(int ballot, int slot, const std::string& value);
+//   };
+//   struct PendingSlot { int slot; std::string value; };
+
+struct LogEntry {
+    std::string value;
+    bool committed;
+};
+
+class MultiPaxosLeader {
+public:
+    MultiPaxosLeader(std::vector<Acceptor> acceptors, int myId)
+        : acceptors_(std::move(acceptors)), myId_(myId), ballot_(0),
+          nextSlot_(0) {}
+
+    bool electSelf() {
+        ballot_ = nextHigherBallot(ballot_, myId_);
+
+        // ONE prepare covers all future slots. Fan out concurrently.
+        std::vector<std::future<std::optional<Promise>>> futures;
+        for (auto& a : acceptors_) {
+            futures.push_back(std::async(std::launch::async,
+                [&a, this] { return a.prepare(ballot_); }));
+        }
+
+        std::vector<Promise> goodPromises;
+        for (auto& f : futures) {
+            auto p = f.get();
+            if (p.has_value()) {           // nullopt == NACK
+                goodPromises.push_back(*p);
+            }
+        }
+        if (static_cast<int>(goodPromises.size())
+                < majority(static_cast<int>(acceptors_.size()))) {
+            return false;
+        }
+
+        // Reconcile partially-accepted slots: for each slot, if any promise
+        // reported an acceptedV at any ballot, the leader MUST re-propose it.
+        auto pendingSlots = collectPendingSlots(goodPromises);
+        for (const auto& ps : pendingSlots) {
+            runAccept(ps.slot, ps.value);
+            ensureSize(ps.slot);
+            log_[ps.slot] = LogEntry{ps.value, true};
+        }
+        nextSlot_ = static_cast<int>(log_.size());
+        return true;  // leader established; from here on, only Phase 2.
+    }
+
+    int propose(const std::string& value) {
+        int slot = nextSlot_++;
+        ensureSize(slot);
+        log_[slot] = LogEntry{value, false};
+        bool ok = runAccept(slot, value);
+        if (ok) log_[slot]->committed = true;
+        return slot;
+    }
+
+private:
+    bool runAccept(int slot, const std::string& value) {
+        std::vector<std::future<std::string>> futures;
+        for (auto& a : acceptors_) {
+            futures.push_back(std::async(std::launch::async,
+                [&a, this, slot, &value] {
+                    return a.accept(ballot_, slot, value);
+                }));
+        }
+
+        int accepted = 0;
+        for (auto& f : futures) {
+            if (f.get() == "ACCEPTED") ++accepted;
+        }
+        return accepted >= majority(static_cast<int>(acceptors_.size()));
+    }
+
+    void ensureSize(int slot) {
+        while (static_cast<int>(log_.size()) <= slot) {
+            log_.push_back(std::nullopt);
+        }
+    }
+
+    std::vector<Acceptor> acceptors_;
+    int myId_;
+    int ballot_;
+    int nextSlot_;
+    std::vector<std::optional<LogEntry>> log_;
+};
+
+// Notice: hot path is one all-to-all ACCEPT and a quorum count. No
+// Prepare. That's the whole point of Multi-Paxos.`,
+    },
+  ],
 
   furtherReading: [
     {

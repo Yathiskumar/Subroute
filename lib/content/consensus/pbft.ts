@@ -114,66 +114,351 @@ export const pbft: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "pbft.ts",
-    code: `// Skeleton of PBFT normal-case operation on a backup node.
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "pbft.go",
+      code: `// Skeleton of PBFT normal-case operation on a backup node.
 // All cross-node messages are signed; signature checks omitted for clarity.
-type Msg =
-  | { kind: "PRE-PREPARE"; view: number; seq: number; op: string; from: number }
-  | { kind: "PREPARE";     view: number; seq: number; op: string; from: number }
-  | { kind: "COMMIT";      view: number; seq: number; from: number };
+
+// One message type with a Kind field models the PRE-PREPARE / PREPARE / COMMIT
+// discriminated union (op is unused for COMMIT).
+type Kind string
+
+const (
+	PrePrepare Kind = "PRE-PREPARE"
+	Prepare    Kind = "PREPARE"
+	Commit     Kind = "COMMIT"
+)
+
+type Msg struct {
+	Kind Kind
+	View int
+	Seq  int
+	Op   string // unused for COMMIT
+	From int
+}
+
+type PbftBackup struct {
+	myId int
+	n    int
+
+	view       int
+	prePrepare map[int]string         // seq -> op
+	prepares   map[int]map[int]string // seq -> from -> op
+	commits    map[int]map[int]bool   // seq -> set of senders
+	prepared   map[int]bool
+	committed  map[int]bool
+}
+
+func NewPbftBackup(myId, n int) *PbftBackup {
+	return &PbftBackup{
+		myId:       myId,
+		n:          n,
+		prePrepare: make(map[int]string),
+		prepares:   make(map[int]map[int]string),
+		commits:    make(map[int]map[int]bool),
+		prepared:   make(map[int]bool),
+		committed:  make(map[int]bool),
+	}
+}
+
+// 2f+1 quorum
+func (p *PbftBackup) quorum() int {
+	f := (p.n - 1) / 3
+	return 2*f + 1
+}
+
+func (p *PbftBackup) OnPrePrepare(m Msg) {
+	if m.View != p.view {
+		return
+	}
+	if _, ok := p.prePrepare[m.Seq]; ok {
+		return // already have one for this seq
+	}
+	p.prePrepare[m.Seq] = m.Op
+	p.broadcast(Msg{Kind: Prepare, View: p.view, Seq: m.Seq, Op: m.Op, From: p.myId})
+}
+
+func (p *PbftBackup) OnPrepare(m Msg) {
+	if m.View != p.view {
+		return
+	}
+	if op, ok := p.prePrepare[m.Seq]; !ok || op != m.Op {
+		return
+	}
+	bag := p.prepares[m.Seq]
+	if bag == nil {
+		bag = make(map[int]string)
+		p.prepares[m.Seq] = bag
+	}
+	bag[m.From] = m.Op
+	// Need pre-prepare + 2f matching prepares from others = 2f+1 total.
+	if len(bag) >= p.quorum()-1 && !p.prepared[m.Seq] {
+		p.prepared[m.Seq] = true
+		p.broadcast(Msg{Kind: Commit, View: p.view, Seq: m.Seq, From: p.myId})
+	}
+}
+
+func (p *PbftBackup) OnCommit(m Msg) {
+	if m.View != p.view {
+		return
+	}
+	set := p.commits[m.Seq]
+	if set == nil {
+		set = make(map[int]bool)
+		p.commits[m.Seq] = set
+	}
+	set[m.From] = true
+	if len(set) >= p.quorum() && !p.committed[m.Seq] && p.prepared[m.Seq] {
+		p.committed[m.Seq] = true
+		p.execute(p.prePrepare[m.Seq])
+		p.replyToClient(m.Seq)
+	}
+}
+
+func (p *PbftBackup) execute(_op string) {} // apply to state machine
+func (p *PbftBackup) replyToClient(_seq int) {} // signed reply
+func (p *PbftBackup) broadcast(_m Msg) {} // send to all other n-1 nodes`,
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "PbftBackup.java",
+      code: `// Skeleton of PBFT normal-case operation on a backup node.
+// All cross-node messages are signed; signature checks omitted for clarity.
+
+import java.util.*;
+
+// A tagged record models the PRE-PREPARE / PREPARE / COMMIT discriminated union
+// (op is null for COMMIT).
+record Msg(Kind kind, int view, int seq, String op, int from) {
+  enum Kind { PRE_PREPARE, PREPARE, COMMIT }
+}
 
 class PbftBackup {
-  view = 0;
-  prePrepare = new Map<number, string>();          // seq -> op
-  prepares   = new Map<number, Map<number, string>>(); // seq -> from -> op
-  commits    = new Map<number, Set<number>>();     // seq -> set of senders
-  prepared   = new Set<number>();
-  committed  = new Set<number>();
+  private final int myId;
+  private final int n;
 
-  constructor(private myId: number, private n: number) {}
+  private int view = 0;
+  private final Map<Integer, String> prePrepare = new HashMap<>();              // seq -> op
+  private final Map<Integer, Map<Integer, String>> prepares = new HashMap<>();  // seq -> from -> op
+  private final Map<Integer, Set<Integer>> commits = new HashMap<>();           // seq -> set of senders
+  private final Set<Integer> prepared = new HashSet<>();
+  private final Set<Integer> committed = new HashSet<>();
+
+  PbftBackup(int myId, int n) {
+    this.myId = myId;
+    this.n = n;
+  }
 
   // 2f+1 quorum
-  private quorum() { const f = Math.floor((this.n - 1) / 3); return 2 * f + 1; }
-
-  onPrePrepare(m: Extract<Msg, { kind: "PRE-PREPARE" }>) {
-    if (m.view !== this.view) return;
-    if (this.prePrepare.has(m.seq)) return;            // already have one for this seq
-    this.prePrepare.set(m.seq, m.op);
-    this.broadcast({ kind: "PREPARE", view: this.view, seq: m.seq, op: m.op, from: this.myId });
+  private int quorum() {
+    int f = (n - 1) / 3;
+    return 2 * f + 1;
   }
 
-  onPrepare(m: Extract<Msg, { kind: "PREPARE" }>) {
-    if (m.view !== this.view) return;
-    if (!this.prePrepare.has(m.seq) || this.prePrepare.get(m.seq) !== m.op) return;
-    let bag = this.prepares.get(m.seq);
-    if (!bag) { bag = new Map(); this.prepares.set(m.seq, bag); }
-    bag.set(m.from, m.op);
+  void onPrePrepare(Msg m) {
+    if (m.view() != view) return;
+    if (prePrepare.containsKey(m.seq())) return;            // already have one for this seq
+    prePrepare.put(m.seq(), m.op());
+    broadcast(new Msg(Msg.Kind.PREPARE, view, m.seq(), m.op(), myId));
+  }
+
+  void onPrepare(Msg m) {
+    if (m.view() != view) return;
+    if (!prePrepare.containsKey(m.seq()) || !prePrepare.get(m.seq()).equals(m.op())) return;
+    Map<Integer, String> bag = prepares.computeIfAbsent(m.seq(), k -> new HashMap<>());
+    bag.put(m.from(), m.op());
     // Need pre-prepare + 2f matching prepares from others = 2f+1 total.
-    if (bag.size >= this.quorum() - 1 && !this.prepared.has(m.seq)) {
-      this.prepared.add(m.seq);
-      this.broadcast({ kind: "COMMIT", view: this.view, seq: m.seq, from: this.myId });
+    if (bag.size() >= quorum() - 1 && !prepared.contains(m.seq())) {
+      prepared.add(m.seq());
+      broadcast(new Msg(Msg.Kind.COMMIT, view, m.seq(), null, myId));
     }
   }
 
-  onCommit(m: Extract<Msg, { kind: "COMMIT" }>) {
-    if (m.view !== this.view) return;
-    let set = this.commits.get(m.seq);
-    if (!set) { set = new Set(); this.commits.set(m.seq, set); }
-    set.add(m.from);
-    if (set.size >= this.quorum() && !this.committed.has(m.seq) && this.prepared.has(m.seq)) {
-      this.committed.add(m.seq);
-      this.execute(this.prePrepare.get(m.seq)!);
-      this.replyToClient(m.seq);
+  void onCommit(Msg m) {
+    if (m.view() != view) return;
+    Set<Integer> set = commits.computeIfAbsent(m.seq(), k -> new HashSet<>());
+    set.add(m.from());
+    if (set.size() >= quorum() && !committed.contains(m.seq()) && prepared.contains(m.seq())) {
+      committed.add(m.seq());
+      execute(prePrepare.get(m.seq()));
+      replyToClient(m.seq());
     }
   }
 
-  private execute(_op: string) { /* apply to state machine */ }
-  private replyToClient(_seq: number) { /* signed reply */ }
-  private broadcast(_m: Msg) { /* send to all other n-1 nodes */ }
+  private void execute(String op) { /* apply to state machine */ }
+  private void replyToClient(int seq) { /* signed reply */ }
+  private void broadcast(Msg m) { /* send to all other n-1 nodes */ }
 }`,
-  },
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "pbft.py",
+      code: `# Skeleton of PBFT normal-case operation on a backup node.
+# All cross-node messages are signed; signature checks omitted for clarity.
+
+from dataclasses import dataclass
+from enum import Enum
+from typing import Optional
+
+
+class Kind(Enum):
+    PRE_PREPARE = "PRE-PREPARE"
+    PREPARE = "PREPARE"
+    COMMIT = "COMMIT"
+
+
+# A tagged dataclass models the PRE-PREPARE / PREPARE / COMMIT discriminated
+# union (op is None for COMMIT).
+@dataclass
+class Msg:
+    kind: Kind
+    view: int
+    seq: int
+    from_: int
+    op: Optional[str] = None
+
+
+class PbftBackup:
+    def __init__(self, my_id: int, n: int):
+        self.my_id = my_id
+        self.n = n
+        self.view = 0
+        self.pre_prepare: dict[int, str] = {}             # seq -> op
+        self.prepares: dict[int, dict[int, str]] = {}     # seq -> from -> op
+        self.commits: dict[int, set[int]] = {}            # seq -> set of senders
+        self.prepared: set[int] = set()
+        self.committed: set[int] = set()
+
+    # 2f+1 quorum
+    def _quorum(self) -> int:
+        f = (self.n - 1) // 3
+        return 2 * f + 1
+
+    def on_pre_prepare(self, m: Msg) -> None:
+        if m.view != self.view:
+            return
+        if m.seq in self.pre_prepare:
+            return  # already have one for this seq
+        self.pre_prepare[m.seq] = m.op
+        self.broadcast(Msg(Kind.PREPARE, self.view, m.seq, self.my_id, m.op))
+
+    def on_prepare(self, m: Msg) -> None:
+        if m.view != self.view:
+            return
+        if m.seq not in self.pre_prepare or self.pre_prepare[m.seq] != m.op:
+            return
+        bag = self.prepares.setdefault(m.seq, {})
+        bag[m.from_] = m.op
+        # Need pre-prepare + 2f matching prepares from others = 2f+1 total.
+        if len(bag) >= self._quorum() - 1 and m.seq not in self.prepared:
+            self.prepared.add(m.seq)
+            self.broadcast(Msg(Kind.COMMIT, self.view, m.seq, self.my_id))
+
+    def on_commit(self, m: Msg) -> None:
+        if m.view != self.view:
+            return
+        senders = self.commits.setdefault(m.seq, set())
+        senders.add(m.from_)
+        if len(senders) >= self._quorum() and m.seq not in self.committed and m.seq in self.prepared:
+            self.committed.add(m.seq)
+            self.execute(self.pre_prepare[m.seq])
+            self.reply_to_client(m.seq)
+
+    def execute(self, _op: str) -> None:
+        pass  # apply to state machine
+
+    def reply_to_client(self, _seq: int) -> None:
+        pass  # signed reply
+
+    def broadcast(self, _m: Msg) -> None:
+        pass  # send to all other n-1 nodes`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "pbft.cpp",
+      code: `// Skeleton of PBFT normal-case operation on a backup node.
+// All cross-node messages are signed; signature checks omitted for clarity.
+
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+
+// One struct with a Kind field models the PRE-PREPARE / PREPARE / COMMIT
+// discriminated union (op is empty for COMMIT).
+enum class Kind { PrePrepare, Prepare, Commit };
+
+struct Msg {
+  Kind kind;
+  int view;
+  int seq;
+  std::string op; // unused for COMMIT
+  int from;
+};
+
+class PbftBackup {
+ public:
+  PbftBackup(int myId, int n) : myId_(myId), n_(n) {}
+
+  void onPrePrepare(const Msg& m) {
+    if (m.view != view_) return;
+    if (prePrepare_.count(m.seq)) return;            // already have one for this seq
+    prePrepare_[m.seq] = m.op;
+    broadcast(Msg{Kind::Prepare, view_, m.seq, m.op, myId_});
+  }
+
+  void onPrepare(const Msg& m) {
+    if (m.view != view_) return;
+    auto it = prePrepare_.find(m.seq);
+    if (it == prePrepare_.end() || it->second != m.op) return;
+    auto& bag = prepares_[m.seq];
+    bag[m.from] = m.op;
+    // Need pre-prepare + 2f matching prepares from others = 2f+1 total.
+    if (static_cast<int>(bag.size()) >= quorum() - 1 && !prepared_.count(m.seq)) {
+      prepared_.insert(m.seq);
+      broadcast(Msg{Kind::Commit, view_, m.seq, "", myId_});
+    }
+  }
+
+  void onCommit(const Msg& m) {
+    if (m.view != view_) return;
+    auto& set = commits_[m.seq];
+    set.insert(m.from);
+    if (static_cast<int>(set.size()) >= quorum() && !committed_.count(m.seq) && prepared_.count(m.seq)) {
+      committed_.insert(m.seq);
+      execute(prePrepare_[m.seq]);
+      replyToClient(m.seq);
+    }
+  }
+
+ private:
+  // 2f+1 quorum
+  int quorum() const {
+    int f = (n_ - 1) / 3;
+    return 2 * f + 1;
+  }
+
+  void execute(const std::string& op) {} // apply to state machine
+  void replyToClient(int seq) {}          // signed reply
+  void broadcast(const Msg& m) {}         // send to all other n-1 nodes
+
+  int myId_;
+  int n_;
+
+  int view_ = 0;
+  std::unordered_map<int, std::string> prePrepare_;                      // seq -> op
+  std::unordered_map<int, std::unordered_map<int, std::string>> prepares_; // seq -> from -> op
+  std::unordered_map<int, std::unordered_set<int>> commits_;            // seq -> set of senders
+  std::unordered_set<int> prepared_;
+  std::unordered_set<int> committed_;
+};`,
+    },
+  ],
 
   furtherReading: [
     {

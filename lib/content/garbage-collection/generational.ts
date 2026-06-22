@@ -97,59 +97,299 @@ export const generational: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "generational.ts",
-    code: `// A sketch of generational collection: fast minor GC over the young gen,
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "generational.go",
+      code: `// A sketch of generational collection: fast minor GC over the young gen,
 // promotion by age, and a remembered set fed by a write barrier.
-const TENURING_THRESHOLD = 3;
+package gc
 
-interface Obj { age: number; refs: Obj[]; gen: "young" | "old"; }
+const TenuringThreshold = 3
+
+type Gen int
+
+const (
+	Young Gen = iota
+	Old
+)
+
+type Obj struct {
+	age  int
+	refs []*Obj
+	gen  Gen
+}
+
+type GenerationalHeap struct {
+	eden       []*Obj
+	survivor   []*Obj
+	old        []*Obj
+	roots      []*Obj
+	remembered map[*Obj]bool // old objects holding young pointers
+}
+
+func NewGenerationalHeap() *GenerationalHeap {
+	return &GenerationalHeap{remembered: map[*Obj]bool{}}
+}
+
+// Alloc is a bump into eden. Triggers a minor GC when full.
+func (h *GenerationalHeap) Alloc(refs []*Obj) *Obj {
+	o := &Obj{age: 0, refs: refs, gen: Young}
+	h.eden = append(h.eden, o)
+	if len(h.eden) > 8 {
+		h.minorGC()
+	}
+	return o
+}
+
+// WriteRef: write barrier run on every pointer store. Records old -> young edges.
+func (h *GenerationalHeap) WriteRef(holder, target *Obj) {
+	holder.refs = append(holder.refs, target)
+	if holder.gen == Old && target.gen == Young {
+		h.remembered[holder] = true // remember it for the next minor GC
+	}
+}
+
+// minorGC: trace young gen only. Roots = real roots + remembered set.
+func (h *GenerationalHeap) minorGC() {
+	live := map[*Obj]bool{}
+	// Seed the worklist from real roots' children and the remembered set's children.
+	var work []*Obj
+	for _, r := range h.roots {
+		work = append(work, r.refs...)
+	}
+	for r := range h.remembered {
+		work = append(work, r.refs...)
+	}
+	for len(work) > 0 {
+		o := work[len(work)-1]
+		work = work[:len(work)-1]
+		if o.gen == Old || live[o] {
+			continue // don't trace into old gen
+		}
+		live[o] = true
+		work = append(work, o.refs...)
+	}
+	var nextSurvivor []*Obj
+	for o := range live {
+		o.age++
+		if o.age >= TenuringThreshold {
+			o.gen = Old
+			h.old = append(h.old, o) // promote
+		} else {
+			nextSurvivor = append(nextSurvivor, o)
+		}
+	}
+	h.eden = nil                // wipe eden + old survivor wholesale
+	h.survivor = nextSurvivor   // swap survivor spaces
+	h.remembered = map[*Obj]bool{}
+}`,
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "Generational.java",
+      code: `// A sketch of generational collection: fast minor GC over the young gen,
+// promotion by age, and a remembered set fed by a write barrier.
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+enum Gen { YOUNG, OLD }
+
+class Obj {
+    int age;
+    List<Obj> refs = new ArrayList<>();
+    Gen gen = Gen.YOUNG;
+}
 
 class GenerationalHeap {
-  private eden: Obj[] = [];
-  private survivor: Obj[] = [];
-  private old: Obj[] = [];
-  private roots: Obj[] = [];
-  private remembered = new Set<Obj>(); // old objects holding young pointers
+    private static final int TENURING_THRESHOLD = 3;
 
-  /** Allocation is a bump into eden. Triggers a minor GC when full. */
-  alloc(refs: Obj[] = []): Obj {
-    const o: Obj = { age: 0, refs, gen: "young" };
-    this.eden.push(o);
-    if (this.eden.length > 8) this.minorGC();
-    return o;
-  }
+    private List<Obj> eden = new ArrayList<>();
+    private List<Obj> survivor = new ArrayList<>();
+    private final List<Obj> old = new ArrayList<>();
+    private final List<Obj> roots = new ArrayList<>();
+    private Set<Obj> remembered = new HashSet<>(); // old objects holding young pointers
 
-  /** Write barrier: run on every pointer store. Records old -> young edges. */
-  writeRef(holder: Obj, target: Obj): void {
-    holder.refs.push(target);
-    if (holder.gen === "old" && target.gen === "young") {
-      this.remembered.add(holder); // remember it for the next minor GC
+    /** Allocation is a bump into eden. Triggers a minor GC when full. */
+    Obj alloc(List<Obj> refs) {
+        Obj o = new Obj();
+        o.refs = refs;
+        eden.add(o);
+        if (eden.size() > 8) minorGC();
+        return o;
     }
-  }
 
-  /** Minor GC: trace young gen only. Roots = real roots + remembered set. */
-  private minorGC(): void {
-    const live = new Set<Obj>();
-    const work = [...this.roots, ...this.remembered].flatMap((r) => r.refs ?? [r]);
-    while (work.length) {
-      const o = work.pop()!;
-      if (o.gen === "old" || live.has(o)) continue; // don't trace into old gen
-      live.add(o);
-      work.push(...o.refs);
+    /** Write barrier: run on every pointer store. Records old -> young edges. */
+    void writeRef(Obj holder, Obj target) {
+        holder.refs.add(target);
+        if (holder.gen == Gen.OLD && target.gen == Gen.YOUNG) {
+            remembered.add(holder); // remember it for the next minor GC
+        }
     }
-    const nextSurvivor: Obj[] = [];
-    for (const o of live) {
-      if (++o.age >= TENURING_THRESHOLD) { o.gen = "old"; this.old.push(o); } // promote
-      else nextSurvivor.push(o);
+
+    /** Minor GC: trace young gen only. Roots = real roots + remembered set. */
+    private void minorGC() {
+        Set<Obj> live = new HashSet<>();
+        Deque<Obj> work = new ArrayDeque<>();
+        for (Obj r : roots) work.addAll(r.refs);
+        for (Obj r : remembered) work.addAll(r.refs);
+        while (!work.isEmpty()) {
+            Obj o = work.pop();
+            if (o.gen == Gen.OLD || live.contains(o)) continue; // don't trace into old gen
+            live.add(o);
+            work.addAll(o.refs);
+        }
+        List<Obj> nextSurvivor = new ArrayList<>();
+        for (Obj o : live) {
+            if (++o.age >= TENURING_THRESHOLD) { o.gen = Gen.OLD; old.add(o); } // promote
+            else nextSurvivor.add(o);
+        }
+        eden = new ArrayList<>();      // wipe eden + old survivor wholesale
+        survivor = nextSurvivor;       // swap survivor spaces
+        remembered = new HashSet<>();
     }
-    this.eden = [];                 // wipe eden + old survivor wholesale
-    this.survivor = nextSurvivor;   // swap survivor spaces
-    this.remembered.clear();
-  }
 }`,
-  },
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "generational.py",
+      code: `# A sketch of generational collection: fast minor GC over the young gen,
+# promotion by age, and a remembered set fed by a write barrier.
+TENURING_THRESHOLD = 3
+
+
+class Obj:
+    def __init__(self, refs: list["Obj"] | None = None, gen: str = "young") -> None:
+        self.age = 0
+        self.refs: list["Obj"] = refs if refs is not None else []
+        self.gen = gen  # "young" | "old"
+
+
+class GenerationalHeap:
+    def __init__(self) -> None:
+        self.eden: list[Obj] = []
+        self.survivor: list[Obj] = []
+        self.old: list[Obj] = []
+        self.roots: list[Obj] = []
+        self.remembered: set[Obj] = set()  # old objects holding young pointers
+
+    def alloc(self, refs: list[Obj] | None = None) -> Obj:
+        """Allocation is a bump into eden. Triggers a minor GC when full."""
+        o = Obj(refs or [], "young")
+        self.eden.append(o)
+        if len(self.eden) > 8:
+            self._minor_gc()
+        return o
+
+    def write_ref(self, holder: Obj, target: Obj) -> None:
+        """Write barrier: run on every pointer store. Records old -> young edges."""
+        holder.refs.append(target)
+        if holder.gen == "old" and target.gen == "young":
+            self.remembered.add(holder)  # remember it for the next minor GC
+
+    def _minor_gc(self) -> None:
+        """Minor GC: trace young gen only. Roots = real roots + remembered set."""
+        live: set[Obj] = set()
+        work: list[Obj] = []
+        for r in self.roots:
+            work.extend(r.refs)
+        for r in self.remembered:
+            work.extend(r.refs)
+        while work:
+            o = work.pop()
+            if o.gen == "old" or o in live:
+                continue                 # don't trace into old gen
+            live.add(o)
+            work.extend(o.refs)
+        next_survivor: list[Obj] = []
+        for o in live:
+            o.age += 1
+            if o.age >= TENURING_THRESHOLD:
+                o.gen = "old"
+                self.old.append(o)       # promote
+            else:
+                next_survivor.append(o)
+        self.eden = []                   # wipe eden + old survivor wholesale
+        self.survivor = next_survivor    # swap survivor spaces
+        self.remembered.clear()`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "generational.cpp",
+      code: `// A sketch of generational collection: fast minor GC over the young gen,
+// promotion by age, and a remembered set fed by a write barrier.
+#include <unordered_set>
+#include <vector>
+
+enum class Gen { Young, Old };
+
+struct Obj {
+    int age = 0;
+    std::vector<Obj*> refs;
+    Gen gen = Gen::Young;
+};
+
+class GenerationalHeap {
+    static constexpr int TENURING_THRESHOLD = 3;
+
+    std::vector<Obj*> eden_;
+    std::vector<Obj*> survivor_;
+    std::vector<Obj*> old_;
+    std::vector<Obj*> roots_;
+    std::unordered_set<Obj*> remembered_; // old objects holding young pointers
+
+public:
+    // Allocation is a bump into eden. Triggers a minor GC when full.
+    Obj* alloc(std::vector<Obj*> refs = {}) {
+        Obj* o = new Obj();
+        o->refs = std::move(refs);
+        eden_.push_back(o);
+        if (eden_.size() > 8) minorGC();
+        return o;
+    }
+
+    // Write barrier: run on every pointer store. Records old -> young edges.
+    void writeRef(Obj* holder, Obj* target) {
+        holder->refs.push_back(target);
+        if (holder->gen == Gen::Old && target->gen == Gen::Young) {
+            remembered_.insert(holder); // remember it for the next minor GC
+        }
+    }
+
+private:
+    // Minor GC: trace young gen only. Roots = real roots + remembered set.
+    void minorGC() {
+        std::unordered_set<Obj*> live;
+        std::vector<Obj*> work;
+        for (Obj* r : roots_) work.insert(work.end(), r->refs.begin(), r->refs.end());
+        for (Obj* r : remembered_) work.insert(work.end(), r->refs.begin(), r->refs.end());
+        while (!work.empty()) {
+            Obj* o = work.back();
+            work.pop_back();
+            if (o->gen == Gen::Old || live.count(o)) continue; // don't trace into old gen
+            live.insert(o);
+            work.insert(work.end(), o->refs.begin(), o->refs.end());
+        }
+        std::vector<Obj*> nextSurvivor;
+        for (Obj* o : live) {
+            if (++o->age >= TENURING_THRESHOLD) { o->gen = Gen::Old; old_.push_back(o); } // promote
+            else nextSurvivor.push_back(o);
+        }
+        eden_.clear();                  // wipe eden + old survivor wholesale
+        survivor_ = nextSurvivor;       // swap survivor spaces
+        remembered_.clear();
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

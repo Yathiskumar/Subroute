@@ -83,10 +83,12 @@ export const writeAround: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "write-around.ts",
-    code: `// Write-around: writes skip the cache, only reads populate it.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "write-around.ts",
+      code: `// Write-around: writes skip the cache, only reads populate it.
 // Invalidation is mandatory — otherwise reads return stale values.
 class WriteAroundCache<K, V> {
   private cache = new Map<K, V>();
@@ -118,7 +120,167 @@ class WriteAroundCache<K, V> {
     this.cache.set(key, value);
   }
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "WriteAround.java",
+      code: `import java.util.LinkedHashMap;
+import java.util.Map;
+
+// Write-around: writes skip the cache, only reads populate it.
+// Invalidation is mandatory — otherwise reads return stale values.
+interface Store<K, V> {
+    V get(K k);
+    void put(K k, V v);
+}
+
+class WriteAroundCache<K, V> {
+    // LinkedHashMap preserves insertion order, so the first key is the oldest.
+    private final Map<K, V> cache = new LinkedHashMap<>();
+    private final int capacity;
+    private final Store<K, V> store;
+
+    WriteAroundCache(int capacity, Store<K, V> store) {
+        this.capacity = capacity;
+        this.store = store;
+    }
+
+    V get(K key) {
+        if (cache.containsKey(key)) return cache.get(key);
+        V v = store.get(key);
+        if (v != null) admit(key, v);
+        return v;
+    }
+
+    void set(K key, V value) {
+        // Always write directly to the store...
+        store.put(key, value);
+        // ...and invalidate any cached copy. Skipping this step is the
+        // most common bug in write-around implementations.
+        cache.remove(key);
+    }
+
+    private void admit(K key, V value) {
+        if (cache.size() >= capacity) {
+            K oldest = cache.keySet().iterator().next();
+            cache.remove(oldest);
+        }
+        cache.put(key, value);
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "write_around.py",
+      code: `from collections import OrderedDict
+from typing import Generic, Optional, Protocol, TypeVar
+
+K = TypeVar("K")
+V = TypeVar("V")
+
+
+class Store(Protocol[K, V]):
+    def get(self, k: K) -> Optional[V]: ...
+    def put(self, k: K, v: V) -> None: ...
+
+
+class WriteAroundCache(Generic[K, V]):
+    """Write-around: writes skip the cache, only reads populate it.
+
+    Invalidation is mandatory — otherwise reads return stale values.
+    """
+
+    def __init__(self, capacity: int, store: Store[K, V]) -> None:
+        self.capacity = capacity
+        self.store = store
+        # OrderedDict preserves insertion order, so the first key is the oldest.
+        self.cache: "OrderedDict[K, V]" = OrderedDict()
+
+    def get(self, key: K) -> Optional[V]:
+        if key in self.cache:
+            return self.cache[key]
+        v = self.store.get(key)
+        if v is not None:
+            self._admit(key, v)
+        return v
+
+    def set(self, key: K, value: V) -> None:
+        # Always write directly to the store...
+        self.store.put(key, value)
+        # ...and invalidate any cached copy. Skipping this step is the
+        # most common bug in write-around implementations.
+        self.cache.pop(key, None)
+
+    def _admit(self, key: K, value: V) -> None:
+        if len(self.cache) >= self.capacity:
+            oldest = next(iter(self.cache))
+            del self.cache[oldest]
+        self.cache[key] = value`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "write_around.cpp",
+      code: `// Write-around: writes skip the cache, only reads populate it.
+// Invalidation is mandatory — otherwise reads return stale values.
+#include <list>
+#include <optional>
+#include <unordered_map>
+
+template <typename K, typename V>
+struct Store {
+    virtual std::optional<V> get(const K& k) = 0;
+    virtual void put(const K& k, const V& v) = 0;
+    virtual ~Store() = default;
+};
+
+template <typename K, typename V>
+class WriteAroundCache {
+    int capacity_;
+    Store<K, V>* store_;
+    // order_ tracks insertion order so the front is the oldest line.
+    std::list<K> order_;
+    std::unordered_map<K, std::pair<V, typename std::list<K>::iterator>> cache_;
+
+public:
+    WriteAroundCache(int capacity, Store<K, V>* store)
+        : capacity_(capacity), store_(store) {}
+
+    std::optional<V> get(const K& key) {
+        auto it = cache_.find(key);
+        if (it != cache_.end()) return it->second.first;
+        std::optional<V> v = store_->get(key);
+        if (v) admit(key, *v);
+        return v;
+    }
+
+    void set(const K& key, const V& value) {
+        // Always write directly to the store...
+        store_->put(key, value);
+        // ...and invalidate any cached copy. Skipping this step is the
+        // most common bug in write-around implementations.
+        auto it = cache_.find(key);
+        if (it != cache_.end()) {
+            order_.erase(it->second.second);
+            cache_.erase(it);
+        }
+    }
+
+private:
+    void admit(const K& key, const V& value) {
+        if (static_cast<int>(cache_.size()) >= capacity_) {
+            const K& oldest = order_.front();
+            cache_.erase(oldest);
+            order_.pop_front();
+        }
+        order_.push_back(key);
+        cache_[key] = {value, std::prev(order_.end())};
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

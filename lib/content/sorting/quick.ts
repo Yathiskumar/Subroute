@@ -116,10 +116,12 @@ export const quick: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "quick-sort.ts",
-    code: `// Quicksort with Lomuto partition.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "quick-sort.ts",
+      code: `// Quicksort with Lomuto partition.
 // Average O(n log n) in-place; worst O(n²) on bad pivots.
 // Production code should randomise the pivot to dodge worst-case inputs.
 function quickSort<T>(a: T[], lo = 0, hi = a.length - 1): T[] {
@@ -147,7 +149,113 @@ function partition<T>(a: T[], lo: number, hi: number): number {
 // Example
 quickSort([10, 7, 8, 9, 1, 5]);
 // → [1, 5, 7, 8, 9, 10]`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "QuickSort.java",
+      code: `// Quicksort with Lomuto partition.
+// Average O(n log n) in-place; worst O(n²) on bad pivots.
+// Production code should randomise the pivot to dodge worst-case inputs.
+static <T extends Comparable<T>> void quickSort(T[] a, int lo, int hi) {
+    if (lo >= hi) return;
+    int p = partition(a, lo, hi);
+    quickSort(a, lo, p - 1);
+    quickSort(a, p + 1, hi);
+}
+
+static <T extends Comparable<T>> int partition(T[] a, int lo, int hi) {
+    // For a hostile-input-resistant version, swap a[hi] with a[lo + random(hi-lo+1)] here.
+    T pivot = a[hi];
+    int i = lo - 1;
+    for (int j = lo; j < hi; j++) {
+        if (a[j].compareTo(pivot) < 0) {
+            i++;
+            T tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+        }
+    }
+    T tmp = a[i + 1]; a[i + 1] = a[hi]; a[hi] = tmp;
+    return i + 1;
+}
+
+// Example
+Integer[] arr = {10, 7, 8, 9, 1, 5};
+quickSort(arr, 0, arr.length - 1);
+// → [1, 5, 7, 8, 9, 10]`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "quick_sort.py",
+      code: `def quick_sort(a: list, lo: int = 0, hi: int = None) -> list:
+    """Quicksort with Lomuto partition.
+    Average O(n log n) in-place; worst O(n²) on bad pivots.
+    Production code should randomise the pivot to dodge worst-case inputs."""
+    if hi is None:
+        hi = len(a) - 1
+    if lo >= hi:
+        return a
+    p = partition(a, lo, hi)
+    quick_sort(a, lo, p - 1)
+    quick_sort(a, p + 1, hi)
+    return a
+
+
+def partition(a: list, lo: int, hi: int) -> int:
+    # For a hostile-input-resistant version, swap a[hi] with a[lo + random(hi-lo+1)] here.
+    pivot = a[hi]
+    i = lo - 1
+    for j in range(lo, hi):
+        if a[j] < pivot:
+            i += 1
+            a[i], a[j] = a[j], a[i]
+    a[i + 1], a[hi] = a[hi], a[i + 1]
+    return i + 1
+
+
+# Example
+quick_sort([10, 7, 8, 9, 1, 5])
+# → [1, 5, 7, 8, 9, 10]`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "quick_sort.cpp",
+      code: `// Quicksort with Lomuto partition.
+// Average O(n log n) in-place; worst O(n²) on bad pivots.
+// Production code should randomise the pivot to dodge worst-case inputs.
+#include <vector>
+#include <utility>
+
+template <typename T>
+int partition(std::vector<T>& a, int lo, int hi) {
+    // For a hostile-input-resistant version, swap a[hi] with a[lo + random(hi-lo+1)] here.
+    T pivot = a[hi];
+    int i = lo - 1;
+    for (int j = lo; j < hi; j++) {
+        if (a[j] < pivot) {
+            i++;
+            std::swap(a[i], a[j]);
+        }
+    }
+    std::swap(a[i + 1], a[hi]);
+    return i + 1;
+}
+
+template <typename T>
+void quickSort(std::vector<T>& a, int lo, int hi) {
+    if (lo >= hi) return;
+    int p = partition(a, lo, hi);
+    quickSort(a, lo, p - 1);
+    quickSort(a, p + 1, hi);
+}
+
+// Example
+// std::vector<int> v = {10, 7, 8, 9, 1, 5};
+// quickSort(v, 0, v.size() - 1);
+// → [1, 5, 7, 8, 9, 10]`,
+    },
+  ],
 
   furtherReading: [
     {

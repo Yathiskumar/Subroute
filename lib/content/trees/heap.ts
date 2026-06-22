@@ -117,10 +117,12 @@ export const heap: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "BinaryHeap.ts",
-    code: `// Array-backed binary min-heap.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "BinaryHeap.ts",
+      code: `// Array-backed binary min-heap.
 // Swap min → max comparator for a max-heap.
 class BinaryHeap {
   private data: number[] = [];
@@ -193,7 +195,269 @@ class BinaryHeap {
 
   get size(): number { return this.data.length; }
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "BinaryHeap.java",
+      code: `// Array-backed binary min-heap.
+// Swap min → max comparator for a max-heap.
+
+import java.util.ArrayList;
+import java.util.List;
+
+class BinaryHeap {
+    private final List<Integer> data = new ArrayList<>();
+
+    // Index helpers — the only "pointers" this structure needs.
+    private int parent(int i) { return (i - 1) / 2; }
+    private int left(int i)   { return 2 * i + 1; }
+    private int right(int i)  { return 2 * i + 2; }
+
+    private void swap(int a, int b) {
+        int tmp = data.get(a);
+        data.set(a, data.get(b));
+        data.set(b, tmp);
+    }
+
+    // Min-heap property: parent ≤ children.
+    private boolean less(int a, int b) {
+        return data.get(a) < data.get(b);
+    }
+
+    // O(log n) — append then bubble up.
+    void push(int value) {
+        data.add(value);
+        bubbleUp(data.size() - 1);
+    }
+
+    private void bubbleUp(int i) {
+        while (i > 0) {
+            int p = parent(i);
+            if (less(i, p)) { swap(i, p); i = p; }
+            else break;
+        }
+    }
+
+    // O(1) — root is always index 0.
+    Integer peek() {
+        return data.isEmpty() ? null : data.get(0);
+    }
+
+    // O(log n) — remove root, promote last, sift down.
+    Integer pop() {
+        if (data.isEmpty()) return null;
+        int top = data.get(0);
+        int last = data.remove(data.size() - 1);
+        if (!data.isEmpty()) {
+            data.set(0, last);
+            siftDown(0);
+        }
+        return top;
+    }
+
+    private void siftDown(int i) {
+        int n = data.size();
+        while (true) {
+            int smallest = i;
+            int l = left(i), r = right(i);
+            if (l < n && less(l, smallest)) smallest = l;
+            if (r < n && less(r, smallest)) smallest = r;
+            if (smallest == i) break;
+            swap(i, smallest);
+            i = smallest;
+        }
+    }
+
+    // O(n) — Floyd's bottom-up build; faster than n × push().
+    static BinaryHeap buildHeap(int[] values) {
+        BinaryHeap h = new BinaryHeap();
+        for (int v : values) h.data.add(v);
+        for (int i = h.data.size() / 2 - 1; i >= 0; i--) {
+            h.siftDown(i);          // sift every internal node, leaves skip
+        }
+        return h;
+    }
+
+    int size() { return data.size(); }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "binary_heap.py",
+      code: `# Array-backed binary min-heap.
+# Swap min → max comparator for a max-heap.
+
+from __future__ import annotations
+from typing import List, Optional
+
+
+class BinaryHeap:
+    def __init__(self) -> None:
+        self.data: List[int] = []
+
+    # Index helpers — the only "pointers" this structure needs.
+    @staticmethod
+    def _parent(i: int) -> int: return (i - 1) // 2
+
+    @staticmethod
+    def _left(i: int) -> int: return 2 * i + 1
+
+    @staticmethod
+    def _right(i: int) -> int: return 2 * i + 2
+
+    def _swap(self, a: int, b: int) -> None:
+        self.data[a], self.data[b] = self.data[b], self.data[a]
+
+    # Min-heap property: parent ≤ children.
+    def _less(self, a: int, b: int) -> bool:
+        return self.data[a] < self.data[b]
+
+    # O(log n) — append then bubble up.
+    def push(self, value: int) -> None:
+        self.data.append(value)
+        self._bubble_up(len(self.data) - 1)
+
+    def _bubble_up(self, i: int) -> None:
+        while i > 0:
+            p = self._parent(i)
+            if self._less(i, p):
+                self._swap(i, p)
+                i = p
+            else:
+                break
+
+    # O(1) — root is always index 0.
+    def peek(self) -> Optional[int]:
+        return self.data[0] if self.data else None
+
+    # O(log n) — remove root, promote last, sift down.
+    def pop(self) -> Optional[int]:
+        if not self.data:
+            return None
+        top = self.data[0]
+        last = self.data.pop()
+        if self.data:
+            self.data[0] = last
+            self._sift_down(0)
+        return top
+
+    def _sift_down(self, i: int) -> None:
+        n = len(self.data)
+        while True:
+            smallest = i
+            l, r = self._left(i), self._right(i)
+            if l < n and self._less(l, smallest):
+                smallest = l
+            if r < n and self._less(r, smallest):
+                smallest = r
+            if smallest == i:
+                break
+            self._swap(i, smallest)
+            i = smallest
+
+    # O(n) — Floyd's bottom-up build; faster than n × push().
+    @staticmethod
+    def build_heap(values: List[int]) -> "BinaryHeap":
+        h = BinaryHeap()
+        h.data = list(values)
+        for i in range(len(h.data) // 2 - 1, -1, -1):
+            h._sift_down(i)         # sift every internal node, leaves skip
+        return h
+
+    @property
+    def size(self) -> int:
+        return len(self.data)`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "binary_heap.cpp",
+      code: `// Array-backed binary min-heap.
+// Swap min → max comparator for a max-heap.
+#include <algorithm>
+#include <optional>
+#include <vector>
+
+class BinaryHeap {
+    std::vector<int> data_;
+
+    // Index helpers — the only "pointers" this structure needs.
+    static int parent(int i) { return (i - 1) / 2; }
+    static int left(int i)   { return 2 * i + 1; }
+    static int right(int i)  { return 2 * i + 2; }
+
+    void swapAt(int a, int b) {
+        std::swap(data_[a], data_[b]);
+    }
+
+    // Min-heap property: parent ≤ children.
+    bool less(int a, int b) const {
+        return data_[a] < data_[b];
+    }
+
+    void bubbleUp(int i) {
+        while (i > 0) {
+            int p = parent(i);
+            if (less(i, p)) { swapAt(i, p); i = p; }
+            else break;
+        }
+    }
+
+    void siftDown(int i) {
+        int n = static_cast<int>(data_.size());
+        while (true) {
+            int smallest = i;
+            int l = left(i), r = right(i);
+            if (l < n && less(l, smallest)) smallest = l;
+            if (r < n && less(r, smallest)) smallest = r;
+            if (smallest == i) break;
+            swapAt(i, smallest);
+            i = smallest;
+        }
+    }
+
+public:
+    // O(log n) — append then bubble up.
+    void push(int value) {
+        data_.push_back(value);
+        bubbleUp(static_cast<int>(data_.size()) - 1);
+    }
+
+    // O(1) — root is always index 0.
+    std::optional<int> peek() const {
+        if (data_.empty()) return std::nullopt;
+        return data_[0];
+    }
+
+    // O(log n) — remove root, promote last, sift down.
+    std::optional<int> pop() {
+        if (data_.empty()) return std::nullopt;
+        int top = data_[0];
+        int last = data_.back();
+        data_.pop_back();
+        if (!data_.empty()) {
+            data_[0] = last;
+            siftDown(0);
+        }
+        return top;
+    }
+
+    // O(n) — Floyd's bottom-up build; faster than n × push().
+    static BinaryHeap buildHeap(const std::vector<int>& values) {
+        BinaryHeap h;
+        h.data_ = values;
+        for (int i = static_cast<int>(h.data_.size()) / 2 - 1; i >= 0; i--) {
+            h.siftDown(i);          // sift every internal node, leaves skip
+        }
+        return h;
+    }
+
+    int size() const { return static_cast<int>(data_.size()); }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

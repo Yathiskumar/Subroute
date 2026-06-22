@@ -113,10 +113,12 @@ export const trie: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "trie.ts",
-    code: `class TrieNode {
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "trie.ts",
+      code: `class TrieNode {
   children: Map<string, TrieNode> = new Map();
   isEnd = false;
 }
@@ -194,7 +196,267 @@ class Trie {
     return node.children.size === 0 && !node.isEnd;
   }
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "Trie.java",
+      code: `import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+class TrieNode {
+    Map<Character, TrieNode> children = new HashMap<>();
+    boolean isEnd = false;
+}
+
+class Trie {
+    private final TrieNode root = new TrieNode();
+
+    /** O(L) — walk one node per character, creating nodes as needed. */
+    void insert(String word) {
+        TrieNode node = root;
+        for (char ch : word.toCharArray()) {
+            node = node.children.computeIfAbsent(ch, k -> new TrieNode());
+        }
+        node.isEnd = true;
+    }
+
+    /** O(L) — walk the path; true only if the path exists AND ends on isEnd. */
+    boolean search(String word) {
+        TrieNode node = walk(word);
+        return node != null && node.isEnd;
+    }
+
+    /** O(L) — true if any stored word starts with this prefix. */
+    boolean startsWith(String prefix) {
+        return walk(prefix) != null;
+    }
+
+    /** O(L + K) — all words that begin with prefix (K = number of results). */
+    List<String> autocomplete(String prefix) {
+        TrieNode node = walk(prefix);
+        List<String> results = new ArrayList<>();
+        if (node == null) return results;
+        collect(node, prefix, results);
+        return results;
+    }
+
+    /** O(L) — clear isEnd; prune dead-end nodes bottom-up via recursion. */
+    boolean delete(String word) {
+        return deleteHelper(root, word, 0);
+    }
+
+    // ── private helpers ────────────────────────────────────────────────────
+
+    private TrieNode walk(String key) {
+        TrieNode node = root;
+        for (char ch : key.toCharArray()) {
+            node = node.children.get(ch);
+            if (node == null) return null;
+        }
+        return node;
+    }
+
+    private void collect(TrieNode node, String prefix, List<String> out) {
+        if (node.isEnd) out.add(prefix);
+        for (Map.Entry<Character, TrieNode> e : node.children.entrySet()) {
+            collect(e.getValue(), prefix + e.getKey(), out);
+        }
+    }
+
+    private boolean deleteHelper(TrieNode node, String word, int depth) {
+        if (depth == word.length()) {
+            if (!node.isEnd) return false;       // word wasn't stored
+            node.isEnd = false;
+            return node.children.isEmpty();      // signal: prune me if I'm a leaf
+        }
+        char ch = word.charAt(depth);
+        TrieNode child = node.children.get(ch);
+        if (child == null) return false;
+        boolean shouldPrune = deleteHelper(child, word, depth + 1);
+        if (shouldPrune) node.children.remove(ch);
+        // Prune this node too if it's now empty and not a word-end
+        return node.children.isEmpty() && !node.isEnd;
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "trie.py",
+      code: `from __future__ import annotations
+
+
+class TrieNode:
+    def __init__(self) -> None:
+        self.children: dict[str, TrieNode] = {}
+        self.is_end = False
+
+
+class Trie:
+    def __init__(self) -> None:
+        self.root = TrieNode()
+
+    def insert(self, word: str) -> None:
+        """O(L) — walk one node per character, creating nodes as needed."""
+        node = self.root
+        for ch in word:
+            if ch not in node.children:
+                node.children[ch] = TrieNode()
+            node = node.children[ch]
+        node.is_end = True
+
+    def search(self, word: str) -> bool:
+        """O(L) — walk the path; true only if the path exists AND ends on is_end."""
+        node = self._walk(word)
+        return node is not None and node.is_end
+
+    def starts_with(self, prefix: str) -> bool:
+        """O(L) — true if any stored word starts with this prefix."""
+        return self._walk(prefix) is not None
+
+    def autocomplete(self, prefix: str) -> list[str]:
+        """O(L + K) — all words that begin with prefix (K = number of results)."""
+        node = self._walk(prefix)
+        if node is None:
+            return []
+        results: list[str] = []
+        self._collect(node, prefix, results)
+        return results
+
+    def delete(self, word: str) -> bool:
+        """O(L) — clear is_end; prune dead-end nodes bottom-up via recursion."""
+        return self._delete_helper(self.root, word, 0)
+
+    # ── private helpers ────────────────────────────────────────────────────
+
+    def _walk(self, key: str) -> TrieNode | None:
+        node = self.root
+        for ch in key:
+            if ch not in node.children:
+                return None
+            node = node.children[ch]
+        return node
+
+    def _collect(self, node: TrieNode, prefix: str, out: list[str]) -> None:
+        if node.is_end:
+            out.append(prefix)
+        for ch, child in node.children.items():
+            self._collect(child, prefix + ch, out)
+
+    def _delete_helper(self, node: TrieNode, word: str, depth: int) -> bool:
+        if depth == len(word):
+            if not node.is_end:           # word wasn't stored
+                return False
+            node.is_end = False
+            return len(node.children) == 0  # signal: prune me if I'm a leaf
+        ch = word[depth]
+        child = node.children.get(ch)
+        if child is None:
+            return False
+        should_prune = self._delete_helper(child, word, depth + 1)
+        if should_prune:
+            del node.children[ch]
+        # Prune this node too if it's now empty and not a word-end
+        return len(node.children) == 0 and not node.is_end`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "trie.cpp",
+      code: `#include <string>
+#include <unordered_map>
+#include <vector>
+
+struct TrieNode {
+    std::unordered_map<char, TrieNode*> children;
+    bool isEnd = false;
+};
+
+class Trie {
+    TrieNode* root = new TrieNode();
+
+public:
+    // O(L) — walk one node per character, creating nodes as needed.
+    void insert(const std::string& word) {
+        TrieNode* node = root;
+        for (char ch : word) {
+            if (!node->children.count(ch)) {
+                node->children[ch] = new TrieNode();
+            }
+            node = node->children[ch];
+        }
+        node->isEnd = true;
+    }
+
+    // O(L) — walk the path; true only if the path exists AND ends on isEnd.
+    bool search(const std::string& word) {
+        TrieNode* node = walk(word);
+        return node != nullptr && node->isEnd;
+    }
+
+    // O(L) — true if any stored word starts with this prefix.
+    bool startsWith(const std::string& prefix) {
+        return walk(prefix) != nullptr;
+    }
+
+    // O(L + K) — all words that begin with prefix (K = number of results).
+    std::vector<std::string> autocomplete(const std::string& prefix) {
+        std::vector<std::string> results;
+        TrieNode* node = walk(prefix);
+        if (node == nullptr) return results;
+        collect(node, prefix, results);
+        return results;
+    }
+
+    // O(L) — clear isEnd; prune dead-end nodes bottom-up via recursion.
+    bool remove(const std::string& word) {
+        return deleteHelper(root, word, 0);
+    }
+
+private:
+    // ── private helpers ────────────────────────────────────────────────────
+
+    TrieNode* walk(const std::string& key) {
+        TrieNode* node = root;
+        for (char ch : key) {
+            auto it = node->children.find(ch);
+            if (it == node->children.end()) return nullptr;
+            node = it->second;
+        }
+        return node;
+    }
+
+    void collect(TrieNode* node, const std::string& prefix,
+                 std::vector<std::string>& out) {
+        if (node->isEnd) out.push_back(prefix);
+        for (auto& [ch, child] : node->children) {
+            collect(child, prefix + ch, out);
+        }
+    }
+
+    bool deleteHelper(TrieNode* node, const std::string& word, size_t depth) {
+        if (depth == word.size()) {
+            if (!node->isEnd) return false;          // word wasn't stored
+            node->isEnd = false;
+            return node->children.empty();           // signal: prune me if I'm a leaf
+        }
+        char ch = word[depth];
+        auto it = node->children.find(ch);
+        if (it == node->children.end()) return false;
+        bool shouldPrune = deleteHelper(it->second, word, depth + 1);
+        if (shouldPrune) {
+            delete it->second;
+            node->children.erase(it);
+        }
+        // Prune this node too if it's now empty and not a word-end
+        return node->children.empty() && !node->isEnd;
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

@@ -138,10 +138,12 @@ export const redBlack: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "red-black-insert.ts",
-    code: `type Color = "RED" | "BLACK";
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "red-black-insert.ts",
+      code: `type Color = "RED" | "BLACK";
 
 interface RBNode {
   key: number;
@@ -225,7 +227,290 @@ function insert(tree: { root: RBNode | null }, key: number): void {
   else y.right = z;
   insertFixup(tree, z);
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "RedBlackTree.java",
+      code: `class RedBlackTree {
+    enum Color { RED, BLACK }
+
+    static class RBNode {
+        int key;
+        Color color = Color.RED;
+        RBNode left, right, parent;
+
+        RBNode(int key) { this.key = key; }
+    }
+
+    RBNode root;
+
+    private void rotateLeft(RBNode x) {
+        RBNode y = x.right;
+        x.right = y.left;
+        if (y.left != null) y.left.parent = x;
+        y.parent = x.parent;
+        if (x.parent == null) root = y;
+        else if (x == x.parent.left) x.parent.left = y;
+        else x.parent.right = y;
+        y.left = x;
+        x.parent = y;
+    }
+
+    private void rotateRight(RBNode x) {
+        RBNode y = x.left;
+        x.left = y.right;
+        if (y.right != null) y.right.parent = x;
+        y.parent = x.parent;
+        if (x.parent == null) root = y;
+        else if (x == x.parent.right) x.parent.right = y;
+        else x.parent.left = y;
+        y.right = x;
+        x.parent = y;
+    }
+
+    private void insertFixup(RBNode z) {
+        while (z.parent != null && z.parent.color == Color.RED) {
+            RBNode p = z.parent;
+            RBNode g = p.parent;
+            if (p == g.left) {
+                RBNode uncle = g.right;
+                if (uncle != null && uncle.color == Color.RED) { // Case 1: uncle red → recolor
+                    p.color = Color.BLACK;
+                    uncle.color = Color.BLACK;
+                    g.color = Color.RED;
+                    z = g;                                        // climb up
+                } else {
+                    if (z == p.right) {                           // Case 2: triangle → rotate to line
+                        z = p;
+                        rotateLeft(z);
+                    }
+                    z.parent.color = Color.BLACK;                 // Case 3: line → rotate grandparent
+                    z.parent.parent.color = Color.RED;
+                    rotateRight(z.parent.parent);
+                }
+            } else {                                              // Mirror: p is g.right
+                RBNode uncle = g.left;
+                if (uncle != null && uncle.color == Color.RED) {
+                    p.color = Color.BLACK; uncle.color = Color.BLACK; g.color = Color.RED; z = g;
+                } else {
+                    if (z == p.left) { z = p; rotateRight(z); }
+                    z.parent.color = Color.BLACK;
+                    z.parent.parent.color = Color.RED;
+                    rotateLeft(z.parent.parent);
+                }
+            }
+        }
+        root.color = Color.BLACK;                                 // Invariant 2: root is always black
+    }
+
+    void insert(int key) {
+        RBNode z = new RBNode(key);
+        RBNode y = null;
+        RBNode x = root;
+        while (x != null) { y = x; x = key < x.key ? x.left : x.right; }
+        z.parent = y;
+        if (y == null) root = z;
+        else if (key < y.key) y.left = z;
+        else y.right = z;
+        insertFixup(z);
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "red_black_tree.py",
+      code: `from __future__ import annotations
+
+RED, BLACK = "RED", "BLACK"
+
+
+class RBNode:
+    def __init__(self, key: int) -> None:
+        self.key = key
+        self.color = RED
+        self.left: RBNode | None = None
+        self.right: RBNode | None = None
+        self.parent: RBNode | None = None
+
+
+class RedBlackTree:
+    def __init__(self) -> None:
+        self.root: RBNode | None = None
+
+    def _rotate_left(self, x: RBNode) -> None:
+        y = x.right
+        x.right = y.left
+        if y.left:
+            y.left.parent = x
+        y.parent = x.parent
+        if x.parent is None:
+            self.root = y
+        elif x is x.parent.left:
+            x.parent.left = y
+        else:
+            x.parent.right = y
+        y.left = x
+        x.parent = y
+
+    def _rotate_right(self, x: RBNode) -> None:
+        y = x.left
+        x.left = y.right
+        if y.right:
+            y.right.parent = x
+        y.parent = x.parent
+        if x.parent is None:
+            self.root = y
+        elif x is x.parent.right:
+            x.parent.right = y
+        else:
+            x.parent.left = y
+        y.right = x
+        x.parent = y
+
+    def _insert_fixup(self, z: RBNode) -> None:
+        while z.parent and z.parent.color == RED:
+            p = z.parent
+            g = p.parent
+            if p is g.left:
+                uncle = g.right
+                if uncle and uncle.color == RED:        # Case 1: uncle red → recolor
+                    p.color = BLACK
+                    uncle.color = BLACK
+                    g.color = RED
+                    z = g                               # climb up
+                else:
+                    if z is p.right:                    # Case 2: triangle → rotate to line
+                        z = p
+                        self._rotate_left(z)
+                    z.parent.color = BLACK              # Case 3: line → rotate grandparent
+                    z.parent.parent.color = RED
+                    self._rotate_right(z.parent.parent)
+            else:                                       # Mirror: p is g.right
+                uncle = g.left
+                if uncle and uncle.color == RED:
+                    p.color = BLACK
+                    uncle.color = BLACK
+                    g.color = RED
+                    z = g
+                else:
+                    if z is p.left:
+                        z = p
+                        self._rotate_right(z)
+                    z.parent.color = BLACK
+                    z.parent.parent.color = RED
+                    self._rotate_left(z.parent.parent)
+        self.root.color = BLACK                         # Invariant 2: root is always black
+
+    def insert(self, key: int) -> None:
+        z = RBNode(key)
+        y: RBNode | None = None
+        x = self.root
+        while x:
+            y = x
+            x = x.left if key < x.key else x.right
+        z.parent = y
+        if y is None:
+            self.root = z
+        elif key < y.key:
+            y.left = z
+        else:
+            y.right = z
+        self._insert_fixup(z)`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "red_black_tree.cpp",
+      code: `enum class Color { RED, BLACK };
+
+struct RBNode {
+    int key;
+    Color color = Color::RED;
+    RBNode* left = nullptr;
+    RBNode* right = nullptr;
+    RBNode* parent = nullptr;
+    explicit RBNode(int k) : key(k) {}
+};
+
+class RedBlackTree {
+    RBNode* root = nullptr;
+
+    void rotateLeft(RBNode* x) {
+        RBNode* y = x->right;
+        x->right = y->left;
+        if (y->left) y->left->parent = x;
+        y->parent = x->parent;
+        if (!x->parent) root = y;
+        else if (x == x->parent->left) x->parent->left = y;
+        else x->parent->right = y;
+        y->left = x;
+        x->parent = y;
+    }
+
+    void rotateRight(RBNode* x) {
+        RBNode* y = x->left;
+        x->left = y->right;
+        if (y->right) y->right->parent = x;
+        y->parent = x->parent;
+        if (!x->parent) root = y;
+        else if (x == x->parent->right) x->parent->right = y;
+        else x->parent->left = y;
+        y->right = x;
+        x->parent = y;
+    }
+
+    void insertFixup(RBNode* z) {
+        while (z->parent && z->parent->color == Color::RED) {
+            RBNode* p = z->parent;
+            RBNode* g = p->parent;
+            if (p == g->left) {
+                RBNode* uncle = g->right;
+                if (uncle && uncle->color == Color::RED) {   // Case 1: uncle red → recolor
+                    p->color = Color::BLACK;
+                    uncle->color = Color::BLACK;
+                    g->color = Color::RED;
+                    z = g;                                    // climb up
+                } else {
+                    if (z == p->right) {                      // Case 2: triangle → rotate to line
+                        z = p;
+                        rotateLeft(z);
+                    }
+                    z->parent->color = Color::BLACK;          // Case 3: line → rotate grandparent
+                    z->parent->parent->color = Color::RED;
+                    rotateRight(z->parent->parent);
+                }
+            } else {                                          // Mirror: p is g->right
+                RBNode* uncle = g->left;
+                if (uncle && uncle->color == Color::RED) {
+                    p->color = Color::BLACK; uncle->color = Color::BLACK; g->color = Color::RED; z = g;
+                } else {
+                    if (z == p->left) { z = p; rotateRight(z); }
+                    z->parent->color = Color::BLACK;
+                    z->parent->parent->color = Color::RED;
+                    rotateLeft(z->parent->parent);
+                }
+            }
+        }
+        root->color = Color::BLACK;                           // Invariant 2: root is always black
+    }
+
+public:
+    void insert(int key) {
+        RBNode* z = new RBNode(key);
+        RBNode* y = nullptr;
+        RBNode* x = root;
+        while (x) { y = x; x = key < x->key ? x->left : x->right; }
+        z->parent = y;
+        if (!y) root = z;
+        else if (key < y->key) y->left = z;
+        else y->right = z;
+        insertFixup(z);
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

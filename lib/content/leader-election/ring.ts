@@ -114,56 +114,239 @@ export const ring: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "ring.ts",
-    code: `// Chang–Roberts ring election. Each process knows only its clockwise successor.
-type ProcId = number;
-type Msg =
-  | { kind: "election"; id: ProcId }
-  | { kind: "coord"; leader: ProcId };
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "ring_election.go",
+      code: `// Chang-Roberts ring election. Each process knows only its clockwise successor.
+package election
+
+type ProcID = int
+
+type Msg struct {
+	Kind   string // "election" | "coord"
+	ID     ProcID // for "election"
+	Leader ProcID // for "coord"
+}
+
+type RingProcess struct {
+	ID          ProcID
+	participant bool
+	Leader      *ProcID                // nil means none
+	next        func(m Msg)            // send to clockwise successor
+}
+
+func NewRingProcess(id ProcID, next func(m Msg)) *RingProcess {
+	return &RingProcess{ID: id, next: next}
+}
+
+// StartElection is triggered when this process suspects the leader is dead.
+func (p *RingProcess) StartElection() {
+	if p.participant {
+		return
+	}
+	p.participant = true
+	p.next(Msg{Kind: "election", ID: p.ID})
+}
+
+func (p *RingProcess) OnMessage(m Msg) {
+	switch m.Kind {
+	case "election":
+		switch {
+		case m.ID > p.ID:
+			p.participant = true
+			p.next(m) // forward larger bid
+		case m.ID < p.ID && !p.participant:
+			p.participant = true
+			p.next(Msg{Kind: "election", ID: p.ID}) // bump to my ID
+		case m.ID < p.ID && p.participant:
+			return // discard - smaller bid
+		default: // m.ID == p.ID -> we are the winner
+			p.participant = false
+			id := p.ID
+			p.Leader = &id
+			p.next(Msg{Kind: "coord", Leader: p.ID})
+		}
+
+	case "coord":
+		p.participant = false
+		leader := m.Leader
+		p.Leader = &leader
+		if m.Leader != p.ID {
+			p.next(m) // forward one lap
+		}
+	}
+}`,
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "RingElection.java",
+      code: `// Chang-Roberts ring election. Each process knows only its clockwise successor.
+import java.util.function.Consumer;
 
 class RingProcess {
-  private participant = false;
-  public leader: ProcId | null = null;
+    record Msg(String kind, int id, int leader) {} // kind: "election" | "coord"
 
-  constructor(
-    public readonly id: ProcId,
-    private next: (m: Msg) => Promise<void>, // send to clockwise successor
-  ) {}
+    static Msg election(int id) { return new Msg("election", id, 0); }
+    static Msg coord(int leader) { return new Msg("coord", 0, leader); }
 
-  /** Triggered when this process suspects the leader is dead. */
-  async startElection() {
-    if (this.participant) return;
-    this.participant = true;
-    await this.next({ kind: "election", id: this.id });
-  }
+    final int id;
+    private final Consumer<Msg> next; // send to clockwise successor
+    private boolean participant = false;
+    Integer leader = null;
 
-  async onMessage(m: Msg) {
-    if (m.kind === "election") {
-      if (m.id > this.id) {
-        this.participant = true;
-        await this.next(m);                          // forward larger bid
-      } else if (m.id < this.id && !this.participant) {
-        this.participant = true;
-        await this.next({ kind: "election", id: this.id }); // bump to my ID
-      } else if (m.id < this.id && this.participant) {
-        return;                                      // discard — smaller bid
-      } else { // m.id === this.id  -> we are the winner
-        this.participant = false;
-        this.leader = this.id;
-        await this.next({ kind: "coord", leader: this.id });
-      }
+    RingProcess(int id, Consumer<Msg> next) {
+        this.id = id;
+        this.next = next;
     }
 
-    if (m.kind === "coord") {
-      this.participant = false;
-      this.leader = m.leader;
-      if (m.leader !== this.id) await this.next(m);  // forward one lap
+    /** Triggered when this process suspects the leader is dead. */
+    void startElection() {
+        if (participant) return;
+        participant = true;
+        next.accept(election(id));
     }
-  }
+
+    void onMessage(Msg m) {
+        if (m.kind().equals("election")) {
+            if (m.id() > id) {
+                participant = true;
+                next.accept(m);                  // forward larger bid
+            } else if (m.id() < id && !participant) {
+                participant = true;
+                next.accept(election(id));       // bump to my ID
+            } else if (m.id() < id) {            // && participant
+                return;                          // discard - smaller bid
+            } else {                             // m.id() == id -> we are the winner
+                participant = false;
+                leader = id;
+                next.accept(coord(id));
+            }
+        }
+
+        if (m.kind().equals("coord")) {
+            participant = false;
+            leader = m.leader();
+            if (m.leader() != id) next.accept(m); // forward one lap
+        }
+    }
 }`,
-  },
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "ring_election.py",
+      code: `# Chang-Roberts ring election. Each process knows only its clockwise successor.
+from dataclasses import dataclass
+from typing import Callable, Optional
+
+
+@dataclass
+class Msg:
+    kind: str  # "election" | "coord"
+    id: int = 0      # for "election"
+    leader: int = 0  # for "coord"
+
+
+class RingProcess:
+    def __init__(self, id: int, next: Callable[[Msg], None]) -> None:
+        self.id = id
+        self._next = next  # send to clockwise successor
+        self.participant = False
+        self.leader: Optional[int] = None
+
+    def start_election(self) -> None:
+        """Triggered when this process suspects the leader is dead."""
+        if self.participant:
+            return
+        self.participant = True
+        self._next(Msg("election", id=self.id))
+
+    def on_message(self, m: Msg) -> None:
+        if m.kind == "election":
+            if m.id > self.id:
+                self.participant = True
+                self._next(m)                          # forward larger bid
+            elif m.id < self.id and not self.participant:
+                self.participant = True
+                self._next(Msg("election", id=self.id))  # bump to my ID
+            elif m.id < self.id and self.participant:
+                return                                 # discard - smaller bid
+            else:  # m.id == self.id -> we are the winner
+                self.participant = False
+                self.leader = self.id
+                self._next(Msg("coord", leader=self.id))
+
+        if m.kind == "coord":
+            self.participant = False
+            self.leader = m.leader
+            if m.leader != self.id:
+                self._next(m)                          # forward one lap`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "ring_election.cpp",
+      code: `// Chang-Roberts ring election. Each process knows only its clockwise successor.
+#include <functional>
+#include <optional>
+#include <string>
+
+using ProcId = int;
+
+struct Msg {
+    std::string kind; // "election" | "coord"
+    ProcId id = 0;     // for "election"
+    ProcId leader = 0; // for "coord"
+};
+
+class RingProcess {
+public:
+    std::optional<ProcId> leader;
+
+    RingProcess(ProcId id, std::function<void(const Msg&)> next)
+        : id_(id), next_(std::move(next)) {} // next sends to clockwise successor
+
+    // Triggered when this process suspects the leader is dead.
+    void startElection() {
+        if (participant_) return;
+        participant_ = true;
+        next_(Msg{"election", id_, 0});
+    }
+
+    void onMessage(const Msg& m) {
+        if (m.kind == "election") {
+            if (m.id > id_) {
+                participant_ = true;
+                next_(m);                          // forward larger bid
+            } else if (m.id < id_ && !participant_) {
+                participant_ = true;
+                next_(Msg{"election", id_, 0});     // bump to my ID
+            } else if (m.id < id_ && participant_) {
+                return;                            // discard - smaller bid
+            } else { // m.id == id_ -> we are the winner
+                participant_ = false;
+                leader = id_;
+                next_(Msg{"coord", 0, id_});
+            }
+        }
+
+        if (m.kind == "coord") {
+            participant_ = false;
+            leader = m.leader;
+            if (m.leader != id_) next_(m);         // forward one lap
+        }
+    }
+
+private:
+    ProcId id_;
+    std::function<void(const Msg&)> next_;
+    bool participant_ = false;
+};`,
+    },
+  ],
 
   furtherReading: [
     {

@@ -72,7 +72,7 @@
 
       /* ---- Candidate class cards ---- */
       .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 11px; margin-bottom: 16px; }
-      .card { text-align: left; background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 12px 13px; cursor: pointer; transition: border-color .15s, transform .1s, box-shadow .2s; position: relative; overflow: hidden; }
+      .card { text-align: left; background: var(--elevated); color: var(--fg); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 12px 13px; cursor: pointer; transition: border-color .15s, transform .1s, box-shadow .2s; position: relative; overflow: hidden; }
       .card:hover { border-color: var(--accent-border); transform: translateY(-2px); }
       .card:active { transform: scale(0.98); }
       .card.locked { cursor: default; }
@@ -82,7 +82,7 @@
       .card.dim { opacity: .45; }
       .card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
       .card-dot { width: 10px; height: 10px; border-radius: 3px; flex: none; }
-      .card-name { font-family: var(--mono); font-size: 13px; font-weight: 700; }
+      .card-name { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--fg); }
       .card-role { margin-left: auto; font-family: var(--mono); font-size: 9px; letter-spacing: .06em; text-transform: uppercase; color: var(--subtle); }
       .fields { display: flex; flex-direction: column; gap: 4px; }
       .field { font-family: var(--mono); font-size: 11px; color: var(--muted); display: flex; gap: 6px; align-items: baseline; }

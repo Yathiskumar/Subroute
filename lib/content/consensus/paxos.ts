@@ -112,59 +112,333 @@ export const paxos: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "paxos.ts",
-    code: `// Basic Paxos — one decree. Roles separated for clarity; in practice
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "paxos.go",
+      code: `// Basic Paxos — one decree. Roles separated for clarity; in practice
 // every node implements all three.
-interface Promise { n: number; acceptedN: number | null; acceptedV: string | null; }
-interface AcceptorState { promisedN: number; acceptedN: number | null; acceptedV: string | null; }
+package paxos
 
-class Acceptor {
-  state: AcceptorState = { promisedN: 0, acceptedN: null, acceptedV: null };
+import "sync"
 
-  prepare(n: number): Promise | "NACK" {
-    if (n <= this.state.promisedN) return "NACK";
-    this.state.promisedN = n;                                  // durable
-    return { n, acceptedN: this.state.acceptedN, acceptedV: this.state.acceptedV };
-  }
-
-  accept(n: number, v: string): "ACCEPTED" | "NACK" {
-    if (n < this.state.promisedN) return "NACK";
-    this.state.promisedN = n;
-    this.state.acceptedN = n;
-    this.state.acceptedV = v;                                  // durable
-    return "ACCEPTED";
-  }
+// Promise is an acceptor's reply to Prepare. Accepted is false when the
+// acceptor has never accepted a value (the "null" case).
+type Promise struct {
+	N         int
+	AcceptedN int
+	AcceptedV string
+	Accepted  bool
 }
 
-async function propose(acceptors: Acceptor[], n: number, myV: string): Promise<string | null> {
-  const majority = Math.floor(acceptors.length / 2) + 1;
+type Acceptor struct {
+	mu        sync.Mutex
+	PromisedN int
+	AcceptedN int
+	AcceptedV string
+	Accepted  bool
+}
 
-  // Phase 1 — Prepare
-  const promises = (await Promise.all(acceptors.map(a => a.prepare(n))))
-    .filter((r): r is Promise => r !== "NACK");
-  if (promises.length < majority) return null;                 // no quorum
+// Prepare returns (promise, true) on success, or (_, false) for a NACK.
+func (a *Acceptor) Prepare(n int) (Promise, bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if n <= a.PromisedN {
+		return Promise{}, false // NACK
+	}
+	a.PromisedN = n // durable
+	return Promise{N: n, AcceptedN: a.AcceptedN, AcceptedV: a.AcceptedV, Accepted: a.Accepted}, true
+}
 
-  // Safety rule: if any acceptor reported a prior accepted value,
-  // we MUST use the one with the highest acceptedN.
-  let value = myV;
-  let bestN = -1;
-  for (const p of promises) {
-    if (p.acceptedV !== null && p.acceptedN! > bestN) {
-      bestN = p.acceptedN!;
-      value = p.acceptedV;
-    }
-  }
+// Accept returns true on ACCEPTED, false on NACK.
+func (a *Acceptor) Accept(n int, v string) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if n < a.PromisedN {
+		return false // NACK
+	}
+	a.PromisedN = n
+	a.AcceptedN = n
+	a.AcceptedV = v // durable
+	a.Accepted = true
+	return true
+}
 
-  // Phase 2 — Accept
-  const accepts = (await Promise.all(acceptors.map(a => a.accept(n, value))))
-    .filter(r => r === "ACCEPTED");
-  if (accepts.length < majority) return null;                  // round fails
+// Propose runs both phases. Returns (value, true) if a value was chosen,
+// or ("", false) if the round failed for lack of quorum.
+func Propose(acceptors []*Acceptor, n int, myV string) (string, bool) {
+	majority := len(acceptors)/2 + 1
 
-  return value;  // chosen — same as bestN's value if there was one
+	// Phase 1 — Prepare (fan out to every acceptor in parallel)
+	var wg sync.WaitGroup
+	promises := make([]Promise, len(acceptors))
+	ok := make([]bool, len(acceptors))
+	for i, a := range acceptors {
+		wg.Add(1)
+		go func(i int, a *Acceptor) {
+			defer wg.Done()
+			promises[i], ok[i] = a.Prepare(n)
+		}(i, a)
+	}
+	wg.Wait()
+
+	var granted []Promise
+	for i := range acceptors {
+		if ok[i] {
+			granted = append(granted, promises[i])
+		}
+	}
+	if len(granted) < majority {
+		return "", false // no quorum
+	}
+
+	// Safety rule: if any acceptor reported a prior accepted value,
+	// we MUST use the one with the highest acceptedN.
+	value := myV
+	bestN := -1
+	for _, p := range granted {
+		if p.Accepted && p.AcceptedN > bestN {
+			bestN = p.AcceptedN
+			value = p.AcceptedV
+		}
+	}
+
+	// Phase 2 — Accept (fan out again)
+	accepted := make([]bool, len(acceptors))
+	for i, a := range acceptors {
+		wg.Add(1)
+		go func(i int, a *Acceptor) {
+			defer wg.Done()
+			accepted[i] = a.Accept(n, value)
+		}(i, a)
+	}
+	wg.Wait()
+
+	count := 0
+	for _, a := range accepted {
+		if a {
+			count++
+		}
+	}
+	if count < majority {
+		return "", false // round fails
+	}
+
+	return value, true // chosen — same as bestN's value if there was one
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "Paxos.java",
+      code: `// Basic Paxos — one decree. Roles separated for clarity; in practice
+// every node implements all three.
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+
+// Promise is an acceptor's reply to Prepare. acceptedV is null when the
+// acceptor has never accepted a value.
+record Promise(int n, Integer acceptedN, String acceptedV) {}
+
+class Acceptor {
+    int promisedN = 0;
+    Integer acceptedN = null;
+    String acceptedV = null;
+
+    // Returns the Promise on success, or empty for a NACK.
+    synchronized Optional<Promise> prepare(int n) {
+        if (n <= promisedN) return Optional.empty(); // NACK
+        promisedN = n;                               // durable
+        return Optional.of(new Promise(n, acceptedN, acceptedV));
+    }
+
+    // Returns true on ACCEPTED, false on NACK.
+    synchronized boolean accept(int n, String v) {
+        if (n < promisedN) return false; // NACK
+        promisedN = n;
+        acceptedN = n;
+        acceptedV = v;                   // durable
+        return true;
+    }
+}
+
+class Paxos {
+    // Returns the chosen value, or null if the round failed for lack of quorum.
+    static String propose(List<Acceptor> acceptors, int n, String myV) {
+        int majority = acceptors.size() / 2 + 1;
+
+        // Phase 1 — Prepare
+        List<Promise> promises = new ArrayList<>();
+        for (Acceptor a : acceptors) {
+            a.prepare(n).ifPresent(promises::add);
+        }
+        if (promises.size() < majority) return null; // no quorum
+
+        // Safety rule: if any acceptor reported a prior accepted value,
+        // we MUST use the one with the highest acceptedN.
+        String value = myV;
+        int bestN = -1;
+        for (Promise p : promises) {
+            if (p.acceptedV() != null && p.acceptedN() > bestN) {
+                bestN = p.acceptedN();
+                value = p.acceptedV();
+            }
+        }
+
+        // Phase 2 — Accept
+        int accepts = 0;
+        for (Acceptor a : acceptors) {
+            if (a.accept(n, value)) accepts++;
+        }
+        if (accepts < majority) return null; // round fails
+
+        return value; // chosen — same as bestN's value if there was one
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "paxos.py",
+      code: `# Basic Paxos — one decree. Roles separated for clarity; in practice
+# every node implements all three.
+from dataclasses import dataclass
+from typing import Optional
+
+
+# A Promise is an acceptor's reply to prepare. accepted_v is None when the
+# acceptor has never accepted a value.
+@dataclass
+class Promise:
+    n: int
+    accepted_n: Optional[int]
+    accepted_v: Optional[str]
+
+
+class Acceptor:
+    def __init__(self) -> None:
+        self.promised_n = 0
+        self.accepted_n: Optional[int] = None
+        self.accepted_v: Optional[str] = None
+
+    def prepare(self, n: int) -> Optional[Promise]:
+        # Returns a Promise on success, or None for a NACK.
+        if n <= self.promised_n:
+            return None  # NACK
+        self.promised_n = n  # durable
+        return Promise(n, self.accepted_n, self.accepted_v)
+
+    def accept(self, n: int, v: str) -> bool:
+        # Returns True on ACCEPTED, False on NACK.
+        if n < self.promised_n:
+            return False  # NACK
+        self.promised_n = n
+        self.accepted_n = n
+        self.accepted_v = v  # durable
+        return True
+
+
+def propose(acceptors: list[Acceptor], n: int, my_v: str) -> Optional[str]:
+    majority = len(acceptors) // 2 + 1
+
+    # Phase 1 — Prepare
+    promises = [p for p in (a.prepare(n) for a in acceptors) if p is not None]
+    if len(promises) < majority:
+        return None  # no quorum
+
+    # Safety rule: if any acceptor reported a prior accepted value,
+    # we MUST use the one with the highest accepted_n.
+    value = my_v
+    best_n = -1
+    for p in promises:
+        if p.accepted_v is not None and p.accepted_n > best_n:
+            best_n = p.accepted_n
+            value = p.accepted_v
+
+    # Phase 2 — Accept
+    accepts = sum(1 for a in acceptors if a.accept(n, value))
+    if accepts < majority:
+        return None  # round fails
+
+    return value  # chosen — same as best_n's value if there was one`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "paxos.cpp",
+      code: `// Basic Paxos — one decree. Roles separated for clarity; in practice
+// every node implements all three.
+#include <optional>
+#include <string>
+#include <vector>
+
+// A Promise is an acceptor's reply to prepare. acceptedV is empty when the
+// acceptor has never accepted a value (the "null" case).
+struct Promise {
+    int n;
+    std::optional<int> acceptedN;
+    std::optional<std::string> acceptedV;
+};
+
+class Acceptor {
+public:
+    int promisedN = 0;
+    std::optional<int> acceptedN;
+    std::optional<std::string> acceptedV;
+
+    // Returns a Promise on success, or std::nullopt for a NACK.
+    std::optional<Promise> prepare(int n) {
+        if (n <= promisedN) return std::nullopt;  // NACK
+        promisedN = n;                            // durable
+        return Promise{n, acceptedN, acceptedV};
+    }
+
+    // Returns true on ACCEPTED, false on NACK.
+    bool accept(int n, const std::string& v) {
+        if (n < promisedN) return false;  // NACK
+        promisedN = n;
+        acceptedN = n;
+        acceptedV = v;                    // durable
+        return true;
+    }
+};
+
+// Returns the chosen value, or std::nullopt if the round failed for lack of quorum.
+std::optional<std::string> propose(std::vector<Acceptor>& acceptors, int n,
+                                   const std::string& myV) {
+    int majority = static_cast<int>(acceptors.size()) / 2 + 1;
+
+    // Phase 1 — Prepare
+    std::vector<Promise> promises;
+    for (auto& a : acceptors) {
+        if (auto p = a.prepare(n)) promises.push_back(*p);
+    }
+    if (static_cast<int>(promises.size()) < majority) return std::nullopt;  // no quorum
+
+    // Safety rule: if any acceptor reported a prior accepted value,
+    // we MUST use the one with the highest acceptedN.
+    std::string value = myV;
+    int bestN = -1;
+    for (const auto& p : promises) {
+        if (p.acceptedV.has_value() && *p.acceptedN > bestN) {
+            bestN = *p.acceptedN;
+            value = *p.acceptedV;
+        }
+    }
+
+    // Phase 2 — Accept
+    int accepts = 0;
+    for (auto& a : acceptors) {
+        if (a.accept(n, value)) accepts++;
+    }
+    if (accepts < majority) return std::nullopt;  // round fails
+
+    return value;  // chosen — same as bestN's value if there was one
+}`,
+    },
+  ],
 
   furtherReading: [
     {

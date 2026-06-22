@@ -124,10 +124,12 @@ export const avl: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "avl.ts",
-    code: `// Minimal AVL tree — insert with rebalancing.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "avl.ts",
+      code: `// Minimal AVL tree — insert with rebalancing.
 // Each node tracks its own height; balance factor is derived on the fly.
 
 interface AVLNode {
@@ -195,7 +197,239 @@ function insert(root: AVLNode | null, key: number): AVLNode {
   // duplicate keys are ignored
   return rebalance(root);
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "AvlTree.java",
+      code: `// Minimal AVL tree — insert with rebalancing.
+// Each node tracks its own height; balance factor is derived on the fly.
+
+class AvlNode {
+    int key;
+    AvlNode left, right;
+    int height;
+
+    AvlNode(int key) { this.key = key; }
+}
+
+class AvlTree {
+
+    static int height(AvlNode n) {
+        return n != null ? n.height : -1;   // null → height -1 by convention
+    }
+
+    static int bf(AvlNode n) {
+        return height(n.left) - height(n.right);
+    }
+
+    static void updateHeight(AvlNode n) {
+        n.height = 1 + Math.max(height(n.left), height(n.right));
+    }
+
+    // ── Rotations ────────────────────────────────────────────────────────────
+
+    static AvlNode rotateRight(AvlNode y) {   // fixes LL imbalance
+        AvlNode x = y.left;
+        y.left = x.right;
+        x.right = y;
+        updateHeight(y);
+        updateHeight(x);
+        return x;                             // x is the new root
+    }
+
+    static AvlNode rotateLeft(AvlNode x) {    // fixes RR imbalance
+        AvlNode y = x.right;
+        x.right = y.left;
+        y.left = x;
+        updateHeight(x);
+        updateHeight(y);
+        return y;
+    }
+
+    static AvlNode rebalance(AvlNode n) {
+        updateHeight(n);
+        int b = bf(n);
+
+        if (b > 1) {                          // left-heavy
+            if (bf(n.left) < 0)               // LR case: straighten first
+                n.left = rotateLeft(n.left);
+            return rotateRight(n);            // LL (or now-straightened LR)
+        }
+        if (b < -1) {                         // right-heavy
+            if (bf(n.right) > 0)              // RL case: straighten first
+                n.right = rotateRight(n.right);
+            return rotateLeft(n);             // RR (or now-straightened RL)
+        }
+        return n;                             // already balanced
+    }
+
+    // ── Public API ────────────────────────────────────────────────────────────
+
+    static AvlNode insert(AvlNode root, int key) {
+        if (root == null) return new AvlNode(key);
+        if (key < root.key) root.left = insert(root.left, key);
+        else if (key > root.key) root.right = insert(root.right, key);
+        // duplicate keys are ignored
+        return rebalance(root);
+    }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "avl_tree.py",
+      code: `# Minimal AVL tree — insert with rebalancing.
+# Each node tracks its own height; balance factor is derived on the fly.
+
+from __future__ import annotations
+from typing import Optional
+
+
+class AvlNode:
+    def __init__(self, key: int) -> None:
+        self.key = key
+        self.left: Optional[AvlNode] = None
+        self.right: Optional[AvlNode] = None
+        self.height = 0
+
+
+def height(n: Optional[AvlNode]) -> int:
+    return n.height if n else -1            # None → height -1 by convention
+
+
+def bf(n: AvlNode) -> int:
+    return height(n.left) - height(n.right)
+
+
+def update_height(n: AvlNode) -> None:
+    n.height = 1 + max(height(n.left), height(n.right))
+
+
+# ── Rotations ──────────────────────────────────────────────────────────────────
+
+def rotate_right(y: AvlNode) -> AvlNode:   # fixes LL imbalance
+    x = y.left
+    y.left = x.right
+    x.right = y
+    update_height(y)
+    update_height(x)
+    return x                               # x is the new root
+
+
+def rotate_left(x: AvlNode) -> AvlNode:    # fixes RR imbalance
+    y = x.right
+    x.right = y.left
+    y.left = x
+    update_height(x)
+    update_height(y)
+    return y
+
+
+def rebalance(n: AvlNode) -> AvlNode:
+    update_height(n)
+    b = bf(n)
+
+    if b > 1:                              # left-heavy
+        if bf(n.left) < 0:                 # LR case: straighten first
+            n.left = rotate_left(n.left)
+        return rotate_right(n)            # LL (or now-straightened LR)
+    if b < -1:                            # right-heavy
+        if bf(n.right) > 0:                # RL case: straighten first
+            n.right = rotate_right(n.right)
+        return rotate_left(n)            # RR (or now-straightened RL)
+    return n                              # already balanced
+
+
+# ── Public API ──────────────────────────────────────────────────────────────────
+
+def insert(root: Optional[AvlNode], key: int) -> AvlNode:
+    if root is None:
+        return AvlNode(key)
+    if key < root.key:
+        root.left = insert(root.left, key)
+    elif key > root.key:
+        root.right = insert(root.right, key)
+    # duplicate keys are ignored
+    return rebalance(root)`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "avl_tree.cpp",
+      code: `// Minimal AVL tree — insert with rebalancing.
+// Each node tracks its own height; balance factor is derived on the fly.
+#include <algorithm>
+
+struct AvlNode {
+    int key;
+    AvlNode* left = nullptr;
+    AvlNode* right = nullptr;
+    int height = 0;
+
+    explicit AvlNode(int k) : key(k) {}
+};
+
+int height(AvlNode* n) {
+    return n ? n->height : -1;            // nullptr → height -1 by convention
+}
+
+int bf(AvlNode* n) {
+    return height(n->left) - height(n->right);
+}
+
+void updateHeight(AvlNode* n) {
+    n->height = 1 + std::max(height(n->left), height(n->right));
+}
+
+// ── Rotations ────────────────────────────────────────────────────────────────
+
+AvlNode* rotateRight(AvlNode* y) {        // fixes LL imbalance
+    AvlNode* x = y->left;
+    y->left = x->right;
+    x->right = y;
+    updateHeight(y);
+    updateHeight(x);
+    return x;                             // x is the new root
+}
+
+AvlNode* rotateLeft(AvlNode* x) {         // fixes RR imbalance
+    AvlNode* y = x->right;
+    x->right = y->left;
+    y->left = x;
+    updateHeight(x);
+    updateHeight(y);
+    return y;
+}
+
+AvlNode* rebalance(AvlNode* n) {
+    updateHeight(n);
+    int b = bf(n);
+
+    if (b > 1) {                          // left-heavy
+        if (bf(n->left) < 0)              // LR case: straighten first
+            n->left = rotateLeft(n->left);
+        return rotateRight(n);            // LL (or now-straightened LR)
+    }
+    if (b < -1) {                         // right-heavy
+        if (bf(n->right) > 0)             // RL case: straighten first
+            n->right = rotateRight(n->right);
+        return rotateLeft(n);             // RR (or now-straightened RL)
+    }
+    return n;                             // already balanced
+}
+
+// ── Public API ────────────────────────────────────────────────────────────────
+
+AvlNode* insert(AvlNode* root, int key) {
+    if (!root) return new AvlNode(key);
+    if (key < root->key) root->left = insert(root->left, key);
+    else if (key > root->key) root->right = insert(root->right, key);
+    // duplicate keys are ignored
+    return rebalance(root);
+}`,
+    },
+  ],
 
   furtherReading: [
     {

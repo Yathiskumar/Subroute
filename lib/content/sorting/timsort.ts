@@ -118,10 +118,12 @@ export const timsort: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "timsort.ts",
-    code: `// A simplified Timsort sketch: find runs, extend short ones, merge.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "timsort.ts",
+      code: `// A simplified Timsort sketch: find runs, extend short ones, merge.
 // Real Timsort adds galloping and the full merge-stack invariants.
 const MINRUN = 32;
 
@@ -172,7 +174,203 @@ function mergeInPlace<T>(a: T[], lo: number, mid: number, hi: number): void {
 }
 
 timsort([5, 21, 7, 23, 19]); // → [5, 7, 19, 21, 23]`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "Timsort.java",
+      code: `// A simplified Timsort sketch: find runs, extend short ones, merge.
+// Real Timsort adds galloping and the full merge-stack invariants.
+import java.util.*;
+
+static final int MINRUN = 32;
+
+static <T extends Comparable<T>> T[] timsort(T[] a) {
+    int n = a.length;
+    // Phase 1: detect runs, extending short ones with insertion sort.
+    Deque<int[]> runs = new ArrayDeque<>(); // [start, length] pairs.
+    int i = 0;
+    while (i < n) {
+        int runEnd = i + 1;
+        while (runEnd < n && a[runEnd].compareTo(a[runEnd - 1]) >= 0) runEnd++;
+        int runLen = runEnd - i;
+        if (runLen < MINRUN) {
+            int extendTo = Math.min(i + MINRUN, n);
+            insertionSortRange(a, i, extendTo);
+            runLen = extendTo - i;
+        }
+        runs.addLast(new int[]{i, runLen});
+        i += runLen;
+    }
+    // Phase 2: merge runs in order (simplified — real Timsort uses a stack).
+    while (runs.size() > 1) {
+        int[] runA = runs.pollFirst();
+        int[] runB = runs.pollFirst();
+        int aStart = runA[0], aLen = runA[1], bLen = runB[1];
+        mergeInPlace(a, aStart, aStart + aLen, aStart + aLen + bLen);
+        runs.addFirst(new int[]{aStart, aLen + bLen});
+    }
+    return a;
+}
+
+static <T extends Comparable<T>> void insertionSortRange(T[] a, int lo, int hi) {
+    for (int i = lo + 1; i < hi; i++) {
+        T key = a[i];
+        int j = i - 1;
+        while (j >= lo && a[j].compareTo(key) > 0) { a[j + 1] = a[j]; j--; }
+        a[j + 1] = key;
+    }
+}
+
+static <T extends Comparable<T>> void mergeInPlace(T[] a, int lo, int mid, int hi) {
+    List<T> left = new ArrayList<>(Arrays.asList(a).subList(lo, mid));
+    List<T> right = new ArrayList<>(Arrays.asList(a).subList(mid, hi));
+    int i = 0, j = 0, k = lo;
+    while (i < left.size() && j < right.size()) {
+        a[k++] = left.get(i).compareTo(right.get(j)) <= 0 ? left.get(i++) : right.get(j++);
+    }
+    while (i < left.size()) a[k++] = left.get(i++);
+    while (j < right.size()) a[k++] = right.get(j++);
+}
+
+timsort(new Integer[]{5, 21, 7, 23, 19}); // → [5, 7, 19, 21, 23]`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "timsort.py",
+      code: `# A simplified Timsort sketch: find runs, extend short ones, merge.
+# Real Timsort adds galloping and the full merge-stack invariants.
+MINRUN = 32
+
+
+def timsort(a: list) -> list:
+    n = len(a)
+    # Phase 1: detect runs, extending short ones with insertion sort.
+    runs: list[list[int]] = []  # [start, length] pairs.
+    i = 0
+    while i < n:
+        run_end = i + 1
+        while run_end < n and a[run_end] >= a[run_end - 1]:
+            run_end += 1
+        run_len = run_end - i
+        if run_len < MINRUN:
+            extend_to = min(i + MINRUN, n)
+            insertion_sort_range(a, i, extend_to)
+            run_len = extend_to - i
+        runs.append([i, run_len])
+        i += run_len
+    # Phase 2: merge runs in order (simplified — real Timsort uses a stack).
+    while len(runs) > 1:
+        a_start, a_len = runs.pop(0)
+        _, b_len = runs.pop(0)
+        merge_in_place(a, a_start, a_start + a_len, a_start + a_len + b_len)
+        runs.insert(0, [a_start, a_len + b_len])
+    return a
+
+
+def insertion_sort_range(a: list, lo: int, hi: int) -> None:
+    for i in range(lo + 1, hi):
+        key = a[i]
+        j = i - 1
+        while j >= lo and a[j] > key:
+            a[j + 1] = a[j]
+            j -= 1
+        a[j + 1] = key
+
+
+def merge_in_place(a: list, lo: int, mid: int, hi: int) -> None:
+    left, right = a[lo:mid], a[mid:hi]
+    i = j = 0
+    k = lo
+    while i < len(left) and j < len(right):
+        if left[i] <= right[j]:
+            a[k] = left[i]
+            i += 1
+        else:
+            a[k] = right[j]
+            j += 1
+        k += 1
+    while i < len(left):
+        a[k] = left[i]
+        i += 1
+        k += 1
+    while j < len(right):
+        a[k] = right[j]
+        j += 1
+        k += 1
+
+
+timsort([5, 21, 7, 23, 19])  # → [5, 7, 19, 21, 23]`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "timsort.cpp",
+      code: `// A simplified Timsort sketch: find runs, extend short ones, merge.
+// Real Timsort adds galloping and the full merge-stack invariants.
+#include <vector>
+#include <deque>
+#include <array>
+#include <algorithm>
+
+const int MINRUN = 32;
+
+template <typename T>
+void insertionSortRange(std::vector<T>& a, int lo, int hi) {
+    for (int i = lo + 1; i < hi; i++) {
+        T key = a[i];
+        int j = i - 1;
+        while (j >= lo && a[j] > key) { a[j + 1] = a[j]; j--; }
+        a[j + 1] = key;
+    }
+}
+
+template <typename T>
+void mergeInPlace(std::vector<T>& a, int lo, int mid, int hi) {
+    std::vector<T> left(a.begin() + lo, a.begin() + mid);
+    std::vector<T> right(a.begin() + mid, a.begin() + hi);
+    size_t i = 0, j = 0;
+    int k = lo;
+    while (i < left.size() && j < right.size()) {
+        a[k++] = left[i] <= right[j] ? left[i++] : right[j++];
+    }
+    while (i < left.size()) a[k++] = left[i++];
+    while (j < right.size()) a[k++] = right[j++];
+}
+
+template <typename T>
+std::vector<T> timsort(std::vector<T> a) {
+    int n = a.size();
+    // Phase 1: detect runs, extending short ones with insertion sort.
+    std::deque<std::array<int, 2>> runs; // [start, length] pairs.
+    int i = 0;
+    while (i < n) {
+        int runEnd = i + 1;
+        while (runEnd < n && a[runEnd] >= a[runEnd - 1]) runEnd++;
+        int runLen = runEnd - i;
+        if (runLen < MINRUN) {
+            int extendTo = std::min(i + MINRUN, n);
+            insertionSortRange(a, i, extendTo);
+            runLen = extendTo - i;
+        }
+        runs.push_back({i, runLen});
+        i += runLen;
+    }
+    // Phase 2: merge runs in order (simplified — real Timsort uses a stack).
+    while (runs.size() > 1) {
+        auto runA = runs.front(); runs.pop_front();
+        auto runB = runs.front(); runs.pop_front();
+        int aStart = runA[0], aLen = runA[1], bLen = runB[1];
+        mergeInPlace(a, aStart, aStart + aLen, aStart + aLen + bLen);
+        runs.push_front({aStart, aLen + bLen});
+    }
+    return a;
+}
+
+// timsort<int>({5, 21, 7, 23, 19}); // → [5, 7, 19, 21, 23]`,
+    },
+  ],
 
   furtherReading: [
     {

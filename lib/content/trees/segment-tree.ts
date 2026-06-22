@@ -121,10 +121,12 @@ export const segmentTree: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "segment-tree.ts",
-    code: `// Recursive segment tree supporting sum / min / max via a swappable combine.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "segment-tree.ts",
+      code: `// Recursive segment tree supporting sum / min / max via a swappable combine.
 // tree[] is 1-indexed; node i's children are 2i and 2i+1.
 // Build is O(n); query and point-update are O(log n).
 
@@ -180,7 +182,208 @@ const maxTree = new SegmentTree(a, Math.max,         -Infinity);
 console.log(sumTree.query(2, 5)); // sum of a[2..5] = 5+1+4+6 = 16
 sumTree.update(4, 10);            // set a[4] = 10
 console.log(sumTree.query(2, 5)); // 5+1+10+6 = 22`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "SegmentTree.java",
+      code: `// Recursive segment tree supporting sum / min / max via a swappable combine.
+// tree[] is 1-indexed; node i's children are 2i and 2i+1.
+// Build is O(n); query and point-update are O(log n).
+
+import java.util.Arrays;
+import java.util.function.LongBinaryOperator;
+
+class SegmentTree {
+    private final long[] tree;
+    private final int n;
+    private final LongBinaryOperator combine;
+    private final long identity;
+
+    SegmentTree(long[] a, LongBinaryOperator combine, long identity) {
+        this.n = a.length;
+        this.combine = combine;
+        this.identity = identity;
+        this.tree = new long[4 * n];
+        Arrays.fill(this.tree, identity);
+        build(a, 1, 0, n - 1);
+    }
+
+    private void build(long[] a, int node, int nl, int nr) {
+        if (nl == nr) { tree[node] = a[nl]; return; }
+        int mid = (nl + nr) >> 1;
+        build(a, 2 * node,     nl,      mid);
+        build(a, 2 * node + 1, mid + 1, nr);
+        tree[node] = combine.applyAsLong(tree[2 * node], tree[2 * node + 1]);
+    }
+
+    long query(int l, int r) { return query(l, r, 1, 0, n - 1); }
+
+    private long query(int l, int r, int node, int nl, int nr) {
+        if (nr < l || r < nl) return identity;            // DISJOINT
+        if (l <= nl && nr <= r) return tree[node];        // FULLY INSIDE
+        int mid = (nl + nr) >> 1;                         // PARTIAL — recurse
+        return combine.applyAsLong(
+            query(l, r, 2 * node,     nl,      mid),
+            query(l, r, 2 * node + 1, mid + 1, nr));
+    }
+
+    void update(int idx, long val) { update(idx, val, 1, 0, n - 1); }
+
+    private void update(int idx, long val, int node, int nl, int nr) {
+        if (nl == nr) { tree[node] = val; return; }       // leaf — set
+        int mid = (nl + nr) >> 1;
+        if (idx <= mid) update(idx, val, 2 * node,     nl,      mid);
+        else            update(idx, val, 2 * node + 1, mid + 1, nr);
+        tree[node] = combine.applyAsLong(tree[2 * node], tree[2 * node + 1]);
+    }
+}
+
+// Usage:
+// long[] a = {3, 2, 5, 1, 4, 6, 2, 7};
+// SegmentTree sumTree = new SegmentTree(a, Long::sum, 0);
+// SegmentTree minTree = new SegmentTree(a, Math::min, Long.MAX_VALUE);
+// SegmentTree maxTree = new SegmentTree(a, Math::max, Long.MIN_VALUE);
+//
+// System.out.println(sumTree.query(2, 5)); // sum of a[2..5] = 5+1+4+6 = 16
+// sumTree.update(4, 10);                    // set a[4] = 10
+// System.out.println(sumTree.query(2, 5)); // 5+1+10+6 = 22`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "segment_tree.py",
+      code: `# Recursive segment tree supporting sum / min / max via a swappable combine.
+# tree[] is 1-indexed; node i's children are 2i and 2i+1.
+# Build is O(n); query and point-update are O(log n).
+
+from typing import Callable, List
+
+
+class SegmentTree:
+    def __init__(self, a: List[int], combine: Callable[[int, int], int], identity: int) -> None:
+        self.n = len(a)
+        self.combine = combine
+        self.identity = identity
+        self.tree = [identity] * (4 * self.n)
+        self._build(a, 1, 0, self.n - 1)
+
+    def _build(self, a: List[int], node: int, nl: int, nr: int) -> None:
+        if nl == nr:
+            self.tree[node] = a[nl]
+            return
+        mid = (nl + nr) >> 1
+        self._build(a, 2 * node,     nl,      mid)
+        self._build(a, 2 * node + 1, mid + 1, nr)
+        self.tree[node] = self.combine(self.tree[2 * node], self.tree[2 * node + 1])
+
+    def query(self, l: int, r: int, node: int = 1, nl: int = 0, nr: int = None) -> int:
+        if nr is None:
+            nr = self.n - 1
+        if nr < l or r < nl:                              # DISJOINT
+            return self.identity
+        if l <= nl and nr <= r:                           # FULLY INSIDE
+            return self.tree[node]
+        mid = (nl + nr) >> 1                              # PARTIAL — recurse
+        return self.combine(
+            self.query(l, r, 2 * node,     nl,      mid),
+            self.query(l, r, 2 * node + 1, mid + 1, nr),
+        )
+
+    def update(self, idx: int, val: int, node: int = 1, nl: int = 0, nr: int = None) -> None:
+        if nr is None:
+            nr = self.n - 1
+        if nl == nr:                                      # leaf — set
+            self.tree[node] = val
+            return
+        mid = (nl + nr) >> 1
+        if idx <= mid:
+            self.update(idx, val, 2 * node,     nl,      mid)
+        else:
+            self.update(idx, val, 2 * node + 1, mid + 1, nr)
+        self.tree[node] = self.combine(self.tree[2 * node], self.tree[2 * node + 1])
+
+
+# Usage:
+a = [3, 2, 5, 1, 4, 6, 2, 7]
+sum_tree = SegmentTree(a, lambda x, y: x + y, 0)
+min_tree = SegmentTree(a, min, float("inf"))
+max_tree = SegmentTree(a, max, float("-inf"))
+
+print(sum_tree.query(2, 5))  # sum of a[2..5] = 5+1+4+6 = 16
+sum_tree.update(4, 10)       # set a[4] = 10
+print(sum_tree.query(2, 5))  # 5+1+10+6 = 22`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "segment_tree.cpp",
+      code: `// Recursive segment tree supporting sum / min / max via a swappable combine.
+// tree[] is 1-indexed; node i's children are 2i and 2i+1.
+// Build is O(n); query and point-update are O(log n).
+#include <algorithm>
+#include <functional>
+#include <vector>
+
+class SegmentTree {
+    std::vector<long long> tree_;
+    int n_;
+    std::function<long long(long long, long long)> combine_;
+    long long identity_;
+
+public:
+    SegmentTree(const std::vector<long long>& a,
+                std::function<long long(long long, long long)> combine,
+                long long identity)
+        : tree_(4 * a.size(), identity), n_(a.size()),
+          combine_(std::move(combine)), identity_(identity) {
+        build(a, 1, 0, n_ - 1);
+    }
+
+    long long query(int l, int r) { return query(l, r, 1, 0, n_ - 1); }
+
+    void update(int idx, long long val) { update(idx, val, 1, 0, n_ - 1); }
+
+private:
+    void build(const std::vector<long long>& a, int node, int nl, int nr) {
+        if (nl == nr) { tree_[node] = a[nl]; return; }
+        int mid = (nl + nr) >> 1;
+        build(a, 2 * node,     nl,      mid);
+        build(a, 2 * node + 1, mid + 1, nr);
+        tree_[node] = combine_(tree_[2 * node], tree_[2 * node + 1]);
+    }
+
+    long long query(int l, int r, int node, int nl, int nr) {
+        if (nr < l || r < nl) return identity_;           // DISJOINT
+        if (l <= nl && nr <= r) return tree_[node];       // FULLY INSIDE
+        int mid = (nl + nr) >> 1;                          // PARTIAL — recurse
+        return combine_(
+            query(l, r, 2 * node,     nl,      mid),
+            query(l, r, 2 * node + 1, mid + 1, nr));
+    }
+
+    void update(int idx, long long val, int node, int nl, int nr) {
+        if (nl == nr) { tree_[node] = val; return; }      // leaf — set
+        int mid = (nl + nr) >> 1;
+        if (idx <= mid) update(idx, val, 2 * node,     nl,      mid);
+        else            update(idx, val, 2 * node + 1, mid + 1, nr);
+        tree_[node] = combine_(tree_[2 * node], tree_[2 * node + 1]);
+    }
+};
+
+// Usage:
+// std::vector<long long> a = {3, 2, 5, 1, 4, 6, 2, 7};
+// const long long NEG_INF = std::numeric_limits<long long>::min();
+// const long long POS_INF = std::numeric_limits<long long>::max();
+// SegmentTree sumTree(a, [](long long x, long long y) { return x + y; }, 0);
+// SegmentTree minTree(a, [](long long x, long long y) { return std::min(x, y); }, POS_INF);
+// SegmentTree maxTree(a, [](long long x, long long y) { return std::max(x, y); }, NEG_INF);
+//
+// sumTree.query(2, 5); // sum of a[2..5] = 5+1+4+6 = 16
+// sumTree.update(4, 10); // set a[4] = 10
+// sumTree.query(2, 5); // 5+1+10+6 = 22`,
+    },
+  ],
 
   furtherReading: [
     {

@@ -93,52 +93,283 @@ export const concurrentMarkSweep: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "concurrent-mark-sweep.ts",
-    code: `// Concurrent mark-sweep: collector runs alongside the mutator, with two
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "concurrent_mark_sweep.go",
+      code: `// Concurrent mark-sweep: collector runs alongside the mutator, with two
 // brief stop-the-world phases bracketing the concurrent work.
-type Color = "white" | "gray" | "black";
-interface Obj { color: Color; refs: Obj[]; }
+package gc
+
+type Color int
+
+const (
+	White Color = iota
+	Gray
+	Black
+)
+
+type Obj struct {
+	color Color
+	refs  []*Obj
+}
+
+type CMSCollector struct {
+	gray []*Obj
+}
+
+// pauseMutators runs fn with all mutator threads halted (stop-the-world).
+func (c *CMSCollector) Collect(roots, heap []*Obj, pauseMutators func(fn func())) {
+	// PHASE 1 — initial mark (STW): scan roots only, then resume mutators.
+	pauseMutators(func() {
+		for _, r := range roots {
+			c.shade(r)
+		}
+	})
+
+	// PHASE 2 — concurrent mark: trace the graph while the program runs.
+	//   The mutator's WriteBarrier() (below) feeds new work into 'gray'.
+	for len(c.gray) > 0 {
+		o := c.gray[len(c.gray)-1]
+		c.gray = c.gray[:len(c.gray)-1]
+		for _, child := range o.refs {
+			c.shade(child)
+		}
+		o.color = Black
+	}
+
+	// PHASE 3 — remark (STW): drain anything the barrier deferred.
+	pauseMutators(func() {
+		for len(c.gray) > 0 {
+			o := c.gray[len(c.gray)-1]
+			c.gray = c.gray[:len(c.gray)-1]
+			for _, child := range o.refs {
+				c.shade(child)
+			}
+			o.color = Black
+		}
+	})
+
+	// PHASE 4 — concurrent sweep: free white objects while the program runs.
+	for _, o := range heap {
+		if o.color == White {
+			// free(o)
+		} else {
+			o.color = White // reset for next cycle
+		}
+		// NOTE: objects orphaned after being blackened survive as floating garbage.
+	}
+}
+
+// WriteBarrier: mutator write barrier (runs in parallel) — keeps marking sound.
+func (c *CMSCollector) WriteBarrier(target *Obj) { c.shade(target) }
+
+func (c *CMSCollector) shade(o *Obj) {
+	if o.color == White {
+		o.color = Gray
+		c.gray = append(c.gray, o)
+	}
+}`,
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "ConcurrentMarkSweep.java",
+      code: `// Concurrent mark-sweep: collector runs alongside the mutator, with two
+// brief stop-the-world phases bracketing the concurrent work.
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
+import java.util.List;
+
+enum Color { WHITE, GRAY, BLACK }
+
+class Obj {
+    Color color = Color.WHITE;
+    List<Obj> refs = new ArrayList<>();
+}
 
 class CMSCollector {
-  private gray: Obj[] = [];
+    private final Deque<Obj> gray = new ArrayDeque<>();
 
-  collect(roots: Obj[], heap: Obj[], pauseMutators: (fn: () => void) => void) {
-    // PHASE 1 — initial mark (STW): scan roots only, then resume mutators.
-    pauseMutators(() => { for (const r of roots) this.shade(r); });
+    // pauseMutators runs the Runnable with all mutator threads halted (STW).
+    void collect(List<Obj> roots, List<Obj> heap, java.util.function.Consumer<Runnable> pauseMutators) {
+        // PHASE 1 — initial mark (STW): scan roots only, then resume mutators.
+        pauseMutators.accept(() -> { for (Obj r : roots) shade(r); });
 
-    // PHASE 2 — concurrent mark: trace the graph while the program runs.
-    //   The mutator's writeBarrier() (below) feeds new work into 'gray'.
-    while (this.gray.length) {
-      const o = this.gray.pop()!;
-      for (const c of o.refs) this.shade(c);
-      o.color = "black";
+        // PHASE 2 — concurrent mark: trace the graph while the program runs.
+        //   The mutator's writeBarrier() (below) feeds new work into 'gray'.
+        while (!gray.isEmpty()) {
+            Obj o = gray.pop();
+            for (Obj c : o.refs) shade(c);
+            o.color = Color.BLACK;
+        }
+
+        // PHASE 3 — remark (STW): drain anything the barrier deferred.
+        pauseMutators.accept(() -> {
+            while (!gray.isEmpty()) {
+                Obj o = gray.pop();
+                for (Obj c : o.refs) shade(c);
+                o.color = Color.BLACK;
+            }
+        });
+
+        // PHASE 4 — concurrent sweep: free white objects while the program runs.
+        for (Obj o : heap) {
+            if (o.color == Color.WHITE) { /* free(o) */ }
+            else o.color = Color.WHITE; // reset for next cycle
+            // NOTE: objects orphaned after being blackened survive as floating garbage.
+        }
     }
 
-    // PHASE 3 — remark (STW): drain anything the barrier deferred.
-    pauseMutators(() => {
-      while (this.gray.length) {
-        const o = this.gray.pop()!;
-        for (const c of o.refs) this.shade(c);
-        o.color = "black";
-      }
-    });
+    /** Mutator write barrier (runs in parallel): keeps marking sound. */
+    void writeBarrier(Obj target) { shade(target); }
 
-    // PHASE 4 — concurrent sweep: free white objects while the program runs.
-    for (const o of heap) {
-      if (o.color === "white") { /* free(o) */ }
-      else o.color = "white"; // reset for next cycle
-      // NOTE: objects orphaned after being blackened survive as floating garbage.
+    private void shade(Obj o) {
+        if (o.color == Color.WHITE) { o.color = Color.GRAY; gray.push(o); }
     }
-  }
-
-  /** Mutator write barrier (runs in parallel): keeps marking sound. */
-  writeBarrier(target: Obj) { this.shade(target); }
-
-  private shade(o: Obj) { if (o.color === "white") { o.color = "gray"; this.gray.push(o); } }
 }`,
-  },
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "concurrent_mark_sweep.py",
+      code: `# Concurrent mark-sweep: collector runs alongside the mutator, with two
+# brief stop-the-world phases bracketing the concurrent work.
+from enum import Enum
+from typing import Callable
+
+
+class Color(Enum):
+    WHITE = 0
+    GRAY = 1
+    BLACK = 2
+
+
+class Obj:
+    def __init__(self) -> None:
+        self.color = Color.WHITE
+        self.refs: list["Obj"] = []
+
+
+class CMSCollector:
+    def __init__(self) -> None:
+        self.gray: list[Obj] = []
+
+    def collect(
+        self,
+        roots: list[Obj],
+        heap: list[Obj],
+        pause_mutators: Callable[[Callable[[], None]], None],
+    ) -> None:
+        # pause_mutators runs fn with all mutator threads halted (stop-the-world).
+
+        # PHASE 1 — initial mark (STW): scan roots only, then resume mutators.
+        def initial_mark() -> None:
+            for r in roots:
+                self._shade(r)
+
+        pause_mutators(initial_mark)
+
+        # PHASE 2 — concurrent mark: trace the graph while the program runs.
+        #   The mutator's write_barrier() (below) feeds new work into 'gray'.
+        while self.gray:
+            o = self.gray.pop()
+            for c in o.refs:
+                self._shade(c)
+            o.color = Color.BLACK
+
+        # PHASE 3 — remark (STW): drain anything the barrier deferred.
+        def remark() -> None:
+            while self.gray:
+                o = self.gray.pop()
+                for c in o.refs:
+                    self._shade(c)
+                o.color = Color.BLACK
+
+        pause_mutators(remark)
+
+        # PHASE 4 — concurrent sweep: free white objects while the program runs.
+        for o in heap:
+            if o.color == Color.WHITE:
+                ...  # free(o)
+            else:
+                o.color = Color.WHITE  # reset for next cycle
+            # NOTE: objects orphaned after being blackened survive as floating garbage.
+
+    def write_barrier(self, target: Obj) -> None:
+        """Mutator write barrier (runs in parallel): keeps marking sound."""
+        self._shade(target)
+
+    def _shade(self, o: Obj) -> None:
+        if o.color == Color.WHITE:
+            o.color = Color.GRAY
+            self.gray.append(o)`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "concurrent_mark_sweep.cpp",
+      code: `// Concurrent mark-sweep: collector runs alongside the mutator, with two
+// brief stop-the-world phases bracketing the concurrent work.
+#include <functional>
+#include <vector>
+
+enum class Color { White, Gray, Black };
+
+struct Obj {
+    Color color = Color::White;
+    std::vector<Obj*> refs;
+};
+
+class CMSCollector {
+    std::vector<Obj*> gray_;
+
+public:
+    // pauseMutators runs fn with all mutator threads halted (stop-the-world).
+    void collect(const std::vector<Obj*>& roots, const std::vector<Obj*>& heap,
+                 const std::function<void(std::function<void()>)>& pauseMutators) {
+        // PHASE 1 — initial mark (STW): scan roots only, then resume mutators.
+        pauseMutators([&] { for (Obj* r : roots) shade(r); });
+
+        // PHASE 2 — concurrent mark: trace the graph while the program runs.
+        //   The mutator's writeBarrier() (below) feeds new work into 'gray'.
+        while (!gray_.empty()) {
+            Obj* o = gray_.back();
+            gray_.pop_back();
+            for (Obj* c : o->refs) shade(c);
+            o->color = Color::Black;
+        }
+
+        // PHASE 3 — remark (STW): drain anything the barrier deferred.
+        pauseMutators([&] {
+            while (!gray_.empty()) {
+                Obj* o = gray_.back();
+                gray_.pop_back();
+                for (Obj* c : o->refs) shade(c);
+                o->color = Color::Black;
+            }
+        });
+
+        // PHASE 4 — concurrent sweep: free white objects while the program runs.
+        for (Obj* o : heap) {
+            if (o->color == Color::White) { /* free(o) */ }
+            else o->color = Color::White; // reset for next cycle
+            // NOTE: objects orphaned after being blackened survive as floating garbage.
+        }
+    }
+
+    // Mutator write barrier (runs in parallel): keeps marking sound.
+    void writeBarrier(Obj* target) { shade(target); }
+
+private:
+    void shade(Obj* o) {
+        if (o->color == Color::White) { o->color = Color::Gray; gray_.push_back(o); }
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

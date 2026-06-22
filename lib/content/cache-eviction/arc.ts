@@ -97,10 +97,12 @@ export const arc: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "arc.ts",
-    code: `// Sketch only — full ARC needs careful list manipulation.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "arc.ts",
+      code: `// Sketch only — full ARC needs careful list manipulation.
 // T1, T2: hold real values; B1, B2: hold keys only (ghosts).
 class ARC<K, V> {
   private t1 = new Map<K, V>(); // recent, seen once
@@ -150,7 +152,196 @@ class ARC<K, V> {
 
   private replace(_: K): void { /* evict from T1 or T2 based on p */ }
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "ArcCache.java",
+      code: `import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+
+// Sketch only — full ARC needs careful list manipulation.
+// T1, T2: hold real values; B1, B2: hold keys only (ghosts).
+class ArcCache<K, V> {
+    private final LinkedHashMap<K, V> t1 = new LinkedHashMap<>(); // recent, seen once
+    private final LinkedHashMap<K, V> t2 = new LinkedHashMap<>(); // frequent, seen 2+ times
+    private final LinkedHashSet<K> b1 = new LinkedHashSet<>();    // ghost of T1
+    private final LinkedHashSet<K> b2 = new LinkedHashSet<>();    // ghost of T2
+    private double p = 0;        // target size of T1, learned
+    private final int c;
+
+    ArcCache(int c) {
+        this.c = c;
+    }
+
+    V get(K key) {
+        // Hit in T1 or T2 -> promote to T2 (head)
+        if (t1.containsKey(key)) {
+            V v = t1.remove(key);
+            t2.put(key, v);
+            return v;
+        }
+        if (t2.containsKey(key)) {
+            V v = t2.remove(key);
+            t2.put(key, v); // touch
+            return v;
+        }
+        return null;
+    }
+
+    void set(K key, V value) {
+        // Ghost hits adapt p: B1 -> favor recency; B2 -> favor frequency
+        if (b1.contains(key)) {
+            p = Math.min(c, p + Math.max(1.0, (double) b2.size() / b1.size()));
+            replace(key);
+            b1.remove(key);
+            t2.put(key, value);
+            return;
+        }
+        if (b2.contains(key)) {
+            p = Math.max(0, p - Math.max(1.0, (double) b1.size() / b2.size()));
+            replace(key);
+            b2.remove(key);
+            t2.put(key, value);
+            return;
+        }
+        // Brand new key
+        if (t1.size() + t2.size() >= c) replace(key);
+        t1.put(key, value);
+    }
+
+    private void replace(K key) { /* evict from T1 or T2 based on p */ }
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "arc_cache.py",
+      code: `from collections import OrderedDict
+from typing import Optional
+
+
+class ARC:
+    """Sketch only — full ARC needs careful list manipulation.
+
+    T1, T2: hold real values; B1, B2: hold keys only (ghosts).
+    """
+
+    def __init__(self, c: int) -> None:
+        self.t1: OrderedDict = OrderedDict()  # recent, seen once
+        self.t2: OrderedDict = OrderedDict()  # frequent, seen 2+ times
+        self.b1: OrderedDict = OrderedDict()  # ghost of T1 (ordered set)
+        self.b2: OrderedDict = OrderedDict()  # ghost of T2 (ordered set)
+        self.p = 0                            # target size of T1, learned
+        self.c = c
+
+    def get(self, key) -> Optional[object]:
+        # Hit in T1 or T2 -> promote to T2 (head)
+        if key in self.t1:
+            v = self.t1.pop(key)
+            self.t2[key] = v
+            return v
+        if key in self.t2:
+            self.t2.move_to_end(key)  # touch
+            return self.t2[key]
+        return None
+
+    def set(self, key, value) -> None:
+        # Ghost hits adapt p: B1 -> favor recency; B2 -> favor frequency
+        if key in self.b1:
+            self.p = min(self.c, self.p + max(1, len(self.b2) / len(self.b1)))
+            self._replace(key)
+            del self.b1[key]
+            self.t2[key] = value
+            return
+        if key in self.b2:
+            self.p = max(0, self.p - max(1, len(self.b1) / len(self.b2)))
+            self._replace(key)
+            del self.b2[key]
+            self.t2[key] = value
+            return
+        # Brand new key
+        if len(self.t1) + len(self.t2) >= self.c:
+            self._replace(key)
+        self.t1[key] = value
+
+    def _replace(self, key) -> None:
+        pass  # evict from T1 or T2 based on p`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "arc_cache.cpp",
+      code: `// Sketch only — full ARC needs careful list manipulation.
+// T1, T2: hold real values; B1, B2: hold keys only (ghosts).
+#include <list>
+#include <unordered_map>
+#include <unordered_set>
+#include <algorithm>
+#include <optional>
+
+template <class K, class V>
+class ARC {
+    using VList = std::list<std::pair<K, V>>;
+    VList t1_;  // recent, seen once
+    VList t2_;  // frequent, seen 2+ times
+    std::unordered_map<K, typename VList::iterator> t1Idx_, t2Idx_;
+    std::unordered_set<K> b1_; // ghost of T1
+    std::unordered_set<K> b2_; // ghost of T2
+    double p_ = 0;             // target size of T1, learned
+    size_t c_;
+
+public:
+    explicit ARC(size_t c) : c_(c) {}
+
+    std::optional<V> get(const K& key) {
+        // Hit in T1 or T2 -> promote to T2
+        auto i = t1Idx_.find(key);
+        if (i != t1Idx_.end()) {
+            V v = i->second->second;
+            t1_.erase(i->second);
+            t1Idx_.erase(i);
+            t2_.emplace_back(key, v);
+            t2Idx_[key] = std::prev(t2_.end());
+            return v;
+        }
+        auto j = t2Idx_.find(key);
+        if (j != t2Idx_.end()) {
+            t2_.splice(t2_.end(), t2_, j->second); // touch
+            return j->second->second;
+        }
+        return std::nullopt;
+    }
+
+    void set(const K& key, const V& value) {
+        // Ghost hits adapt p: B1 -> favor recency; B2 -> favor frequency
+        if (b1_.count(key)) {
+            p_ = std::min<double>(c_, p_ + std::max(1.0, (double)b2_.size() / b1_.size()));
+            replace(key);
+            b1_.erase(key);
+            t2_.emplace_back(key, value);
+            t2Idx_[key] = std::prev(t2_.end());
+            return;
+        }
+        if (b2_.count(key)) {
+            p_ = std::max(0.0, p_ - std::max(1.0, (double)b1_.size() / b2_.size()));
+            replace(key);
+            b2_.erase(key);
+            t2_.emplace_back(key, value);
+            t2Idx_[key] = std::prev(t2_.end());
+            return;
+        }
+        // Brand new key
+        if (t1Idx_.size() + t2Idx_.size() >= c_) replace(key);
+        t1_.emplace_back(key, value);
+        t1Idx_[key] = std::prev(t1_.end());
+    }
+
+private:
+    void replace(const K&) { /* evict from T1 or T2 based on p */ }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

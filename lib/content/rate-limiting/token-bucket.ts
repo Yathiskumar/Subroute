@@ -100,10 +100,12 @@ export const tokenBucket: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "token-bucket.ts",
-    code: `// A minimal token bucket. Lazy refill — no timer needed.
+  codeSamples: [
+    {
+      label: "TypeScript",
+      language: "typescript",
+      filename: "token-bucket.ts",
+      code: `// A minimal token bucket. Lazy refill — no timer needed.
 class TokenBucket {
   constructor(
     private capacity: number,        // max burst budget
@@ -137,7 +139,124 @@ if (bucket.tryConsume()) {
 } else {
   // ... return 429 Too Many Requests
 }`,
-  },
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "TokenBucket.java",
+      code: `// A minimal token bucket. Lazy refill — no timer needed.
+class TokenBucket {
+    private final double capacity;        // max burst budget
+    private final double refillPerSecond; // sustained rate
+    private double tokens;
+    private long lastRefill = System.nanoTime();
+
+    TokenBucket(double capacity, double refillPerSecond) {
+        this.capacity = capacity;
+        this.refillPerSecond = refillPerSecond;
+        this.tokens = capacity;
+    }
+
+    synchronized boolean tryConsume(double cost) {
+        refill();
+        if (tokens < cost) return false;
+        tokens -= cost;
+        return true;
+    }
+
+    private void refill() {
+        long now = System.nanoTime();
+        double elapsed = (now - lastRefill) / 1_000_000_000.0;
+        tokens = Math.min(capacity, tokens + elapsed * refillPerSecond);
+        lastRefill = now;
+    }
+}
+
+// Usage: 100 req/s sustained, bursts up to 25
+TokenBucket bucket = new TokenBucket(25, 100);
+if (bucket.tryConsume(1)) {
+    // ... handle the request
+} else {
+    // ... return 429 Too Many Requests
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "token_bucket.py",
+      code: `import time
+
+
+class TokenBucket:
+    """A minimal token bucket. Lazy refill — no timer needed."""
+
+    def __init__(self, capacity: float, refill_per_second: float) -> None:
+        self.capacity = capacity                    # max burst budget
+        self.refill_per_second = refill_per_second  # sustained rate
+        self.tokens = capacity
+        self.last_refill = time.monotonic()
+
+    def try_consume(self, cost: float = 1) -> bool:
+        self._refill()
+        if self.tokens < cost:
+            return False
+        self.tokens -= cost
+        return True
+
+    def _refill(self) -> None:
+        now = time.monotonic()
+        elapsed = now - self.last_refill
+        self.tokens = min(self.capacity, self.tokens + elapsed * self.refill_per_second)
+        self.last_refill = now
+
+
+# Usage: 100 req/s sustained, bursts up to 25
+bucket = TokenBucket(25, 100)
+if bucket.try_consume():
+    ...  # handle the request
+else:
+    ...  # return 429 Too Many Requests`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "token_bucket.cpp",
+      code: `// A minimal token bucket. Lazy refill — no timer needed.
+#include <algorithm>
+#include <chrono>
+
+class TokenBucket {
+    double capacity_;         // max burst budget
+    double refillPerSecond_;  // sustained rate
+    double tokens_;
+    std::chrono::steady_clock::time_point lastRefill_;
+
+public:
+    TokenBucket(double capacity, double refillPerSecond)
+        : capacity_(capacity), refillPerSecond_(refillPerSecond),
+          tokens_(capacity), lastRefill_(std::chrono::steady_clock::now()) {}
+
+    bool tryConsume(double cost = 1) {
+        refill();
+        if (tokens_ < cost) return false;
+        tokens_ -= cost;
+        return true;
+    }
+
+private:
+    void refill() {
+        auto now = std::chrono::steady_clock::now();
+        double elapsed = std::chrono::duration<double>(now - lastRefill_).count();
+        tokens_ = std::min(capacity_, tokens_ + elapsed * refillPerSecond_);
+        lastRefill_ = now;
+    }
+};
+
+// Usage: 100 req/s sustained, bursts up to 25
+// TokenBucket bucket(25, 100);
+// if (bucket.tryConsume()) { /* handle */ } else { /* 429 */ }`,
+    },
+  ],
 
   furtherReading: [
     {

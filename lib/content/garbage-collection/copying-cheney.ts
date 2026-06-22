@@ -93,46 +93,199 @@ export const copyingCheney: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "cheney.ts",
-    code: `// Cheney's copying collector: a breadth-first copy with no recursion stack.
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "cheney.go",
+      code: `// Cheney's copying collector: a breadth-first copy with no recursion stack.
 // 'scan' and 'alloc' pointers walk to-space; the gap between them is the queue.
-interface Obj {
-  refs: Obj[];            // outgoing pointers (into from-space)
-  forwarded: Obj | null;  // set once copied: points to the to-space copy
+package gc
+
+type Obj struct {
+	refs      []*Obj // outgoing pointers (into from-space)
+	forwarded *Obj   // set once copied: points to the to-space copy
+}
+
+type CheneyCollector struct {
+	toSpace []*Obj
+}
+
+func (c *CheneyCollector) Collect(roots []*Obj) []*Obj {
+	c.toSpace = nil
+	scan := 0
+
+	// 1. Evacuate the roots into to-space.
+	newRoots := make([]*Obj, len(roots))
+	for i, r := range roots {
+		newRoots[i] = c.copy(r)
+	}
+
+	// 2. Scan: process each copied object; the gap to 'alloc'
+	//    (len(toSpace)) is the breadth-first work queue.
+	for scan < len(c.toSpace) {
+		obj := c.toSpace[scan]
+		scan++
+		for i, child := range obj.refs {
+			obj.refs[i] = c.copy(child)
+		}
+	}
+	// scan == alloc → queue empty → from-space is now wholly garbage.
+	return newRoots
+}
+
+// copy once; thereafter follow the forwarding pointer.
+func (c *CheneyCollector) copy(obj *Obj) *Obj {
+	if obj.forwarded != nil {
+		return obj.forwarded // already moved — redirect
+	}
+	cp := &Obj{refs: obj.refs}
+	c.toSpace = append(c.toSpace, cp) // bump 'alloc'
+	obj.forwarded = cp                // leave a forwarding pointer
+	return cp
+}`,
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "Cheney.java",
+      code: `// Cheney's copying collector: a breadth-first copy with no recursion stack.
+// 'scan' and 'alloc' pointers walk to-space; the gap between them is the queue.
+import java.util.ArrayList;
+import java.util.List;
+
+class Obj {
+    List<Obj> refs = new ArrayList<>(); // outgoing pointers (into from-space)
+    Obj forwarded = null;               // set once copied: points to the to-space copy
 }
 
 class CheneyCollector {
-  toSpace: Obj[] = [];
+    List<Obj> toSpace = new ArrayList<>();
 
-  collect(roots: Obj[]): Obj[] {
-    this.toSpace = [];
-    let scan = 0;
+    List<Obj> collect(List<Obj> roots) {
+        toSpace = new ArrayList<>();
+        int scan = 0;
 
-    // 1. Evacuate the roots into to-space.
-    const newRoots = roots.map((r) => this.copy(r));
+        // 1. Evacuate the roots into to-space.
+        List<Obj> newRoots = new ArrayList<>();
+        for (Obj r : roots) newRoots.add(copy(r));
 
-    // 2. Scan: process each copied object; the gap to 'alloc'
-    //    (toSpace.length) is the breadth-first work queue.
-    while (scan < this.toSpace.length) {
-      const obj = this.toSpace[scan++];
-      obj.refs = obj.refs.map((child) => this.copy(child));
+        // 2. Scan: process each copied object; the gap to 'alloc'
+        //    (toSpace.size()) is the breadth-first work queue.
+        while (scan < toSpace.size()) {
+            Obj obj = toSpace.get(scan++);
+            for (int i = 0; i < obj.refs.size(); i++) {
+                obj.refs.set(i, copy(obj.refs.get(i)));
+            }
+        }
+        // scan == alloc → queue empty → from-space is now wholly garbage.
+        return newRoots;
     }
-    // scan === alloc → queue empty → from-space is now wholly garbage.
-    return newRoots;
-  }
 
-  /** Copy once; thereafter follow the forwarding pointer. */
-  private copy(obj: Obj): Obj {
-    if (obj.forwarded) return obj.forwarded;   // already moved — redirect
-    const copy: Obj = { refs: obj.refs, forwarded: null };
-    this.toSpace.push(copy);                   // bump 'alloc'
-    obj.forwarded = copy;                      // leave a forwarding pointer
-    return copy;
-  }
+    /** Copy once; thereafter follow the forwarding pointer. */
+    private Obj copy(Obj obj) {
+        if (obj.forwarded != null) return obj.forwarded; // already moved — redirect
+        Obj copy = new Obj();
+        copy.refs = obj.refs;
+        toSpace.add(copy);          // bump 'alloc'
+        obj.forwarded = copy;       // leave a forwarding pointer
+        return copy;
+    }
 }`,
-  },
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "cheney.py",
+      code: `# Cheney's copying collector: a breadth-first copy with no recursion stack.
+# 'scan' and 'alloc' pointers walk to-space; the gap between them is the queue.
+from typing import Optional
+
+
+class Obj:
+    def __init__(self) -> None:
+        self.refs: list["Obj"] = []                # outgoing pointers (into from-space)
+        self.forwarded: Optional["Obj"] = None     # set once copied: the to-space copy
+
+
+class CheneyCollector:
+    def __init__(self) -> None:
+        self.to_space: list[Obj] = []
+
+    def collect(self, roots: list[Obj]) -> list[Obj]:
+        self.to_space = []
+        scan = 0
+
+        # 1. Evacuate the roots into to-space.
+        new_roots = [self._copy(r) for r in roots]
+
+        # 2. Scan: process each copied object; the gap to 'alloc'
+        #    (len(to_space)) is the breadth-first work queue.
+        while scan < len(self.to_space):
+            obj = self.to_space[scan]
+            scan += 1
+            obj.refs = [self._copy(child) for child in obj.refs]
+        # scan == alloc → queue empty → from-space is now wholly garbage.
+        return new_roots
+
+    def _copy(self, obj: Obj) -> Obj:
+        """Copy once; thereafter follow the forwarding pointer."""
+        if obj.forwarded is not None:
+            return obj.forwarded         # already moved — redirect
+        copy = Obj()
+        copy.refs = obj.refs
+        self.to_space.append(copy)       # bump 'alloc'
+        obj.forwarded = copy             # leave a forwarding pointer
+        return copy`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "cheney.cpp",
+      code: `// Cheney's copying collector: a breadth-first copy with no recursion stack.
+// 'scan' and 'alloc' pointers walk to-space; the gap between them is the queue.
+#include <vector>
+
+struct Obj {
+    std::vector<Obj*> refs;     // outgoing pointers (into from-space)
+    Obj* forwarded = nullptr;   // set once copied: points to the to-space copy
+};
+
+class CheneyCollector {
+public:
+    std::vector<Obj*> toSpace;
+
+    std::vector<Obj*> collect(const std::vector<Obj*>& roots) {
+        toSpace.clear();
+        size_t scan = 0;
+
+        // 1. Evacuate the roots into to-space.
+        std::vector<Obj*> newRoots;
+        for (Obj* r : roots) newRoots.push_back(copy(r));
+
+        // 2. Scan: process each copied object; the gap to 'alloc'
+        //    (toSpace.size()) is the breadth-first work queue.
+        while (scan < toSpace.size()) {
+            Obj* obj = toSpace[scan++];
+            for (auto& child : obj->refs) child = copy(child);
+        }
+        // scan == alloc → queue empty → from-space is now wholly garbage.
+        return newRoots;
+    }
+
+private:
+    // Copy once; thereafter follow the forwarding pointer.
+    Obj* copy(Obj* obj) {
+        if (obj->forwarded) return obj->forwarded; // already moved — redirect
+        Obj* cp = new Obj();
+        cp->refs = obj->refs;
+        toSpace.push_back(cp);   // bump 'alloc'
+        obj->forwarded = cp;     // leave a forwarding pointer
+        return cp;
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

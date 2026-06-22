@@ -93,31 +93,143 @@ export const nextFit: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "next-fit.ts",
-    code: `interface Hole { start: number; size: number; }
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "next_fit.go",
+      code: `package alloc
+
+type Hole struct {
+	Start int
+	Size  int
+}
+
+type NextFit struct {
+	last int // roving bookmark: index to resume from
+}
+
+// Alloc returns the allocated address and ok=false on failure.
+func (nf *NextFit) Alloc(holes *[]Hole, request int) (int, bool) {
+	h := *holes
+	n := len(h)
+	for step := 0; step < n; step++ {
+		i := (nf.last + step) % n // resume at bookmark, wrap with %
+		if h[i].Size >= request { // first fit from current position
+			addr := h[i].Start
+			leftover := h[i].Size - request
+			if leftover == 0 {
+				*holes = append(h[:i], h[i+1:]...)
+			} else {
+				h[i].Start += request
+				h[i].Size = leftover
+			}
+			nf.last = i // save bookmark for next time
+			return addr, true
+		}
+	}
+	return 0, false // full loop, no fit: fail
+}`,
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "NextFit.java",
+      code: `import java.util.List;
+
+class Hole {
+    int start, size;
+    Hole(int start, int size) { this.start = start; this.size = size; }
+}
 
 class NextFit {
-  private last = 0; // roving bookmark: index to resume from
+    private int last = 0; // roving bookmark: index to resume from
 
-  alloc(holes: Hole[], request: number): number | null {
-    const n = holes.length;
-    for (let step = 0; step < n; step++) {
-      const i = (this.last + step) % n;   // resume at bookmark, wrap with %
-      if (holes[i].size >= request) {     // first fit from current position
-        const addr = holes[i].start;
-        const leftover = holes[i].size - request;
-        if (leftover === 0) holes.splice(i, 1);
-        else { holes[i].start += request; holes[i].size = leftover; }
-        this.last = i;                    // save bookmark for next time
-        return addr;
-      }
+    /** Returns the allocated address, or null on failure. */
+    Integer alloc(List<Hole> holes, int request) {
+        int n = holes.size();
+        for (int step = 0; step < n; step++) {
+            int i = (last + step) % n;          // resume at bookmark, wrap with %
+            if (holes.get(i).size >= request) { // first fit from current position
+                int addr = holes.get(i).start;
+                int leftover = holes.get(i).size - request;
+                if (leftover == 0) holes.remove(i);
+                else { holes.get(i).start += request; holes.get(i).size = leftover; }
+                last = i;                        // save bookmark for next time
+                return addr;
+            }
+        }
+        return null;                             // full loop, no fit: fail
     }
-    return null;                          // full loop, no fit: fail
-  }
 }`,
-  },
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "next_fit.py",
+      code: `from dataclasses import dataclass
+
+
+@dataclass
+class Hole:
+    start: int
+    size: int
+
+
+class NextFit:
+    def __init__(self) -> None:
+        self.last = 0  # roving bookmark: index to resume from
+
+    def alloc(self, holes: list[Hole], request: int) -> int | None:
+        n = len(holes)
+        for step in range(n):
+            i = (self.last + step) % n      # resume at bookmark, wrap with %
+            if holes[i].size >= request:    # first fit from current position
+                addr = holes[i].start
+                leftover = holes[i].size - request
+                if leftover == 0:
+                    del holes[i]
+                else:
+                    holes[i].start += request
+                    holes[i].size = leftover
+                self.last = i               # save bookmark for next time
+                return addr
+        return None                         # full loop, no fit: fail`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "next_fit.cpp",
+      code: `#include <optional>
+#include <vector>
+
+struct Hole {
+    int start;
+    int size;
+};
+
+class NextFit {
+    std::size_t last_ = 0; // roving bookmark: index to resume from
+
+public:
+    std::optional<int> alloc(std::vector<Hole>& holes, int request) {
+        std::size_t n = holes.size();
+        for (std::size_t step = 0; step < n; ++step) {
+            std::size_t i = (last_ + step) % n;  // resume at bookmark, wrap with %
+            if (holes[i].size >= request) {      // first fit from current position
+                int addr = holes[i].start;
+                int leftover = holes[i].size - request;
+                if (leftover == 0) holes.erase(holes.begin() + i);
+                else { holes[i].start += request; holes[i].size = leftover; }
+                last_ = i;                        // save bookmark for next time
+                return addr;
+            }
+        }
+        return std::nullopt;                      // full loop, no fit: fail
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {

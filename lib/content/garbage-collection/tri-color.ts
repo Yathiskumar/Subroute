@@ -104,39 +104,196 @@ export const triColor: ConceptContent = {
     },
   ],
 
-  code: {
-    language: "typescript",
-    filename: "tri-color.ts",
-    code: `// Tri-color marking with a Dijkstra-style insertion write barrier.
-type Color = "white" | "gray" | "black";
-interface Obj { color: Color; refs: Obj[]; }
+  codeSamples: [
+    {
+      label: "Go",
+      language: "go",
+      filename: "tri_color.go",
+      code: `// Tri-color marking with a Dijkstra-style insertion write barrier.
+package gc
+
+type Color int
+
+const (
+	White Color = iota
+	Gray
+	Black
+)
+
+type Obj struct {
+	color Color
+	refs  []*Obj
+}
+
+type TriColorMarker struct {
+	gray []*Obj // the work queue
+}
+
+func (m *TriColorMarker) Mark(roots []*Obj) {
+	for _, r := range roots {
+		m.shade(r) // gray the roots
+	}
+	for len(m.gray) > 0 {
+		obj := m.gray[len(m.gray)-1] // take a gray object
+		m.gray = m.gray[:len(m.gray)-1]
+		for _, child := range obj.refs {
+			m.shade(child) // gray its white children
+		}
+		obj.color = Black // fully scanned
+	}
+	// anything still white is unreachable -> sweep it
+}
+
+// shade: white -> gray (and enqueue). Idempotent for gray/black.
+func (m *TriColorMarker) shade(o *Obj) {
+	if o.color == White {
+		o.color = Gray
+		m.gray = append(m.gray, o)
+	}
+}
+
+// WriteBarrier: run on every pointer store 'holder.field = target'.
+// Dijkstra: graying the target restores "no black -> white".
+func (m *TriColorMarker) WriteBarrier(holder, target *Obj) {
+	m.shade(target)
+	// (Yuasa/SATB variant would instead shade the *old* value being overwritten.)
+}`,
+    },
+    {
+      label: "Java",
+      language: "java",
+      filename: "TriColor.java",
+      code: `// Tri-color marking with a Dijkstra-style insertion write barrier.
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
+import java.util.List;
+
+enum Color { WHITE, GRAY, BLACK }
+
+class Obj {
+    Color color = Color.WHITE;
+    List<Obj> refs = new ArrayList<>();
+}
 
 class TriColorMarker {
-  private gray: Obj[] = []; // the work queue
+    private final Deque<Obj> gray = new ArrayDeque<>(); // the work queue
 
-  mark(roots: Obj[]): void {
-    for (const r of roots) this.shade(r);  // gray the roots
-    while (this.gray.length) {
-      const obj = this.gray.pop()!;        // take a gray object
-      for (const child of obj.refs) this.shade(child); // gray its white children
-      obj.color = "black";                 // fully scanned
+    void mark(List<Obj> roots) {
+        for (Obj r : roots) shade(r);        // gray the roots
+        while (!gray.isEmpty()) {
+            Obj obj = gray.pop();            // take a gray object
+            for (Obj child : obj.refs) shade(child); // gray its white children
+            obj.color = Color.BLACK;         // fully scanned
+        }
+        // anything still white is unreachable -> sweep it
     }
-    // anything still white is unreachable -> sweep it
-  }
 
-  /** white -> gray (and enqueue). Idempotent for gray/black. */
-  private shade(o: Obj): void {
-    if (o.color === "white") { o.color = "gray"; this.gray.push(o); }
-  }
+    /** white -> gray (and enqueue). Idempotent for gray/black. */
+    private void shade(Obj o) {
+        if (o.color == Color.WHITE) { o.color = Color.GRAY; gray.push(o); }
+    }
 
-  /** Write barrier: run on every pointer store 'holder.field = target'.
-   *  Dijkstra: graying the target restores "no black -> white". */
-  writeBarrier(holder: Obj, target: Obj): void {
-    this.shade(target);
-    // (Yuasa/SATB variant would instead shade the *old* value being overwritten.)
-  }
+    /** Write barrier: run on every pointer store 'holder.field = target'.
+     *  Dijkstra: graying the target restores "no black -> white". */
+    void writeBarrier(Obj holder, Obj target) {
+        shade(target);
+        // (Yuasa/SATB variant would instead shade the *old* value being overwritten.)
+    }
 }`,
-  },
+    },
+    {
+      label: "Python",
+      language: "python",
+      filename: "tri_color.py",
+      code: `# Tri-color marking with a Dijkstra-style insertion write barrier.
+from enum import Enum
+
+
+class Color(Enum):
+    WHITE = 0
+    GRAY = 1
+    BLACK = 2
+
+
+class Obj:
+    def __init__(self) -> None:
+        self.color = Color.WHITE
+        self.refs: list["Obj"] = []
+
+
+class TriColorMarker:
+    def __init__(self) -> None:
+        self.gray: list[Obj] = []  # the work queue
+
+    def mark(self, roots: list[Obj]) -> None:
+        for r in roots:
+            self._shade(r)               # gray the roots
+        while self.gray:
+            obj = self.gray.pop()        # take a gray object
+            for child in obj.refs:
+                self._shade(child)       # gray its white children
+            obj.color = Color.BLACK      # fully scanned
+        # anything still white is unreachable -> sweep it
+
+    def _shade(self, o: Obj) -> None:
+        """white -> gray (and enqueue). Idempotent for gray/black."""
+        if o.color == Color.WHITE:
+            o.color = Color.GRAY
+            self.gray.append(o)
+
+    def write_barrier(self, holder: Obj, target: Obj) -> None:
+        """Write barrier: run on every pointer store 'holder.field = target'.
+
+        Dijkstra: graying the target restores "no black -> white".
+        """
+        self._shade(target)
+        # (Yuasa/SATB variant would instead shade the *old* value being overwritten.)`,
+    },
+    {
+      label: "C++",
+      language: "cpp",
+      filename: "tri_color.cpp",
+      code: `// Tri-color marking with a Dijkstra-style insertion write barrier.
+#include <vector>
+
+enum class Color { White, Gray, Black };
+
+struct Obj {
+    Color color = Color::White;
+    std::vector<Obj*> refs;
+};
+
+class TriColorMarker {
+    std::vector<Obj*> gray_; // the work queue
+
+public:
+    void mark(const std::vector<Obj*>& roots) {
+        for (Obj* r : roots) shade(r);       // gray the roots
+        while (!gray_.empty()) {
+            Obj* obj = gray_.back();         // take a gray object
+            gray_.pop_back();
+            for (Obj* child : obj->refs) shade(child); // gray its white children
+            obj->color = Color::Black;       // fully scanned
+        }
+        // anything still white is unreachable -> sweep it
+    }
+
+    // Write barrier: run on every pointer store 'holder.field = target'.
+    // Dijkstra: graying the target restores "no black -> white".
+    void writeBarrier(Obj* holder, Obj* target) {
+        shade(target);
+        // (Yuasa/SATB variant would instead shade the *old* value being overwritten.)
+    }
+
+private:
+    // white -> gray (and enqueue). Idempotent for gray/black.
+    void shade(Obj* o) {
+        if (o->color == Color::White) { o->color = Color::Gray; gray_.push_back(o); }
+    }
+};`,
+    },
+  ],
 
   furtherReading: [
     {
