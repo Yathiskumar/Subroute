@@ -33,3 +33,6 @@ next-env.d.ts
 
 # reference material (not part of the app)
 /Claude Files/
+
+# brand images / logos
+/public/brand/

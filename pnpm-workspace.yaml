@@ -1,3 +1,8 @@
 allowBuilds:
   sharp: true
   unrs-resolver: true
+
+# Force the patched postcss everywhere — next bundles a transitive copy
+# below 8.5.10 (GHSA-qx2v-qp2m-jg93, </style> XSS in CSS stringify).
+overrides:
+  postcss@<8.5.10: ">=8.5.10"

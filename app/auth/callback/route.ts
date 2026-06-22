@@ -2,6 +2,20 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
 /**
+ * Only allow the post-login redirect to a same-origin, relative path. This
+ * blocks open-redirects via crafted `?next=` values such as `//evil.com`,
+ * `/\evil.com`, or an absolute `https://evil.com` URL. Anything that isn't a
+ * single-leading-slash path falls back to the home page.
+ */
+function safeNext(raw: string | null): string {
+  if (!raw) return "/";
+  // Must start with exactly one "/" (not "//" or "/\") and contain no control
+  // chars; reject any value that parses as having a scheme/host.
+  if (!/^\/[^/\\]/.test(raw) && raw !== "/") return "/";
+  return raw;
+}
+
+/**
  * OAuth / magic-link landing route. Supabase redirects here with a `code`
  * (PKCE) which we exchange for a session cookie, then send the user on to
  * wherever they started (`next`), defaulting to the home page.
@@ -9,7 +23,7 @@ import { createClient } from "@/lib/supabase/server";
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/";
+  const next = safeNext(searchParams.get("next"));
 
   if (code) {
     const supabase = await createClient();
