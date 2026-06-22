@@ -158,8 +158,11 @@ export default async function BlogPostPage({
     <>
       <script
         type="application/ld+json"
-        // JSON-LD is static, build-time content — safe to inline.
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        // JSON-LD is build-time content, but escape "<" anyway so a stray
+        // "</script>" in any field can't break out of the tag.
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c"),
+        }}
       />
 
       <div className="container py-12 md:py-16">
