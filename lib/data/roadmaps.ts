@@ -277,38 +277,46 @@ export const ROADMAPS: Roadmap[] = [
             items: [
               {
                 title: "DRY, KISS, YAGNI",
+                slug: "dry-kiss-yagni",
                 note: "Don't repeat yourself, keep it simple, don't build what you don't need.",
                 tag: "core",
               },
               {
                 title: "Law of Demeter",
+                slug: "law-of-demeter",
                 note: "Talk to your friends, not to strangers' internals.",
               },
               {
                 title: "Separation of Concerns",
+                slug: "separation-of-concerns",
                 note: "Each module owns one well-defined job.",
               },
               {
                 title: "Program to interfaces",
+                slug: "program-to-interfaces",
                 note: "Code against contracts, not concrete implementations.",
                 tag: "core",
               },
               {
                 title: "Dependency Injection & IoC",
+                slug: "dependency-injection-and-ioc",
                 note: "Hand dependencies in instead of creating them inside.",
                 tag: "interview",
               },
               {
                 title: "Injection styles: constructor vs setter vs field",
+                slug: "injection-styles",
                 note: "The trade-offs interviewers probe — and why constructor injection usually wins.",
                 tag: "interview",
               },
               {
                 title: "Tell, Don't Ask",
+                slug: "tell-dont-ask",
                 note: "Push behavior to the data instead of pulling data out.",
               },
               {
                 title: "Command–Query Separation",
+                slug: "command-query-separation",
                 note: "A method either does something or answers something — not both.",
               },
             ],

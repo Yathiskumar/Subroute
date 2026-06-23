@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DRY, KISS, YAGNI — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --violet: #a78bfa;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---- Tabs ---- */
+      .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+      .tab { flex: 1; background: var(--surface); color: var(--muted); font: 600 13px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 11px 12px; cursor: pointer; transition: all .15s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+      .tab:hover { border-color: var(--border-strong); color: var(--fg); }
+      .tab.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--fg); }
+      .tab .ico { font-family: var(--mono); font-size: 12px; color: var(--accent); font-weight: 700; }
+
+      /* ---- Buttons ---- */
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: filter .15s, transform .1s, border-color .15s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .btn.primary { background: var(--accent); color: #1a1003; border-color: transparent; }
+      .btn.primary:hover { filter: brightness(1.06); }
+      .btn:disabled { opacity: .4; cursor: not-allowed; }
+      .btn:disabled:active { transform: none; }
+
+      /* ---- Layout ---- */
+      .grid { display: grid; grid-template-columns: 1fr 210px; gap: 14px; align-items: start; }
+      @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
+
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 18px 16px; }
+      .stage-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); text-align: center; margin-bottom: 14px; }
+
+      /* ---- Code snippet rows ---- */
+      .snip { font-family: var(--mono); font-size: 11.5px; line-height: 1.6; background: var(--bg); border: 1px solid var(--border-strong); border-radius: 7px; padding: 9px 12px; margin-bottom: 8px; white-space: pre; overflow-x: auto; color: var(--muted); transition: border-color .2s, background .2s; }
+      .snip .kw { color: var(--violet); }
+      .snip .fn { color: var(--info); }
+      .snip .num { color: var(--accent); }
+      .snip .tag { float: right; font-size: 9px; letter-spacing: .05em; text-transform: uppercase; color: var(--subtle); }
+      .snip.dup { border-color: rgba(240,104,104,0.4); }
+      .snip.unified { border-color: var(--success); background: var(--success-soft); color: var(--fg); }
+      .snip.faded { opacity: .35; }
+      .snip-caller { font-family: var(--mono); font-size: 11px; color: var(--subtle); padding: 2px 12px 0; }
+
+      .controls { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+
+      /* ---- KISS toggle ---- */
+      .toggle-row { display: flex; gap: 8px; margin-bottom: 14px; }
+      .toggle-btn { flex: 1; background: var(--surface); color: var(--muted); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px; cursor: pointer; transition: all .15s; }
+      .toggle-btn:hover { border-color: var(--border-strong); color: var(--fg); }
+      .toggle-btn.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--fg); }
+
+      /* ---- YAGNI checklist ---- */
+      .feat { display: flex; align-items: center; gap: 11px; background: var(--bg); border: 1px solid var(--border-strong); border-radius: 7px; padding: 11px 13px; margin-bottom: 8px; cursor: pointer; transition: border-color .15s, background .15s, opacity .2s; }
+      .feat:hover { border-color: var(--accent-border); }
+      .feat .feat-box { width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid var(--border-strong); display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 12px; color: var(--subtle); flex-shrink: 0; }
+      .feat .feat-name { font-size: 13px; font-weight: 600; color: var(--fg); }
+      .feat .feat-kind { font-family: var(--mono); font-size: 9.5px; letter-spacing: .05em; text-transform: uppercase; margin-left: auto; }
+      .feat.real { cursor: default; border-color: rgba(92,198,111,0.4); }
+      .feat.real:hover { border-color: rgba(92,198,111,0.4); }
+      .feat.real .feat-box { border-color: var(--success); color: var(--success); }
+      .feat.real .feat-kind { color: var(--success); }
+      .feat.spec .feat-kind { color: var(--accent); }
+      .feat.deferred { opacity: .4; }
+      .feat.deferred .feat-name { text-decoration: line-through; color: var(--muted); }
+      .feat.deferred .feat-box { border-color: var(--border); color: var(--subtle); }
+
+      /* ---- Side indicators / meters ---- */
+      .side { display: flex; flex-direction: column; gap: 10px; }
+      .ind { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 13px; transition: border-color .2s, background .2s; }
+      .ind.ok { border-color: rgba(92,198,111,0.5); background: var(--success-soft); }
+      .ind.warn { border-color: rgba(251,134,58,0.5); background: var(--accent-soft); }
+      .ind.bad { border-color: rgba(240,104,104,0.5); background: var(--danger-soft); }
+      .ind-q { font-size: 11.5px; color: var(--muted); margin-bottom: 7px; line-height: 1.4; }
+      .ind-v { font-family: var(--mono); font-size: 26px; font-weight: 700; color: var(--fg); display: flex; align-items: baseline; gap: 6px; }
+      .ind-v .unit { font-size: 11px; font-weight: 600; color: var(--muted); }
+      .ind.ok .ind-v { color: var(--success); }
+      .ind.warn .ind-v { color: var(--accent); }
+      .ind.bad .ind-v { color: var(--danger); }
+      .meter { height: 7px; border-radius: 5px; background: var(--elevated); margin-top: 9px; overflow: hidden; }
+      .meter > i { display: block; height: 100%; border-radius: 5px; transition: width .35s ease, background .25s; }
+
+      /* ---- Fixed explain panel (REPLACED, never appended) ---- */
+      .explain { margin-top: 14px; min-height: 92px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 13px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .acc { color: var(--accent); font-weight: 700; }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <!-- TAB TOGGLE -->
+    <div class="tabs">
+      <button class="tab on" id="tab-dry" onclick="setTab('dry')"><span class="ico">DRY</span> Don't Repeat Yourself</button>
+      <button class="tab" id="tab-kiss" onclick="setTab('kiss')"><span class="ico">KISS</span> Keep It Simple</button>
+      <button class="tab" id="tab-yagni" onclick="setTab('yagni')"><span class="ico">YAGNI</span> You Aren't Gonna Need It</button>
+    </div>
+
+    <div class="grid">
+      <!-- ===== STAGE ===== -->
+      <div class="stage">
+        <div class="stage-cap" id="stage-cap"></div>
+
+        <!-- DRY panel -->
+        <div id="panel-dry">
+          <div id="dry-snips"></div>
+          <div class="snip-caller" id="dry-callers" style="display:none">cartTotal · invoiceTotal · receiptTotal → all call <span style="color:var(--success)">withTax()</span></div>
+          <div class="controls">
+            <button class="btn primary" id="dry-extract" onclick="dryExtract()">Extract shared function ⇲</button>
+            <button class="btn" id="dry-reset" onclick="dryReset()" disabled>Reset</button>
+          </div>
+        </div>
+
+        <!-- KISS panel -->
+        <div id="panel-kiss" style="display:none">
+          <div class="toggle-row">
+            <button class="toggle-btn on" id="kiss-clever" onclick="kissSet('clever')">Clever one-liner</button>
+            <button class="toggle-btn" id="kiss-simple" onclick="kissSet('simple')">Plain &amp; readable</button>
+          </div>
+          <div class="snip" id="kiss-code"></div>
+        </div>
+
+        <!-- YAGNI panel -->
+        <div id="panel-yagni" style="display:none">
+          <div id="yagni-list"></div>
+        </div>
+      </div>
+
+      <!-- ===== SIDE: live meter ===== -->
+      <div class="side" id="side"></div>
+    </div>
+
+    <!-- FIXED EXPLAIN PANEL (replaced, never appended) -->
+    <div class="explain">
+      <div class="explain-title" id="ex-title">—</div>
+      <div class="explain-body" id="ex-body">—</div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span id="hint-text"></span>
+    </div>
+
+    <script>
+      /* ---------- one explanation panel, content REPLACED (never appended) ---------- */
+      function setExplain(title, bodyHtml) {
+        document.getElementById("ex-title").textContent = title;
+        document.getElementById("ex-body").innerHTML = bodyHtml;
+      }
+
+      var tab = "dry";
+
+      /* =========================================================
+         DRY
+      ========================================================= */
+      var dryDone = false;
+
+      function dupSnip(name) {
+        return '<div class="snip dup"><span class="tag">copy</span>' +
+          '<span class="kw">function</span> <span class="fn">' + name + '</span>(p) { <span class="kw">return</span> p + p * <span class="num">0.08</span>; }</div>';
+      }
+      function renderDry() {
+        var box = document.getElementById("dry-snips");
+        var callers = document.getElementById("dry-callers");
+        if (!dryDone) {
+          box.innerHTML = dupSnip("cartTotal") + dupSnip("invoiceTotal") + dupSnip("receiptTotal");
+          callers.style.display = "none";
+        } else {
+          box.innerHTML =
+            '<div class="snip unified"><span class="tag" style="color:var(--success)">one home</span>' +
+            '<span class="kw">const</span> <span class="fn">TAX_RATE</span> = <span class="num">0.08</span>;\n' +
+            '<span class="kw">function</span> <span class="fn">withTax</span>(p) { <span class="kw">return</span> p + p * <span class="fn">TAX_RATE</span>; }</div>';
+          callers.style.display = "block";
+        }
+        document.getElementById("dry-extract").disabled = dryDone;
+        document.getElementById("dry-reset").disabled = !dryDone;
+        renderDrySide();
+      }
+      function renderDrySide() {
+        var n = dryDone ? 1 : 3;
+        document.getElementById("side").innerHTML =
+          '<div class="ind ' + (dryDone ? "ok" : "bad") + '">' +
+            '<div class="ind-q">Places to change when the tax rate moves</div>' +
+            '<div class="ind-v">' + n + '<span class="unit">spot' + (n === 1 ? "" : "s") + '</span></div>' +
+            '<div class="meter"><i style="width:' + (n / 3 * 100) + '%;background:' + (dryDone ? "var(--success)" : "var(--danger)") + '"></i></div>' +
+          '</div>';
+      }
+      function dryExtract() {
+        dryDone = true;
+        renderDry();
+        setExplain("DRY — one fact, one home",
+          'The tax rate <code>0.08</code> lived in <span class="bad">three copies</span>. Now it has <span class="good">one home</span> in <code>withTax()</code>, and every total calls it. ' +
+          'When the rate becomes 9% you change <span class="good">one line</span> — <span class="dim">copies can\'t silently disagree anymore. Places to change: 3 → 1.</span>');
+      }
+      function dryReset() {
+        dryDone = false;
+        renderDry();
+        setExplain("DRY — the copy-paste smell",
+          'The same <code>p + p * 0.08</code> is pasted into <span class="bad">three functions</span>. The tax rate has no single home, so a change must be remembered in <span class="bad">all three</span> spots. ' +
+          '<span class="dim">Press “Extract shared function” to give the fact one home.</span>');
+      }
+
+      /* =========================================================
+         KISS
+      ========================================================= */
+      var kissMode = "clever";
+      var KISS = {
+        clever: {
+          code: '<span class="tag">clever</span><span class="kw">const</span> total = cart.<span class="fn">reduce</span>((s, x) =&gt; s + (x.q ? x.q * x.p : <span class="num">0</span>), <span class="num">0</span>);',
+          secs: 38, label: "decode it line by line"
+        },
+        simple: {
+          code: '<span class="tag" style="color:var(--success)">simple</span><span class="kw">let</span> total = <span class="num">0</span>;\n' +
+                '<span class="kw">for</span> (<span class="kw">const</span> item <span class="kw">of</span> cart) {\n' +
+                '  <span class="kw">if</span> (item.quantity) total += item.quantity * item.price;\n}',
+          secs: 6, label: "read it at a glance"
+        }
+      };
+      function renderKiss() {
+        var k = KISS[kissMode];
+        document.getElementById("kiss-code").innerHTML = k.code;
+        document.getElementById("kiss-clever").classList.toggle("on", kissMode === "clever");
+        document.getElementById("kiss-simple").classList.toggle("on", kissMode === "simple");
+        renderKissSide();
+      }
+      function renderKissSide() {
+        var k = KISS[kissMode];
+        var simple = kissMode === "simple";
+        document.getElementById("side").innerHTML =
+          '<div class="ind ' + (simple ? "ok" : "warn") + '">' +
+            '<div class="ind-q">Seconds to understand</div>' +
+            '<div class="ind-v">~' + k.secs + '<span class="unit">sec</span></div>' +
+            '<div class="meter"><i style="width:' + (k.secs / 38 * 100) + '%;background:' + (simple ? "var(--success)" : "var(--accent)") + '"></i></div>' +
+            '<div class="ind-q" style="margin:9px 0 0">' + (simple ? "✓ " : "") + k.label + '</div>' +
+          '</div>';
+      }
+      function kissSet(m) {
+        kissMode = m;
+        renderKiss();
+        if (m === "clever") {
+          setExplain("KISS — clever, but slow to read",
+            'Both versions compute the <b>same</b> total. The <code>reduce</code> one-liner is <span class="bad">correct</span> — but you have to stop and <span class="bad">decode it</span> every time. ' +
+            '<span class="dim">Fewer characters isn\'t simpler if the next reader has to puzzle it out.</span>');
+        } else {
+          setExplain("KISS — simple wins",
+            'The plain <code>for</code> loop is longer, and that\'s <span class="good">fine</span>. Anyone can read it at a glance, fix it under pressure, and trust it. ' +
+            '<span class="acc">KISS</span> = easy to understand, <span class="dim">not fewest lines. Code is read far more than it\'s written.</span>');
+        }
+      }
+
+      /* =========================================================
+         YAGNI
+      ========================================================= */
+      var FEATS = [
+        { id: "name",  name: "Save the user's name", kind: "needed today", cost: 1, real: true },
+        { id: "multi", name: "Multi-currency support", kind: "speculative", cost: 4, real: false },
+        { id: "plugin",name: "Plugin system",          kind: "speculative", cost: 5, real: false },
+        { id: "i18n",  name: "Full internationalization (i18n)", kind: "speculative", cost: 4, real: false }
+      ];
+      var deferred = {}; // id -> true
+
+      function renderYagni() {
+        var list = document.getElementById("yagni-list");
+        list.innerHTML = "";
+        FEATS.forEach(function (f) {
+          var off = !!deferred[f.id];
+          var div = document.createElement("div");
+          div.className = "feat " + (f.real ? "real" : "spec") + (off ? " deferred" : "");
+          div.innerHTML =
+            '<div class="feat-box">' + (f.real ? "✓" : (off ? "·" : "+")) + '</div>' +
+            '<div class="feat-name">' + f.name + '</div>' +
+            '<div class="feat-kind">' + (off ? "deferred" : f.kind) + '</div>';
+          if (!f.real) div.onclick = (function (id) { return function () { toggleDefer(id); }; })(f.id);
+          list.appendChild(div);
+        });
+        renderYagniSide();
+      }
+      function totalCost() {
+        return FEATS.reduce(function (s, f) { return s + (deferred[f.id] ? 0 : f.cost); }, 0);
+      }
+      var MAX_COST = FEATS.reduce(function (s, f) { return s + f.cost; }, 0);
+      function renderYagniSide() {
+        var c = totalCost();
+        var minimal = c <= 1;
+        document.getElementById("side").innerHTML =
+          '<div class="ind ' + (minimal ? "ok" : "warn") + '">' +
+            '<div class="ind-q">Code to build &amp; maintain now</div>' +
+            '<div class="ind-v">' + c + '<span class="unit">units</span></div>' +
+            '<div class="meter"><i style="width:' + (c / MAX_COST * 100) + '%;background:' + (minimal ? "var(--success)" : "var(--accent)") + '"></i></div>' +
+            '<div class="ind-q" style="margin:9px 0 0">' + (minimal ? "✓ just today\'s requirement" : "click the speculative items to defer") + '</div>' +
+          '</div>';
+      }
+      function toggleDefer(id) {
+        deferred[id] = !deferred[id];
+        renderYagni();
+        var f = FEATS.find(function (x) { return x.id === id; });
+        if (deferred[id]) {
+          setExplain("YAGNI — deferred “" + f.name + "”",
+            'Nobody asked for <code>' + f.name + '</code> yet. Building it now costs time to write, test, and maintain — for a payoff that <span class="bad">may never come</span>. ' +
+            '<span class="good">Defer it.</span> <span class="dim">When a real need arrives, you\'ll build the right thing instead of a guess.</span>');
+        } else {
+          setExplain("YAGNI — re-added “" + f.name + "”",
+            'You added <code>' + f.name + '</code> back. If there\'s no <span class="bad">real requirement</span> for it today, it\'s speculative weight. ' +
+            '<span class="dim">YAGNI says build what today needs and revisit later.</span>');
+        }
+      }
+
+      /* =========================================================
+         TAB SWITCHING
+      ========================================================= */
+      function setTab(t) {
+        tab = t;
+        ["dry", "kiss", "yagni"].forEach(function (k) {
+          document.getElementById("tab-" + k).classList.toggle("on", k === t);
+          document.getElementById("panel-" + k).style.display = (k === t) ? "block" : "none";
+        });
+        if (t === "dry") {
+          document.getElementById("stage-cap").textContent = "The same tax formula, copy-pasted into three functions";
+          document.getElementById("hint-text").innerHTML = 'Give each fact <b style="color:var(--fg)">one home</b>. Extract the shared function and watch <b style="color:var(--fg)">3 → 1</b>.';
+          renderDry();
+          setExplain("DRY — the copy-paste smell",
+            'The same <code>p + p * 0.08</code> is pasted into <span class="bad">three functions</span>. The tax rate has no single home, so a change must be remembered in <span class="bad">all three</span> spots. ' +
+            '<span class="dim">Press “Extract shared function” to give the fact one home.</span>');
+        } else if (t === "kiss") {
+          document.getElementById("stage-cap").textContent = "Same logic, two styles — which reads faster?";
+          document.getElementById("hint-text").innerHTML = 'Pick the version the <b style="color:var(--fg)">next reader</b> understands fastest. Simple beats clever.';
+          renderKiss();
+          kissSet(kissMode);
+        } else {
+          document.getElementById("stage-cap").textContent = "Job: save a user’s name — which features does TODAY need?";
+          document.getElementById("hint-text").innerHTML = 'Tap the <b style="color:var(--accent)">speculative</b> features to defer them. Build what today needs.';
+          renderYagni();
+          setExplain("YAGNI — build for today",
+            'The job is one thing: <code>save a user\'s name</code>. The list is padded with <span class="acc">speculative</span> features for a future nobody asked for. ' +
+            '<span class="dim">Click each speculative item to defer it and watch the build cost fall.</span>');
+        }
+      }
+
+      /* ---------- boot ---------- */
+      setTab("dry");
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

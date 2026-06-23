@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Program to Interfaces, Not Implementations — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --violet: #a78bfa;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---- Mode toggle (tabs) ---- */
+      .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+      .tab { flex: 1; background: var(--surface); color: var(--muted); font: 600 13px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 11px 12px; cursor: pointer; transition: all .15s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+      .tab:hover { border-color: var(--border-strong); color: var(--fg); }
+      .tab.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--fg); }
+      .tab .ico { font-family: var(--mono); font-size: 14px; color: var(--accent); }
+
+      /* ---- Layout: stage + side indicators ---- */
+      .grid { display: grid; grid-template-columns: 1fr 200px; gap: 14px; align-items: start; }
+      @media (max-width: 620px) { .grid { grid-template-columns: 1fr; } }
+
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 20px 16px; }
+      .stage-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); text-align: center; margin-bottom: 14px; }
+
+      /* ---- The consumer function declaration box ---- */
+      .col { display: flex; flex-direction: column; align-items: center; }
+      .node { width: 280px; border: 1.5px solid var(--border-strong); border-radius: 7px; background: var(--bg); box-shadow: 0 8px 24px rgba(0,0,0,.32); overflow: hidden; }
+      .node.consumer { border-color: var(--info); box-shadow: 0 0 0 1px rgba(94,159,246,0.22), 0 8px 24px rgba(0,0,0,.32); }
+      .node-name { text-align: center; font-family: var(--mono); font-size: 13.5px; font-weight: 700; color: var(--fg); padding: 9px 10px 4px; }
+      .node-sub { text-align: center; font-family: var(--mono); font-size: 9.5px; color: var(--subtle); padding: 0 10px 8px; }
+      .decl { font-family: var(--mono); font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--border-strong); padding: 9px 12px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .decl .kw { color: var(--violet); }
+      .decl .concrete-type { color: var(--danger); font-weight: 700; }
+      .decl .iface-type { color: var(--accent); font-weight: 700; }
+
+      /* ---- The socket label ---- */
+      .socket { margin: 12px 0 4px; font-family: var(--mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); text-align: center; }
+      .socket b { color: var(--fg); }
+
+      /* ---- Tray of candidate implementations ---- */
+      .tray-wrap { margin-top: 8px; }
+      .tray { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+      .chip { position: relative; text-align: center; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 8px 11px; cursor: pointer; transition: border-color .15s, transform .1s, background .15s; font-family: var(--mono); }
+      .chip:hover:not(:disabled) { border-color: var(--accent-border); transform: translateY(-2px); }
+      .chip:active:not(:disabled) { transform: scale(0.98); }
+      .chip.accepted { border-color: var(--success); background: var(--success-soft); }
+      .chip.accepted.on { box-shadow: 0 0 0 1px var(--success-soft); }
+      .chip.rejected { border-color: var(--danger); background: var(--danger-soft); border-style: dashed; cursor: not-allowed; opacity: .72; }
+      .chip-name { font-size: 12px; font-weight: 700; color: var(--fg); }
+      .chip-sub { font-size: 9px; color: var(--muted); margin-top: 4px; min-height: 11px; }
+      .chip-mark { position: absolute; top: 6px; right: 8px; font-size: 13px; font-weight: 700; }
+      .chip.accepted .chip-mark { color: var(--success); }
+      .chip.rejected .chip-mark { color: var(--danger); }
+
+      /* ---- Side indicators ---- */
+      .side { display: flex; flex-direction: column; gap: 10px; }
+      .ind { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 13px; transition: border-color .2s, background .2s; }
+      .ind.ok { border-color: rgba(92,198,111,0.5); background: var(--success-soft); }
+      .ind.bad { border-color: rgba(240,104,104,0.5); background: var(--danger-soft); }
+      .ind-q { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+      .ind-v { font-family: var(--mono); font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+      .ind.ok .ind-v { color: var(--success); }
+      .ind.bad .ind-v { color: var(--danger); }
+      .ind-mark { font-size: 18px; }
+      .ind-count { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 13px; text-align: center; transition: border-color .2s; }
+      .ind-count.lit { border-color: var(--accent-border); }
+      .ind-count .cn { font-family: var(--mono); font-size: 34px; font-weight: 800; color: var(--accent); line-height: 1; }
+      .ind-count .cl { font-size: 11px; color: var(--muted); margin-top: 6px; }
+
+      /* ---- Fixed explanation panel (REPLACES content, never grows) ---- */
+      .explain { margin-top: 14px; min-height: 88px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 13px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <!-- MODE TOGGLE -->
+    <div class="tabs">
+      <button class="tab on" id="tab-concrete" onclick="setMode('concrete')"><span class="ico">⊗</span> Concrete type</button>
+      <button class="tab" id="tab-interface" onclick="setMode('interface')"><span class="ico">⇄</span> Interface type</button>
+    </div>
+
+    <div class="grid">
+      <!-- ===== STAGE: the consumer + tray ===== -->
+      <div class="stage">
+        <div class="stage-cap" id="stage-cap">process() declared with a concrete ArrayList parameter</div>
+
+        <div class="col">
+          <div class="node consumer">
+            <div class="node-name">process(orders)</div>
+            <div class="node-sub">consuming code · the body never changes</div>
+            <div class="decl" id="decl-line">
+              <span class="kw">void</span> process(<span class="concrete-type">ArrayList&lt;Order&gt;</span> orders)
+            </div>
+          </div>
+        </div>
+
+        <div class="socket" id="socket-cap">Socket accepts: <b>only ArrayList</b></div>
+
+        <!-- candidate implementations that try to plug in -->
+        <div class="tray-wrap">
+          <div class="tray" id="tray"></div>
+        </div>
+      </div>
+
+      <!-- ===== SIDE: live indicators ===== -->
+      <div class="side">
+        <div class="ind-count" id="count-box">
+          <div class="cn" id="count-n">1</div>
+          <div class="cl">values that fit</div>
+        </div>
+        <div class="ind bad" id="ind-swap">
+          <div class="ind-q">Swap the implementation without editing <b style="color:var(--fg)">this code</b>?</div>
+          <div class="ind-v"><span class="ind-mark" id="swap-mark">✗</span><span id="swap-text">No</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FIXED EXPLAIN PANEL (replaced, never appended) -->
+    <div class="explain">
+      <div class="explain-title" id="ex-title">—</div>
+      <div class="explain-body" id="ex-body">—</div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>Declare the <b style="color:var(--fg)">socket</b> (an interface like <code style="font-family:var(--mono)">List</code>), not a <b style="color:var(--fg)">specific class</b>. Flip to <b style="color:var(--accent)">Interface type</b> and watch every implementation plug in — the <b style="color:var(--fg)">consuming code never moves</b>.</span>
+    </div>
+
+    <script>
+      /* ---------- one explanation panel, content REPLACED (never appended) ---------- */
+      function setExplain(title, bodyHtml) {
+        document.getElementById("ex-title").textContent = title;
+        document.getElementById("ex-body").innerHTML = bodyHtml;
+      }
+
+      /* ---------- candidate implementations in the tray ---------- */
+      var IMPLS = {
+        array:  { name: "ArrayList",     sub: "is a List" },
+        linked: { name: "LinkedList",    sub: "is a List" },
+        immut:  { name: "ImmutableList", sub: "is a List" },
+      };
+      var TRAY_ORDER = ["array", "linked", "immut"];
+
+      var mode = "concrete";   // "concrete" | "interface"
+      var picked = "array";    // which impl is currently selected (interface mode)
+
+      // In concrete mode only ArrayList is accepted; in interface mode all fit.
+      function isAccepted(key) {
+        return mode === "interface" || key === "array";
+      }
+
+      function renderTray() {
+        var tray = document.getElementById("tray");
+        tray.innerHTML = "";
+        TRAY_ORDER.forEach(function (key) {
+          var im = IMPLS[key];
+          var ok = isAccepted(key);
+          var b = document.createElement("button");
+          var on = mode === "interface" && picked === key;
+          b.className = "chip " + (ok ? "accepted" : "rejected") + (on ? " on" : "");
+          b.disabled = !ok;
+          var sub = ok ? im.sub : "not an ArrayList";
+          b.innerHTML =
+            '<div class="chip-mark">' + (ok ? "✓" : "✗") + '</div>' +
+            '<div class="chip-name">' + im.name + '</div>' +
+            '<div class="chip-sub">' + sub + '</div>';
+          b.onclick = (function (k) { return function () { plug(k); }; })(key);
+          tray.appendChild(b);
+        });
+      }
+
+      function setSwap(ok) {
+        var sw = document.getElementById("ind-swap");
+        sw.className = "ind " + (ok ? "ok" : "bad");
+        document.getElementById("swap-mark").textContent = ok ? "✓" : "✗";
+        document.getElementById("swap-text").textContent = ok ? "Yes" : "No";
+      }
+
+      function render() {
+        var concrete = mode === "concrete";
+        document.getElementById("tab-concrete").classList.toggle("on", concrete);
+        document.getElementById("tab-interface").classList.toggle("on", !concrete);
+
+        var decl = document.getElementById("decl-line");
+        var fit = concrete ? 1 : 3;
+        document.getElementById("count-n").textContent = String(fit);
+        document.getElementById("count-box").classList.toggle("lit", !concrete);
+
+        if (concrete) {
+          document.getElementById("stage-cap").textContent =
+            "process() declared with a concrete ArrayList parameter";
+          decl.innerHTML =
+            '<span class="kw">void</span> process(<span class="concrete-type">ArrayList&lt;Order&gt;</span> orders)';
+          document.getElementById("socket-cap").innerHTML = "Socket accepts: <b>only ArrayList</b>";
+          setSwap(false);
+          renderTray();
+          setExplain(
+            "Concrete — the socket is locked to one class",
+            'The parameter is typed <code>ArrayList&lt;Order&gt;</code>, so the socket only accepts an <code>ArrayList</code>. ' +
+            '<code>LinkedList</code> and <code>ImmutableList</code> are perfectly good lists, but they\'re turned away — <span class="bad">not an ArrayList</span>. ' +
+            'Just <span class="bad">1 value fits</span>, and to change the choice you\'d have to <span class="bad">edit this signature</span> everywhere. ' +
+            '<span class="dim">Flip to Interface type.</span>'
+          );
+        } else {
+          document.getElementById("stage-cap").textContent =
+            "process() declared with the List interface — one line changed";
+          decl.innerHTML =
+            '<span class="kw">void</span> process(<span class="iface-type">List&lt;Order&gt;</span> orders)';
+          document.getElementById("socket-cap").innerHTML = "Socket accepts: <b>any List</b>";
+          setSwap(true);
+          renderTray();
+          // first message after switching; plug() overrides on each click
+          explainForPick(picked, true);
+        }
+      }
+
+      function explainForPick(key, isModeSwitch) {
+        var im = IMPLS[key];
+        if (isModeSwitch) {
+          setExplain(
+            "Interface — the socket opened up",
+            'You changed <span class="good">one type</span> — <code>ArrayList&lt;Order&gt;</code> became <code>List&lt;Order&gt;</code> — and the <b>body of process() never moved</b>. ' +
+            'Now <span class="good">all 3</span> implementations plug in: <code>ArrayList</code>, <code>LinkedList</code>, <code>ImmutableList</code>. ' +
+            '<span class="dim">Click any chip to swap it in.</span>'
+          );
+        } else {
+          setExplain(
+            "Plugged in " + im.name + " — swap ✓",
+            'You picked <code>' + im.name + '</code> and it dropped straight into the socket because it <span class="good">is a List</span>. ' +
+            'The construction line elsewhere chose this class; <b style="color:var(--success)">process() didn\'t change at all.</b> ' +
+            '<span class="dim">Depending on the contract is exactly what makes the swap free.</span>'
+          );
+        }
+      }
+
+      function plug(key) {
+        if (!isAccepted(key)) return;     // rejected chips are inert
+        if (mode === "concrete") {
+          // only ArrayList is acceptable here; reinforce the lesson
+          picked = "array";
+          render();
+          return;
+        }
+        picked = key;
+        renderTray();
+        explainForPick(key, false);
+      }
+
+      function setMode(m) {
+        mode = m;
+        if (m === "concrete") picked = "array";
+        render();
+      }
+
+      /* ---------- boot ---------- */
+      render();
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

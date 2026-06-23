@@ -34,6 +34,14 @@ import { openClosed } from "./lld/open-closed";
 import { liskovSubstitution } from "./lld/liskov-substitution";
 import { interfaceSegregation } from "./lld/interface-segregation";
 import { dependencyInversion } from "./lld/dependency-inversion";
+import { dryKissYagni } from "./lld/dry-kiss-yagni";
+import { lawOfDemeter } from "./lld/law-of-demeter";
+import { separationOfConcerns } from "./lld/separation-of-concerns";
+import { programToInterfaces } from "./lld/program-to-interfaces";
+import { dependencyInjectionAndIoc } from "./lld/dependency-injection-and-ioc";
+import { injectionStyles } from "./lld/injection-styles";
+import { tellDontAsk } from "./lld/tell-dont-ask";
+import { commandQuerySeparation } from "./lld/command-query-separation";
 
 /** Indexed by `${roadmapSlug}/${topicSlug}`. */
 const ROADMAP_LESSONS: Record<string, RoadmapLesson> = {
@@ -72,6 +80,14 @@ const ROADMAP_LESSONS: Record<string, RoadmapLesson> = {
   "lld/liskov-substitution": liskovSubstitution,
   "lld/interface-segregation": interfaceSegregation,
   "lld/dependency-inversion": dependencyInversion,
+  "lld/dry-kiss-yagni": dryKissYagni,
+  "lld/law-of-demeter": lawOfDemeter,
+  "lld/separation-of-concerns": separationOfConcerns,
+  "lld/program-to-interfaces": programToInterfaces,
+  "lld/dependency-injection-and-ioc": dependencyInjectionAndIoc,
+  "lld/injection-styles": injectionStyles,
+  "lld/tell-dont-ask": tellDontAsk,
+  "lld/command-query-separation": commandQuerySeparation,
 };
 
 export function getRoadmapLesson(
