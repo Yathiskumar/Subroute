@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Injection styles: constructor vs setter vs field — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --warn: #d6a23a;
+        --warn-soft: rgba(214, 162, 58, 0.12);
+        --violet: #a78bfa;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---- Style tabs ---- */
+      .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+      .tab { flex: 1; background: var(--surface); color: var(--muted); font: 600 13px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 11px 12px; cursor: pointer; transition: all .15s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+      .tab:hover { border-color: var(--border-strong); color: var(--fg); }
+      .tab.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--fg); }
+      .tab .ico { font-family: var(--mono); font-size: 14px; color: var(--accent); }
+      .tab .tally { font-family: var(--mono); font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 99px; background: var(--elevated); color: var(--muted); border: 1px solid var(--border); }
+      .tab.on .tally { color: var(--fg); }
+
+      /* ---- Layout: stage + scorecard ---- */
+      .grid { display: grid; grid-template-columns: 1fr 260px; gap: 14px; align-items: start; }
+      @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
+
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 18px 16px; }
+      .stage-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); text-align: center; margin-bottom: 14px; }
+
+      /* ---- The class box ---- */
+      .col { display: flex; flex-direction: column; align-items: center; }
+      .node { width: 100%; max-width: 360px; border: 1.5px solid var(--info); border-radius: 7px; background: var(--bg); box-shadow: 0 0 0 1px rgba(94,159,246,0.18), 0 8px 24px rgba(0,0,0,.32); overflow: hidden; }
+      .node-name { text-align: center; font-family: var(--mono); font-size: 13.5px; font-weight: 700; color: var(--fg); padding: 9px 10px; }
+      .node-sub { text-align: center; font-family: var(--mono); font-size: 9.5px; color: var(--subtle); padding: 0 10px 8px; }
+      .code-block { font-family: var(--mono); font-size: 11.5px; color: var(--muted); border-top: 1px solid var(--border-strong); padding: 11px 13px; line-height: 1.7; text-align: left; white-space: pre; overflow-x: auto; }
+      .code-block .kw { color: var(--violet); }
+      .code-block .ty { color: var(--accent); }
+      .code-block .anno { color: var(--success); }
+      .code-block .warn { color: var(--danger); }
+      .code-block .cm { color: var(--subtle); }
+
+      /* ---- Style badge under the box ---- */
+      .style-badge { margin-top: 13px; display: inline-flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 11px; padding: 7px 12px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); }
+      .style-badge .dot { width: 8px; height: 8px; border-radius: 99px; background: var(--accent); }
+
+      /* ---- Scorecard ---- */
+      .side { display: flex; flex-direction: column; gap: 10px; }
+      .score-head { font-family: var(--mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); display: flex; justify-content: space-between; align-items: baseline; }
+      .score-head .pts { color: var(--fg); font-weight: 700; }
+      .row { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 11px 13px; transition: border-color .2s, background .2s; }
+      .row.ok { border-color: rgba(92,198,111,0.5); background: var(--success-soft); }
+      .row.bad { border-color: rgba(240,104,104,0.5); background: var(--danger-soft); }
+      .row.partial { border-color: rgba(214,162,58,0.5); background: var(--warn-soft); }
+      .row-q { font-size: 11.5px; color: var(--muted); line-height: 1.4; margin-bottom: 6px; }
+      .row-v { font-family: var(--mono); font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+      .row.ok .row-v { color: var(--success); }
+      .row.bad .row-v { color: var(--danger); }
+      .row.partial .row-v { color: var(--warn); }
+      .row-mark { font-size: 17px; }
+
+      /* ---- Fixed explain panel (REPLACED, never appended) ---- */
+      .explain { margin-top: 14px; min-height: 88px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 13px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .mid { color: var(--warn); font-weight: 700; }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <!-- STYLE TABS -->
+    <div class="tabs">
+      <button class="tab on" id="tab-ctor" onclick="setStyle('ctor')"><span class="ico">①</span> Constructor <span class="tally" id="tally-ctor">4</span></button>
+      <button class="tab" id="tab-setter" onclick="setStyle('setter')"><span class="ico">②</span> Setter <span class="tally" id="tally-setter">1½</span></button>
+      <button class="tab" id="tab-field" onclick="setStyle('field')"><span class="ico">③</span> Field <span class="tally" id="tally-field">0</span></button>
+    </div>
+
+    <div class="grid">
+      <!-- ===== STAGE: the OrderService box + code form ===== -->
+      <div class="stage">
+        <div class="stage-cap" id="stage-cap">OrderService receives a MessageSender via its constructor</div>
+        <div class="col">
+          <div class="node">
+            <div class="node-name">OrderService</div>
+            <div class="node-sub">needs a MessageSender</div>
+            <div class="code-block" id="code-block"></div>
+          </div>
+          <div class="style-badge"><span class="dot"></span><span id="badge-text">constructor injection</span></div>
+        </div>
+      </div>
+
+      <!-- ===== SIDE: the fixed 4-row scorecard ===== -->
+      <div class="side">
+        <div class="score-head"><span>Scorecard</span><span class="pts" id="score-pts">4 green checks</span></div>
+
+        <div class="row" id="row-1">
+          <div class="row-q">Required dependency <b style="color:var(--fg)">guaranteed</b> at construction?</div>
+          <div class="row-v"><span class="row-mark" id="m1">✓</span><span id="t1">Yes</span></div>
+        </div>
+        <div class="row" id="row-2">
+          <div class="row-q">Can be <code style="color:var(--fg)">final</code> / immutable?</div>
+          <div class="row-v"><span class="row-mark" id="m2">✓</span><span id="t2">Yes</span></div>
+        </div>
+        <div class="row" id="row-3">
+          <div class="row-q">Testable with a plain <b style="color:var(--fg)">new + fake</b>, no framework?</div>
+          <div class="row-v"><span class="row-mark" id="m3">✓</span><span id="t3">Yes</span></div>
+        </div>
+        <div class="row" id="row-4">
+          <div class="row-q">Dependency <b style="color:var(--fg)">visible</b> in the public API?</div>
+          <div class="row-v"><span class="row-mark" id="m4">✓</span><span id="t4">Yes</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FIXED EXPLAIN PANEL (replaced, never appended) -->
+    <div class="explain">
+      <div class="explain-title" id="ex-title">—</div>
+      <div class="explain-body" id="ex-body">—</div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>Same <b style="color:var(--fg)">OrderService</b>, three ways to hand it a <b style="color:var(--fg)">MessageSender</b>. Switch tabs and watch the scorecard — <b style="color:var(--accent)">constructor</b> is the only style that wins every row.</span>
+    </div>
+
+    <script>
+      /* ---------- one explanation panel, content REPLACED (never appended) ---------- */
+      function setExplain(title, bodyHtml) {
+        document.getElementById("ex-title").textContent = title;
+        document.getElementById("ex-body").innerHTML = bodyHtml;
+      }
+
+      /* ---------- the three styles ---------- */
+      // states per row: "ok" (✓), "bad" (✗), "partial" (~)
+      var STYLES = {
+        ctor: {
+          badge: "constructor injection",
+          cap: "OrderService receives a MessageSender via its constructor",
+          rows: ["ok", "ok", "ok", "ok"],
+          tally: "4 green checks",
+          code:
+            '<span class="kw">class</span> OrderService {\n' +
+            '  <span class="kw">constructor</span>(<span class="kw">private readonly</span> sender: <span class="ty">MessageSender</span>) {}\n' +
+            '  placeOrder(c) { <span class="kw">this</span>.sender.send(c, <span class="ty">"Confirmed"</span>); }\n' +
+            '}\n' +
+            '<span class="cm">// can\'t build it without a sender ↓</span>\n' +
+            '<span class="kw">new</span> OrderService(<span class="kw">new</span> EmailSender());',
+          title: "Constructor — wins every row",
+          body:
+            'The <code>MessageSender</code> is a constructor parameter stored in a <code>readonly</code> field. ' +
+            'You <span class="good">can\'t build the object without it</span> (guaranteed), it\'s <span class="good">immutable</span>, ' +
+            'it\'s <span class="good">visible in the signature</span>, and a test can <code>new OrderService(fake)</code> — ' +
+            '<span class="good">no framework</span>. <span class="dim">This is the default for required dependencies.</span>',
+        },
+        setter: {
+          badge: "setter / property injection",
+          cap: "OrderService gets a MessageSender via setSender() — after construction",
+          rows: ["bad", "bad", "ok", "partial"],
+          tally: "1½ green checks",
+          code:
+            '<span class="kw">class</span> OrderService {\n' +
+            '  <span class="kw">private</span> sender?: <span class="ty">MessageSender</span>;\n' +
+            '  setSender(s: <span class="ty">MessageSender</span>) { <span class="kw">this</span>.sender = s; }\n' +
+            '  placeOrder(c) { <span class="kw">this</span>.sender?.send(c, <span class="ty">"Confirmed"</span>); }\n' +
+            '}\n' +
+            '<span class="kw">const</span> svc = <span class="kw">new</span> OrderService(); <span class="warn">// sender is undefined here</span>\n' +
+            'svc.setSender(<span class="kw">new</span> EmailSender()); <span class="cm">// ...until you call this</span>',
+          title: "Setter — half-built in between",
+          body:
+            'The sender is set <b>after</b> construction, so between <code>new</code> and <code>setSender(...)</code> ' +
+            'the object is <span class="bad">half-built</span> — required ✗, <code>final</code> ✗. It <span class="good">stays testable</span> ' +
+            'with a plain <code>new</code>, and it\'s only <span class="mid">partly visible</span> (you must find the setter). ' +
+            '<span class="dim">Right pick only for genuinely optional or reconfigurable deps.</span>',
+        },
+        field: {
+          badge: "field injection (@Autowired)",
+          cap: "A framework sets OrderService's private field by reflection",
+          rows: ["bad", "bad", "bad", "bad"],
+          tally: "0 green checks",
+          code:
+            '<span class="kw">class</span> OrderService {\n' +
+            '  <span class="anno">@Autowired</span> <span class="cm">// framework reaches in via reflection</span>\n' +
+            '  <span class="kw">private</span> <span class="ty">MessageSender</span> sender; <span class="warn">// can\'t be final; hidden</span>\n' +
+            '  <span class="kw">void</span> placeOrder(c) { sender.send(c, <span class="ty">"Confirmed"</span>); }\n' +
+            '}\n' +
+            '<span class="cm">// new OrderService() leaves sender = null unless wired.</span>',
+          title: "Field — hidden and untestable",
+          body:
+            'A framework sets the private field directly, so there\'s the least boilerplate — but the dependency is ' +
+            '<span class="bad">hidden from the API</span>, <span class="bad">can\'t be final</span>, and <code>new OrderService()</code> ' +
+            'leaves it <span class="bad">null</span>. To inject a fake in a test you must <span class="bad">start the framework or use reflection</span>. ' +
+            '<span class="dim">Zero green checks — widely discouraged in production code.</span>',
+        },
+      };
+
+      var STATE = {
+        ok:      { mark: "✓", text: "Yes" },
+        bad:     { mark: "✗", text: "No" },
+        partial: { mark: "~", text: "Partial" },
+      };
+
+      var current = "ctor";
+
+      function applyRow(i, state) {
+        var row = document.getElementById("row-" + i);
+        row.className = "row " + state;
+        document.getElementById("m" + i).textContent = STATE[state].mark;
+        document.getElementById("t" + i).textContent = STATE[state].text;
+      }
+
+      function render() {
+        var s = STYLES[current];
+
+        // tabs
+        document.getElementById("tab-ctor").classList.toggle("on", current === "ctor");
+        document.getElementById("tab-setter").classList.toggle("on", current === "setter");
+        document.getElementById("tab-field").classList.toggle("on", current === "field");
+
+        // stage
+        document.getElementById("stage-cap").textContent = s.cap;
+        document.getElementById("code-block").innerHTML = s.code;
+        document.getElementById("badge-text").textContent = s.badge;
+
+        // scorecard
+        for (var i = 0; i < 4; i++) applyRow(i + 1, s.rows[i]);
+        document.getElementById("score-pts").textContent = s.tally;
+
+        // ONE explain panel, replaced
+        setExplain(s.title, s.body);
+      }
+
+      function setStyle(k) {
+        current = k;
+        render();
+      }
+
+      /* ---------- boot ---------- */
+      render();
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

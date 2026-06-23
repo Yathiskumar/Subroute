@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tell, Don't Ask — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --violet: #a78bfa;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---- Mode toggle (tabs) ---- */
+      .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+      .tab { flex: 1; background: var(--surface); color: var(--muted); font: 600 13px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 11px 12px; cursor: pointer; transition: all .15s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+      .tab:hover { border-color: var(--border-strong); color: var(--fg); }
+      .tab.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--fg); }
+      .tab .ico { font-family: var(--mono); font-size: 14px; color: var(--accent); }
+
+      /* ---- Buttons ---- */
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px 16px; cursor: pointer; transition: filter .15s, transform .1s, border-color .15s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .btn.primary { background: var(--accent); color: #1a1003; border-color: transparent; }
+      .btn.primary:hover { filter: brightness(1.06); }
+      .actions { display: flex; justify-content: center; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+
+      /* ---- Layout: stage + side indicators ---- */
+      .grid { display: grid; grid-template-columns: 1fr 200px; gap: 14px; align-items: start; }
+      @media (max-width: 660px) { .grid { grid-template-columns: 1fr; } }
+
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 20px 16px; }
+      .stage-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); text-align: center; margin-bottom: 16px; }
+
+      /* ---- Scene: two callers on the left, the account on the right ---- */
+      .scene { display: grid; grid-template-columns: 1fr 30px 1fr; gap: 6px; align-items: center; }
+      @media (max-width: 460px) { .scene { grid-template-columns: 1fr; } .scene .midwire { display: none; } }
+
+      .callers { display: flex; flex-direction: column; gap: 12px; }
+
+      .caller { border: 1.5px solid var(--border-strong); border-radius: 8px; background: var(--bg); box-shadow: 0 6px 18px rgba(0,0,0,.3); overflow: hidden; transition: border-color .2s; }
+      .caller-head { font-family: var(--mono); font-size: 11.5px; font-weight: 700; color: var(--fg); padding: 8px 11px 4px; }
+      .caller-head .tag { font-weight: 400; font-size: 9px; color: var(--subtle); margin-left: 6px; }
+      .caller-body { font-family: var(--mono); font-size: 10.5px; color: var(--muted); padding: 2px 11px 9px; line-height: 1.65; }
+
+      /* the decision block (the if-check) — lives in caller (Ask) or fades out (Tell) */
+      .decision { display: inline-block; border: 1px dashed var(--danger); background: var(--danger-soft); color: var(--danger); border-radius: 6px; padding: 3px 7px; font-family: var(--mono); font-size: 10px; font-weight: 700; margin: 3px 0; transition: opacity .25s, transform .25s; }
+      .caller .tell-line { color: var(--accent); font-weight: 700; }
+      .caller.forgot { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger-soft), 0 6px 18px rgba(0,0,0,.3); }
+
+      .midwire { display: flex; align-items: center; justify-content: center; }
+      .midwire svg { overflow: visible; }
+
+      /* the account box on the right */
+      .account { border: 1.5px solid var(--border-strong); border-radius: 9px; background: var(--bg); box-shadow: 0 8px 24px rgba(0,0,0,.32); overflow: hidden; transition: border-color .2s, box-shadow .2s; }
+      .account.rich { border-color: var(--accent-border); background: linear-gradient(var(--accent-soft), var(--accent-soft)), var(--bg); }
+      .account.negative { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger-soft), 0 8px 24px rgba(0,0,0,.32); }
+      .acct-name { text-align: center; font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--fg); padding: 9px 10px 3px; }
+      .acct-bal { text-align: center; font-family: var(--mono); font-size: 22px; font-weight: 800; color: var(--success); padding: 2px 10px 4px; transition: color .2s; }
+      .account.negative .acct-bal { color: var(--danger); }
+      .acct-tag { text-align: center; font-family: var(--mono); font-size: 9px; color: var(--subtle); padding: 0 10px 8px; }
+      .acct-method { border-top: 1px solid var(--border-strong); font-family: var(--mono); font-size: 10.5px; padding: 8px 11px; line-height: 1.6; transition: opacity .25s, max-height .25s; overflow: hidden; }
+      .acct-method .mname { color: var(--accent); font-weight: 700; }
+      .acct-method .check { color: var(--fg); }
+      .acct-method.empty { opacity: .5; color: var(--subtle); }
+
+      /* ---- Side indicators ---- */
+      .side { display: flex; flex-direction: column; gap: 10px; }
+      .ind { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 14px; transition: border-color .2s, background .2s; }
+      .ind.bad { border-color: rgba(240,104,104,0.5); background: var(--danger-soft); }
+      .ind.ok { border-color: rgba(92,198,111,0.5); background: var(--success-soft); }
+      .ind-q { font-size: 12px; color: var(--muted); margin-bottom: 8px; line-height: 1.4; }
+      .ind-v { font-family: var(--mono); font-size: 30px; font-weight: 800; line-height: 1; display: flex; align-items: baseline; gap: 7px; }
+      .ind.bad .ind-v { color: var(--danger); }
+      .ind.ok .ind-v { color: var(--success); }
+      .ind-unit { font-size: 11px; font-weight: 600; color: var(--muted); }
+
+      .note-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 13px 14px; }
+      .note-title { font-family: var(--mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+      .note-body { font-size: 11.5px; color: var(--muted); line-height: 1.7; }
+      .note-body b { color: var(--fg); }
+
+      /* ---- Fixed explanation panel (REPLACES content, never grows) ---- */
+      .explain { margin-top: 14px; min-height: 96px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 13px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <!-- MODE TOGGLE -->
+    <div class="tabs">
+      <button class="tab on" id="tab-ask" onclick="setMode('ask')"><span class="ico">?</span> Ask</button>
+      <button class="tab" id="tab-tell" onclick="setMode('tell')"><span class="ico">→</span> Tell</button>
+    </div>
+
+    <div class="grid">
+      <!-- ===== STAGE: callers + account ===== -->
+      <div class="stage">
+        <div class="stage-cap" id="stage-cap">Ask — the rule lives OUTSIDE the account, in every caller</div>
+
+        <div class="scene">
+          <!-- two callers -->
+          <div class="callers">
+            <div class="caller" id="caller-atm">
+              <div class="caller-head">ATM <span class="tag">caller</span></div>
+              <div class="caller-body" id="atm-body"></div>
+            </div>
+            <div class="caller" id="caller-checkout">
+              <div class="caller-head">OnlineCheckout <span class="tag">caller</span></div>
+              <div class="caller-body" id="checkout-body"></div>
+            </div>
+          </div>
+
+          <!-- connector wire -->
+          <div class="midwire">
+            <svg width="30" height="60" viewBox="0 0 30 60" role="img" aria-label="callers talk to the account">
+              <line x1="2" y1="20" x2="26" y2="20" stroke="#3a414c" stroke-width="1.5"/>
+              <line x1="2" y1="40" x2="26" y2="40" stroke="#3a414c" stroke-width="1.5"/>
+              <path d="M28,20 L20,16 L20,24 z" fill="#3a414c"/>
+              <path d="M28,40 L20,36 L20,44 z" fill="#3a414c"/>
+            </svg>
+          </div>
+
+          <!-- the account -->
+          <div class="account" id="account">
+            <div class="acct-name">BankAccount</div>
+            <div class="acct-bal" id="acct-bal">$100</div>
+            <div class="acct-tag" id="acct-tag">a dumb data bag</div>
+            <div class="acct-method empty" id="acct-method">+ getBalance() / setBalance()<br />— holds a number, enforces nothing</div>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="btn primary" id="move-btn" onclick="toggleMode()">Move the rule inside →</button>
+          <button class="btn" id="overdraft-btn" onclick="overdraft()">Overdraft attempt · withdraw $150</button>
+          <button class="btn" id="reset-btn" onclick="resetBalance()">↺ Reset balance</button>
+        </div>
+      </div>
+
+      <!-- ===== SIDE: where does the rule live? ===== -->
+      <div class="side">
+        <div class="ind bad" id="ind-rule">
+          <div class="ind-q">The overdraft rule lives in…</div>
+          <div class="ind-v"><span id="rule-n">2</span><span class="ind-unit" id="rule-unit">places · can drift</span></div>
+        </div>
+        <div class="note-card">
+          <div class="note-title">Where's the decision?</div>
+          <div class="note-body" id="note-body"><b>Outside</b> the account — each caller reads <code>getBalance()</code>, decides, then <code>setBalance()</code>. Copy it wrong once and the account drifts.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FIXED EXPLAIN PANEL (replaced, never appended) -->
+    <div class="explain">
+      <div class="explain-title" id="ex-title">—</div>
+      <div class="explain-body" id="ex-body">—</div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>Don't <b style="color:var(--fg)">ask</b> for the balance and decide — <b style="color:var(--fg)">tell</b> the account to <b style="color:var(--accent)">withdraw</b>. Move the rule inside, then trigger an overdraft to see Ask drift and Tell hold firm.</span>
+    </div>
+
+    <script>
+      /* ---------- one explanation panel, content REPLACED (never appended) ---------- */
+      function setExplain(title, bodyHtml) {
+        document.getElementById("ex-title").textContent = title;
+        document.getElementById("ex-body").innerHTML = bodyHtml;
+      }
+
+      var mode = "ask";        // "ask" | "tell"
+      var balance = 100;
+      var START = 100;
+
+      /* ---------- render the caller bodies for the current mode ---------- */
+      function renderCallers() {
+        var atm = document.getElementById("atm-body");
+        var co = document.getElementById("checkout-body");
+        if (mode === "ask") {
+          // both callers carry their OWN copy of the if-check
+          atm.innerHTML =
+            'if (acct.getBalance() >= amt)<br />' +
+            '<span class="decision">balance &gt;= amount?</span><br />' +
+            '&nbsp;&nbsp;acct.setBalance(...)';
+          co.innerHTML =
+            'if (acct.getBalance() >= amt)<br />' +
+            '<span class="decision">balance &gt;= amount?</span><br />' +
+            '&nbsp;&nbsp;acct.setBalance(...)';
+        } else {
+          // callers shrink to a single TELL line
+          atm.innerHTML = '<span class="tell-line">acct.withdraw(amt)</span>';
+          co.innerHTML = '<span class="tell-line">acct.withdraw(amt)</span>';
+        }
+      }
+
+      /* ---------- render the account for the current mode ---------- */
+      function renderAccount() {
+        var acct = document.getElementById("account");
+        var tag = document.getElementById("acct-tag");
+        var method = document.getElementById("acct-method");
+        if (mode === "ask") {
+          acct.classList.remove("rich");
+          tag.textContent = "a dumb data bag";
+          method.className = "acct-method empty";
+          method.innerHTML = "+ getBalance() / setBalance()<br />— holds a number, enforces nothing";
+        } else {
+          acct.classList.add("rich");
+          tag.textContent = "guards its own balance";
+          method.className = "acct-method";
+          method.innerHTML =
+            '<span class="mname">withdraw(amount)</span><br />' +
+            '<span class="check">&nbsp;&nbsp;if (amount &gt; balance) reject</span><br />' +
+            '<span class="check">&nbsp;&nbsp;balance -= amount</span>';
+        }
+      }
+
+      function renderBalance() {
+        var bal = document.getElementById("acct-bal");
+        var acct = document.getElementById("account");
+        bal.textContent = (balance < 0 ? "-$" + Math.abs(balance) : "$" + balance);
+        acct.classList.toggle("negative", balance < 0);
+      }
+
+      function renderSide() {
+        var ind = document.getElementById("ind-rule");
+        var note = document.getElementById("note-body");
+        if (mode === "ask") {
+          ind.className = "ind bad";
+          document.getElementById("rule-n").textContent = "2";
+          document.getElementById("rule-unit").textContent = "places · can drift";
+          note.innerHTML = '<b>Outside</b> the account — each caller reads <code>getBalance()</code>, decides, then <code>setBalance()</code>. Copy it wrong once and the account drifts.';
+        } else {
+          ind.className = "ind ok";
+          document.getElementById("rule-n").textContent = "1";
+          document.getElementById("rule-unit").textContent = "place · can't drift";
+          note.innerHTML = '<b>Inside</b> the account — the rule lives next to the <code>balance</code> it guards. Every caller just <b>tells</b> it <code>withdraw(amt)</code>.';
+        }
+      }
+
+      function clearForgot() {
+        document.getElementById("caller-atm").classList.remove("forgot");
+        document.getElementById("caller-checkout").classList.remove("forgot");
+      }
+
+      function render() {
+        document.getElementById("tab-ask").classList.toggle("on", mode === "ask");
+        document.getElementById("tab-tell").classList.toggle("on", mode === "tell");
+        document.getElementById("stage-cap").textContent =
+          mode === "ask"
+            ? "Ask — the rule lives OUTSIDE the account, in every caller"
+            : "Tell — the rule moved INSIDE the account, in one place";
+        document.getElementById("move-btn").textContent =
+          mode === "ask" ? "Move the rule inside →" : "↺ Back to Ask (pull the rule out)";
+        document.getElementById("move-btn").className =
+          mode === "ask" ? "btn primary" : "btn";
+
+        renderCallers();
+        renderAccount();
+        renderBalance();
+        renderSide();
+        clearForgot();
+      }
+
+      /* ---------- interactions ---------- */
+      function toggleMode() {
+        mode = (mode === "ask") ? "tell" : "ask";
+        balance = START;
+        render();
+        if (mode === "tell") {
+          setExplain(
+            "Moved the rule inside ✓",
+            'The decision <code>balance &gt;= amount?</code> slid <span class="good">into the account</span> as <code>withdraw(amount)</code>, and both callers shrank to a single <code>acct.withdraw(amt)</code> line. ' +
+            'The rule now lives in <span class="good">one place</span>, right next to the <code>balance</code> it guards — so it <span class="good">can’t drift</span>. ' +
+            '<span class="dim">Try the overdraft now: the account refuses it the same way for every caller.</span>'
+          );
+        } else {
+          setExplain(
+            "Back to Ask — rule pulled out",
+            'The decision is <span class="bad">outside</span> the account again, copied into <span class="bad">both</span> callers. ' +
+            'The account is back to a <span class="bad">dumb data bag</span> with <code>getBalance()</code>/<code>setBalance()</code> and no way to protect itself. ' +
+            '<span class="dim">Trigger an overdraft to watch one caller drift.</span>'
+          );
+        }
+      }
+
+      function setMode(m) {
+        mode = m;
+        balance = START;
+        render();
+        if (m === "ask") {
+          setExplain(
+            "Ask — the decision lives outside",
+            'Each caller pulls the balance out with <code>getBalance()</code>, checks <code>balance &gt;= amount</code> <span class="bad">itself</span>, then writes a new value with <code>setBalance()</code>. ' +
+            'The same rule sits in <span class="bad">two</span> caller boxes. <span class="dim">Hit “Overdraft attempt” to see them disagree.</span>'
+          );
+        } else {
+          setExplain(
+            "Tell — the decision lives inside",
+            'You <span class="good">tell</span> the account <code>withdraw(amt)</code> and it decides for itself. ' +
+            'One copy of the rule, next to the data. <span class="dim">Overdraft is rejected uniformly.</span>'
+          );
+        }
+      }
+
+      function overdraft() {
+        var amt = 150; // more than the $100 balance
+        if (mode === "ask") {
+          // The ATM remembers its check (refuses). The OnlineCheckout FORGOT its check
+          // and calls setBalance straight through — driving the balance negative.
+          balance = START - amt; // checkout forgot the if → goes negative
+          renderBalance();
+          var co = document.getElementById("caller-checkout");
+          co.classList.add("forgot");
+          document.getElementById("checkout-body").innerHTML =
+            '<span style="color:var(--danger)">// forgot the if!</span><br />' +
+            'acct.setBalance(bal - amt)';
+          setExplain(
+            "Ask drifts — inconsistent! ✗",
+            'Both callers withdraw <code>$150</code> from a <code>$100</code> account. The <code>ATM</code> still has its check and <span class="good">refuses</span>. ' +
+            'But <code>OnlineCheckout</code> <span class="bad">forgot the if</span> and called <code>setBalance()</code> straight through — the balance is now <span class="bad">negative</span>. ' +
+            'Same account, <span class="bad">two different answers</span>, because the rule lived outside it and one copy drifted.'
+          );
+        } else {
+          // Tell: the account itself rejects — uniformly, no matter the caller.
+          // balance unchanged.
+          renderBalance();
+          setExplain(
+            "Tell holds firm — rejected uniformly ✓",
+            'Both callers <span class="good">tell</span> the account <code>withdraw(150)</code>. The account checks <code>150 &gt; 100</code> <span class="good">itself</span> and <span class="good">rejects</span> — the balance stays <code>$100</code>. ' +
+            'It doesn’t matter <i>who</i> asked: there is <span class="good">one rule</span>, inside the object, so every caller gets the <span class="good">same answer</span>. ' +
+            '<span class="dim">No public setter to bypass, either.</span>'
+          );
+        }
+      }
+
+      function resetBalance() {
+        balance = START;
+        render();
+        setExplain(
+          "Balance reset to $100",
+          'Back to a clean <code>$100</code> account. ' +
+          (mode === "ask"
+            ? 'In <span class="bad">Ask</span> mode the rule still lives outside, in two callers. Trigger an overdraft to watch it drift.'
+            : 'In <span class="good">Tell</span> mode the rule lives inside <code>withdraw()</code>. Trigger an overdraft to see it rejected uniformly.')
+        );
+      }
+
+      /* ---------- boot ---------- */
+      render();
+      setExplain(
+        "Ask — the decision lives outside the object",
+        'Two callers, an <code>ATM</code> and an <code>OnlineCheckout</code>, both need to withdraw. Each one <span class="bad">asks</span> the account for its balance, checks <code>balance &gt;= amount</code> itself, then pushes a new value back with <code>setBalance()</code>. ' +
+        'The same rule is <span class="bad">copied into both</span> — the indicator reads <span class="bad">2 places</span>. ' +
+        '<span class="dim">Hit “Overdraft attempt” to watch a copy drift, then “Move the rule inside” to fix it.</span>'
+      );
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

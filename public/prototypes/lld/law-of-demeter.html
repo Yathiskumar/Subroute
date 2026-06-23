@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Law of Demeter — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --violet: #a78bfa;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---- Mode toggle (tabs) ---- */
+      .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+      .tab { flex: 1; background: var(--surface); color: var(--muted); font: 600 13px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 11px 12px; cursor: pointer; transition: all .15s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+      .tab:hover { border-color: var(--border-strong); color: var(--fg); }
+      .tab.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--fg); }
+      .tab .ico { font-family: var(--mono); font-size: 14px; color: var(--accent); }
+
+      /* ---- Layout: stage + side indicators ---- */
+      .grid { display: grid; grid-template-columns: 1fr 200px; gap: 14px; align-items: start; }
+      @media (max-width: 660px) { .grid { grid-template-columns: 1fr; } }
+
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 20px 16px; }
+      .stage-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); text-align: center; margin-bottom: 16px; }
+
+      /* ---- The expression line ---- */
+      .expr { font-family: var(--mono); font-size: 12px; text-align: center; color: var(--subtle); margin-bottom: 18px; word-break: break-all; }
+      .expr .seg { color: var(--muted); transition: color .15s; }
+      .expr .seg.friend { color: var(--success); font-weight: 700; }
+      .expr .seg.stranger { color: var(--danger); font-weight: 700; }
+
+      /* ---- The object chain (a row of boxes) ---- */
+      .chain { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0; }
+      .caller { display: flex; flex-direction: column; align-items: center; }
+      .caller-box { width: 64px; height: 46px; border: 1.5px solid var(--border-strong); border-radius: 7px; background: var(--bg); display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+      .caller-tag { font-family: var(--mono); font-size: 9px; color: var(--subtle); margin-top: 5px; }
+
+      .hop { display: flex; align-items: center; }
+      .arrow { width: 38px; height: 46px; display: flex; align-items: center; justify-content: center; }
+      .arrow svg { overflow: visible; }
+
+      .node { display: flex; flex-direction: column; align-items: center; }
+      .node-box { min-width: 86px; border: 1.5px solid var(--border-strong); border-radius: 7px; background: var(--bg); box-shadow: 0 6px 18px rgba(0,0,0,.3); cursor: pointer; transition: border-color .15s, box-shadow .15s, transform .1s, opacity .25s; overflow: hidden; }
+      .node-box:hover { border-color: var(--accent-border); transform: translateY(-2px); }
+      .node-box:active { transform: scale(0.98); }
+      .node-name { text-align: center; font-family: var(--mono); font-size: 12.5px; font-weight: 700; color: var(--fg); padding: 9px 12px 3px; }
+      .node-role { text-align: center; font-family: var(--mono); font-size: 9px; padding: 0 12px 8px; color: var(--subtle); letter-spacing: .03em; }
+
+      .node-box.friend { border-color: var(--success); box-shadow: 0 0 0 1px var(--success-soft), 0 6px 18px rgba(0,0,0,.3); }
+      .node-box.friend .node-role { color: var(--success); }
+      .node-box.stranger { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger-soft), 0 6px 18px rgba(0,0,0,.3); }
+      .node-box.stranger .node-role { color: var(--danger); }
+      .node-box.collapsed { opacity: 0; pointer-events: none; max-width: 0; min-width: 0; padding: 0; margin: 0; border-width: 0; }
+      .hop.collapsed { opacity: 0; max-width: 0; overflow: hidden; }
+
+      /* ---- Buttons ---- */
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px 16px; cursor: pointer; transition: filter .15s, transform .1s, border-color .15s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .btn.primary { background: var(--accent); color: #1a1003; border-color: transparent; }
+      .btn.primary:hover { filter: brightness(1.06); }
+
+      .actions { display: flex; justify-content: center; gap: 10px; margin-top: 20px; }
+
+      /* ---- Side indicators ---- */
+      .side { display: flex; flex-direction: column; gap: 10px; }
+      .ind { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 14px; transition: border-color .2s, background .2s; }
+      .ind.bad { border-color: rgba(240,104,104,0.5); background: var(--danger-soft); }
+      .ind.ok { border-color: rgba(92,198,111,0.5); background: var(--success-soft); }
+      .ind-q { font-size: 12px; color: var(--muted); margin-bottom: 8px; line-height: 1.4; }
+      .ind-v { font-family: var(--mono); font-size: 34px; font-weight: 800; line-height: 1; display: flex; align-items: baseline; gap: 7px; }
+      .ind.bad .ind-v { color: var(--danger); }
+      .ind.ok .ind-v { color: var(--success); }
+      .ind-unit { font-size: 11px; font-weight: 600; color: var(--muted); }
+
+      .friends-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 13px 14px; }
+      .friends-title { font-family: var(--mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+      .friends-list { font-size: 11.5px; color: var(--muted); line-height: 1.75; }
+      .friends-list b { color: var(--success); }
+
+      /* ---- Fixed explanation panel (REPLACES content, never grows) ---- */
+      .explain { margin-top: 14px; min-height: 92px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 13px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <!-- MODE TOGGLE -->
+    <div class="tabs">
+      <button class="tab on" id="tab-wreck" onclick="setMode('wreck')"><span class="ico">⛓</span> Train wreck</button>
+      <button class="tab" id="tab-fixed" onclick="setMode('fixed')"><span class="ico">✓</span> Refactored</button>
+    </div>
+
+    <div class="grid">
+      <!-- ===== STAGE: the call chain ===== -->
+      <div class="stage">
+        <div class="stage-cap" id="stage-cap">Click each hop — friend or stranger?</div>
+
+        <div class="expr" id="expr"></div>
+
+        <div class="chain">
+          <div class="caller">
+            <div class="caller-box">caller</div>
+            <div class="caller-tag" id="caller-tag">us</div>
+          </div>
+
+          <!-- hops are built by JS so they can collapse -->
+          <span id="chain-hops"></span>
+        </div>
+
+        <div class="actions">
+          <button class="btn primary" id="refactor-btn" onclick="toggleRefactor()">Refactor ⮕ order.chargeCard(amount)</button>
+        </div>
+      </div>
+
+      <!-- ===== SIDE: coupling counter + friends list ===== -->
+      <div class="side">
+        <div class="ind bad" id="ind-couple">
+          <div class="ind-q">Classes this one line is coupled to</div>
+          <div class="ind-v"><span id="couple-n">4</span><span class="ind-unit" id="couple-unit">classes</span></div>
+        </div>
+        <div class="friends-card">
+          <div class="friends-title">The caller's only friend</div>
+          <div class="friends-list"><b>Order</b> — held directly.<br />Everything past it is a <span style="color:var(--danger)">stranger</span> reached <i>through</i> a friend.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FIXED EXPLAIN PANEL (replaced, never appended) -->
+    <div class="explain">
+      <div class="explain-title" id="ex-title">—</div>
+      <div class="explain-body" id="ex-body">—</div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>Talk to your <b style="color:var(--fg)">friends</b>, not to <b style="color:var(--fg)">strangers</b> you reach through them. Click each box, then hit <b style="color:var(--accent)">Refactor</b> to collapse the chain into one friendly call.</span>
+    </div>
+
+    <script>
+      /* ---------- one explanation panel, content REPLACED (never appended) ---------- */
+      function setExplain(title, bodyHtml) {
+        document.getElementById("ex-title").textContent = title;
+        document.getElementById("ex-body").innerHTML = bodyHtml;
+      }
+
+      /* ---------- the chain definition ---------- */
+      // role: "friend" = a direct collaborator of the caller; "stranger" = reached THROUGH another call.
+      var CHAIN = [
+        { id: "order",    name: "Order",    role: "friend",   call: "getCustomer()", why:
+          'You hold <code>order</code> directly — it was handed to you, so it’s your <span class="good">friend</span>. ' +
+          'Calling <code>order.getCustomer()</code> is fine on its own. The trouble starts with the <i>next</i> dot.' },
+        { id: "customer", name: "Customer", role: "stranger", call: "getWallet()", why:
+          'You never knew about <code>Customer</code> — <code>order</code> introduced you. It’s a <span class="bad">stranger</span>. ' +
+          'Now your line <i>knows</i> that an <code>Order</code> has a <code>Customer</code>: if that changes, your line breaks.' },
+        { id: "wallet",   name: "Wallet",   role: "stranger", call: "getCard()", why:
+          '<code>Wallet</code> is one more <span class="bad">stranger</span>, reached through two earlier calls. ' +
+          'Your line now also knows a <code>Customer</code> has a <code>Wallet</code> — the day a customer has <i>two</i> wallets, this breaks.' },
+        { id: "card",     name: "Card",     role: "stranger", call: "getNumber()", why:
+          'The deepest <span class="bad">stranger</span>. To read one number you reached through <b>three</b> objects you were never supposed to know. ' +
+          'This single line is now welded to <span class="bad">four</span> classes’ internals.' }
+      ];
+
+      var mode = "wreck";   // "wreck" | "fixed"
+      var clicked = {};     // which boxes have been inspected
+
+      /* ---------- arrow SVGs ---------- */
+      function arrowSvg(color) {
+        return '<svg width="38" height="46" viewBox="0 0 38 46" role="img" aria-label="calls into the next object">' +
+               '<line x1="2" y1="23" x2="30" y2="23" stroke="' + color + '" stroke-width="1.6"/>' +
+               '<path d="M36,23 L26,18 L26,28 z" fill="' + color + '"/>' +
+               '</svg>';
+      }
+
+      function buildWreck() {
+        var host = document.getElementById("chain-hops");
+        host.innerHTML = "";
+        CHAIN.forEach(function (n, i) {
+          var hop = document.createElement("span");
+          hop.className = "hop";
+          hop.id = "hop-" + n.id;
+
+          // arrow: caller->Order is a friend link (green); later links are stranger links (red).
+          var arrowColor = (i === 0) ? "#5cc66f" : "#f06868";
+          var arrow = document.createElement("span");
+          arrow.className = "arrow";
+          arrow.innerHTML = arrowSvg(arrowColor);
+          hop.appendChild(arrow);
+
+          var node = document.createElement("div");
+          node.className = "node";
+          var box = document.createElement("div");
+          box.className = "node-box";
+          box.id = "box-" + n.id;
+          box.innerHTML = '<div class="node-name">' + n.name + '</div><div class="node-role" id="role-' + n.id + '">.' + n.call + '</div>';
+          box.onclick = (function (key) { return function () { inspect(key); }; })(n.id);
+          node.appendChild(box);
+          hop.appendChild(node);
+
+          host.appendChild(hop);
+        });
+      }
+
+      function renderExpr() {
+        var el = document.getElementById("expr");
+        if (mode === "fixed") {
+          el.innerHTML = '<span class="seg friend">order</span>.<span class="seg friend">chargeCard(amount)</span>';
+          return;
+        }
+        // wreck expression, each segment coloured once inspected
+        var parts = ['<span class="seg ' + segCls("order") + '">order</span>'];
+        CHAIN.forEach(function (n) {
+          parts.push('.<span class="seg ' + segCls(n.id) + '">' + n.call + '</span>');
+        });
+        el.innerHTML = parts.join("");
+      }
+      function segCls(id) {
+        if (!clicked[id]) return "";
+        var n = CHAIN.find(function (c) { return c.id === id; });
+        return n.role;
+      }
+
+      function inspect(id) {
+        if (mode !== "wreck") return;
+        clicked[id] = true;
+        var n = CHAIN.find(function (c) { return c.id === id; });
+        var box = document.getElementById("box-" + id);
+        box.className = "node-box " + n.role;
+        document.getElementById("role-" + id).textContent = n.role === "friend" ? "friend ✓" : "stranger ✗";
+        renderExpr();
+
+        if (n.role === "friend") {
+          setExplain("Order — your friend ✓", n.why);
+        } else {
+          setExplain(n.name + " — a stranger ✗", n.why);
+        }
+      }
+
+      function setCounter(value, ok) {
+        var ind = document.getElementById("ind-couple");
+        ind.className = "ind " + (ok ? "ok" : "bad");
+        document.getElementById("couple-n").textContent = value;
+        document.getElementById("couple-unit").textContent = value === 1 ? "class" : "classes";
+      }
+
+      function render() {
+        var wreck = mode === "wreck";
+        document.getElementById("tab-wreck").classList.toggle("on", wreck);
+        document.getElementById("tab-fixed").classList.toggle("on", !wreck);
+
+        var btn = document.getElementById("refactor-btn");
+        var capt = document.getElementById("stage-cap");
+
+        if (wreck) {
+          buildWreck();
+          // re-apply any prior inspections
+          CHAIN.forEach(function (n) {
+            if (clicked[n.id]) {
+              var box = document.getElementById("box-" + n.id);
+              box.className = "node-box " + n.role;
+              document.getElementById("role-" + n.id).textContent = n.role === "friend" ? "friend ✓" : "stranger ✗";
+            }
+          });
+          renderExpr();
+          setCounter(4, false);
+          capt.textContent = "Click each hop — friend or stranger?";
+          btn.textContent = "Refactor ⮕ order.chargeCard(amount)";
+          btn.className = "btn primary";
+        } else {
+          // collapse the strangers, keep only Order
+          var host = document.getElementById("chain-hops");
+          host.innerHTML = "";
+          var hop = document.createElement("span");
+          hop.className = "hop";
+          hop.innerHTML = '<span class="arrow">' + arrowSvg("#5cc66f") + '</span>';
+          var node = document.createElement("div");
+          node.className = "node";
+          node.innerHTML = '<div class="node-box friend"><div class="node-name">Order</div><div class="node-role">does it all ✓</div></div>';
+          hop.appendChild(node);
+          host.appendChild(hop);
+
+          renderExpr();
+          setCounter(1, true);
+          capt.textContent = "One friendly call — Order hides the rest";
+          btn.textContent = "↺ Back to the train wreck";
+          btn.className = "btn";
+        }
+      }
+
+      function toggleRefactor() {
+        mode = (mode === "wreck") ? "fixed" : "wreck";
+        render();
+        if (mode === "fixed") {
+          setExplain(
+            "Refactored — talk to one friend ✓",
+            'You told your friend <code>Order</code> to handle it: <code>order.chargeCard(amount)</code>. ' +
+            '<code>Order</code> talks to its own <code>Wallet</code> and <code>Card</code> <span class="dim">privately</span> — each object handles the layer below it. ' +
+            'Your line is now coupled to <span class="good">one class</span>, not four. <span class="dim">If a Wallet’s internals change tomorrow, your code never finds out.</span>'
+          );
+        } else {
+          setExplain(
+            "Back to the train wreck",
+            'The chain is back: <code>order.getCustomer().getWallet().getCard().getNumber()</code>. ' +
+            'Click each box to see who’s a <span class="good">friend</span> and who’s a <span class="bad">stranger</span>.'
+          );
+        }
+      }
+
+      function setMode(m) {
+        mode = m;
+        render();
+        if (m === "fixed") {
+          setExplain(
+            "Refactored — talk to one friend ✓",
+            'You told your friend <code>Order</code> to handle it: <code>order.chargeCard(amount)</code>. ' +
+            '<code>Order</code> talks to its own <code>Wallet</code> and <code>Card</code> <span class="dim">privately</span>. ' +
+            'Coupled to <span class="good">one class</span>, not four.'
+          );
+        } else {
+          setExplain(
+            "The train wreck",
+            'Each dot reaches into a deeper <span class="bad">stranger</span>: ' +
+            '<code>order.getCustomer().getWallet().getCard().getNumber()</code>. ' +
+            'Click each box to light it up as a <span class="good">friend</span> or a <span class="bad">stranger</span>.'
+          );
+        }
+      }
+
+      /* ---------- boot ---------- */
+      render();
+      setExplain(
+        "The train wreck",
+        'One line, four dots: <code>order.getCustomer().getWallet().getCard().getNumber()</code>. ' +
+        'Your only <span class="good">friend</span> is <code>order</code> — everything past it is a <span class="bad">stranger</span> you reached <i>through</i> a friend. ' +
+        '<span class="dim">Click each box to find out, then hit Refactor.</span>'
+      );
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

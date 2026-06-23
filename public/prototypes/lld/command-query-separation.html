@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Command–Query Separation — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --violet: #a78bfa;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---- Top bar: tally + reset ---- */
+      .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 12px; }
+      .tally { font-family: var(--mono); font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+      .tally b { color: var(--success); font-size: 15px; }
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: filter .15s, transform .1s, border-color .15s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+
+      /* ---- The deck of unsorted method cards ---- */
+      .deck-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 14px; margin-bottom: 14px; }
+      .deck-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 11px; }
+      .deck { display: flex; flex-wrap: wrap; gap: 9px; min-height: 46px; }
+      .deck-empty { font-size: 12px; color: var(--subtle); font-style: italic; align-self: center; }
+
+      .card { font-family: var(--mono); font-size: 12.5px; font-weight: 700; color: var(--fg); background: var(--elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 10px 13px; cursor: pointer; transition: border-color .15s, transform .1s, background .15s; user-select: none; }
+      .card:hover { border-color: var(--accent-border); transform: translateY(-2px); }
+      .card:active { transform: scale(0.97); }
+      .card.sel { border-color: var(--accent); background: var(--accent-soft); }
+      .card.trap { border-color: var(--danger); color: var(--danger); background: var(--danger-soft); }
+      .card.trap:hover { border-color: var(--danger); }
+      .card .ret { font-weight: 400; color: var(--subtle); font-size: 10.5px; margin-left: 6px; }
+
+      /* ---- The two buckets ---- */
+      .buckets { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+      @media (max-width: 560px) { .buckets { grid-template-columns: 1fr; } }
+      .bucket { background: var(--surface); border: 1.5px dashed var(--border-strong); border-radius: var(--r-lg); padding: 13px; min-height: 130px; transition: border-color .15s, background .15s; }
+      .bucket.armed { cursor: pointer; }
+      .bucket.armed:hover { background: var(--elevated); }
+      .bucket.cmd.armed:hover { border-color: var(--success); }
+      .bucket.qry.armed:hover { border-color: var(--info); }
+      .bucket-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+      .bucket-title { font-family: var(--mono); font-size: 13px; font-weight: 700; letter-spacing: .03em; }
+      .bucket.cmd .bucket-title { color: var(--success); }
+      .bucket.qry .bucket-title { color: var(--info); }
+      .bucket-rule { font-size: 11px; color: var(--muted); margin-bottom: 11px; line-height: 1.5; }
+      .bucket-items { display: flex; flex-wrap: wrap; gap: 8px; }
+      .placed { font-family: var(--mono); font-size: 12px; font-weight: 700; padding: 8px 11px; border-radius: var(--r-md); border: 1px solid; }
+      .bucket.cmd .placed { color: var(--fg); background: var(--success-soft); border-color: rgba(92,198,111,0.5); }
+      .bucket.qry .placed { color: var(--fg); background: var(--info-soft); border-color: rgba(94,159,246,0.5); }
+      .placed.wrong { background: var(--danger-soft); border-color: rgba(240,104,104,0.6); }
+
+      /* ---- Fixed explanation panel (REPLACES content, never grows) ---- */
+      .explain { margin-top: 14px; min-height: 92px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 13px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .qcol { color: var(--info); font-weight: 700; }
+
+      /* ---- "call it twice" demo strip ---- */
+      .twice { margin-top: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 13px; }
+      .twice-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+      .twice-row { display: flex; gap: 8px; flex-wrap: wrap; }
+      .twice-btn { font-family: var(--mono); font-size: 12px; font-weight: 700; background: var(--elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 9px 13px; cursor: pointer; color: var(--fg); transition: border-color .15s, transform .1s; }
+      .twice-btn.q:hover { border-color: var(--info); }
+      .twice-btn.t:hover { border-color: var(--danger); }
+      .twice-btn:active { transform: scale(0.97); }
+      .twice-state { margin-top: 10px; font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+      .twice-state b { color: var(--fg); }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <!-- TOP BAR -->
+    <div class="topbar">
+      <div class="tally"><span>Sorted correctly</span> <b id="tally-num">0</b> <span id="tally-den">/ 6</span></div>
+      <button class="btn" onclick="reset()">↺ Reset</button>
+    </div>
+
+    <!-- DECK of unsorted method cards -->
+    <div class="deck-wrap">
+      <div class="deck-cap" id="deck-cap">ShoppingCart methods · pick a card, then choose a bucket</div>
+      <div class="deck" id="deck"></div>
+    </div>
+
+    <!-- TWO BUCKETS -->
+    <div class="buckets">
+      <div class="bucket cmd" id="bucket-cmd" onclick="dropInto('command')">
+        <div class="bucket-head"><span class="bucket-title">⚙ COMMAND</span></div>
+        <div class="bucket-rule">Does something. Changes state. Returns nothing (<code style="font-family:var(--mono)">void</code>).</div>
+        <div class="bucket-items" id="items-cmd"></div>
+      </div>
+      <div class="bucket qry" id="bucket-qry" onclick="dropInto('query')">
+        <div class="bucket-head"><span class="bucket-title">？ QUERY</span></div>
+        <div class="bucket-rule">Answers something. Returns a value. Changes nothing — safe to repeat.</div>
+        <div class="bucket-items" id="items-qry"></div>
+      </div>
+    </div>
+
+    <!-- FIXED EXPLAIN PANEL (replaced, never appended) -->
+    <div class="explain">
+      <div class="explain-title" id="ex-title">Sort the methods</div>
+      <div class="explain-body" id="ex-body">Click a method card above, then click <span class="qcol">QUERY</span> or <span class="good">COMMAND</span> to sort it. A query <b>answers</b> (returns a value, changes nothing); a command <b>does</b> (changes state, returns nothing).</div>
+    </div>
+
+    <!-- CALL-IT-TWICE DEMO -->
+    <div class="twice">
+      <div class="twice-cap">Call it twice · does asking the question change the answer?</div>
+      <div class="twice-row">
+        <button class="twice-btn q" onclick="callTwiceQuery()">▶ totalItems() · ×2 &nbsp;<span style="color:var(--info)">(pure query)</span></button>
+        <button class="twice-btn t" onclick="callTwiceTrap()">▶ popLast() · ×2 &nbsp;<span style="color:var(--danger)">(the trap)</span></button>
+      </div>
+      <div class="twice-state" id="twice-state">Cart: <b id="cart-view">[milk, bread, eggs]</b></div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>A method is an <b style="color:var(--fg)">order</b> or a <b style="color:var(--fg)">question</b> — never both. Sort all six, then face the red <b style="color:var(--danger)">TRAP</b> card that breaks the rule.</span>
+    </div>
+
+    <script>
+      /* ---------- one explanation panel, content REPLACED (never appended) ---------- */
+      function setExplain(title, bodyHtml) {
+        document.getElementById("ex-title").textContent = title;
+        document.getElementById("ex-body").innerHTML = bodyHtml;
+      }
+
+      /* ---------- the methods to sort ---------- */
+      // kind: "command" | "query" | "trap"
+      var METHODS = [
+        { id: "getBalance",  sig: "getBalance()",  ret: "→ number",  kind: "query",
+          why: 'returns the balance and changes nothing — a pure <span class="qcol">question</span>. You can call it ten times and get the same answer.' },
+        { id: "deposit",     sig: "deposit(x)",    ret: "→ void",    kind: "command",
+          why: 'changes the balance and returns nothing — a pure <span class="good">order</span>. It <i>does</i> something to the object.' },
+        { id: "isEmpty",     sig: "isEmpty()",     ret: "→ boolean", kind: "query",
+          why: 'reads state and returns true/false, mutating nothing — a <span class="qcol">question</span>. Named <code>is…</code>, so callers expect it to be safe.' },
+        { id: "clear",       sig: "clear()",       ret: "→ void",    kind: "command",
+          why: 'empties the cart and returns nothing — a pure <span class="good">order</span>. The name promises an action.' },
+        { id: "totalItems",  sig: "totalItems()",  ret: "→ number",  kind: "query",
+          why: 'counts the items and returns the number, changing nothing — a <span class="qcol">question</span> you can repeat freely.' },
+        { id: "addItem",     sig: "addItem(x)",    ret: "→ void",    kind: "command",
+          why: 'pushes an item and returns nothing — a pure <span class="good">order</span> that changes state.' },
+      ];
+      var TRAP = { id: "popLast", sig: "popLast()", ret: "→ item & mutates", kind: "trap" };
+
+      var CLEAN_COUNT = METHODS.length;        // 6
+      var selected = null;                     // currently picked card id
+      var placed = {};                         // id -> "command" | "query"
+      var trapShown = false;
+      var trapPlaced = false;
+
+      /* ---------- render the deck of unsorted cards ---------- */
+      function renderDeck() {
+        var deck = document.getElementById("deck");
+        deck.innerHTML = "";
+        var remaining = METHODS.filter(function (m) { return !placed[m.id]; });
+
+        remaining.forEach(function (m) { deck.appendChild(cardEl(m, false)); });
+
+        if (trapShown && !trapPlaced) {
+          deck.appendChild(cardEl(TRAP, true));
+        }
+
+        if (remaining.length === 0 && (!trapShown || trapPlaced)) {
+          var e = document.createElement("div");
+          e.className = "deck-empty";
+          e.textContent = trapPlaced
+            ? "All sorted — even the trap. Try the call-it-twice demo below."
+            : "Clean methods sorted ✓ — here comes the trap…";
+          deck.appendChild(e);
+        }
+      }
+
+      function cardEl(m, isTrap) {
+        var b = document.createElement("button");
+        b.className = "card" + (isTrap ? " trap" : "") + (selected === m.id ? " sel" : "");
+        b.innerHTML = (isTrap ? "⚠ " : "") + m.sig + '<span class="ret">' + m.ret + "</span>";
+        b.onclick = (function (id) { return function () { select(id); }; })(m.id);
+        return b;
+      }
+
+      /* ---------- render placed items inside buckets ---------- */
+      function renderBuckets() {
+        renderBucket("command", "items-cmd");
+        renderBucket("query", "items-qry");
+        // arm buckets only when a card is selected (visual affordance)
+        document.getElementById("bucket-cmd").classList.toggle("armed", !!selected);
+        document.getElementById("bucket-qry").classList.toggle("armed", !!selected);
+      }
+
+      function renderBucket(bucketKind, elId) {
+        var host = document.getElementById(elId);
+        host.innerHTML = "";
+        Object.keys(placed).forEach(function (id) {
+          if (placed[id] !== bucketKind) return;
+          var m = methodById(id);
+          var correct = (m.kind === bucketKind);
+          var chip = document.createElement("div");
+          chip.className = "placed" + (correct ? "" : " wrong");
+          chip.textContent = m.sig + (correct ? " ✓" : " ✗");
+          host.appendChild(chip);
+        });
+      }
+
+      function methodById(id) {
+        if (id === TRAP.id) return TRAP;
+        return METHODS.filter(function (m) { return m.id === id; })[0];
+      }
+
+      function correctCount() {
+        var n = 0;
+        Object.keys(placed).forEach(function (id) {
+          var m = methodById(id);
+          if (m.kind === placed[id]) n++;
+        });
+        return n;
+      }
+
+      function updateTally() {
+        document.getElementById("tally-num").textContent = correctCount();
+        document.getElementById("tally-den").textContent = "/ " + (trapShown ? CLEAN_COUNT : CLEAN_COUNT);
+      }
+
+      /* ---------- pick a card ---------- */
+      function select(id) {
+        selected = id;
+        var m = methodById(id);
+        renderDeck();
+        renderBuckets();
+        if (m.kind === "trap") {
+          setExplain(
+            "⚠ The trap — popLast()",
+            '<code>popLast()</code> <b class="bad">returns the last item</b> AND <b class="bad">removes it</b>. It looks like a question (it hands back a value) but acts like an order (it mutates). ' +
+            'It fits <span class="bad">neither bucket cleanly</span> — that is a CQS <span class="bad">violation</span>. Drop it anywhere to see the fix.'
+          );
+        } else {
+          setExplain(
+            "Picked " + m.sig,
+            'Now choose a bucket. Is <code>' + m.sig + '</code> an <span class="good">order</span> (changes state, returns nothing) or a <span class="qcol">question</span> (returns a value, changes nothing)? ' +
+            '<span class="dim">Hint: look at the return type — <code>' + m.ret + '</code>.</span>'
+          );
+        }
+      }
+
+      /* ---------- drop the selected card into a bucket ---------- */
+      function dropInto(bucketKind) {
+        if (!selected) {
+          setExplain("Pick a card first",
+            'Click one of the method cards above, then click a bucket. <span class="dim">A query answers; a command does.</span>');
+          return;
+        }
+        var m = methodById(selected);
+        placed[m.id] = bucketKind;
+
+        if (m.kind === "trap") {
+          trapPlaced = true;
+          setExplain(
+            "popLast() can't be sorted — split it",
+            'No bucket is right, because <code>popLast()</code> does <b class="bad">both</b> jobs. The CQS fix is to <b>split it in two</b>: ' +
+            'a pure query <code>peekLast()</code> <span class="qcol">(read the last item, change nothing)</span> and a command <code>removeLast()</code> <span class="good">(remove it, return nothing)</span>. ' +
+            'Callers who need both call them on purpose — nothing happens by surprise.'
+          );
+        } else {
+          var correct = (m.kind === bucketKind);
+          if (correct) {
+            setExplain(
+              "✓ Correct — " + m.sig + " is a " + (m.kind === "command" ? "COMMAND" : "QUERY"),
+              '<code>' + m.sig + '</code> ' + m.why
+            );
+          } else {
+            setExplain(
+              "✗ Not quite — " + m.sig + " is a " + (m.kind === "command" ? "COMMAND" : "QUERY"),
+              'You put it in <span class="bad">' + bucketKind.toUpperCase() + '</span>, but <code>' + m.sig + '</code> ' + m.why +
+              ' <span class="dim">Click it again to re-sort.</span>'
+            );
+          }
+        }
+
+        selected = null;
+        renderDeck();
+        renderBuckets();
+        updateTally();
+        maybeRevealTrap();
+      }
+
+      /* ---------- reveal the trap once all six clean cards are placed ---------- */
+      function maybeRevealTrap() {
+        var allCleanPlaced = METHODS.every(function (m) { return !!placed[m.id]; });
+        if (allCleanPlaced && !trapShown) {
+          trapShown = true;
+          renderDeck();
+          if (correctCount() === CLEAN_COUNT) {
+            setExplain(
+              "All six sorted ✓ — now the trap",
+              'Every clean method landed in the right bucket — each was clearly an <span class="good">order</span> or a <span class="qcol">question</span>. ' +
+              'But here is a card that breaks the rule: the red <code>popLast()</code>. Click it.'
+            );
+          }
+        }
+      }
+
+      /* ---------- call-it-twice demo ---------- */
+      var INITIAL_CART = ["milk", "bread", "eggs"];
+      var cart = INITIAL_CART.slice();
+
+      function renderCart() {
+        document.getElementById("cart-view").textContent = "[" + cart.join(", ") + "]";
+      }
+
+      function callTwiceQuery() {
+        // pure query: totalItems() — read length, mutate nothing
+        var a = cart.length;
+        var b = cart.length;   // called again, same answer
+        setExplain(
+          "totalItems() ×2 — same answer, safe",
+          'First call → <span class="qcol">' + a + '</span>. Second call → <span class="qcol">' + b + '</span>. ' +
+          'A pure <b>query</b> changes nothing, so calling it twice gives the <span class="good">same answer</span> and leaves the cart <b>untouched</b>. ' +
+          '<span class="dim">This is what makes reading state safe to repeat.</span>'
+        );
+        renderCart();
+      }
+
+      function callTwiceTrap() {
+        // the trap: popLast() — returns AND mutates, so the second call differs
+        if (cart.length === 0) {
+          setExplain("Cart is empty",
+            'Nothing left to pop. <span class="dim">Hit Reset to refill the cart and try again.</span>');
+          return;
+        }
+        var first = cart.pop();           // removes + returns
+        var second = cart.length ? cart.pop() : "(empty)";
+        setExplain(
+          "popLast() ×2 — the answer changed",
+          'First call → <span class="bad">' + first + '</span>. Second call → <span class="bad">' + second + '</span>. ' +
+          'Because the "question" <b>secretly removed</b> an item, calling it again returned a <b class="bad">different value</b> and shrank the cart. ' +
+          'Cart is now <code>[' + cart.join(", ") + ']</code>. <span class="dim">A query you can\'t safely repeat isn\'t really a query.</span>'
+        );
+        renderCart();
+      }
+
+      /* ---------- reset everything ---------- */
+      function reset() {
+        selected = null;
+        placed = {};
+        trapShown = false;
+        trapPlaced = false;
+        cart = INITIAL_CART.slice();
+        renderDeck();
+        renderBuckets();
+        renderCart();
+        updateTally();
+        setExplain("Sort the methods",
+          'Click a method card above, then click <span class="qcol">QUERY</span> or <span class="good">COMMAND</span> to sort it. A query <b>answers</b> (returns a value, changes nothing); a command <b>does</b> (changes state, returns nothing).');
+      }
+
+      /* ---------- boot ---------- */
+      renderDeck();
+      renderBuckets();
+      renderCart();
+      updateTally();
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>
