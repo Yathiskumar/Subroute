@@ -42,6 +42,12 @@ import { dependencyInjectionAndIoc } from "./lld/dependency-injection-and-ioc";
 import { injectionStyles } from "./lld/injection-styles";
 import { tellDontAsk } from "./lld/tell-dont-ask";
 import { commandQuerySeparation } from "./lld/command-query-separation";
+import { singleton } from "./lld/singleton";
+import { factoryMethod } from "./lld/factory-method";
+import { abstractFactory } from "./lld/abstract-factory";
+import { builder } from "./lld/builder";
+import { prototypePattern } from "./lld/prototype";
+import { objectPool } from "./lld/object-pool";
 
 /** Indexed by `${roadmapSlug}/${topicSlug}`. */
 const ROADMAP_LESSONS: Record<string, RoadmapLesson> = {
@@ -88,6 +94,12 @@ const ROADMAP_LESSONS: Record<string, RoadmapLesson> = {
   "lld/injection-styles": injectionStyles,
   "lld/tell-dont-ask": tellDontAsk,
   "lld/command-query-separation": commandQuerySeparation,
+  "lld/singleton": singleton,
+  "lld/factory-method": factoryMethod,
+  "lld/abstract-factory": abstractFactory,
+  "lld/builder": builder,
+  "lld/prototype": prototypePattern,
+  "lld/object-pool": objectPool,
 };
 
 export function getRoadmapLesson(

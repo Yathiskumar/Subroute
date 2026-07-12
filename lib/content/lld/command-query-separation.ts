@@ -3,7 +3,7 @@ import type { RoadmapLesson } from "@/lib/content/types";
 export const commandQuerySeparation: RoadmapLesson = {
   title: "Command–Query Separation (CQS)",
   oneLiner:
-    "Bertrand Meyer's rule: every method should be either a command that *does* something (changes state, returns nothing) or a query that *answers* something (returns a value, changes nothing) — never both. Asking a question shouldn't change the answer, so you can read state as often as you like without surprises.",
+    "Bertrand Meyer's rule: every method should be either a command that does something (changes state, returns nothing) or a query that answers something (returns a value, changes nothing) — never both. Asking a question shouldn't change the answer, so you can read state as often as you like without surprises.",
   difficulty: "beginner",
   estimatedTime: "14 min",
   prototypePath: "/prototypes/lld/command-query-separation.html",

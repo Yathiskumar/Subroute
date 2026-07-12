@@ -3,7 +3,7 @@ import type { RoadmapLesson } from "@/lib/content/types";
 export const domainModeling: RoadmapLesson = {
   title: "Domain Modeling",
   oneLiner:
-    "A domain model is a web of objects that mirror the real-world domain in the *exact language the domain experts use* — and the first skill is telling Entities, Value Objects, and Services apart.",
+    "A domain model is a web of objects that mirror the real-world domain in the exact language the domain experts use — and the first skill is telling Entities, Value Objects, and Services apart.",
   difficulty: "intermediate",
   estimatedTime: "14 min",
   prototypePath: "/prototypes/lld/domain-modeling.html",

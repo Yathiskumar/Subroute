@@ -3,7 +3,7 @@ import type { RoadmapLesson } from "@/lib/content/types";
 export const lawOfDemeter: RoadmapLesson = {
   title: "Law of Demeter (Principle of Least Knowledge)",
   oneLiner:
-    "Only talk to your immediate friends — not to strangers you reach through them. A method should call methods on itself, its own fields, its parameters, and objects it makes — but not on objects handed back by another call. Each extra dot (`a.getB().getC().doThing()`) reaches deeper into a stranger's guts and couples you to the whole chain.",
+    "Only talk to your immediate friends — not to strangers you reach through them. A method should call methods on itself, its own fields, its parameters, and objects it makes — but not on objects handed back by another call. Each extra dot (a.getB().getC().doThing()) reaches deeper into a stranger's guts and couples you to the whole chain.",
   difficulty: "beginner",
   estimatedTime: "14 min",
   prototypePath: "/prototypes/lld/law-of-demeter.html",
