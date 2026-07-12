@@ -3,7 +3,7 @@ import type { RoadmapLesson } from "@/lib/content/types";
 export const dependencyInjectionAndIoc: RoadmapLesson = {
   title: "Dependency Injection & Inversion of Control",
   oneLiner:
-    "A dependency is just another object your object needs to do its job. Instead of letting an object build its own dependencies with `new`, you hand them in from outside — usually through the constructor. That's Dependency Injection, and it's the most common way to achieve Inversion of Control: an outside assembler, not your object, decides what gets wired together.",
+    "A dependency is just another object your object needs to do its job. Instead of letting an object build its own dependencies with new, you hand them in from outside — usually through the constructor. That's Dependency Injection, and it's the most common way to achieve Inversion of Control: an outside assembler, not your object, decides what gets wired together.",
   difficulty: "intermediate",
   estimatedTime: "16 min",
   prototypePath: "/prototypes/lld/dependency-injection-and-ioc.html",

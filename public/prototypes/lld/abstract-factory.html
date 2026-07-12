@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Abstract Factory — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---- Top: mode toggle + reset ---- */
+      .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+      .toggle { display: inline-flex; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 3px; }
+      .toggle button { font: 700 12px/1 var(--sans); border: 0; background: transparent; color: var(--muted); padding: 8px 15px; border-radius: 999px; cursor: pointer; transition: color .15s, background .15s; white-space: nowrap; }
+      .toggle button.on.factory { background: var(--success-soft); color: var(--success); }
+      .toggle button.on.mix { background: var(--danger-soft); color: var(--danger); }
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: border-color .15s, transform .1s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+
+      /* ---- Theme chips (factory pickers) ---- */
+      .chips { display: flex; gap: 9px; flex-wrap: wrap; margin-bottom: 6px; align-items: center; }
+      .chip-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .05em; text-transform: uppercase; color: var(--subtle); width: 100%; margin-bottom: 2px; }
+      .chip { font-family: var(--mono); font-size: 12px; font-weight: 700; background: var(--elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 10px 14px; cursor: pointer; color: var(--fg); transition: border-color .15s, transform .1s, background .15s; }
+      .chip:hover { border-color: var(--accent); }
+      .chip:active { transform: scale(0.97); }
+      .chip.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+      .consistency { margin-left: auto; font-family: var(--mono); font-size: 11.5px; }
+      .consistency b.ok { color: var(--success); }
+      .consistency b.bad { color: var(--danger); }
+
+      /* ---- Main split: preview + client code ---- */
+      .split { display: grid; grid-template-columns: 300px 1fr; gap: 14px; margin-top: 12px; margin-bottom: 14px; align-items: start; }
+      @media (max-width: 620px) { .split { grid-template-columns: 1fr; } }
+
+      /* ---- Device / preview frame ---- */
+      .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 14px; }
+      .panel-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+      .panel-cap .fam { color: var(--fg); }
+
+      .device { border: 10px solid #202430; border-radius: 22px; padding: 0; overflow: hidden; box-shadow: 0 0 0 1px #000 inset; }
+      .screen { padding: 16px 15px 18px; min-height: 240px; transition: background .2s; }
+      .screen .app-title { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; margin-bottom: 14px; opacity: .8; }
+
+      /* live widgets — colors set inline per theme via JS */
+      .w-btn { display: inline-block; font: 700 13px/1 var(--sans); border-radius: 8px; padding: 11px 18px; border: 1px solid transparent; margin-bottom: 16px; }
+      .w-check { display: flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 600; margin-bottom: 16px; }
+      .w-box { width: 18px; height: 18px; border-radius: 5px; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; border: 1.5px solid transparent; }
+      .w-card { border-radius: 10px; padding: 13px 14px; border: 1px solid transparent; }
+      .w-card .c-title { font-size: 13px; font-weight: 700; margin-bottom: 5px; }
+      .w-card .c-text { font-size: 11.5px; line-height: 1.5; opacity: .85; }
+      .w-tag { display: inline-block; font-family: var(--mono); font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 5px; margin-top: 9px; }
+
+      .mismatch-banner { margin-top: 12px; font-family: var(--mono); font-size: 11.5px; font-weight: 700; padding: 8px 11px; border-radius: var(--r-md); text-align: center; }
+      .mismatch-banner.bad { background: var(--danger-soft); color: var(--danger); border: 1px solid var(--danger); }
+      .mismatch-banner.ok { background: var(--success-soft); color: var(--success); border: 1px solid rgba(92,198,111,.4); }
+
+      /* ---- per-widget pickers (mix mode) ---- */
+      .mixers { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+      .mixer { display: flex; align-items: center; gap: 9px; }
+      .mixer .lbl { font-family: var(--mono); font-size: 11px; color: var(--muted); width: 74px; }
+      .mixer .opts { display: flex; gap: 5px; }
+      .mopt { font-family: var(--mono); font-size: 11px; font-weight: 700; background: var(--elevated); border: 1px solid var(--border-strong); border-radius: 6px; padding: 6px 9px; cursor: pointer; color: var(--fg); transition: border-color .15s; }
+      .mopt:hover { border-color: var(--accent); }
+      .mopt.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+
+      /* ---- Client code panel ---- */
+      .code { background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-lg); padding: 0; overflow: hidden; }
+      .code-head { display: flex; justify-content: space-between; align-items: center; padding: 9px 13px; border-bottom: 1px solid var(--border); }
+      .code-head .fname { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+      .code-head .badge { font-family: var(--mono); font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 5px; background: var(--success-soft); color: var(--success); border: 1px solid rgba(92,198,111,.35); }
+      .code pre { margin: 0; padding: 14px 15px; font-family: var(--mono); font-size: 12px; line-height: 1.7; color: var(--fg); overflow-x: auto; }
+      .code .kw { color: #c58bef; }
+      .code .fn { color: var(--info); }
+      .code .str { color: var(--success); }
+      .code .cm { color: var(--subtle); }
+      .code .hl { color: var(--accent); font-weight: 700; }
+
+      /* ---- Fixed explain panel (replaced, never grows) ---- */
+      .explain { min-height: 92px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 13px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .qcol { color: var(--info); font-weight: 700; }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <!-- TOP: mode toggle -->
+    <div class="topbar">
+      <div class="toggle" id="toggle">
+        <button class="factory on" id="tg-factory" onclick="setMode('factory')">✓ Abstract Factory</button>
+        <button class="mix" id="tg-mix" onclick="setMode('mix')">⚠ Try to mix manually</button>
+      </div>
+      <button class="btn" onclick="reset()">↺ Reset</button>
+    </div>
+
+    <!-- THEME CHIPS (factory pickers) -->
+    <div class="chips" id="chips">
+      <span class="chip-cap">Pick one theme factory — it builds the whole matching family</span>
+      <button class="chip" id="chip-light" onclick="pickTheme('light')">☀️ Light</button>
+      <button class="chip" id="chip-dark"  onclick="pickTheme('dark')">🌙 Dark</button>
+      <button class="chip" id="chip-ocean" onclick="pickTheme('ocean')">🌊 Ocean</button>
+      <span class="consistency" id="consistency"></span>
+    </div>
+
+    <!-- MAIN SPLIT -->
+    <div class="split">
+      <!-- LEFT: device preview -->
+      <div class="panel">
+        <div class="panel-cap">
+          <span>UI preview</span>
+          <span class="fam" id="fam-label">— pick a theme —</span>
+        </div>
+        <div class="device">
+          <div class="screen" id="screen"></div>
+        </div>
+        <div id="extra"></div>
+      </div>
+
+      <!-- RIGHT: client code -->
+      <div class="code">
+        <div class="code-head">
+          <span class="fname">client.ts</span>
+          <span class="badge">client code: unchanged ✓</span>
+        </div>
+        <pre id="clientcode"></pre>
+      </div>
+    </div>
+
+    <!-- FIXED EXPLAIN PANEL -->
+    <div class="explain">
+      <div class="explain-title" id="ex-title">One factory, one matching family</div>
+      <div class="explain-body" id="ex-body">Pick a theme chip — <span class="good">☀️ Light</span>, <span class="good">🌙 Dark</span>, or <span class="good">🌊 Ocean</span>. That one choice is you picking a concrete <code>ThemeFactory</code>, and it builds a whole matching set: a button, a checkbox, and a card, all in the same theme.</div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>In <b style="color:var(--success)">Abstract Factory</b> mode the client code never changes — only the factory you pass in. Switch to <b style="color:var(--danger)">mix manually</b> mode and try to build a clashing UI to see why the pattern makes that <b>impossible</b>.</span>
+    </div>
+
+    <script>
+      /* ---- one explain panel, REPLACED (never appended) ---- */
+      function setExplain(title, bodyHtml) {
+        document.getElementById("ex-title").textContent = title;
+        document.getElementById("ex-body").innerHTML = bodyHtml;
+      }
+
+      // Theme palettes: each concrete factory's look.
+      var THEMES = {
+        light: {
+          name: "Light", ico: "☀️",
+          screenBg: "#f4f5f7", appText: "#1b2030",
+          btnBg: "#2f6bff", btnText: "#ffffff", btnBorder: "#2f6bff",
+          checkText: "#1b2030", boxBg: "#2f6bff", boxBorder: "#2f6bff", boxMark: "#ffffff",
+          cardBg: "#ffffff", cardBorder: "#dfe3ea", cardTitle: "#1b2030", cardText: "#4a5266",
+          tagBg: "#e6ecff", tagText: "#2f6bff",
+        },
+        dark: {
+          name: "Dark", ico: "🌙",
+          screenBg: "#15171d", appText: "#e8ecf4",
+          btnBg: "#3d7bff", btnText: "#ffffff", btnBorder: "#3d7bff",
+          checkText: "#e8ecf4", boxBg: "#3d7bff", boxBorder: "#3d7bff", boxMark: "#ffffff",
+          cardBg: "#1e222b", cardBorder: "#2c3240", cardTitle: "#e8ecf4", cardText: "#9aa3b5",
+          tagBg: "#22314f", tagText: "#7aa2ff",
+        },
+        ocean: {
+          name: "Ocean", ico: "🌊",
+          screenBg: "#062733", appText: "#d7f4f6",
+          btnBg: "#12b3c4", btnText: "#022027", btnBorder: "#12b3c4",
+          checkText: "#d7f4f6", boxBg: "#12b3c4", boxBorder: "#12b3c4", boxMark: "#022027",
+          cardBg: "#0a3644", cardBorder: "#12586a", cardTitle: "#d7f4f6", cardText: "#7fc4cf",
+          tagBg: "#0d4a5b", tagText: "#4fd6e6",
+        },
+      };
+      var THEME_ORDER = ["light", "dark", "ocean"];
+
+      var mode = "factory";          // "factory" | "mix"
+      var theme = null;              // chosen factory in factory mode
+      // per-widget themes in mix mode:
+      var mix = { button: "dark", checkbox: "dark", card: "light" };
+
+      /* ---- build one widget's HTML in a given theme ---- */
+      function widgetsHtml(btnT, checkT, cardT) {
+        var b = THEMES[btnT], c = THEMES[checkT], k = THEMES[cardT];
+        return (
+          '<button class="w-btn" style="background:' + b.btnBg + ';color:' + b.btnText + ';border-color:' + b.btnBorder + '">Save changes</button>' +
+          '<div class="w-check" style="color:' + c.checkText + '">' +
+            '<span class="w-box" style="background:' + c.boxBg + ';border-color:' + c.boxBorder + ';color:' + c.boxMark + '">✓</span>' +
+            'Email me updates</div>' +
+          '<div class="w-card" style="background:' + k.cardBg + ';border-color:' + k.cardBorder + '">' +
+            '<div class="c-title" style="color:' + k.cardTitle + '">Your plan</div>' +
+            '<div class="c-text" style="color:' + k.cardText + '">Pro · renews July 30. Manage billing anytime.</div>' +
+          '</div>'
+        );
+      }
+
+      /* ---- render the whole scene ---- */
+      function render() {
+        // toggle styling
+        document.getElementById("tg-factory").className = "factory" + (mode === "factory" ? " on" : "");
+        document.getElementById("tg-mix").className = "mix" + (mode === "mix" ? " on" : "");
+
+        var screen = document.getElementById("screen");
+        var extra = document.getElementById("extra");
+        var famLabel = document.getElementById("fam-label");
+        var consistency = document.getElementById("consistency");
+        extra.innerHTML = "";
+
+        if (mode === "factory") {
+          // chips visible & active
+          THEME_ORDER.forEach(function (t) {
+            document.getElementById("chip-" + t).className = "chip" + (theme === t ? " on" : "");
+          });
+
+          if (!theme) {
+            screen.style.background = "#101216";
+            screen.innerHTML = '<div class="app-title" style="color:#5b6474">— no factory chosen —</div>' +
+              '<div style="color:#5b6474;font-size:12.5px;line-height:1.6">Click a theme chip above.<br/>One factory builds the whole matching set.</div>';
+            famLabel.textContent = "— pick a theme —";
+            consistency.innerHTML = "";
+            renderClientCode("theme");
+            return;
+          }
+
+          var tm = THEMES[theme];
+          screen.style.background = tm.screenBg;
+          screen.innerHTML =
+            '<div class="app-title" style="color:' + tm.appText + '">' + tm.ico + ' ' + tm.name + ' theme</div>' +
+            widgetsHtml(theme, theme, theme) +
+            '<span class="w-tag" style="background:' + tm.tagBg + ';color:' + tm.tagText + '">built by ' + tm.name + 'ThemeFactory</span>';
+          famLabel.textContent = tm.ico + " " + tm.name + " family";
+          consistency.innerHTML = 'consistency check: <b class="ok">✓ consistent</b>';
+          renderClientCode(theme);
+        } else {
+          // MIX MODE — three separate pickers
+          THEME_ORDER.forEach(function (t) {
+            document.getElementById("chip-" + t).className = "chip";
+          });
+          var scr = THEMES[mix.button];
+          screen.style.background = scr.screenBg;
+          screen.innerHTML =
+            '<div class="app-title" style="color:' + scr.appText + '">🔧 hand-assembled UI</div>' +
+            widgetsHtml(mix.button, mix.checkbox, mix.card);
+          famLabel.textContent = "hand-mixed";
+
+          // build the three pickers
+          extra.innerHTML =
+            '<div class="mixers">' +
+              mixerRow("button", "button") +
+              mixerRow("checkbox", "checkbox") +
+              mixerRow("card", "card") +
+            '</div>';
+
+          var same = (mix.button === mix.checkbox && mix.checkbox === mix.card);
+          var banner = document.createElement("div");
+          banner.className = "mismatch-banner " + (same ? "ok" : "bad");
+          banner.textContent = same
+            ? "consistency check: ✓ all " + THEMES[mix.button].name + " — happens to match"
+            : "consistency check: ✗ MISMATCH";
+          extra.appendChild(banner);
+
+          consistency.innerHTML = same
+            ? 'consistency check: <b class="ok">✓ consistent</b>'
+            : 'consistency check: <b class="bad">✗ MISMATCH</b>';
+          renderClientCode("mix");
+        }
+      }
+
+      function mixerRow(part, label) {
+        var opts = THEME_ORDER.map(function (t) {
+          var on = mix[part] === t ? " on" : "";
+          return '<button class="mopt' + on + '" onclick="setMix(\'' + part + '\',\'' + t + '\')">' + THEMES[t].ico + '</button>';
+        }).join("");
+        return '<div class="mixer"><span class="lbl">' + label + '</span><span class="opts">' + opts + '</span></div>';
+      }
+
+      /* ---- client code panel (stays identical across themes) ---- */
+      function renderClientCode(t) {
+        var pre = document.getElementById("clientcode");
+        if (mode === "mix") {
+          pre.innerHTML =
+            '<span class="cm">// mix mode: you wire up each widget BY HAND</span>\n' +
+            '<span class="kw">const</span> button   = <span class="fn">make</span>(<span class="str">"' + mix.button + '"</span>, <span class="str">"button"</span>);\n' +
+            '<span class="kw">const</span> checkbox = <span class="fn">make</span>(<span class="str">"' + mix.checkbox + '"</span>, <span class="str">"checkbox"</span>);\n' +
+            '<span class="kw">const</span> card     = <span class="fn">make</span>(<span class="str">"' + mix.card + '"</span>, <span class="str">"card"</span>);\n' +
+            '<span class="cm">// nothing stops these three from clashing ✗</span>\n' +
+            '<span class="fn">render</span>(button, checkbox, card);';
+          return;
+        }
+        var themeLine = (t === "theme")
+          ? '<span class="kw">const</span> theme = <span class="hl">"…"</span>;   <span class="cm">// pick a chip →</span>'
+          : '<span class="kw">const</span> theme = <span class="hl">"' + t + '"</span>;';
+        pre.innerHTML =
+          themeLine + '\n\n' +
+          '<span class="cm">// one factory for the WHOLE family</span>\n' +
+          '<span class="kw">const</span> ui = ThemeFactory.<span class="fn">for</span>(theme);\n\n' +
+          '<span class="fn">render</span>(\n' +
+          '  ui.<span class="fn">createButton</span>(),\n' +
+          '  ui.<span class="fn">createCheckbox</span>(),\n' +
+          '  ui.<span class="fn">createCard</span>(),\n' +
+          ');';
+      }
+
+      /* ---- pick a theme (factory mode) ---- */
+      function pickTheme(t) {
+        theme = t;
+        render();
+        var tm = THEMES[t];
+        setExplain(
+          "for(\"" + t + "\") → the whole " + tm.name + " family",
+          'You picked <span class="good">' + tm.ico + ' ' + tm.name + '</span> — that\'s one concrete <code>' + tm.name + 'ThemeFactory</code>. ' +
+          'It built a <b>button</b>, a <b>checkbox</b>, and a <b>card</b> together, all in the same theme. ' +
+          'Notice the <span class="qcol">client code on the right never changed</span> — only the factory did. ' +
+          '<span class="dim">One swap re-skins everything, guaranteed to match.</span>'
+        );
+      }
+
+      /* ---- change one widget's theme (mix mode) ---- */
+      function setMix(part, t) {
+        mix[part] = t;
+        render();
+        var same = (mix.button === mix.checkbox && mix.checkbox === mix.card);
+        if (same) {
+          setExplain(
+            "You lined them up — but nothing guaranteed it",
+            'All three happen to be <span class="good">' + THEMES[t].name + '</span> right now, so it looks fine. ' +
+            'But <b>you</b> had to keep them in sync by hand. Change just one picker and it breaks. ' +
+            '<span class="dim">The Abstract Factory removes the chance to get this wrong.</span>'
+          );
+        } else {
+          setExplain(
+            "consistency check: ✗ MISMATCH",
+            'You set the <b class="bad">' + part + '</b> to <b>' + THEMES[t].name + '</b>, but the others don\'t match — ' +
+            'the result clashes and looks broken. Because you built each widget separately, <span class="bad">nothing stops the mix</span>. ' +
+            '<span class="dim">An Abstract Factory makes this impossible: one factory, one family.</span>'
+          );
+        }
+      }
+
+      /* ---- switch modes ---- */
+      function setMode(m) {
+        if (m === mode) return;
+        mode = m;
+        render();
+        if (m === "mix") {
+          setExplain(
+            "Danger mode: build each widget by hand",
+            'Now there\'s <b>no factory</b> — you pick every widget\'s theme <span class="bad">separately</span> with the three pickers. ' +
+            'Try a <b>Dark</b> button with a <b>Light</b> card and watch the <span class="bad">✗ MISMATCH</span> banner appear. ' +
+            '<span class="dim">This is exactly what the pattern prevents.</span>'
+          );
+        } else {
+          setExplain(
+            "Back to Abstract Factory",
+            'One factory builds the whole family again, so it snaps back to <span class="good">✓ consistent</span>. ' +
+            'Pick a theme chip and every widget matches automatically — <span class="qcol">and the client code stays the same</span>.'
+          );
+        }
+      }
+
+      /* ---- reset ---- */
+      function reset() {
+        mode = "factory";
+        theme = null;
+        mix = { button: "dark", checkbox: "dark", card: "light" };
+        render();
+        setExplain("One factory, one matching family",
+          'Pick a theme chip — <span class="good">☀️ Light</span>, <span class="good">🌙 Dark</span>, or <span class="good">🌊 Ocean</span>. ' +
+          'That one choice picks a concrete <code>ThemeFactory</code>, and it builds a whole matching set: button, checkbox, and card.');
+      }
+
+      /* ---- boot ---- */
+      render();
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

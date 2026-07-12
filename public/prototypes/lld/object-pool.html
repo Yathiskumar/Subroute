@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Object Pool — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --warn: #e0a53d;
+        --warn-soft: rgba(224, 165, 61, 0.14);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---- Top: world toggle + reset ---- */
+      .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+      .toggle { display: inline-flex; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 3px; }
+      .toggle button { font: 700 12px/1 var(--sans); border: 0; background: transparent; color: var(--muted); padding: 8px 15px; border-radius: 999px; cursor: pointer; transition: color .15s, background .15s; white-space: nowrap; }
+      .toggle button.on.without { background: var(--danger-soft); color: var(--danger); }
+      .toggle button.on.with { background: var(--success-soft); color: var(--success); }
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: border-color .15s, transform .1s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+
+      /* ---- Metric row: the big teaching counter ---- */
+      .metrics { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+      .metric { flex: 1 1 150px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 11px 14px; }
+      .metric.big { border-color: var(--accent-border); background: var(--accent-soft); }
+      .metric .label { font-family: var(--mono); font-size: 10px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+      .metric .value { font-family: var(--mono); font-size: 26px; font-weight: 700; line-height: 1; color: var(--fg); }
+      .metric.big .value { color: var(--accent); }
+      .metric .value.flat { color: var(--success); }
+      .metric .value.runaway { color: var(--danger); }
+      .metric .unit { font-size: 11px; color: var(--muted); margin-top: 5px; }
+
+      /* ---- Action row ---- */
+      .actions { display: flex; gap: 9px; flex-wrap: wrap; margin-bottom: 14px; align-items: center; }
+      .act { font-family: var(--mono); font-size: 12px; font-weight: 700; background: var(--elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 10px 14px; cursor: pointer; color: var(--fg); transition: border-color .15s, transform .1s; }
+      .act.prime { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+      .act:hover { border-color: var(--accent); }
+      .act:active { transform: scale(0.97); }
+      .act:disabled { opacity: .4; cursor: not-allowed; }
+      .served { margin-left: auto; font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+      .served b { color: var(--fg); }
+
+      /* ---- Stage ---- */
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 14px; margin-bottom: 14px; }
+      .stage-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
+
+      /* ---- Pool slots (WITH world) ---- */
+      .slots { display: flex; flex-wrap: wrap; gap: 12px; min-height: 96px; align-content: flex-start; }
+      .slot { width: 168px; background: var(--elevated); border: 1.5px solid var(--border-strong); border-radius: var(--r-md); padding: 11px; transition: border-color .2s, box-shadow .2s; }
+      .slot.available { border-color: var(--success); box-shadow: 0 0 0 3px var(--success-soft); }
+      .slot.inuse { border-color: var(--warn); box-shadow: 0 0 0 3px var(--warn-soft); }
+      .slot-head { display: flex; align-items: center; gap: 7px; margin-bottom: 7px; }
+      .slot-ico { font-size: 15px; }
+      .slot-id { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--fg); }
+      .slot-tag { font-family: var(--mono); font-size: 9px; padding: 2px 6px; border-radius: 4px; margin-left: auto; }
+      .slot.available .slot-tag { background: var(--success-soft); color: var(--success); }
+      .slot.inuse .slot-tag { background: var(--warn-soft); color: var(--warn); }
+      .slot-sub { font-size: 10px; color: var(--muted); margin-bottom: 8px; }
+      .slot-btn { width: 100%; font-family: var(--mono); font-size: 11px; font-weight: 700; border-radius: 6px; padding: 6px; cursor: pointer; border: 1px solid var(--border-strong); background: var(--surface); color: var(--muted); transition: border-color .15s, transform .1s; }
+      .slot.inuse .slot-btn { border-color: var(--info); color: var(--info); }
+      .slot.inuse .slot-btn:hover { border-color: var(--info); background: var(--info-soft); }
+      .slot.inuse .slot-btn:active { transform: scale(0.97); }
+      .slot.available .slot-btn { opacity: .4; cursor: not-allowed; }
+
+      /* ---- WITHOUT world: fleeting new connections ---- */
+      .throwaway { display: flex; flex-wrap: wrap; gap: 10px; min-height: 96px; align-content: flex-start; }
+      .throwaway.empty::before { content: "Click “＋ Acquire” — every click builds a brand-new connection →"; color: var(--subtle); font-size: 12px; font-style: italic; align-self: center; }
+      .conn-new { width: 150px; background: var(--elevated); border: 1.5px solid var(--danger); border-radius: var(--r-md); padding: 10px 11px; animation: pop .25s ease; }
+      .conn-new .cn-id { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--fg); }
+      .conn-new .cn-cost { font-family: var(--mono); font-size: 9.5px; color: var(--danger); margin-top: 4px; }
+      .conn-new .cn-note { font-size: 9.5px; color: var(--muted); margin-top: 4px; font-style: italic; }
+      @keyframes pop { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+      /* ---- Waiting queue ---- */
+      .waitbar { margin-top: 12px; }
+      .waitbar-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .05em; text-transform: uppercase; color: var(--subtle); margin-bottom: 7px; }
+      .waiters { display: flex; flex-wrap: wrap; gap: 8px; min-height: 30px; align-items: center; }
+      .waiters.empty::before { content: "no one waiting — a free connection is available"; color: var(--subtle); font-size: 11px; font-style: italic; }
+      .waiter { font-family: var(--mono); font-size: 10.5px; color: var(--danger); background: var(--danger-soft); border: 1px solid var(--danger); border-radius: 5px; padding: 5px 9px; animation: pop .25s ease; }
+
+      /* ---- Fixed explain panel (replaced, never grows) ---- */
+      .explain { min-height: 92px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 13px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .warn { color: var(--warn); font-weight: 700; }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <!-- TOP: world toggle -->
+    <div class="topbar">
+      <div class="toggle" id="toggle">
+        <button class="without on" id="tg-without" onclick="setWorld('without')">✕ WITHOUT Pool</button>
+        <button class="with" id="tg-with" onclick="setWorld('with')">✓ WITH Pool</button>
+      </div>
+      <button class="btn" onclick="reset()">↺ Reset</button>
+    </div>
+
+    <!-- METRICS -->
+    <div class="metrics">
+      <div class="metric big">
+        <div class="label">Expensive objects created</div>
+        <div class="value" id="created-n">0</div>
+        <div class="unit" id="created-unit">each costs a 200ms handshake</div>
+      </div>
+      <div class="metric">
+        <div class="label">Requests served</div>
+        <div class="value" id="served-n">0</div>
+        <div class="unit">total ＋ Acquire clicks</div>
+      </div>
+    </div>
+
+    <!-- ACTIONS -->
+    <div class="actions">
+      <button class="act prime" id="acq-btn" onclick="acquire()">＋ Acquire</button>
+      <span class="served" id="scoreboard">click ＋ Acquire to borrow a connection…</span>
+    </div>
+
+    <!-- STAGE -->
+    <div class="stage">
+      <div class="stage-cap" id="world-label">WITHOUT Pool · every ＋ Acquire runs new Connection()</div>
+
+      <!-- WITH world: fixed pool of slots -->
+      <div class="slots" id="slots" style="display:none"></div>
+
+      <!-- WITHOUT world: throwaway connections -->
+      <div class="throwaway empty" id="throwaway"></div>
+
+      <!-- Waiting queue (WITH world only) -->
+      <div class="waitbar" id="waitbar" style="display:none">
+        <div class="waitbar-cap">Waiting queue — requests that arrived when the pool was full</div>
+        <div class="waiters empty" id="waiters"></div>
+      </div>
+    </div>
+
+    <!-- FIXED EXPLAIN PANEL -->
+    <div class="explain">
+      <div class="explain-title" id="ex-title">Build a new one, or reuse?</div>
+      <div class="explain-body" id="ex-body">You're in the <span class="bad">WITHOUT Pool</span> world. Click <code>＋ Acquire</code> a few times and watch a <b>brand-new connection</b> get built every time — the <b>created</b> counter climbs with every click and never stops. Then flip to <span class="good">WITH Pool</span>: the counter flatlines at <b>3</b> because you reuse the same few.</div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>Watch the <b style="color:var(--fg)">“expensive objects created”</b> number. WITHOUT a pool it <b style="color:var(--danger)">runs away</b> with every click; WITH a pool of 3 it <b style="color:var(--success)">flatlines at 3</b> no matter how many requests you serve.</span>
+    </div>
+
+    <script>
+      /* ---- one explain panel, REPLACED (never appended) ---- */
+      function setExplain(title, bodyHtml) {
+        document.getElementById("ex-title").textContent = title;
+        document.getElementById("ex-body").innerHTML = bodyHtml;
+      }
+
+      var MAX = 3;                 // fixed pool size
+
+      var world = "without";       // "without" | "with"
+      var created = 0;             // real 'new Connection()' calls
+      var served = 0;              // total acquire requests served
+      var slots = [];              // WITH world: { id, state:"available"|"inuse" }
+      var throwaway = [];          // WITHOUT world: recent new connections (id)
+      var waiters = [];            // WITH world: request labels waiting for a free conn
+      var nextReq = 0;             // request number counter (for waiter labels)
+
+      /* ---- core action: acquire ---- */
+      function acquire() {
+        if (world === "with") {
+          acquireWith();
+        } else {
+          acquireWithout();
+        }
+        render();
+      }
+
+      function acquireWith() {
+        nextReq++;
+        served++;
+        var free = slots.filter(function (s) { return s.state === "available"; })[0];
+        if (free) {
+          free.state = "inuse";
+          setExplain(
+            "acquire() → reused connection #" + free.id,
+            'The pool had a free slot, so it handed you <span class="good">connection #' + free.id + '</span> — <b>no new object built</b>. ' +
+            'It flips to <span class="warn">🟡 in-use</span> while you work. ' +
+            '<span class="dim">Served ' + served + ' requests, but created still only ' + created + '. That is reuse.</span>'
+          );
+        } else {
+          // pool exhausted — request waits
+          var label = "req #" + nextReq;
+          waiters.push(label);
+          setExplain(
+            "pool exhausted — your request is waiting",
+            'All <b>' + MAX + '</b> connections are <span class="warn">in-use</span>, so <span class="bad">' + label + '</span> can\'t get one. ' +
+            'It drops into the <b>waiting queue</b>. It will stay there until someone clicks <code>Release</code> — then the freed connection is handed straight to it. ' +
+            '<span class="dim">The cap protects the database: never more than ' + MAX + ' connections at once.</span>'
+          );
+        }
+      }
+
+      function acquireWithout() {
+        created++;
+        served++;
+        var id = created;
+        throwaway.unshift(id);
+        if (throwaway.length > 6) throwaway.pop();   // keep the strip short; it's a growing count anyway
+        setExplain(
+          "new Connection() → a brand-new object #" + id,
+          'In the <span class="bad">WITHOUT Pool</span> world, every request runs <code>new Connection()</code> — you just paid another <b class="bad">200ms handshake</b> to build <b>connection #' + id + '</b>. ' +
+          'It is used once and thrown away. <span class="bad">Created is now ' + created + '</span> and climbs with every single click — <b>no reuse at all</b>. ' +
+          '<span class="dim">Serve 5,000 requests and you build 5,000 connections.</span>'
+        );
+      }
+
+      /* ---- release a slot (WITH world) ---- */
+      function release(id) {
+        var s = slots.filter(function (x) { return x.id === id; })[0];
+        if (!s || s.state !== "inuse") return;
+
+        if (waiters.length > 0) {
+          // hand the freed connection straight to the next waiter (stays in-use)
+          var who = waiters.shift();
+          setExplain(
+            "released #" + id + " → handed to " + who,
+            'Connection #' + id + ' came back to the pool, but <span class="bad">' + who + '</span> was waiting — so instead of going idle, ' +
+            'it is handed <span class="good">straight to the waiter</span> and stays <span class="warn">in-use</span>. ' +
+            '<span class="dim">The waiting request is served with a reused connection — created still ' + created + '.</span>'
+          );
+          // s stays in-use
+        } else {
+          s.state = "available";
+          setExplain(
+            "released #" + id + " → back in the pool",
+            'You returned connection #' + id + ' (after a quick <code>reset()</code> to clear stale state). ' +
+            'It flips back to <span class="good">🟢 available</span>, ready for the next <code>acquire()</code> to <b>reuse</b> it. ' +
+            '<span class="dim">This is the “release” step — you MUST do it, or the pool starves.</span>'
+          );
+        }
+        render();
+      }
+
+      /* ---- render ---- */
+      function render() {
+        // toggle styling + world label
+        document.getElementById("tg-without").className = "without" + (world === "without" ? " on" : "");
+        document.getElementById("tg-with").className = "with" + (world === "with" ? " on" : "");
+        document.getElementById("world-label").textContent =
+          world === "with"
+            ? "WITH Pool · fixed pool of " + MAX + " connections · acquire reuses, never rebuilds"
+            : "WITHOUT Pool · every ＋ Acquire runs new Connection()";
+
+        // metrics
+        var cn = document.getElementById("created-n");
+        cn.textContent = created;
+        cn.className = "value " + (world === "with" ? "flat" : "runaway");
+        document.getElementById("created-unit").textContent =
+          world === "with" ? "capped at pool size (" + MAX + ") — reused" : "each costs a 200ms handshake";
+        document.getElementById("served-n").textContent = served;
+
+        // scoreboard
+        var sb = document.getElementById("scoreboard");
+        if (served === 0) {
+          sb.innerHTML = "click ＋ Acquire to borrow a connection…";
+        } else if (world === "with") {
+          sb.innerHTML = 'served <b>' + served + '</b> requests · created only <b style="color:var(--success)">' + created + '</b>';
+        } else {
+          sb.innerHTML = 'served <b>' + served + '</b> requests · created <b style="color:var(--danger)">' + created + '</b> (one per request)';
+        }
+
+        // show/hide the two worlds
+        document.getElementById("slots").style.display = world === "with" ? "flex" : "none";
+        document.getElementById("waitbar").style.display = world === "with" ? "block" : "none";
+        document.getElementById("throwaway").style.display = world === "with" ? "none" : "flex";
+
+        if (world === "with") {
+          renderSlots();
+          renderWaiters();
+        } else {
+          renderThrowaway();
+        }
+      }
+
+      function renderSlots() {
+        var host = document.getElementById("slots");
+        host.innerHTML = "";
+        slots.forEach(function (s) {
+          var el = document.createElement("div");
+          el.className = "slot " + s.state;
+          var avail = s.state === "available";
+          el.innerHTML =
+            '<div class="slot-head">' +
+              '<span class="slot-ico">' + (avail ? "🟢" : "🟡") + '</span>' +
+              '<span class="slot-id">conn #' + s.id + '</span>' +
+              '<span class="slot-tag">' + (avail ? "AVAILABLE" : "IN-USE") + '</span>' +
+            '</div>' +
+            '<div class="slot-sub">' + (avail ? "idle in the pool" : "borrowed — working…") + '</div>' +
+            '<button class="slot-btn">' + (avail ? "Release" : "Release ↩") + '</button>';
+          var btn = el.querySelector(".slot-btn");
+          if (!avail) {
+            btn.onclick = (function (id) { return function () { release(id); }; })(s.id);
+          } else {
+            btn.disabled = true;
+          }
+          host.appendChild(el);
+        });
+      }
+
+      function renderWaiters() {
+        var host = document.getElementById("waiters");
+        host.innerHTML = "";
+        host.classList.toggle("empty", waiters.length === 0);
+        waiters.forEach(function (w) {
+          var el = document.createElement("div");
+          el.className = "waiter";
+          el.textContent = "⏳ " + w + " · pool exhausted — waiting…";
+          host.appendChild(el);
+        });
+      }
+
+      function renderThrowaway() {
+        var host = document.getElementById("throwaway");
+        host.innerHTML = "";
+        host.classList.toggle("empty", throwaway.length === 0);
+        throwaway.forEach(function (id, i) {
+          var el = document.createElement("div");
+          el.className = "conn-new";
+          el.innerHTML =
+            '<div class="cn-id">🔌 new Connection #' + id + '</div>' +
+            '<div class="cn-cost">＋200ms handshake paid</div>' +
+            '<div class="cn-note">' + (i === 0 ? "used once, then discarded" : "already discarded") + '</div>';
+          host.appendChild(el);
+        });
+      }
+
+      /* ---- switch worlds (reset the scene so contrast is clean) ---- */
+      function setWorld(w) {
+        if (w === world) return;
+        world = w;
+        clearState();
+        if (w === "with") {
+          // build the fixed pool of 3, all available. Creating the pool
+          // pays the 3 handshakes up front — created starts at 3.
+          slots = [];
+          for (var i = 1; i <= MAX; i++) slots.push({ id: i, state: "available" });
+          created = MAX;
+          render();
+          setExplain(
+            "Switched to the Pool world",
+            'A fixed pool of <span class="good">' + MAX + ' connections</span> is ready (built once, up front). ' +
+            'Click <code>＋ Acquire</code> to borrow one — it turns <span class="warn">🟡 in-use</span>, but <b>created stays at ' + MAX + '</b>. ' +
+            'Acquire all ' + MAX + ', then acquire again to see a request <b>wait</b>, and <code>Release</code> to hand it off.'
+          );
+        } else {
+          created = 0;
+          render();
+          setExplain(
+            "Switched to the WITHOUT Pool world",
+            'No pool. Every <code>＋ Acquire</code> runs <code>new Connection()</code>, pays a <b class="bad">200ms handshake</b>, uses it once, and throws it away. ' +
+            'Click a few times and watch <b>created</b> climb — <span class="bad">it never stops</span>. ' +
+            '<span class="dim">That runaway cost is exactly what a pool prevents.</span>'
+          );
+        }
+      }
+
+      function clearState() {
+        created = 0; served = 0; slots = []; throwaway = []; waiters = []; nextReq = 0;
+      }
+
+      /* ---- reset ---- */
+      function reset() {
+        clearState();
+        if (world === "with") {
+          for (var i = 1; i <= MAX; i++) slots.push({ id: i, state: "available" });
+          created = MAX;
+        }
+        render();
+        setExplain("Build a new one, or reuse?",
+          'You\'re in the <span class="' + (world === "with" ? "good\">WITH" : "bad\">WITHOUT") + ' Pool</span> world. ' +
+          (world === "with"
+            ? 'Click <code>＋ Acquire</code> to borrow one of the ' + MAX + ' ready connections; <code>Release</code> gives it back. Created stays at ' + MAX + '.'
+            : 'Click <code>＋ Acquire</code> and watch a new connection get built — and the created counter climb — every single time.'));
+      }
+
+      /* ---- boot ---- */
+      render();
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

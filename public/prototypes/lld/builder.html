@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Builder — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---- Top: view toggle + reset ---- */
+      .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+      .toggle { display: inline-flex; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 3px; }
+      .toggle button { font: 700 12px/1 var(--sans); border: 0; background: transparent; color: var(--muted); padding: 8px 15px; border-radius: 999px; cursor: pointer; transition: color .15s, background .15s; white-space: nowrap; }
+      .toggle button.on.cons { background: var(--danger-soft); color: var(--danger); }
+      .toggle button.on.buil { background: var(--success-soft); color: var(--success); }
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: border-color .15s, transform .1s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+
+      /* ---- Ingredient toggles ---- */
+      .section-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 9px; }
+      .toppings { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+      .top { font: 700 12px/1 var(--sans); background: var(--elevated); border: 1px solid var(--border-strong); border-radius: 999px; padding: 9px 13px; cursor: pointer; color: var(--muted); transition: border-color .15s, color .15s, background .15s, transform .1s; display: inline-flex; align-items: center; gap: 6px; }
+      .top:hover { border-color: var(--accent); }
+      .top:active { transform: scale(0.96); }
+      .top.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+      .top .em { font-size: 15px; }
+
+      /* ---- Director presets ---- */
+      .presets { display: flex; gap: 9px; flex-wrap: wrap; margin-bottom: 16px; align-items: center; }
+      .preset { font: 700 12px/1 var(--sans); background: var(--info-soft); border: 1px solid rgba(94,159,246,0.4); color: var(--info); border-radius: var(--r-md); padding: 10px 14px; cursor: pointer; transition: border-color .15s, transform .1s; display: inline-flex; align-items: center; gap: 7px; }
+      .preset:hover { border-color: var(--info); }
+      .preset:active { transform: scale(0.97); }
+      .presets .lbl { font-family: var(--mono); font-size: 10px; color: var(--subtle); letter-spacing: .05em; text-transform: uppercase; }
+
+      /* ---- Stage: burger stack + code ---- */
+      .stage { display: grid; grid-template-columns: 210px 1fr; gap: 14px; margin-bottom: 14px; align-items: stretch; }
+      @media (max-width: 620px) { .stage { grid-template-columns: 1fr; } }
+      .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 14px; }
+
+      /* burger stack */
+      .stack-wrap { display: flex; flex-direction: column; align-items: center; }
+      .stack { display: flex; flex-direction: column-reverse; align-items: center; gap: 3px; min-height: 190px; justify-content: flex-start; width: 100%; }
+      .layer { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; max-width: 168px; border-radius: 999px; font-size: 13px; font-weight: 700; color: #23180f; padding: 7px 0; animation: drop .28s ease; box-shadow: 0 1px 0 rgba(0,0,0,0.25); }
+      .layer .em { font-size: 16px; }
+      .layer.bun { background: linear-gradient(#e8a94e, #d98b34); }
+      .layer.bun-top { border-radius: 999px 999px 60px 60px; height: 34px; }
+      .layer.bun-bottom { border-radius: 60px 60px 999px 999px; }
+      .layer.patty { background: #6a4326; color: #f3e7dc; }
+      .layer.cheese { background: linear-gradient(#ffcf4d, #f4b53a); max-width: 176px; clip-path: polygon(0 0,100% 0,100% 60%,92% 100%,78% 62%,64% 100%,50% 62%,36% 100%,22% 62%,8% 100%,0 60%); }
+      .layer.bacon { background: linear-gradient(#c65b45, #a8412f); color: #ffe9e2; }
+      .layer.lettuce { background: #7fbf5a; color: #17300c; max-width: 180px; border-radius: 999px; clip-path: polygon(0 0,100% 0,100% 55%,90% 100%,72% 55%,54% 100%,36% 55%,18% 100%,4% 55%); }
+      .layer.tomato { background: #d9503f; color: #fff0ec; }
+      .layer.sauce { background: linear-gradient(#e8b04b, #d68f2f); color: #2b1c08; height: 16px; padding: 3px 0; font-size: 10px; }
+      .stack-empty { color: var(--subtle); font-size: 12px; font-style: italic; text-align: center; align-self: center; margin: auto 0; }
+      @keyframes drop { from { opacity: 0; transform: translateY(-10px) scale(.9); } to { opacity: 1; transform: none; } }
+      .count-cap { font-family: var(--mono); font-size: 10px; color: var(--subtle); margin-top: 12px; text-align: center; }
+      .count-cap b { color: var(--fg); }
+
+      /* code panel */
+      .code-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+      .code-head .tag { font-family: var(--mono); font-size: 9px; padding: 3px 8px; border-radius: 5px; letter-spacing: .05em; }
+      .code-head .tag.buil { background: var(--success-soft); color: var(--success); }
+      .code-head .tag.cons { background: var(--danger-soft); color: var(--danger); }
+      pre.code { margin: 0; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 14px 15px; font-family: var(--mono); font-size: 12.5px; line-height: 1.65; color: var(--fg); overflow-x: auto; min-height: 150px; }
+      .code-line { white-space: pre; }
+      .k-new { color: var(--info); }
+      .k-method { color: var(--accent); }
+      .k-build { color: var(--success); font-weight: 700; }
+      .k-bool-t { color: var(--success); }
+      .k-bool-f { color: var(--danger); }
+      .k-dim { color: var(--subtle); }
+      .k-warn { color: var(--danger); font-style: italic; }
+      .k-note { color: var(--muted); }
+
+      /* ---- Fixed explain panel (replaced, never grows) ---- */
+      .explain { min-height: 92px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 13px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .qcol { color: var(--info); font-weight: 700; }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <!-- TOP: view toggle -->
+    <div class="topbar">
+      <div class="toggle" id="toggle">
+        <button class="buil on" id="tg-buil" onclick="setView('builder')">✓ Builder way</button>
+        <button class="cons" id="tg-cons" onclick="setView('constructor')">⚙ Constructor way</button>
+      </div>
+      <button class="btn" onclick="reset()">↺ Reset</button>
+    </div>
+
+    <!-- INGREDIENT TOGGLES -->
+    <div class="section-cap">Toppings — click to add or remove (bun is always there)</div>
+    <div class="toppings" id="toppings"></div>
+
+    <!-- DIRECTOR PRESETS -->
+    <div class="presets">
+      <span class="lbl">Director presets:</span>
+      <button class="preset" onclick="runDirector('classic')"><span>🍔</span> Classic Cheeseburger</button>
+      <button class="preset" onclick="runDirector('veggie')"><span>🥬</span> Veggie Deluxe</button>
+    </div>
+
+    <!-- STAGE -->
+    <div class="stage">
+      <div class="panel stack-wrap">
+        <div class="section-cap" style="align-self:flex-start">Your burger</div>
+        <div class="stack" id="stack"></div>
+        <div class="count-cap">layers: <b id="layer-n">2</b> <span class="k-dim">(bun ×2)</span></div>
+      </div>
+      <div class="panel">
+        <div class="code-head">
+          <div class="section-cap" style="margin-bottom:0">Generated code</div>
+          <span class="tag buil" id="code-tag">BUILDER WAY</span>
+        </div>
+        <pre class="code" id="code"></pre>
+      </div>
+    </div>
+
+    <!-- FIXED EXPLAIN PANEL -->
+    <div class="explain">
+      <div class="explain-title" id="ex-title">Build a burger, step by step</div>
+      <div class="explain-body" id="ex-body">Click a topping to add it. Two things move together: a <b>layer drops into the burger</b> and a <b>named line appears in the code</b> — like <code>.addCheese()</code> — always above the final <code>.build()</code>. Then flip to the <span class="bad">⚙ Constructor way</span> to see the same burger as one confusing row of booleans.</div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>Each step is <b style="color:var(--fg)">named and optional</b>. Skip a topping by not calling its method; the chain always ends with <b style="color:var(--success)">.build()</b>, which hands back the finished burger.</span>
+    </div>
+
+    <script>
+      /* ---- one explain panel, REPLACED (never appended) ---- */
+      function setExplain(title, bodyHtml) {
+        document.getElementById("ex-title").textContent = title;
+        document.getElementById("ex-body").innerHTML = bodyHtml;
+      }
+
+      // Ordered ingredient list. `stack` decides layer order (bottom→top order of build).
+      var INGREDIENTS = [
+        { id: "patty",  em: "🥩", label: "Patty",        method: "addPatty",  layer: "patty",  text: "Patty" },
+        { id: "cheese", em: "🧀", label: "Cheese",       method: "addCheese", layer: "cheese", text: "Cheese" },
+        { id: "bacon",  em: "🥓", label: "Bacon",        method: "addBacon",  layer: "bacon",  text: "Bacon" },
+        { id: "lettuce",em: "🥬", label: "Lettuce",      method: "addLettuce",layer: "lettuce",text: "Lettuce" },
+        { id: "tomato", em: "🍅", label: "Tomato",       method: "addTomato", layer: "tomato", text: "Tomato" },
+        { id: "sauce",  em: "🧂", label: "Sauce",        method: "addSauce",  layer: "sauce",  text: "Sauce" },
+        { id: "double", em: "🥩🥩", label: "Double Patty", method: "addPatty",  layer: "patty",  text: "Patty" },
+      ];
+
+      // state: which toggles are on
+      var on = {};
+      var view = "builder"; // "builder" | "constructor"
+
+      /* ---- toggle an ingredient ---- */
+      function toggle(id) {
+        on[id] = !on[id];
+        var ing = INGREDIENTS.find(function (i) { return i.id === id; });
+        if (on[id]) {
+          setExplain(
+            "added " + ing.label + " → ." + ing.method + "() appended",
+            'You turned on <b style="color:var(--accent)">' + ing.em + ' ' + ing.label + '</b>. ' +
+            'A <span class="good">' + ing.text.toLowerCase() + ' layer</span> dropped into the burger, and the code chain grew one line: ' +
+            '<code>.' + ing.method + '()</code> — sitting right above the final <code>.build()</code>. ' +
+            '<span class="dim">Only the toppings you pick appear; the order follows your clicks.</span>'
+          );
+        } else {
+          setExplain(
+            "removed " + ing.label + " → ." + ing.method + "() dropped",
+            'You turned off <b>' + ing.em + ' ' + ing.label + '</b>. The layer left the burger and the <code>.' + ing.method + '()</code> line vanished from the chain. ' +
+            '<span class="dim">With a Builder, skipping a part is just not calling its method — no null to pass.</span>'
+          );
+        }
+        render();
+      }
+
+      /* ---- Director presets: run a fixed recipe of steps ---- */
+      function runDirector(which) {
+        on = {};
+        if (which === "classic") {
+          on.patty = true; on.cheese = true; on.sauce = true;
+          setExplain(
+            "Director → classicCheeseburger()",
+            'The <span class="qcol">Director</span> ran a <b>fixed recipe</b> in one call: ' +
+            '<code>b.addPatty().addCheese().addSauce().build()</code>. ' +
+            'You didn\'t pick the steps — the Director knows the <b style="color:var(--info)">Classic Cheeseburger</b> and assembled it for you. ' +
+            '<span class="dim">Callers get a preset without repeating the steps.</span>'
+          );
+        } else {
+          on.lettuce = true; on.tomato = true; on.sauce = true;
+          setExplain(
+            "Director → veggieDeluxe()",
+            'The <span class="qcol">Director</span> ran a different fixed recipe: ' +
+            '<code>b.addLettuce().addTomato().addSauce().build()</code> — no meat. ' +
+            'One click filled the burger and the code with the <b style="color:var(--info)">Veggie Deluxe</b> preset. ' +
+            '<span class="dim">Same Builder, a different known sequence of steps.</span>'
+          );
+        }
+        render();
+      }
+
+      /* ---- switch code view ---- */
+      function setView(v) {
+        if (v === view) return;
+        view = v;
+        if (v === "constructor") {
+          setExplain(
+            "Same burger, the ⚙ Constructor way",
+            'Here is the <span class="bad">exact same burger</span> built with one telescoping constructor: a long row of ' +
+            '<code>true</code>/<code>false</code> flags. <span class="bad">Which boolean is cheese?</span> You can\'t tell without counting positions — ' +
+            'and adding one more topping shifts everything. <span class="dim">Flip back to the Builder way to see the readable version.</span>'
+          );
+        } else {
+          setExplain(
+            "Back to the ✓ Builder way",
+            'The <span class="good">readable</span> version returns: every step is <b>named</b> (<code>.addCheese()</code>), <b>optional</b>, and reads top to bottom like an order. ' +
+            'Same burger — far easier to understand and change. <span class="dim">This is the core win of the pattern.</span>'
+          );
+        }
+        render();
+      }
+
+      /* ---- helpers ---- */
+      // toppings actually selected, in ingredient order (double patty adds a 2nd patty)
+      function selectedLayers() {
+        var out = [];
+        INGREDIENTS.forEach(function (i) { if (on[i.id]) out.push(i); });
+        return out;
+      }
+
+      /* ---- render everything ---- */
+      function render() {
+        // toggle buttons
+        var host = document.getElementById("toppings");
+        host.innerHTML = "";
+        INGREDIENTS.forEach(function (i) {
+          var el = document.createElement("button");
+          el.className = "top" + (on[i.id] ? " on" : "");
+          el.innerHTML = '<span class="em">' + i.em + '</span>' + i.label;
+          el.onclick = (function (id) { return function () { toggle(id); }; })(i.id);
+          host.appendChild(el);
+        });
+
+        // toggle bar styling
+        document.getElementById("tg-buil").className = "buil" + (view === "builder" ? " on" : "");
+        document.getElementById("tg-cons").className = "cons" + (view === "constructor" ? " on" : "");
+        var tag = document.getElementById("code-tag");
+        tag.className = "tag " + (view === "builder" ? "buil" : "cons");
+        tag.textContent = view === "builder" ? "BUILDER WAY" : "CONSTRUCTOR WAY";
+
+        renderStack();
+        renderCode();
+      }
+
+      function renderStack() {
+        var stack = document.getElementById("stack");
+        stack.innerHTML = "";
+        var layers = selectedLayers();
+
+        // bottom bun
+        stack.appendChild(makeLayer("bun bun-bottom", "🍞", "Bottom bun"));
+        // middle layers (in ingredient/click order)
+        layers.forEach(function (i) {
+          stack.appendChild(makeLayer(i.layer, i.em.length > 2 ? "🥩" : i.em, i.text));
+        });
+        // top bun
+        stack.appendChild(makeLayer("bun bun-top", "🍞", "Top bun"));
+
+        document.getElementById("layer-n").textContent = layers.length + 2;
+      }
+
+      function makeLayer(cls, em, text) {
+        var el = document.createElement("div");
+        el.className = "layer " + cls;
+        el.innerHTML = '<span class="em">' + em + '</span>' + text;
+        return el;
+      }
+
+      function renderCode() {
+        var pre = document.getElementById("code");
+        var layers = selectedLayers();
+        if (view === "builder") {
+          var html = '<div class="code-line"><span class="k-new">new</span> BurgerBuilder()</div>';
+          layers.forEach(function (i) {
+            html += '<div class="code-line">  .<span class="k-method">' + i.method + '</span>()</div>';
+          });
+          html += '<div class="code-line">  .<span class="k-build">build</span>()  <span class="k-dim">// → finished Burger</span></div>';
+          pre.innerHTML = html;
+        } else {
+          // constructor way: one boolean per possible topping, in a fixed order.
+          // fixed field order (telescoping constructor):
+          var fields = [
+            { id: "patty",  q: "patty" },
+            { id: "cheese", q: "cheese" },
+            { id: "bacon",  q: "bacon" },
+            { id: "lettuce",q: "lettuce" },
+            { id: "tomato", q: "tomato" },
+            { id: "sauce",  q: "sauce" },
+            { id: "double", q: "2nd patty" },
+          ];
+          var vals = fields.map(function (f) {
+            var v = !!on[f.id];
+            return '<span class="' + (v ? "k-bool-t" : "k-bool-f") + '">' + v + '</span>';
+          }).join(", ");
+          var labels = fields.map(function (f) { return f.q; }).join(", ");
+          pre.innerHTML =
+            '<div class="code-line"><span class="k-new">new</span> Burger(' + vals + ')</div>' +
+            '<div class="code-line"><span class="k-warn">// which boolean is cheese?! 😖</span></div>' +
+            '<div class="code-line"><span class="k-dim">//   positions: ' + labels + '</span></div>' +
+            '<div class="code-line"><span class="k-note">// add one topping → every call site shifts</span></div>';
+        }
+      }
+
+      /* ---- reset ---- */
+      function reset() {
+        on = {};
+        view = "builder";
+        render();
+        setExplain("Build a burger, step by step",
+          'Cleared. Click a topping to add it — a <b>layer drops in</b> and a <b>named line</b> appears in the code, always above <code>.build()</code>. ' +
+          'Try the <span class="qcol">Director presets</span>, or flip to the <span class="bad">⚙ Constructor way</span> to see the messy version.');
+      }
+
+      /* ---- boot ---- */
+      render();
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

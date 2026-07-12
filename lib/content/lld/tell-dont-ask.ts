@@ -3,7 +3,7 @@ import type { RoadmapLesson } from "@/lib/content/types";
 export const tellDontAsk: RoadmapLesson = {
   title: "Tell, Don't Ask",
   oneLiner:
-    "Don't pull data OUT of an object to make a decision and then push a result back. Instead, TELL the object what you want and let IT use its own data to decide. Asking (`if (account.getBalance() >= amount) account.setBalance(...)`) scatters the same rule across every caller; telling (`account.withdraw(amount)`) keeps the rule next to the data, in one place.",
+    "Don't pull data OUT of an object to make a decision and then push a result back. Instead, TELL the object what you want and let IT use its own data to decide. Asking (if (account.getBalance() >= amount) account.setBalance(...)) scatters the same rule across every caller; telling (account.withdraw(amount)) keeps the rule next to the data, in one place.",
   difficulty: "beginner",
   estimatedTime: "14 min",
   prototypePath: "/prototypes/lld/tell-dont-ask.html",

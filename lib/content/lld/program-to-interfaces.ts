@@ -3,7 +3,7 @@ import type { RoadmapLesson } from "@/lib/content/types";
 export const programToInterfaces: RoadmapLesson = {
   title: "Program to Interfaces, Not Implementations",
   oneLiner:
-    "The Gang of Four motto. When you declare a variable, parameter, or return type, name the *contract* (an interface like `List` or `MessageSender`), not a *specific class* (like `ArrayList` or `EmailSender`). Then you can swap the concrete object behind it without touching the code that uses it. Nail it to a concrete class and every user is locked to that one choice forever.",
+    "The Gang of Four motto. When you declare a variable, parameter, or return type, name the contract (an interface like List or MessageSender), not a specific class (like ArrayList or EmailSender). Then you can swap the concrete object behind it without touching the code that uses it. Nail it to a concrete class and every user is locked to that one choice forever.",
   difficulty: "beginner",
   estimatedTime: "14 min",
   prototypePath: "/prototypes/lld/program-to-interfaces.html",

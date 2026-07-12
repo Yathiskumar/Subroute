@@ -3,7 +3,7 @@ import type { RoadmapLesson } from "@/lib/content/types";
 export const abstraction: RoadmapLesson = {
   title: "Abstraction",
   oneLiner:
-    "Expose a simple, essential interface and hide the complex machinery behind it — you call `makeEspresso()`, not the twelve internal steps.",
+    "Expose a simple, essential interface and hide the complex machinery behind it — you call makeEspresso(), not the twelve internal steps.",
   difficulty: "beginner",
   estimatedTime: "11 min",
   prototypePath: "/prototypes/lld/abstraction.html",

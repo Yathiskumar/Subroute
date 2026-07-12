@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Prototype — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+      .title-wrap { display: flex; flex-direction: column; gap: 2px; }
+      .title-wrap .t { font-size: 13px; font-weight: 700; color: var(--fg); }
+      .title-wrap .s { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: border-color .15s, transform .1s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+
+      /* ---- main layout: template | clones ---- */
+      .grid { display: grid; grid-template-columns: 240px 1fr; gap: 14px; align-items: start; margin-bottom: 14px; }
+      @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
+
+      .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 14px; }
+      .panel-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+      .panel-cap b { color: var(--fg); }
+
+      /* ---- template card ---- */
+      .tmpl { border: 1.5px solid var(--accent-border); border-radius: var(--r-md); background: var(--elevated); padding: 12px; }
+      .enemy-face { font-size: 40px; text-align: center; line-height: 1; margin: 4px 0 8px; filter: drop-shadow(0 0 6px var(--tint, transparent)); }
+      .enemy-name { text-align: center; font-size: 13px; font-weight: 700; margin-bottom: 2px; }
+      .enemy-meta { text-align: center; font-family: var(--mono); font-size: 10px; color: var(--muted); margin-bottom: 10px; }
+
+      .ctrl { margin-bottom: 10px; }
+      .ctrl-lab { font-family: var(--mono); font-size: 9px; letter-spacing: .05em; text-transform: uppercase; color: var(--subtle); margin-bottom: 5px; }
+      .opts { display: flex; gap: 5px; flex-wrap: wrap; }
+      .opt { flex: 1; min-width: 0; font: 600 15px/1 var(--sans); background: var(--surface); border: 1px solid var(--border-strong); border-radius: 6px; padding: 7px 4px; cursor: pointer; text-align: center; transition: border-color .12s, background .12s; }
+      .opt.on { border-color: var(--accent); background: var(--accent-soft); }
+      .opt:hover { border-color: var(--accent); }
+      .swatches { display: flex; gap: 6px; }
+      .sw { width: 26px; height: 26px; border-radius: 6px; cursor: pointer; border: 2px solid transparent; transition: transform .1s; }
+      .sw.on { border-color: var(--fg); transform: scale(1.08); }
+      .hp-row { display: flex; align-items: center; gap: 8px; }
+      .hp-btn { width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--fg); font-size: 16px; cursor: pointer; line-height: 1; }
+      .hp-btn:hover { border-color: var(--accent); }
+      .hp-val { font-family: var(--mono); font-size: 14px; font-weight: 700; min-width: 40px; text-align: center; }
+
+      .clone-btn { width: 100%; margin-top: 4px; font: 700 14px/1 var(--sans); background: var(--accent-soft); border: 1.5px solid var(--accent-border); color: var(--accent); border-radius: var(--r-md); padding: 12px; cursor: pointer; transition: transform .1s, background .15s; }
+      .clone-btn:hover { background: rgba(251,134,58,0.2); }
+      .clone-btn:active { transform: scale(0.97); }
+      .cost { margin-top: 9px; font-family: var(--mono); font-size: 10.5px; line-height: 1.5; color: var(--muted); text-align: center; }
+      .cost .scratch { color: var(--danger); font-weight: 700; }
+      .cost .clones { color: var(--success); font-weight: 700; }
+
+      /* ---- clones grid ---- */
+      .clones { display: flex; flex-wrap: wrap; gap: 10px; min-height: 130px; align-content: flex-start; }
+      .clones.empty::before { content: "Click ⧉ Clone — copies appear here →"; color: var(--subtle); font-size: 12px; font-style: italic; align-self: center; }
+      .clone { width: 96px; background: var(--elevated); border: 1.5px solid var(--border-strong); border-radius: var(--r-md); padding: 9px 8px; text-align: center; position: relative; animation: pop .25s ease; }
+      .clone.just { border-color: var(--success); box-shadow: 0 0 0 3px var(--success-soft); }
+      .clone .face { font-size: 26px; line-height: 1; }
+      .clone .cid { font-family: var(--mono); font-size: 9px; color: var(--subtle); margin-top: 3px; }
+      .clone .cmeta { font-family: var(--mono); font-size: 9px; color: var(--muted); margin-top: 2px; }
+      @keyframes pop { from { opacity: 0; transform: translateY(-6px) scale(0.9); } to { opacity: 1; transform: none; } }
+
+      /* ---- shallow/deep inventory demo ---- */
+      .demo { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 14px; margin-bottom: 14px; }
+      .demo-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+      .demo-head .lab { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+      .toggle { display: inline-flex; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 3px; }
+      .toggle button { font: 700 11px/1 var(--sans); border: 0; background: transparent; color: var(--muted); padding: 7px 13px; border-radius: 999px; cursor: pointer; transition: color .15s, background .15s; white-space: nowrap; }
+      .toggle button.on.shallow { background: var(--danger-soft); color: var(--danger); }
+      .toggle button.on.deep { background: var(--success-soft); color: var(--success); }
+
+      .inv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      @media (max-width: 560px) { .inv-grid { grid-template-columns: 1fr; } }
+      .invbox { border: 1.5px solid var(--border-strong); border-radius: var(--r-md); background: var(--elevated); padding: 11px; }
+      .invbox.orig { border-color: var(--info); }
+      .invbox-cap { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+      .invbox.orig .invbox-cap { color: var(--info); }
+      .items { display: flex; flex-wrap: wrap; gap: 5px; min-height: 26px; }
+      .item { font-family: var(--mono); font-size: 10.5px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 3px 7px; }
+      .item.shared { border-color: var(--danger); color: var(--danger); animation: flashred .5s ease; }
+      .item.owned { border-color: var(--success); color: var(--success); animation: flashgreen .5s ease; }
+      @keyframes flashred { from { background: var(--danger-soft); } to { background: var(--surface); } }
+      @keyframes flashgreen { from { background: var(--success-soft); } to { background: var(--surface); } }
+      .items-empty { font-size: 10px; color: var(--subtle); font-style: italic; }
+      .add-btn { margin-top: 9px; width: 100%; font: 600 11px/1 var(--sans); background: var(--elevated); border: 1px solid var(--border-strong); color: var(--fg); border-radius: 6px; padding: 8px; cursor: pointer; }
+      .add-btn:hover { border-color: var(--accent); }
+      .add-btn:disabled { opacity: .4; cursor: not-allowed; }
+      .demo-note { margin-top: 11px; font-family: var(--mono); font-size: 10.5px; text-align: center; }
+      .demo-note.shared { color: var(--danger); }
+      .demo-note.owned { color: var(--success); }
+      .demo-note.idle { color: var(--subtle); }
+
+      /* ---- fixed explain panel (replaced, never grows) ---- */
+      .explain { min-height: 92px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 13px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .acc { color: var(--accent); font-weight: 700; }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <div class="topbar">
+      <div class="title-wrap">
+        <span class="t">⧉ Prototype — clone a configured enemy</span>
+        <span class="s">configure the template once · clone it many times</span>
+      </div>
+      <button class="btn" onclick="resetAll()">↺ Reset</button>
+    </div>
+
+    <div class="grid">
+      <!-- LEFT: the template you configure once -->
+      <div class="panel">
+        <div class="panel-cap"><span>Template enemy</span><b>the prototype</b></div>
+        <div class="tmpl">
+          <div class="enemy-face" id="face">👺</div>
+          <div class="enemy-name" id="ename">Goblin</div>
+          <div class="enemy-meta" id="emeta">Sword · 30 HP</div>
+
+          <div class="ctrl">
+            <div class="ctrl-lab">Type</div>
+            <div class="opts" id="type-opts"></div>
+          </div>
+          <div class="ctrl">
+            <div class="ctrl-lab">Colour</div>
+            <div class="swatches" id="color-opts"></div>
+          </div>
+          <div class="ctrl">
+            <div class="ctrl-lab">Weapon</div>
+            <div class="opts" id="weapon-opts"></div>
+          </div>
+          <div class="ctrl">
+            <div class="ctrl-lab">HP</div>
+            <div class="hp-row">
+              <button class="hp-btn" onclick="bumpHp(-10)">−</button>
+              <span class="hp-val" id="hp-val">30</span>
+              <button class="hp-btn" onclick="bumpHp(10)">＋</button>
+            </div>
+          </div>
+
+          <button class="clone-btn" onclick="doClone()">⧉ Clone</button>
+          <div class="cost" id="cost">no clones yet · configuring one enemy = <b style="color:var(--fg)">4</b> steps</div>
+        </div>
+      </div>
+
+      <!-- RIGHT: the clones -->
+      <div class="panel">
+        <div class="panel-cap"><span>Clones spawned</span><b id="clone-count">0</b></div>
+        <div class="clones empty" id="clones"></div>
+      </div>
+    </div>
+
+    <!-- SHALLOW vs DEEP demo -->
+    <div class="demo">
+      <div class="demo-head">
+        <span class="lab">Bonus · shallow vs deep copy — the nested <code style="font-family:var(--mono);color:var(--muted)">inventory</code> trap</span>
+        <div class="toggle" id="mode-toggle">
+          <button class="shallow on" id="tg-shallow" onclick="setMode('shallow')">⚠ Shallow clone</button>
+          <button class="deep" id="tg-deep" onclick="setMode('deep')">✓ Deep clone</button>
+        </div>
+      </div>
+      <div class="inv-grid">
+        <div class="invbox orig">
+          <div class="invbox-cap">🎯 Template inventory</div>
+          <div class="items" id="orig-items"></div>
+        </div>
+        <div class="invbox">
+          <div class="invbox-cap">⧉ Cloned enemy inventory</div>
+          <div class="items" id="clone-items"></div>
+          <button class="add-btn" id="add-btn" onclick="addToClone()">＋ add item to this clone's inventory</button>
+        </div>
+      </div>
+      <div class="demo-note idle" id="demo-note">Clone the template, then add an item to the clone — watch whether the template changes too.</div>
+    </div>
+
+    <!-- FIXED EXPLAIN PANEL -->
+    <div class="explain">
+      <div class="explain-title" id="ex-title">Configure once, clone many</div>
+      <div class="explain-body" id="ex-body">Set up the <span class="acc">template</span> enemy on the left — type, colour, weapon, HP. Then hit <code>⧉ Clone</code>: an <b>identical copy</b> appears on the right, all four fields copied in <span class="good">one click</span>. No re-configuring. That's the Prototype pattern.</div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>Each clone copies the template's <b style="color:var(--fg)">current</b> values. Change the template, then clone again, and the new copy reflects the change — a clone is a snapshot of the object as it is <b style="color:var(--accent)">right now</b>.</span>
+    </div>
+
+    <script>
+      /* ---- one explain panel, REPLACED (never appended) ---- */
+      function setExplain(title, bodyHtml) {
+        document.getElementById("ex-title").textContent = title;
+        document.getElementById("ex-body").innerHTML = bodyHtml;
+      }
+
+      var TYPES = [
+        { key: "Goblin", face: "👺" },
+        { key: "Orc", face: "👹" },
+        { key: "Dragon", face: "🐉" },
+      ];
+      var COLORS = ["#5cc66f", "#5e9ff6", "#fb863a", "#f06868", "#c98bff"];
+      var WEAPONS = [
+        { key: "Sword", ico: "🗡️" },
+        { key: "Bow", ico: "🏹" },
+        { key: "Fireball", ico: "🔥" },
+      ];
+      var FIELDS = 4; // type, color, weapon, hp — "steps to configure from scratch"
+
+      // the template (prototype) — the expensive-to-configure object
+      var tmpl = { type: "Goblin", color: "#5cc66f", weapon: "Sword", hp: 30 };
+
+      var clones = [];        // spawned copies
+      var cloneSeq = 0;
+
+      // shallow/deep demo state
+      var mode = "shallow";           // "shallow" | "deep"
+      var origInv = ["potion"];       // the template's inventory (nested object)
+      var demoClone = null;           // { inv: [...] , sharesOrig: bool }
+
+      function faceFor(type) {
+        var t = TYPES.filter(function (x) { return x.key === type; })[0];
+        return t ? t.face : "👾";
+      }
+      function icoFor(weapon) {
+        var w = WEAPONS.filter(function (x) { return x.key === weapon; })[0];
+        return w ? w.ico : "";
+      }
+
+      /* ---- build the template controls ---- */
+      function buildControls() {
+        var to = document.getElementById("type-opts");
+        to.innerHTML = "";
+        TYPES.forEach(function (t) {
+          var b = document.createElement("button");
+          b.className = "opt" + (tmpl.type === t.key ? " on" : "");
+          b.textContent = t.face;
+          b.title = t.key;
+          b.onclick = function () { setType(t.key); };
+          to.appendChild(b);
+        });
+
+        var co = document.getElementById("color-opts");
+        co.innerHTML = "";
+        COLORS.forEach(function (c) {
+          var s = document.createElement("div");
+          s.className = "sw" + (tmpl.color === c ? " on" : "");
+          s.style.background = c;
+          s.title = c;
+          s.onclick = function () { setColor(c); };
+          co.appendChild(s);
+        });
+
+        var wo = document.getElementById("weapon-opts");
+        wo.innerHTML = "";
+        WEAPONS.forEach(function (w) {
+          var b = document.createElement("button");
+          b.className = "opt" + (tmpl.weapon === w.key ? " on" : "");
+          b.textContent = w.ico;
+          b.title = w.key;
+          b.onclick = function () { setWeapon(w.key); };
+          wo.appendChild(b);
+        });
+      }
+
+      function renderTemplate() {
+        var face = document.getElementById("face");
+        face.textContent = faceFor(tmpl.type);
+        face.style.setProperty("--tint", tmpl.color);
+        face.style.textShadow = "0 0 14px " + tmpl.color + "88";
+        document.getElementById("ename").textContent = tmpl.type;
+        document.getElementById("ename").style.color = tmpl.color;
+        document.getElementById("emeta").textContent = tmpl.weapon + " · " + tmpl.hp + " HP";
+        document.getElementById("hp-val").textContent = tmpl.hp;
+        buildControls();
+      }
+
+      function setType(t) {
+        tmpl.type = t; renderTemplate();
+        setExplain("Template changed → type = " + t,
+          'You edited the <span class="acc">template</span> (the prototype). It now costs nothing extra — but every <b>future</b> clone will copy this new value. ' +
+          'A clone captures the template\'s <b>current</b> state, so change first, then clone.');
+      }
+      function setColor(c) {
+        tmpl.color = c; renderTemplate();
+        setExplain("Template changed → colour",
+          'The <span class="acc">template</span>\'s colour changed. Clones made from now on inherit it. ' +
+          '<span class="dim">Clones already on the right keep the colour they were stamped with — they were snapshots.</span>');
+      }
+      function setWeapon(w) {
+        tmpl.weapon = w; renderTemplate();
+        setExplain("Template changed → weapon = " + w,
+          'The <span class="acc">template</span> now wields ' + icoFor(w) + ' <b>' + w + '</b>. The next <code>clone()</code> copies this weapon in one step.');
+      }
+      function bumpHp(d) {
+        tmpl.hp = Math.max(10, Math.min(200, tmpl.hp + d));
+        renderTemplate();
+        setExplain("Template changed → " + tmpl.hp + " HP",
+          'HP set to <b>' + tmpl.hp + '</b> on the <span class="acc">template</span>. Clone it and the copy has <b>' + tmpl.hp + ' HP</b> too — ' +
+          'proof that a clone copies the <b>current</b> state, not a blank default.');
+      }
+
+      /* ---- THE CORE ACTION: clone the template ---- */
+      function doClone() {
+        cloneSeq++;
+        var c = { id: cloneSeq, type: tmpl.type, color: tmpl.color, weapon: tmpl.weapon, hp: tmpl.hp, just: true };
+        clones.forEach(function (x) { x.just = false; });
+        clones.push(c);
+        renderClones();
+        renderCost();
+        setExplain(
+          "clone() → an identical " + tmpl.type + " appeared",
+          'One click ran <code>template.clone()</code>. It copied <b>all ' + FIELDS + ' fields</b> — ' +
+          faceFor(tmpl.type) + ' ' + tmpl.type + ', its colour, ' + icoFor(tmpl.weapon) + ' ' + tmpl.weapon + ', ' + tmpl.hp + ' HP — into ' +
+          '<span class="good">clone #' + cloneSeq + '</span>, no re-configuring. ' +
+          'Building this from scratch would have meant <span class="bad">' + FIELDS + ' steps</span>; cloning took <span class="good">1</span>.'
+        );
+      }
+
+      function renderClones() {
+        var host = document.getElementById("clones");
+        host.innerHTML = "";
+        host.classList.toggle("empty", clones.length === 0);
+        clones.forEach(function (c) {
+          var el = document.createElement("div");
+          el.className = "clone" + (c.just ? " just" : "");
+          el.innerHTML =
+            '<div class="face" style="text-shadow:0 0 10px ' + c.color + '88">' + faceFor(c.type) + '</div>' +
+            '<div class="cid">clone #' + c.id + '</div>' +
+            '<div class="cmeta" style="color:' + c.color + '">' + c.type + '</div>' +
+            '<div class="cmeta">' + icoFor(c.weapon) + ' ' + c.hp + ' HP</div>';
+          host.appendChild(el);
+        });
+        document.getElementById("clone-count").textContent = clones.length;
+      }
+
+      function renderCost() {
+        var n = clones.length;
+        var el = document.getElementById("cost");
+        if (n === 0) {
+          el.innerHTML = 'no clones yet · configuring one enemy = <b style="color:var(--fg)">' + FIELDS + '</b> steps';
+          return;
+        }
+        el.innerHTML = 'made <b style="color:var(--fg)">' + n + '</b> enemies · ' +
+          'from scratch: <span class="scratch">' + n + '×' + FIELDS + ' = ' + (n * FIELDS) + ' steps</span> · ' +
+          'by cloning: <span class="clones">' + n + ' clicks</span>';
+      }
+
+      /* ---- shallow / deep inventory demo ---- */
+      function setMode(m) {
+        if (m === mode) return;
+        mode = m;
+        // re-clone under the new mode so the wiring matches
+        makeDemoClone(true);
+        document.getElementById("tg-shallow").className = "shallow" + (mode === "shallow" ? " on" : "");
+        document.getElementById("tg-deep").className = "deep" + (mode === "deep" ? " on" : "");
+        setExplain(
+          mode === "shallow" ? "Switched to SHALLOW clone" : "Switched to DEEP clone",
+          mode === "shallow"
+            ? 'A <span class="bad">shallow</span> copy copies the top-level fields but only the <b>reference</b> to the nested <code>inventory</code> — so the clone and template <span class="bad">share the same list</span>. Add an item to the clone below and watch it appear on the template too.'
+            : 'A <span class="good">deep</span> copy also duplicates the nested <code>inventory</code>, so the clone gets its <b>own</b> list. Add an item to the clone below and the template stays <span class="good">untouched</span>.'
+        );
+      }
+
+      // (re)create the demo clone from the current template inventory
+      function makeDemoClone(quiet) {
+        if (mode === "shallow") {
+          demoClone = { inv: origInv, sharesOrig: true };   // SAME array reference
+        } else {
+          demoClone = { inv: origInv.slice(), sharesOrig: false }; // independent copy
+        }
+        renderInv();
+        var note = document.getElementById("demo-note");
+        note.className = "demo-note idle";
+        note.textContent = mode === "shallow"
+          ? "Shallow clone made — it shares the template's inventory list. Add an item to see."
+          : "Deep clone made — it has its own inventory list. Add an item to see.";
+      }
+
+      function addToClone() {
+        if (!demoClone) makeDemoClone(true);
+        var item = ["bomb", "key", "gem", "scroll", "ring", "torch"][ (demoClone.inv.length) % 6 ];
+        demoClone.inv.push(item + "-" + (demoClone.inv.length));
+        // in shallow mode inv IS origInv, so origInv already changed.
+        renderInv(true);
+        var note = document.getElementById("demo-note");
+        if (demoClone.sharesOrig) {
+          note.className = "demo-note shared";
+          note.textContent = "⚠ shared reference! The item landed in the template's inventory too — they are the same list.";
+          setExplain("Shallow copy → shared inventory",
+            'You added <code>' + item + '</code> to the <b>clone</b>, but it also appeared on the <span class="bad">template</span>. ' +
+            'A <span class="bad">shallow</span> clone shares the nested list — editing one edits both. <span class="dim">This is the classic Prototype trap.</span>');
+        } else {
+          note.className = "demo-note owned";
+          note.textContent = "✓ independent copies. The item is only on the clone — the template's inventory is unchanged.";
+          setExplain("Deep copy → independent inventories",
+            'You added <code>' + item + '</code> to the <b>clone</b> only — the <span class="good">template</span> list is untouched. ' +
+            'A <span class="good">deep</span> clone copied the nested list, so the two are truly separate. <span class="dim">This is what you usually want.</span>');
+        }
+      }
+
+      function renderInv(flash) {
+        var oh = document.getElementById("orig-items");
+        var ch = document.getElementById("clone-items");
+        oh.innerHTML = "";
+        ch.innerHTML = "";
+        if (origInv.length === 0) oh.innerHTML = '<span class="items-empty">empty</span>';
+        origInv.forEach(function (it, i) {
+          var shareFlash = flash && demoClone && demoClone.sharesOrig && i === origInv.length - 1;
+          oh.innerHTML += '<span class="item' + (shareFlash ? ' shared' : '') + '">' + it + '</span>';
+        });
+        var inv = demoClone ? demoClone.inv : [];
+        if (!demoClone) {
+          ch.innerHTML = '<span class="items-empty">clone the template (toggle above) to begin</span>';
+        } else if (inv.length === 0) {
+          ch.innerHTML = '<span class="items-empty">empty</span>';
+        } else {
+          inv.forEach(function (it, i) {
+            var last = flash && i === inv.length - 1;
+            var cls = last ? (demoClone.sharesOrig ? ' shared' : ' owned') : '';
+            ch.innerHTML += '<span class="item' + cls + '">' + it + '</span>';
+          });
+        }
+      }
+
+      /* ---- reset everything ---- */
+      function resetAll() {
+        tmpl = { type: "Goblin", color: "#5cc66f", weapon: "Sword", hp: 30 };
+        clones = [];
+        cloneSeq = 0;
+        origInv = ["potion"];
+        demoClone = null;
+        mode = "shallow";
+        document.getElementById("tg-shallow").className = "shallow on";
+        document.getElementById("tg-deep").className = "deep";
+        renderTemplate();
+        renderClones();
+        renderCost();
+        makeDemoClone(true);
+        setExplain("Reset — configure once, clone many",
+          'Set up the <span class="acc">template</span> enemy on the left, then hit <code>⧉ Clone</code> to stamp out identical copies in one click each. ' +
+          'The bottom demo shows the <span class="bad">shallow</span>-vs-<span class="good">deep</span> copy trap.');
+      }
+
+      /* ---- boot ---- */
+      renderTemplate();
+      renderClones();
+      renderCost();
+      makeDemoClone(true);
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

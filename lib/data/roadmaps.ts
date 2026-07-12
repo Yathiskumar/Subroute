@@ -335,12 +335,12 @@ export const ROADMAPS: Roadmap[] = [
           {
             label: "Creational",
             items: [
-              { title: "Singleton", note: "One shared instance, globally reachable." },
-              { title: "Factory Method", note: "Defer which class to instantiate to subclasses." },
-              { title: "Abstract Factory", note: "Create families of related objects." },
-              { title: "Builder", note: "Assemble complex objects step by step." },
-              { title: "Prototype", note: "Clone an existing object instead of building anew." },
-              { title: "Object Pool", note: "Reuse expensive objects instead of recreating them." },
+              { title: "Singleton", note: "One shared instance, globally reachable.", slug: "singleton" },
+              { title: "Factory Method", note: "Defer which class to instantiate to subclasses.", slug: "factory-method" },
+              { title: "Abstract Factory", note: "Create families of related objects.", slug: "abstract-factory" },
+              { title: "Builder", note: "Assemble complex objects step by step.", slug: "builder" },
+              { title: "Prototype", note: "Clone an existing object instead of building anew.", slug: "prototype" },
+              { title: "Object Pool", note: "Reuse expensive objects instead of recreating them.", slug: "object-pool" },
             ],
           },
           {
