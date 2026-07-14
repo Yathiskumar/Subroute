@@ -1,0 +1,10 @@
+# Subroute — security contact information (RFC 9116)
+# Subroute is a free, open educational site teaching computer science
+# concepts through interactive visualizations. Source: github.com/Yathiskumar/Subroute
+
+Contact: https://github.com/Yathiskumar/Subroute/security/advisories/new
+Contact: mailto:yathiskumar2212@gmail.com
+Expires: 2027-07-14T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://subroute.dev/.well-known/security.txt
+Policy: https://github.com/Yathiskumar/Subroute/blob/main/SECURITY.md
