@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Flyweight — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---- Top: world toggle + reset ---- */
+      .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+      .toggle { display: inline-flex; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 3px; }
+      .toggle button { font: 700 12px/1 var(--sans); border: 0; background: transparent; color: var(--muted); padding: 8px 15px; border-radius: 999px; cursor: pointer; transition: color .15s, background .15s; white-space: nowrap; }
+      .toggle button.on.without { background: var(--danger-soft); color: var(--danger); }
+      .toggle button.on.with { background: var(--success-soft); color: var(--success); }
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: border-color .15s, transform .1s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+
+      /* ---- Actions + stat chips ---- */
+      .actions { display: flex; gap: 9px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; }
+      .act { font-family: var(--mono); font-size: 12px; font-weight: 700; background: var(--accent-soft); border: 1px solid var(--accent-border); border-radius: var(--r-md); padding: 10px 14px; cursor: pointer; color: var(--accent); transition: border-color .15s, transform .1s; }
+      .act:hover { border-color: var(--accent); }
+      .act:active { transform: scale(0.97); }
+      .act:disabled { opacity: .4; cursor: not-allowed; }
+      .chips { margin-left: auto; display: flex; gap: 7px; flex-wrap: wrap; }
+      .chip { font-family: var(--mono); font-size: 11px; color: var(--muted); background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 7px 11px; white-space: nowrap; }
+      .chip b { color: var(--fg); font-weight: 700; }
+      .chip b.hot { color: var(--danger); }
+      .chip b.cool { color: var(--success); }
+      @media (max-width: 560px) { .chips { margin-left: 0; } }
+
+      /* ---- Memory bar ---- */
+      .membar { height: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; overflow: hidden; margin-bottom: 12px; }
+      .membar .fill { height: 100%; width: 0%; border-radius: 999px; background: var(--success); transition: width .25s ease, background .25s ease; }
+      .membar .fill.warn { background: var(--accent); }
+      .membar .fill.hot { background: var(--danger); }
+
+      /* ---- TreeType cache strip (WITH world only) ---- */
+      .cache { display: flex; gap: 9px; flex-wrap: wrap; margin-bottom: 12px; }
+      .fw-card { display: flex; align-items: center; gap: 9px; background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 8px 11px; min-width: 148px; transition: border-color .2s, box-shadow .2s; }
+      .fw-card.used { border-color: var(--success); }
+      .fw-card.flash { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+      .fw-emoji { font-size: 20px; }
+      .fw-name { font-size: 12px; font-weight: 700; color: var(--fg); }
+      .fw-sub { font-family: var(--mono); font-size: 9.5px; color: var(--subtle); margin-top: 1px; }
+      .fw-badge { margin-left: auto; font-family: var(--mono); font-size: 9.5px; padding: 3px 7px; border-radius: 4px; background: var(--elevated); color: var(--subtle); white-space: nowrap; }
+      .fw-card.used .fw-badge { background: var(--success-soft); color: var(--success); }
+      .fw-card.flash .fw-badge { background: var(--accent-soft); color: var(--accent); }
+
+      /* ---- Forest: FIXED height, trees stamp inside ---- */
+      .forest { position: relative; height: 240px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; margin-bottom: 12px; }
+      .forest-cap { position: absolute; top: 8px; right: 11px; font-family: var(--mono); font-size: 10px; color: var(--subtle); z-index: 2; }
+      .tree { position: absolute; font-size: 13px; line-height: 1; transform: translate(-50%, -50%); animation: sprout .25s ease; }
+      @keyframes sprout { from { opacity: 0; transform: translate(-50%, -50%) scale(0.4); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+
+      /* ---- Fixed explain panel (replaced, never grows) ---- */
+      .explain { min-height: 72px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 13px 15px; display: flex; align-items: center; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .dim { color: var(--muted); }
+
+      .hint { margin-top: 12px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <!-- TOP: world toggle -->
+    <div class="topbar">
+      <div class="toggle">
+        <button class="without on" id="tg-without" onclick="setWorld('without')">✕ WITHOUT Flyweight</button>
+        <button class="with" id="tg-with" onclick="setWorld('with')">✓ WITH Flyweight</button>
+      </div>
+      <button class="btn" onclick="reset()">↺ Reset</button>
+    </div>
+
+    <!-- ACTIONS + STATS -->
+    <div class="actions">
+      <button class="act" id="b50" onclick="plant(50)">＋ 50 trees</button>
+      <button class="act" id="b200" onclick="plant(200)">＋ 200 trees</button>
+      <span class="chips">
+        <span class="chip">🌳 trees <b id="c-trees">0</b></span>
+        <span class="chip">🧠 memory <b id="c-mem">0 KB</b></span>
+        <span class="chip">heavy objects <b id="c-heavy">0</b></span>
+      </span>
+    </div>
+
+    <!-- MEMORY BAR -->
+    <div class="membar"><div class="fill" id="mem-fill"></div></div>
+
+    <!-- TREETYPE CACHE (WITH world only) -->
+    <div class="cache" id="cache" style="display:none">
+      <div class="fw-card" id="fw-0"><span class="fw-emoji">🌳</span><span><span class="fw-name">Oak</span><br /><span class="fw-sub">2 KB · shared</span></span><span class="fw-badge" id="fwb-0">unused</span></div>
+      <div class="fw-card" id="fw-1"><span class="fw-emoji">🌲</span><span><span class="fw-name">Pine</span><br /><span class="fw-sub">2 KB · shared</span></span><span class="fw-badge" id="fwb-1">unused</span></div>
+      <div class="fw-card" id="fw-2"><span class="fw-emoji">🌴</span><span><span class="fw-name">Palm</span><br /><span class="fw-sub">2 KB · shared</span></span><span class="fw-badge" id="fwb-2">unused</span></div>
+    </div>
+
+    <!-- FOREST (fixed height) -->
+    <div class="forest" id="forest"><span class="forest-cap" id="forest-cap"></span></div>
+
+    <!-- FIXED EXPLAIN PANEL -->
+    <div class="explain">
+      <div class="explain-body" id="ex">Plant trees, then flip worlds — <span class="dim">watch only the memory change.</span></div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>Same seeded forest in both worlds — the only difference is who owns the 2&nbsp;KB sprite data.</span>
+    </div>
+
+    <script>
+      /* ---- constants ---- */
+      var CAP = 1000;              // true tree cap
+      var DOM_CAP = 300;           // max emoji actually stamped in the DOM
+      var HEAVY_KB = 2;            // heavy sprite data per TreeType
+      var REF_B = 40;              // extrinsic record per tree (x, y + ref)
+      var SCALE_KB = CAP * HEAVY_KB; // memory bar full-scale = 2000 KB
+      var SPECIES = [
+        { name: "Oak", emoji: "🌳" },
+        { name: "Pine", emoji: "🌲" },
+        { name: "Palm", emoji: "🌴" },
+      ];
+
+      /* ---- seeded PRNG (mulberry32) → same forest every run ---- */
+      function mulberry32(a) {
+        return function () {
+          a |= 0; a = (a + 0x6d2b79f5) | 0;
+          var t = Math.imul(a ^ (a >>> 15), 1 | a);
+          t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+      }
+
+      /* ---- state ---- */
+      var world = "without";       // "without" | "with"
+      var rng = mulberry32(1337);
+      var trees = [];              // { x, y, s } — extrinsic state only
+      var typeCount = [0, 0, 0];   // trees per species (flyweight use count)
+
+      function usedTypes() {
+        return (typeCount[0] > 0 ? 1 : 0) + (typeCount[1] > 0 ? 1 : 0) + (typeCount[2] > 0 ? 1 : 0);
+      }
+
+      /* ---- the memory math (the whole lesson) ---- */
+      function memKB(w) {
+        if (w === "with") return usedTypes() * HEAVY_KB + (trees.length * REF_B) / 1024;
+        return trees.length * HEAVY_KB;
+      }
+      function fmt(kb) {
+        if (kb >= 1000) return (kb / 1024).toFixed(2) + " MB";
+        return (Math.round(kb * 10) / 10) + " KB";
+      }
+
+      function setExplain(html) {
+        document.getElementById("ex").innerHTML = html;
+      }
+
+      /* ---- plant trees ---- */
+      function plant(n) {
+        var room = CAP - trees.length;
+        if (room <= 0) {
+          setExplain('Forest full at <b>1,000</b> trees — <span class="dim">hit ↺ Reset to replant.</span>');
+          return;
+        }
+        var add = Math.min(n, room);
+        var newTypes = 0;
+        var host = document.getElementById("forest");
+        for (var i = 0; i < add; i++) {
+          var t = { x: 3 + rng() * 94, y: 8 + rng() * 84, s: Math.floor(rng() * 3) };
+          if (typeCount[t.s] === 0) { newTypes++; flashCard(t.s); }
+          typeCount[t.s]++;
+          trees.push(t);
+          if (trees.length <= DOM_CAP) {
+            var el = document.createElement("span");
+            el.className = "tree";
+            el.textContent = SPECIES[t.s].emoji;
+            el.style.left = t.x + "%";
+            el.style.top = t.y + "%";
+            host.appendChild(el);
+          }
+        }
+        if (trees.length >= CAP) {
+          setExplain('Forest full at <b>1,000</b> trees — <span class="bad">' + fmt(memKB("without")) + '</span> without vs <span class="good">' + fmt(memKB("with")) + '</span> with.');
+        } else if (world === "with") {
+          var deltaKB = newTypes * HEAVY_KB + (add * REF_B) / 1024;
+          setExplain('＋' + add + ' trees → <span class="good">+' + fmt(deltaKB) + '</span> — <span class="dim">each stores only <code>x, y</code> + a reference.</span>');
+        } else {
+          setExplain('＋' + add + ' trees → <span class="bad">+' + fmt(add * HEAVY_KB) + '</span> — <span class="dim">every tree carries its own 2 KB copy.</span>');
+        }
+        render();
+      }
+
+      /* ---- flyweight card flash ("created once" / reuse hit) ---- */
+      function flashCard(s) {
+        if (world !== "with") return;
+        var card = document.getElementById("fw-" + s);
+        card.classList.add("flash");
+        setTimeout(function () { card.classList.remove("flash"); }, 700);
+      }
+
+      /* ---- switch worlds: SAME forest, memory recounted ---- */
+      function setWorld(w) {
+        if (w === world) return;
+        world = w;
+        if (w === "with") {
+          setExplain('Same forest — <span class="good">' + usedTypes() + ' shared TreeTypes</span> hold all the heavy data: <span class="good">' + fmt(memKB("with")) + '</span>.');
+        } else {
+          setExplain('Same forest — <span class="bad">every tree owns a 2 KB copy</span> again: <span class="bad">' + fmt(memKB("without")) + '</span>.');
+        }
+        render();
+      }
+
+      /* ---- reset: reseed → identical forest next time ---- */
+      function reset() {
+        rng = mulberry32(1337);
+        trees = [];
+        typeCount = [0, 0, 0];
+        var host = document.getElementById("forest");
+        host.innerHTML = '<span class="forest-cap" id="forest-cap"></span>';
+        setExplain('Forest cleared — <span class="dim">plant in either world; the layout is seeded and identical.</span>');
+        render();
+      }
+
+      /* ---- render stats, bar, cache ---- */
+      function render() {
+        var n = trees.length;
+        var kb = memKB(world);
+        var heavy = world === "with" ? usedTypes() : n;
+
+        // toggle styling
+        document.getElementById("tg-without").className = "without" + (world === "without" ? " on" : "");
+        document.getElementById("tg-with").className = "with" + (world === "with" ? " on" : "");
+
+        // chips
+        document.getElementById("c-trees").textContent = n.toLocaleString();
+        var mem = document.getElementById("c-mem");
+        mem.textContent = fmt(kb);
+        mem.className = world === "with" ? "cool" : (kb / SCALE_KB > 0.6 ? "hot" : "");
+        document.getElementById("c-heavy").textContent = heavy.toLocaleString();
+
+        // memory bar
+        var pct = Math.min(100, Math.round((kb / SCALE_KB) * 1000) / 10);
+        var fill = document.getElementById("mem-fill");
+        fill.style.width = pct + "%";
+        fill.className = "fill" + (pct > 60 ? " hot" : pct > 30 ? " warn" : "");
+
+        // cache strip (WITH only)
+        document.getElementById("cache").style.display = world === "with" ? "flex" : "none";
+        for (var s = 0; s < 3; s++) {
+          var card = document.getElementById("fw-" + s);
+          var badge = document.getElementById("fwb-" + s);
+          var c = typeCount[s];
+          card.classList.toggle("used", c > 0);
+          badge.textContent = c === 0 ? "unused" : c === 1 ? "created once" : "reused ×" + (c - 1).toLocaleString();
+        }
+
+        // forest corner label
+        var cap = document.getElementById("forest-cap");
+        cap.textContent = n > DOM_CAP ? n.toLocaleString() + " trees · showing " + DOM_CAP : "";
+
+        // plant buttons at cap
+        var full = n >= CAP;
+        document.getElementById("b50").disabled = full;
+        document.getElementById("b200").disabled = full;
+      }
+
+      /* ---- boot ---- */
+      render();
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

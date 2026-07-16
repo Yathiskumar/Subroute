@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bridge — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---- Top: world toggle + counter + reset ---- */
+      .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+      .toggle { display: inline-flex; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 3px; }
+      .toggle button { font: 700 12px/1 var(--sans); border: 0; background: transparent; color: var(--muted); padding: 8px 15px; border-radius: 999px; cursor: pointer; transition: color .15s, background .15s; white-space: nowrap; }
+      .toggle button.on.without { background: var(--danger-soft); color: var(--danger); }
+      .toggle button.on.with { background: var(--success-soft); color: var(--success); }
+      .right { display: flex; align-items: center; gap: 10px; }
+      .chip { font-family: var(--mono); font-size: 13px; font-weight: 700; background: var(--accent-soft); border: 1px solid var(--accent-border); color: var(--accent); border-radius: 999px; padding: 8px 15px; white-space: nowrap; }
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: border-color .15s, transform .1s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+
+      /* ---- Action row ---- */
+      .actions { display: flex; gap: 9px; flex-wrap: wrap; margin-bottom: 14px; }
+      .act { font-family: var(--mono); font-size: 12px; font-weight: 700; background: var(--elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 10px 14px; cursor: pointer; color: var(--fg); transition: border-color .15s, transform .1s; }
+      .act:hover { border-color: var(--accent); }
+      .act:active { transform: scale(0.97); }
+      .act:disabled { opacity: .35; cursor: not-allowed; }
+      .act:disabled:hover { border-color: var(--border-strong); }
+
+      /* ---- Stage ---- */
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 14px; margin-bottom: 14px; }
+      .stage-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
+
+      /* WITHOUT: crowded combo grid */
+      .combo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 9px; }
+      .card { background: var(--elevated); border: 1.5px solid var(--border-strong); border-radius: var(--r-md); padding: 9px 11px; animation: pop .25s ease; }
+      .card .cname { font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--fg); word-break: break-all; }
+      .card .ctag { font-family: var(--mono); font-size: 9px; color: var(--subtle); margin-top: 4px; }
+      .card.combo { border-color: rgba(240,104,104,.35); }
+      .card.new { border-color: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); animation: flash .8s ease; }
+      @keyframes pop { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+      @keyframes flash { 0% { background: var(--danger-soft); } 100% { background: var(--elevated); } }
+
+      /* WITH: two columns + bridge */
+      .bridge-grid { display: grid; grid-template-columns: 1fr 96px 1fr; gap: 10px; align-items: center; }
+      @media (max-width: 560px) { .bridge-grid { grid-template-columns: 1fr; } .bridge-mid { transform: rotate(90deg); margin: 2px auto; } }
+      .col-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .05em; text-transform: uppercase; color: var(--subtle); margin-bottom: 8px; }
+      .col { display: flex; flex-direction: column; gap: 8px; }
+      .card.remote { border-color: rgba(94,159,246,.4); }
+      .card.device { border-color: rgba(92,198,111,.4); }
+      .card.new-ok { border-color: var(--success); box-shadow: 0 0 0 3px var(--success-soft); animation: flashok .8s ease; }
+      @keyframes flashok { 0% { background: var(--success-soft); } 100% { background: var(--elevated); } }
+      .bridge-mid { text-align: center; }
+      .bridge-arrow { font-family: var(--mono); font-size: 10px; font-weight: 700; color: var(--accent); }
+      .bridge-line { font-size: 16px; color: var(--accent); letter-spacing: -2px; }
+      .vbar { height: 6px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; margin-top: 7px; overflow: hidden; }
+      .vfill { height: 100%; background: var(--success); border-radius: 4px; transition: width .35s ease; }
+      .vnum { font-family: var(--mono); font-size: 9px; color: var(--muted); margin-top: 3px; }
+      .card.hit { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+      /* Demo strip */
+      .demo { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 13px; padding-top: 12px; border-top: 1px dashed var(--border-strong); }
+      .demo-cap { font-family: var(--mono); font-size: 9px; letter-spacing: .06em; text-transform: uppercase; color: var(--subtle); width: 100%; }
+      .pick { font-family: var(--mono); font-size: 11px; font-weight: 700; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 999px; padding: 6px 12px; cursor: pointer; color: var(--muted); transition: border-color .15s, color .15s; }
+      .pick.remote-pick.sel { border-color: var(--info); color: var(--info); background: var(--info-soft); }
+      .pick.device-pick.sel { border-color: var(--success); color: var(--success); background: var(--success-soft); }
+      .demo-x { font-family: var(--mono); font-size: 11px; color: var(--subtle); }
+      .vol-btn { font-family: var(--mono); font-size: 12px; font-weight: 700; background: var(--accent-soft); border: 1px solid var(--accent-border); color: var(--accent); border-radius: var(--r-md); padding: 8px 14px; cursor: pointer; transition: transform .1s; }
+      .vol-btn:active { transform: scale(0.96); }
+
+      /* ---- Fixed explain panel (replaced, never grows) ---- */
+      .explain { min-height: 72px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 13px 15px; display: flex; align-items: center; }
+      .explain-body { font-size: 13px; line-height: 1.55; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .dim { color: var(--muted); }
+
+      .hint { margin-top: 12px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <!-- TOP -->
+    <div class="topbar">
+      <div class="toggle">
+        <button class="without on" id="tg-without" onclick="setWorld('without')">✕ WITHOUT Bridge</button>
+        <button class="with" id="tg-with" onclick="setWorld('with')">✓ WITH Bridge</button>
+      </div>
+      <div class="right">
+        <span class="chip">classes: <span id="count">6</span></span>
+        <button class="btn" onclick="reset()">↺ Reset</button>
+      </div>
+    </div>
+
+    <!-- ACTIONS -->
+    <div class="actions">
+      <button class="act" id="add-proj" onclick="addProjector()">＋ Add Projector device</button>
+      <button class="act" id="add-kids" onclick="addKids()">＋ Add Kids remote</button>
+    </div>
+
+    <!-- STAGE -->
+    <div class="stage">
+      <div class="stage-cap" id="stage-cap">WITHOUT Bridge · one class per remote × device combo</div>
+      <div id="view"></div>
+    </div>
+
+    <!-- EXPLAIN -->
+    <div class="explain">
+      <div class="explain-body" id="ex">Every combo is <span class="bad">its own class</span> — try the add buttons.</div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>Same add buttons in both worlds — compare how much the <b style="color:var(--fg)">classes</b> chip jumps.</span>
+    </div>
+
+    <script>
+      var world = "without";
+      var remotes, devices, hasProjector, hasKids, newKeys, selRemote, selDevice, hitDevice;
+
+      function initState() {
+        remotes = [ { id: "basic", label: "Basic" }, { id: "advanced", label: "Advanced" } ];
+        devices = [
+          { id: "tv", label: "TV", icon: "📺", vol: 30 },
+          { id: "radio", label: "Radio", icon: "📻", vol: 50 },
+          { id: "speaker", label: "Speaker", icon: "🔈", vol: 40 },
+        ];
+        hasProjector = false;
+        hasKids = false;
+        newKeys = [];
+        selRemote = null;
+        selDevice = null;
+        hitDevice = null;
+      }
+      initState();
+
+      function setExplain(html) { document.getElementById("ex").innerHTML = html; }
+
+      function classCount() {
+        return world === "without" ? remotes.length * devices.length : remotes.length + devices.length;
+      }
+
+      /* ---- add buttons (same in both worlds) ---- */
+      function addProjector() {
+        if (hasProjector) return;
+        var before = classCount();
+        hasProjector = true;
+        newKeys = [];
+        if (world === "without") {
+          remotes.forEach(function (r) { newKeys.push(r.id + "-projector"); });
+        } else {
+          newKeys = ["d-projector"];
+        }
+        devices.push({ id: "projector", label: "Projector", icon: "📽️", vol: 20 });
+        hitDevice = null;
+        render();
+        var after = classCount();
+        setExplain(world === "without"
+          ? 'One new device → <span class="bad">' + (after - before) + ' new classes</span> <span class="dim">(' + before + ' → ' + after + ')</span>.'
+          : 'One new device → <span class="good">1 new class</span> <span class="dim">(' + before + ' → ' + after + ')</span> — every remote already drives it.');
+      }
+
+      function addKids() {
+        if (hasKids) return;
+        var before = classCount();
+        hasKids = true;
+        newKeys = [];
+        if (world === "without") {
+          devices.forEach(function (d) { newKeys.push("kids-" + d.id); });
+        } else {
+          newKeys = ["r-kids"];
+        }
+        remotes.push({ id: "kids", label: "Kids" });
+        hitDevice = null;
+        render();
+        var after = classCount();
+        setExplain(world === "without"
+          ? 'One new remote → <span class="bad">' + (after - before) + ' new classes</span> <span class="dim">(' + before + ' → ' + after + ')</span>.'
+          : 'One new remote → <span class="good">1 new class</span> <span class="dim">(' + before + ' → ' + after + ')</span> — it already drives every device.');
+      }
+
+      /* ---- demo strip (WITH world) ---- */
+      function pickRemote(id) { selRemote = id; hitDevice = null; render(); }
+      function pickDevice(id) { selDevice = id; hitDevice = null; render(); }
+
+      function volumeUp() {
+        if (!selRemote || !selDevice) {
+          setExplain('<span class="dim">Pick one remote and one device first.</span>');
+          return;
+        }
+        var d = devices.filter(function (x) { return x.id === selDevice; })[0];
+        var r = remotes.filter(function (x) { return x.id === selRemote; })[0];
+        var from = d.vol;
+        d.vol = Math.min(100, d.vol + 10);
+        hitDevice = d.id;
+        render();
+        setExplain('<b>' + r.label + '</b> remote → <code>device.setVolume()</code> → <span class="good">' + d.label + " " + from + " → " + d.vol + '</span>.');
+      }
+
+      /* ---- render ---- */
+      function render() {
+        document.getElementById("tg-without").className = "without" + (world === "without" ? " on" : "");
+        document.getElementById("tg-with").className = "with" + (world === "with" ? " on" : "");
+        document.getElementById("count").textContent = classCount();
+        document.getElementById("stage-cap").textContent = world === "without"
+          ? "WITHOUT Bridge · one class per remote × device combo"
+          : "WITH Bridge · Remote has-a Device — two small hierarchies";
+        var host = document.getElementById("view");
+
+        if (world === "without") {
+          var html = '<div class="combo-grid">';
+          remotes.forEach(function (r) {
+            devices.forEach(function (d) {
+              var key = r.id + "-" + d.id;
+              html += '<div class="card combo' + (newKeys.indexOf(key) >= 0 ? " new" : "") + '">' +
+                '<div class="cname">' + r.label + d.label + 'Remote</div>' +
+                '<div class="ctag">class · combo</div></div>';
+            });
+          });
+          html += "</div>";
+          host.innerHTML = html;
+        } else {
+          var html = '<div class="bridge-grid"><div>';
+          html += '<div class="col-cap">Remotes · abstraction</div><div class="col">';
+          remotes.forEach(function (r) {
+            html += '<div class="card remote' + (newKeys.indexOf("r-" + r.id) >= 0 ? " new-ok" : "") + '">' +
+              '<div class="cname">🎛️ ' + r.label + 'Remote</div>' +
+              '<div class="ctag">holds a Device</div></div>';
+          });
+          html += "</div></div>";
+          html += '<div class="bridge-mid"><div class="bridge-arrow">has-a</div><div class="bridge-line">──🌉──▶</div></div>';
+          html += '<div><div class="col-cap">Devices · implementation</div><div class="col">';
+          devices.forEach(function (d) {
+            html += '<div class="card device' + (newKeys.indexOf("d-" + d.id) >= 0 ? " new-ok" : "") + (hitDevice === d.id ? " hit" : "") + '">' +
+              '<div class="cname">' + d.icon + " " + d.label + '</div>' +
+              '<div class="vbar"><div class="vfill" style="width:' + d.vol + '%"></div></div>' +
+              '<div class="vnum">volume ' + d.vol + "</div></div>";
+          });
+          html += "</div></div></div>";
+
+          // demo strip
+          html += '<div class="demo"><div class="demo-cap">Demo — any remote drives any device</div>';
+          remotes.forEach(function (r) {
+            html += '<button class="pick remote-pick' + (selRemote === r.id ? " sel" : "") + '" onclick="pickRemote(\'' + r.id + '\')">' + r.label + "</button>";
+          });
+          html += '<span class="demo-x">×</span>';
+          devices.forEach(function (d) {
+            html += '<button class="pick device-pick' + (selDevice === d.id ? " sel" : "") + '" onclick="pickDevice(\'' + d.id + '\')">' + d.label + "</button>";
+          });
+          html += '<button class="vol-btn" onclick="volumeUp()">🔊 volume +</button></div>';
+          host.innerHTML = html;
+        }
+
+        document.getElementById("add-proj").disabled = hasProjector;
+        document.getElementById("add-kids").disabled = hasKids;
+      }
+
+      /* ---- world switch + reset ---- */
+      function setWorld(w) {
+        if (w === world) return;
+        world = w;
+        initState();
+        render();
+        setExplain(w === "with"
+          ? '<span class="good">Remote has-a Device</span> — 2 + 3 = 5 classes. Try the same add buttons.'
+          : 'Every combo is <span class="bad">its own class</span> — 2 × 3 = 6. Try the add buttons.');
+      }
+
+      function reset() {
+        initState();
+        render();
+        setExplain(world === "with"
+          ? '<span class="good">Reset.</span> 2 remotes + 3 devices = 5 classes.'
+          : '<span class="bad">Reset.</span> 2 remotes × 3 devices = 6 combo classes.');
+      }
+
+      render();
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

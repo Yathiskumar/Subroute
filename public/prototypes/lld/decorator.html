@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Decorator — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---- chips row ---- */
+      .topbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+      .chip {
+        font: 700 12px/1 var(--mono); background: var(--elevated); color: var(--muted);
+        border: 1.5px solid var(--border-strong); border-radius: 999px; padding: 9px 13px;
+        cursor: pointer; transition: border-color .15s, color .15s, background .15s, transform .1s;
+        white-space: nowrap;
+      }
+      .chip:hover { border-color: var(--accent); }
+      .chip:active { transform: scale(0.96); }
+      .chip.on { color: var(--fg); }
+      .chip.on.c-milk    { border-color: #5e9ff6; background: rgba(94,159,246,.14); }
+      .chip.on.c-mocha   { border-color: #c98a5e; background: rgba(201,138,94,.14); }
+      .chip.on.c-whip    { border-color: #d8d4cc; background: rgba(216,212,204,.12); }
+      .chip.on.c-caramel { border-color: #e6b34d; background: rgba(230,179,77,.14); }
+      .spacer { margin-left: auto; }
+      .counter { font: 600 10.5px/1.3 var(--mono); color: var(--subtle); border: 1px dashed var(--border-strong); border-radius: 999px; padding: 7px 11px; white-space: nowrap; }
+      .counter b { color: var(--accent); }
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: border-color .15s, transform .1s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+
+      /* ---- stage: concentric rings ---- */
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 22px 14px; margin-bottom: 14px; display: flex; justify-content: center; }
+      .ring {
+        border: 1.5px solid var(--border-strong); border-radius: 16px; padding: 12px 16px 16px;
+        transition: border-color .2s, box-shadow .2s, background .2s;
+      }
+      .ring.c-milk    { border-color: #5e9ff6; background: rgba(94,159,246,.05); }
+      .ring.c-mocha   { border-color: #c98a5e; background: rgba(201,138,94,.05); }
+      .ring.c-whip    { border-color: #d8d4cc; background: rgba(216,212,204,.04); }
+      .ring.c-caramel { border-color: #e6b34d; background: rgba(230,179,77,.05); }
+      .ring-label { display: flex; align-items: baseline; gap: 8px; font: 700 11.5px/1 var(--mono); color: var(--fg); margin-bottom: 10px; }
+      .ring-label .delta { color: var(--subtle); font-weight: 600; transition: color .15s, transform .15s; }
+      .ring.hot { box-shadow: 0 0 0 3px var(--accent-soft); border-color: var(--accent); }
+      .ring.lit .delta { color: var(--success); transform: scale(1.15); }
+      .core {
+        background: var(--elevated); border: 1.5px solid var(--accent-border); border-radius: 12px;
+        padding: 14px 20px; text-align: center; transition: box-shadow .2s, border-color .2s;
+      }
+      .core.hot { box-shadow: 0 0 0 4px var(--accent-soft); border-color: var(--accent); }
+      .core .cup { font-size: 22px; }
+      .core .nm { font: 700 12.5px/1.5 var(--mono); color: var(--fg); }
+      .core .pr { font: 600 11px/1 var(--mono); color: var(--accent); }
+      @media (max-width: 560px) {
+        .ring { padding: 8px 9px 10px; border-radius: 12px; }
+        .ring-label { font-size: 10px; gap: 5px; margin-bottom: 7px; }
+        .core { padding: 10px 12px; }
+        .stage { padding: 14px 8px; }
+      }
+
+      /* ---- readout + run ---- */
+      .runbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+      .readout { flex: 1 1 260px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px 13px; min-width: 0; }
+      .expr { font: 600 11.5px/1.6 var(--mono); color: var(--info); word-break: break-all; }
+      .total { font: 700 12.5px/1.6 var(--mono); color: var(--fg); }
+      .total b { color: var(--success); }
+      .act { font-family: var(--mono); font-size: 12.5px; font-weight: 700; background: var(--accent-soft); border: 1px solid var(--accent-border); border-radius: var(--r-md); padding: 12px 18px; cursor: pointer; color: var(--accent); transition: border-color .15s, transform .1s; }
+      .act:hover { border-color: var(--accent); }
+      .act:active { transform: scale(0.97); }
+      .act:disabled { opacity: .4; cursor: not-allowed; }
+
+      /* ---- fixed explain panel (replaced, never grows) ---- */
+      .explain { min-height: 72px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 15px; display: flex; align-items: center; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+
+      .hint { margin-top: 12px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <!-- ADD-ON CHIPS -->
+    <div class="topbar">
+      <button class="chip c-milk" id="chip-milk" onclick="toggleAddon('milk')">🥛 Milk +$0.50</button>
+      <button class="chip c-mocha" id="chip-mocha" onclick="toggleAddon('mocha')">🍫 Mocha +$0.80</button>
+      <button class="chip c-whip" id="chip-whip" onclick="toggleAddon('whip')">🍦 Whip +$0.70</button>
+      <button class="chip c-caramel" id="chip-caramel" onclick="toggleAddon('caramel')">🍯 Caramel +$0.60</button>
+      <span class="spacer"></span>
+      <span class="counter">subclasses instead: <b>16</b></span>
+      <button class="btn" onclick="reset()">↺ Reset</button>
+    </div>
+
+    <!-- STAGE -->
+    <div class="stage"><div id="rings"></div></div>
+
+    <!-- READOUT + RUN -->
+    <div class="runbar">
+      <div class="readout">
+        <div class="expr" id="expr">new Espresso()</div>
+        <div class="total" id="total">cost() = <b>$2.50</b></div>
+      </div>
+      <button class="act" id="run-btn" onclick="runCost()">▶ cost()</button>
+    </div>
+
+    <!-- EXPLAIN -->
+    <div class="explain"><div class="explain-body" id="ex">Click a chip to wrap the espresso.</div></div>
+
+    <div class="hint"><span class="b">▸</span><span>Outermost ring = newest wrapper. Toggle a chip off to unwrap it.</span></div>
+
+    <script>
+      var ADDONS = {
+        milk:    { name: "Milk",    cls: "Milk",    emoji: "🥛", price: 0.5 },
+        mocha:   { name: "Mocha",   cls: "Mocha",   emoji: "🍫", price: 0.8 },
+        whip:    { name: "Whip",    cls: "Whip",    emoji: "🍦", price: 0.7 },
+        caramel: { name: "Caramel", cls: "Caramel", emoji: "🍯", price: 0.6 },
+      };
+      var BASE = 2.5;
+      var stack = [];          // add-on keys, index 0 = innermost wrapper
+      var animating = false;
+      var ringEls = [];        // [0] = outermost ring element
+      var coreEl = null;
+
+      function money(n) { return "$" + n.toFixed(2); }
+
+      /* one explain line, REPLACED (never appended) */
+      function setExplain(html) { document.getElementById("ex").innerHTML = html; }
+
+      function totalCost() {
+        var t = BASE;
+        for (var i = 0; i < stack.length; i++) t += ADDONS[stack[i]].price;
+        return t;
+      }
+
+      function expression() {
+        var e = "new Espresso()";
+        for (var i = 0; i < stack.length; i++) e = "new " + ADDONS[stack[i]].cls + "(" + e + ")";
+        return e;
+      }
+
+      /* ---- render rings + readout + chips ---- */
+      function render() {
+        // chips
+        for (var k in ADDONS) {
+          var chip = document.getElementById("chip-" + k);
+          chip.className = "chip c-" + k + (stack.indexOf(k) >= 0 ? " on" : "");
+        }
+        // rings (nested, outermost = last added)
+        var host = document.getElementById("rings");
+        host.innerHTML = "";
+        ringEls = [];
+        var parentEl = host;
+        for (var i = stack.length - 1; i >= 0; i--) {
+          var a = ADDONS[stack[i]];
+          var ring = document.createElement("div");
+          ring.className = "ring c-" + stack[i];
+          var label = document.createElement("div");
+          label.className = "ring-label";
+          label.innerHTML = "<span>" + a.emoji + " " + a.name + "</span><span class=\"delta\">+" + money(a.price) + "</span>";
+          ring.appendChild(label);
+          parentEl.appendChild(ring);
+          ringEls.push(ring);          // creation order → [0] is outermost
+          parentEl = ring;
+        }
+        coreEl = document.createElement("div");
+        coreEl.className = "core";
+        coreEl.innerHTML = "<div class=\"cup\">☕</div><div class=\"nm\">Espresso</div><div class=\"pr\">" + money(BASE) + "</div>";
+        parentEl.appendChild(coreEl);
+        // readout
+        document.getElementById("expr").textContent = expression();
+        document.getElementById("total").innerHTML = "cost() = <b>" + money(totalCost()) + "</b>";
+      }
+
+      /* ---- toggle an add-on (wrap / unwrap) ---- */
+      function toggleAddon(key) {
+        if (animating) return;
+        var a = ADDONS[key];
+        var idx = stack.indexOf(key);
+        if (idx >= 0) {
+          stack.splice(idx, 1);
+          setExplain(a.emoji + " <b>" + a.name + "</b> unwrapped — the rest of the stack still works.");
+        } else {
+          stack.push(key);
+          setExplain(a.emoji + " <b>" + a.name + "</b> now wraps the whole order — same interface, <span class=\"good\">+" + money(a.price) + "</span>.");
+        }
+        render();
+      }
+
+      /* ---- ▶ cost(): pulse in, then add up on the way out ---- */
+      function runCost() {
+        if (animating) return;
+        animating = true;
+        document.getElementById("run-btn").disabled = true;
+        setExplain("<code>cost()</code> travels inward…");
+        var totalEl = document.getElementById("total");
+        var STEP = 280;
+        var t = 0;
+
+        function hot(el, on) { if (on) el.classList.add("hot"); else el.classList.remove("hot"); }
+        function lit(el, on) { if (on) el.classList.add("lit"); else el.classList.remove("lit"); }
+
+        // inward: outermost ring → … → core
+        var inward = ringEls.concat([coreEl]);
+        inward.forEach(function (el) {
+          setTimeout(function () { hot(el, true); }, t);
+          setTimeout(function () { hot(el, false); }, t + STEP);
+          t += STEP;
+        });
+
+        // outward: core returns $2.50, then each ring adds its price
+        var running = 0;
+        setTimeout(function () {
+          hot(coreEl, true);
+          running = BASE;
+          totalEl.innerHTML = "cost() = <b>" + money(running) + "</b>";
+        }, t);
+        setTimeout(function () { hot(coreEl, false); }, t + STEP);
+        t += STEP;
+        for (var i = ringEls.length - 1; i >= 0; i--) {
+          (function (ring, key, at) {
+            setTimeout(function () {
+              lit(ring, true);
+              hot(ring, true);
+              running += ADDONS[key].price;
+              totalEl.innerHTML = "cost() = <b>" + money(running) + "</b>";
+            }, at);
+            setTimeout(function () { lit(ring, false); hot(ring, false); }, at + STEP);
+          })(ringEls[i], stack[ringEls.length - 1 - i], t);
+          t += STEP;
+        }
+
+        setTimeout(function () {
+          setExplain("The call reached <b>Espresso</b>, then <span class=\"good\">each wrapper added its price on the way out</span>.");
+          animating = false;
+          document.getElementById("run-btn").disabled = false;
+        }, t + STEP);
+      }
+
+      /* ---- reset ---- */
+      function reset() {
+        if (animating) return;
+        stack = [];
+        render();
+        setExplain("Back to a plain espresso — click a chip to wrap it.");
+      }
+
+      /* ---- boot ---- */
+      render();
+    </script>
+    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>
