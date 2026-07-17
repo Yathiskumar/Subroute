@@ -55,6 +55,17 @@ import { decorator } from "./lld/decorator";
 import { facade } from "./lld/facade";
 import { flyweight } from "./lld/flyweight";
 import { proxy } from "./lld/proxy";
+import { chainOfResponsibility } from "./lld/chain-of-responsibility";
+import { command } from "./lld/command";
+import { iterator } from "./lld/iterator";
+import { mediator } from "./lld/mediator";
+import { memento } from "./lld/memento";
+import { observer } from "./lld/observer";
+import { statePattern } from "./lld/state";
+import { strategy } from "./lld/strategy";
+import { templateMethod } from "./lld/template-method";
+import { visitor } from "./lld/visitor";
+import { nullObject } from "./lld/null-object";
 
 /** Indexed by `${roadmapSlug}/${topicSlug}`. */
 const ROADMAP_LESSONS: Record<string, RoadmapLesson> = {
@@ -114,6 +125,17 @@ const ROADMAP_LESSONS: Record<string, RoadmapLesson> = {
   "lld/facade": facade,
   "lld/flyweight": flyweight,
   "lld/proxy": proxy,
+  "lld/chain-of-responsibility": chainOfResponsibility,
+  "lld/command": command,
+  "lld/iterator": iterator,
+  "lld/mediator": mediator,
+  "lld/memento": memento,
+  "lld/observer": observer,
+  "lld/state": statePattern,
+  "lld/strategy": strategy,
+  "lld/template-method": templateMethod,
+  "lld/visitor": visitor,
+  "lld/null-object": nullObject,
 };
 
 export function getRoadmapLesson(

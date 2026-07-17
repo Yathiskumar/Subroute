@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Command — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---- Top bar ---- */
+      .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+      .chip { font-family: var(--mono); font-size: 11.5px; font-weight: 700; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent-border); border-radius: 999px; padding: 7px 13px; }
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: border-color .15s, transform .1s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+
+      /* ---- Three zones ---- */
+      .zones { display: grid; grid-template-columns: 170px 1fr 1fr; gap: 12px; margin-bottom: 14px; align-items: stretch; }
+      @media (max-width: 560px) { .zones { grid-template-columns: 1fr; } }
+      .zone { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 12px; }
+      .zone-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+      .zone-cap .role { color: var(--subtle); }
+
+      /* ---- Remote (invoker) ---- */
+      .remote { display: flex; flex-direction: column; gap: 8px; }
+      .rbtn { font-family: var(--mono); font-size: 12px; font-weight: 700; background: var(--elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 11px 12px; cursor: pointer; color: var(--fg); text-align: left; transition: border-color .15s, transform .1s; }
+      .rbtn:hover { border-color: var(--accent); }
+      .rbtn:active { transform: scale(0.96); }
+      .rbtn.undo { background: var(--info-soft); border-color: rgba(94,159,246,.45); color: var(--info); margin-top: 8px; }
+      .rbtn.undo:hover { border-color: var(--info); }
+
+      /* ---- History stack (fixed height, 6 slots) ---- */
+      .stack { height: 258px; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; overflow: hidden; position: relative; background: #0a0b0e; border: 1px dashed var(--border-strong); border-radius: var(--r-md); padding: 8px; }
+      .stack.empty::before { content: "stack empty"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--subtle); font-size: 11px; font-style: italic; }
+      .card { flex: 0 0 auto; font-family: var(--mono); font-size: 10.5px; font-weight: 700; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent-border); border-radius: 6px; padding: 8px 10px; display: flex; justify-content: space-between; gap: 6px; animation: pop .28s ease; }
+      .card .n { color: var(--subtle); font-weight: 400; }
+      .card.top { box-shadow: 0 0 0 2px var(--accent-soft); }
+      .card.old { opacity: .38; }
+      .card.undoing { animation: flyback .2s ease forwards; }
+      @keyframes pop { from { opacity: 0; transform: translateY(-14px) scale(.92); } to { opacity: 1; transform: none; } }
+      @keyframes flyback { to { opacity: 0; transform: translateX(-26px) scale(.9); } }
+
+      /* ---- Receivers ---- */
+      .devices { display: flex; flex-direction: column; gap: 10px; }
+      .device { background: var(--elevated); border: 1.5px solid var(--border-strong); border-radius: var(--r-md); padding: 11px 12px; display: flex; align-items: center; gap: 12px; transition: border-color .2s, box-shadow .2s; }
+      .device.active { border-color: var(--success); box-shadow: 0 0 0 3px var(--success-soft); }
+      .device.flash { animation: flash .35s ease; }
+      @keyframes flash { 0% { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); } }
+      .bulb { font-size: 26px; filter: grayscale(1) brightness(.55); transition: filter .25s; }
+      .device.active .bulb { filter: none; text-shadow: 0 0 18px rgba(251,200,58,.8); }
+      .dev-name { font-size: 12px; font-weight: 700; }
+      .dev-state { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 2px; }
+      .dev-state b.on { color: var(--success); }
+      .dev-state b.off { color: var(--subtle); }
+      .temp { font-family: var(--mono); font-size: 21px; font-weight: 700; color: var(--fg); }
+
+      /* ---- Fixed explain panel (replaced, never grows) ---- */
+      .explain { min-height: 72px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 4px; }
+      .explain-body { font-size: 13px; line-height: 1.55; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .blue { color: var(--info); font-weight: 700; }
+
+      .hint { margin-top: 12px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <div class="topbar">
+      <span class="chip" id="hist-chip">history: 0</span>
+      <button class="btn" onclick="reset()">↺ Reset</button>
+    </div>
+
+    <div class="zones">
+      <!-- INVOKER -->
+      <div class="zone">
+        <div class="zone-cap">Remote <span class="role">· invoker</span></div>
+        <div class="remote">
+          <button class="rbtn" onclick="press('light-on')">💡 Light on</button>
+          <button class="rbtn" onclick="press('light-off')">💡 Light off</button>
+          <button class="rbtn" onclick="press('heat-up')">🌡 Heat +</button>
+          <button class="rbtn undo" onclick="undoCmd()">⎌ Undo</button>
+        </div>
+      </div>
+
+      <!-- COMMAND OBJECTS -->
+      <div class="zone">
+        <div class="zone-cap">History stack <span class="role">· command objects</span></div>
+        <div class="stack empty" id="stack"></div>
+      </div>
+
+      <!-- RECEIVERS -->
+      <div class="zone">
+        <div class="zone-cap">Devices <span class="role">· receivers</span></div>
+        <div class="devices">
+          <div class="device" id="dev-light">
+            <span class="bulb" id="bulb">💡</span>
+            <div>
+              <div class="dev-name">Living-room Light</div>
+              <div class="dev-state" id="light-state"><b class="off">OFF</b></div>
+            </div>
+          </div>
+          <div class="device" id="dev-thermo">
+            <span style="font-size:26px">🌡</span>
+            <div>
+              <div class="dev-name">Thermostat</div>
+              <div class="temp" id="temp-out">20°C</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FIXED EXPLAIN PANEL -->
+    <div class="explain">
+      <div class="explain-title" id="ex-title">Press a remote button</div>
+      <div class="explain-body" id="ex-body">Watch the two hops: button → <span class="dim">command object on the stack</span> → device.</div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>The remote never touches a device — it only builds command objects. The stack of those objects is what makes <b style="color:var(--info)">⎌ Undo</b> possible.</span>
+    </div>
+
+    <script>
+      var MAX = 6;                 // stack capacity (bounded undo depth)
+      var lightOn = false;
+      var temp = 20;
+      var hist = [];               // executed commands: { kind, name, prev }
+      var seq = 0;                 // running press number
+
+      function setExplain(title, bodyHtml) {
+        document.getElementById("ex-title").textContent = title;
+        document.getElementById("ex-body").innerHTML = bodyHtml;
+      }
+
+      var DEFS = {
+        "light-on":  { name: "LightOnCommand",      exec: "light.turnOn()" },
+        "light-off": { name: "LightOffCommand",     exec: "light.turnOff()" },
+        "heat-up":   { name: "ThermostatUpCommand", exec: "thermostat.up()" }
+      };
+
+      /* ---- press a remote button: build command → stack → device ---- */
+      function press(kind) {
+        seq++;
+        var cmd = { kind: kind, name: DEFS[kind].name, n: seq };
+        if (kind === "heat-up") { cmd.prev = temp; temp++; }
+        else { cmd.prev = lightOn; lightOn = (kind === "light-on"); }
+
+        hist.push(cmd);
+        var dropped = null;
+        if (hist.length > MAX) dropped = hist.shift();
+
+        renderStack();
+        setExplain(
+          cmd.name + " → execute()",
+          'The button built a <code>' + cmd.name + '</code>, pushed it on the stack — then the command ran <code>' + DEFS[kind].exec + '</code>.' +
+          (dropped ? ' <span class="bad">Stack full:</span> <span class="dim">oldest command dropped — it can no longer be undone.</span>' : '')
+        );
+
+        // second hop: the receiver reacts after the card lands
+        setTimeout(function () { renderDevices(kind === "heat-up" ? "thermo" : "light"); }, 220);
+      }
+
+      /* ---- undo: pop top command, it reverses its own receiver ---- */
+      function undoCmd() {
+        if (hist.length === 0) {
+          setExplain("Nothing to undo", 'The history stack is <span class="dim">empty</span> — press a remote button first.');
+          return;
+        }
+        var cmd = hist.pop();
+        if (cmd.kind === "heat-up") temp = cmd.prev;
+        else lightOn = cmd.prev;
+
+        // fly the top card off, then re-render
+        var host = document.getElementById("stack");
+        var top = host.lastChild;
+        if (top && top.classList) top.classList.add("undoing");
+        setTimeout(function () {
+          renderStack();
+          renderDevices(cmd.kind === "heat-up" ? "thermo" : "light");
+        }, 190);
+
+        setExplain(
+          cmd.name + " → undo()",
+          '<span class="blue">⎌</span> Popped <code>' + cmd.name + '</code> off the stack — it reversed its own action on the device.'
+        );
+      }
+
+      /* ---- render: history stack (fixed 6 slots, newest on top) ---- */
+      function renderStack() {
+        var host = document.getElementById("stack");
+        host.innerHTML = "";
+        host.classList.toggle("empty", hist.length === 0);
+        // oldest at bottom of the flex column → newest visually on top
+        for (var i = 0; i < hist.length; i++) {
+          var c = hist[i];
+          var el = document.createElement("div");
+          var cls = "card";
+          if (i === hist.length - 1) cls += " top";
+          if (hist.length === MAX && i === 0) cls += " old";
+          el.className = cls;
+          el.innerHTML = '<span>' + c.name + '</span><span class="n">#' + c.n + '</span>';
+          host.appendChild(el);
+        }
+        document.getElementById("hist-chip").textContent = "history: " + hist.length;
+      }
+
+      /* ---- render: receivers ---- */
+      function renderDevices(flashWhich) {
+        var dl = document.getElementById("dev-light");
+        dl.className = "device" + (lightOn ? " active" : "");
+        document.getElementById("light-state").innerHTML = lightOn ? '<b class="on">ON</b>' : '<b class="off">OFF</b>';
+
+        var dt = document.getElementById("dev-thermo");
+        dt.className = "device" + (temp > 20 ? " active" : "");
+        document.getElementById("temp-out").textContent = temp + "°C";
+
+        if (flashWhich === "light") { dl.className += " flash"; }
+        if (flashWhich === "thermo") { dt.className += " flash"; }
+      }
+
+      /* ---- reset ---- */
+      function reset() {
+        lightOn = false;
+        temp = 20;
+        hist = [];
+        seq = 0;
+        renderStack();
+        renderDevices();
+        setExplain("Press a remote button", 'Watch the two hops: button → <span class="dim">command object on the stack</span> → device.');
+      }
+
+      /* ---- boot ---- */
+      renderStack();
+      renderDevices();
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Null Object — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --gold: #e6b455;
+        --gold-soft: rgba(230, 180, 85, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---- Top: world toggle + reset ---- */
+      .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+      .toggle { display: inline-flex; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 3px; }
+      .toggle button { font: 700 12px/1 var(--sans); border: 0; background: transparent; color: var(--muted); padding: 8px 15px; border-radius: 999px; cursor: pointer; transition: color .15s, background .15s; white-space: nowrap; }
+      .toggle button.on.without { background: var(--danger-soft); color: var(--danger); }
+      .toggle button.on.with { background: var(--success-soft); color: var(--success); }
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: border-color .15s, transform .1s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+
+      /* ---- Action row ---- */
+      .actions { display: flex; gap: 9px; flex-wrap: wrap; margin-bottom: 14px; align-items: center; }
+      .act { font-family: var(--mono); font-size: 12px; font-weight: 700; background: var(--elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 10px 14px; cursor: pointer; color: var(--fg); transition: border-color .15s, transform .1s; }
+      .act.prime { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+      .act:hover { border-color: var(--accent); }
+      .act:active { transform: scale(0.97); }
+      .act:disabled { opacity: .35; cursor: not-allowed; }
+      .act.chip { font-size: 11.5px; padding: 8px 12px; border-radius: 999px; }
+      .act.chip.on { background: var(--danger-soft); border-color: var(--danger); color: var(--danger); }
+      .checks { margin-left: auto; font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+      .checks b { color: var(--success); }
+      .checks b.tax { color: var(--danger); }
+
+      /* ---- Stage: checkout lane ---- */
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 14px; margin-bottom: 14px; }
+      .stage-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+      .grid { display: grid; grid-template-columns: minmax(0, 1fr) 210px; gap: 14px; align-items: start; }
+      @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
+      .col-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .05em; text-transform: uppercase; color: var(--subtle); margin-bottom: 9px; }
+
+      /* ---- CODE card ---- */
+      .code-card { background: #0a0b0e; border: 1.5px solid var(--border-strong); border-radius: var(--r-md); padding: 12px 13px; min-height: 132px; transition: border-color .2s, background .2s; }
+      .code-card.patched { border-color: var(--danger); background: rgba(240, 104, 104, 0.05); }
+      .code-body { font-family: var(--mono); font-size: 12px; line-height: 1.85; color: var(--fg); white-space: pre-wrap; word-break: break-word; }
+      .code-body .kw { color: var(--info); }
+      .code-body .dim { color: var(--subtle); }
+      .code-body .bad { color: var(--danger); font-weight: 700; }
+      .seg { border-radius: 4px; padding: 1px 2px; transition: background .18s, color .18s, box-shadow .18s; }
+      .seg.lit { background: var(--success-soft); color: var(--success); box-shadow: 0 0 0 1px rgba(92,198,111,.35); }
+      .seg.boom { background: var(--danger-soft); color: var(--danger); box-shadow: 0 0 0 1px var(--danger); }
+      .cline { display: block; }
+      .guard { color: var(--danger); border-radius: 4px; transition: background .18s; }
+      .guard.fire { background: var(--danger-soft); }
+      .code-tag { font-family: var(--mono); font-size: 9px; letter-spacing: .05em; text-transform: uppercase; padding: 2px 7px; border-radius: 4px; background: var(--elevated); color: var(--subtle); }
+      .code-tag.tax { background: var(--danger-soft); color: var(--danger); }
+
+      /* ---- Lane: token -> chain -> price ---- */
+      .lane { display: flex; flex-direction: column; gap: 10px; }
+      .token { border: 1.5px solid var(--border-strong); background: var(--elevated); border-radius: var(--r-md); padding: 10px 11px; min-height: 62px; display: flex; flex-direction: column; justify-content: center; transition: border-color .2s, box-shadow .2s; }
+      .token .who { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--fg); }
+      .token .sub { font-size: 10px; color: var(--muted); margin-top: 3px; }
+      .token.member { border-color: var(--gold); box-shadow: 0 0 0 3px var(--gold-soft); }
+      .token.member .who { color: var(--gold); }
+      .token.nul { border-color: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); }
+      .token.nul .who { color: var(--danger); }
+      .token.guest { border-color: var(--border-strong); box-shadow: 0 0 0 3px rgba(144,153,168,.08); }
+      .token.guest .who { color: var(--muted); }
+      .token.idle .who { color: var(--subtle); font-weight: 400; font-style: italic; }
+
+      .chain { display: flex; flex-direction: column; gap: 5px; }
+      .link { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--border); background: var(--surface); color: var(--subtle); border-radius: 5px; padding: 5px 8px; transition: all .18s; }
+      .link.lit { border-color: var(--success); background: var(--success-soft); color: var(--success); }
+      .link.boom { border-color: var(--danger); background: var(--danger-soft); color: var(--danger); }
+      .link.skip { border-style: dashed; color: var(--subtle); }
+
+      .price { position: relative; border: 1.5px solid var(--border-strong); background: var(--elevated); border-radius: var(--r-md); padding: 11px; display: flex; align-items: center; justify-content: center; gap: 9px; font-family: var(--mono); font-weight: 700; overflow: hidden; }
+      .price .from { font-size: 13px; color: var(--muted); text-decoration: line-through; }
+      .price .arrow { color: var(--subtle); font-size: 12px; }
+      .price .to { font-size: 17px; color: var(--subtle); }
+      .price.ok { border-color: var(--success); }
+      .price.ok .to { color: var(--success); }
+      .price.dead { border-color: var(--danger); }
+      .price.dead .to { color: var(--danger); }
+      .price.plain .from { text-decoration: none; }
+
+      .crash { display: none; margin-top: 10px; border: 1.5px solid var(--danger); background: rgba(240,104,104,.14); border-radius: var(--r-md); padding: 9px 11px; font-family: var(--mono); font-size: 11.5px; font-weight: 700; color: var(--danger); text-align: center; }
+      .crash.show { display: block; animation: shake .3s ease; }
+      @keyframes shake { 0%,100% { transform: none; } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+
+      /* ---- Fixed explain panel (replaced, never grows) ---- */
+      .explain { min-height: 72px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 13px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <!-- TOP: world toggle -->
+    <div class="topbar">
+      <div class="toggle" id="toggle">
+        <button class="without on" id="tg-without" onclick="setWorld('without')">✕ WITHOUT Null Object</button>
+        <button class="with" id="tg-with" onclick="setWorld('with')">✓ WITH Null Object</button>
+      </div>
+      <button class="btn" onclick="reset()">↺ Reset</button>
+    </div>
+
+    <!-- ACTIONS -->
+    <div class="actions">
+      <button class="act prime" id="btn-member" onclick="swipe('member')">💳 Member card</button>
+      <button class="act" id="btn-none" onclick="swipe('none')">🪪 No card</button>
+      <button class="act chip" id="btn-patch" onclick="addNullChecks()">🩹 Add null checks</button>
+      <span class="checks" id="checks">checks: <b id="checks-n">0</b></span>
+    </div>
+
+    <!-- STAGE -->
+    <div class="stage">
+      <div class="stage-cap">
+        <span id="world-label">WITHOUT Null Object · lookup may return null</span>
+        <span>latte · $10.00</span>
+      </div>
+      <div class="grid">
+        <div>
+          <div class="col-cap">Checkout code <span class="code-tag" id="code-tag">one line</span></div>
+          <div class="code-card" id="code-card"><div class="code-body" id="code-body"></div></div>
+        </div>
+        <div>
+          <div class="col-cap">Checkout lane</div>
+          <div class="lane">
+            <div class="token idle" id="token"><div class="who">swipe a card…</div><div class="sub">lookupCustomer(card) →</div></div>
+            <div class="chain" id="chain"></div>
+            <div class="price plain" id="price">
+              <span class="from">$10.00</span><span class="arrow">→</span><span class="to" id="price-to">—</span>
+            </div>
+          </div>
+          <div class="crash" id="crash">💥 NullPointerException</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FIXED EXPLAIN PANEL -->
+    <div class="explain">
+      <div class="explain-title" id="ex-title">One line, two kinds of customer</div>
+      <div class="explain-body" id="ex-body">Swipe <code>💳 Member card</code>, then <code>🪪 No card</code>, and watch what <span class="bad">null</span> does to the chain.</div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>The <b style="color:var(--fg)">code line never changes</b> between worlds — only what <code style="font-family:var(--mono)">lookupCustomer</code> returns does.</span>
+    </div>
+
+    <script>
+      /* ---- one explain panel, REPLACED (never appended) ---- */
+      function setExplain(title, bodyHtml) {
+        document.getElementById("ex-title").textContent = title;
+        document.getElementById("ex-body").innerHTML = bodyHtml;
+      }
+
+      var LINKS = ["lookupCustomer(card)", ".getPlan()", ".getDiscount()"];
+
+      var world = "without";   // "without" | "with"
+      var patched = false;     // null-check pyramid applied (WITHOUT world only)
+      var timers = [];
+
+      function later(fn, ms) { timers.push(setTimeout(fn, ms)); }
+      function clearTimers() {
+        for (var i = 0; i < timers.length; i++) { clearTimeout(timers[i]); }
+        timers = [];
+      }
+
+      /* ---- CODE card ---- */
+      function renderCode() {
+        var card = document.getElementById("code-card");
+        var body = document.getElementById("code-body");
+        var tag = document.getElementById("code-tag");
+        if (patched) {
+          card.classList.add("patched");
+          tag.className = "code-tag tax";
+          tag.textContent = "5 lines · 2 checks";
+          body.innerHTML =
+            '<span class="cline"><span class="kw">const</span> c = lookupCustomer(card);</span>' +
+            '<span class="cline guard" id="g1"><span class="kw">if</span> (c == <span class="bad">null</span>) <span class="kw">return</span> 0;</span>' +
+            '<span class="cline"><span class="kw">const</span> p = c.getPlan();</span>' +
+            '<span class="cline guard" id="g2"><span class="kw">if</span> (p == <span class="bad">null</span>) <span class="kw">return</span> 0;</span>' +
+            '<span class="cline"><span class="kw">return</span> p.getDiscount();</span>';
+        } else {
+          card.classList.remove("patched");
+          tag.className = "code-tag";
+          tag.textContent = "one line";
+          body.innerHTML =
+            '<span class="seg">lookupCustomer(card)</span>' +
+            '<span class="seg">.getPlan()</span>' +
+            '<span class="seg">.getDiscount()</span>';
+        }
+      }
+
+      function renderChain() {
+        var host = document.getElementById("chain");
+        var html = "";
+        for (var i = 0; i < LINKS.length; i++) {
+          html += '<div class="link">' + LINKS[i] + "</div>";
+        }
+        host.innerHTML = html;
+      }
+
+      function chainEls() { return document.querySelectorAll("#chain .link"); }
+      function segEls() { return document.querySelectorAll("#code-body .seg"); }
+
+      function setLink(i, cls) {
+        var els = chainEls();
+        if (els[i]) { els[i].className = "link " + cls; }
+        var segs = segEls();
+        if (segs[i]) { segs[i].className = "seg " + (cls === "skip" ? "" : cls); }
+      }
+
+      function setToken(kind, who, sub) {
+        var el = document.getElementById("token");
+        el.className = "token " + kind;
+        el.innerHTML = '<div class="who">' + who + '</div><div class="sub">' + sub + "</div>";
+      }
+
+      function setPrice(cls, to) {
+        document.getElementById("price").className = "price " + cls;
+        document.getElementById("price-to").textContent = to;
+      }
+
+      function setChecks(n) {
+        document.getElementById("checks-n").textContent = n;
+        document.getElementById("checks-n").className = n > 0 ? "tax" : "";
+      }
+
+      function hideCrash() { document.getElementById("crash").className = "crash"; }
+      function showCrash() { document.getElementById("crash").className = "crash show"; }
+
+      /* ---- clear the lane before a run ---- */
+      function clearLane() {
+        clearTimers();
+        hideCrash();
+        renderChain();
+        renderCode();
+        setPrice("plain", "—");
+      }
+
+      /* ---- THE core action: swipe a card ---- */
+      function swipe(kind) {
+        clearLane();
+
+        var isMember = kind === "member";
+        // 1. what does lookupCustomer() hand back?
+        if (isMember) {
+          setToken("member", "Customer(\"Gold ★\")", "a real member · GoldPlan · 20% off");
+        } else if (world === "with") {
+          setToken("guest", "GuestCustomer", "a real object · NoDiscountPlan · 0% off");
+        } else {
+          setToken("nul", "null", "nothing at all · a live grenade");
+        }
+
+        // 2. does the chain survive?
+        var crashes = !isMember && world === "without" && !patched;
+        var guarded = !isMember && world === "without" && patched;
+
+        if (guarded) {
+          setLink(0, "lit");
+          later(function () {
+            var g = document.getElementById("g1");
+            if (g) { g.className = "cline guard fire"; }
+            setLink(1, "skip");
+            setLink(2, "skip");
+            setPrice("plain", "$10.00");
+            setExplain(
+              "The guard caught it — at a price",
+              'The <span class="bad">if (c == null)</span> line saved the register, but checkout is now a <span class="bad">5-line pyramid</span> — and every method that touches a customer pays it too.'
+            );
+          }, 280);
+          return;
+        }
+
+        // run the chain left → right
+        setLink(0, "lit");
+        later(function () {
+          if (crashes) {
+            setLink(1, "boom");
+            showCrash();
+            setPrice("dead", "☠");
+            setExplain(
+              "💥 The chain hit null",
+              '<code>lookupCustomer</code> returned <span class="bad">null</span>, so <code>.getPlan()</code> blew up — <span class="bad">NullPointerException</span>, dead register.'
+            );
+          } else {
+            setLink(1, "lit");
+          }
+        }, 280);
+
+        if (crashes) return;
+
+        later(function () { setLink(2, "lit"); }, 560);
+        later(function () {
+          if (isMember) {
+            setPrice("ok", "$8.00 ✓");
+            setExplain(
+              "Member → 20% off",
+              'Every link returned a real object, so the chain ran end to end: <span class="good">$10.00 → $8.00</span>.'
+            );
+          } else {
+            setPrice("ok", "$10.00 ✓");
+            setExplain(
+              "Guest → 0% off, no crash",
+              '<code>GuestCustomer</code> is a <span class="good">real object</span> whose <code>NoDiscountPlan</code> returns <b>0</b> — same line, no ifs, no crash.'
+            );
+          }
+        }, 840);
+      }
+
+      /* ---- the null-check tax ---- */
+      function addNullChecks() {
+        if (world !== "without" || patched) return;
+        patched = true;
+        clearLane();
+        setChecks(2);
+        setToken("idle", "swipe a card…", "lookupCustomer(card) →");
+        setExplain(
+          "You just paid the null tax",
+          'One tidy line became <span class="bad">5</span> with <span class="bad">2 checks</span> — now swipe <code>🪪 No card</code> and see it survive.'
+        );
+        render();
+      }
+
+      /* ---- render chrome ---- */
+      function render() {
+        document.getElementById("tg-without").className = "without" + (world === "without" ? " on" : "");
+        document.getElementById("tg-with").className = "with" + (world === "with" ? " on" : "");
+        document.getElementById("world-label").textContent =
+          world === "with"
+            ? "WITH Null Object · lookup always returns a real object"
+            : "WITHOUT Null Object · lookup may return null";
+
+        var patch = document.getElementById("btn-patch");
+        patch.disabled = world === "with" || patched;
+        patch.className = "act chip" + (patched ? " on" : "");
+        renderCode();
+      }
+
+      /* ---- switch worlds ---- */
+      function setWorld(w) {
+        if (w === world) return;
+        world = w;
+        patched = false;
+        clearLane();
+        setChecks(0);
+        setToken("idle", "swipe a card…", "lookupCustomer(card) →");
+        render();
+        if (w === "with") {
+          setExplain(
+            "No null exists here",
+            'Walk-ins now get a <span class="good">GuestCustomer</span> with a <code>NoDiscountPlan</code> — swipe <code>🪪 No card</code> and the same one-liner just works.'
+          );
+        } else {
+          setExplain(
+            "Back where null can bite",
+            '<code>lookupCustomer</code> can return <span class="bad">null</span> again — swipe <code>🪪 No card</code> to blow up the register.'
+          );
+        }
+      }
+
+      /* ---- reset ---- */
+      function reset() {
+        patched = false;
+        clearLane();
+        setChecks(0);
+        setToken("idle", "swipe a card…", "lookupCustomer(card) →");
+        render();
+        setExplain(
+          "One line, two kinds of customer",
+          'Swipe <code>💳 Member card</code>, then <code>🪪 No card</code>, and watch what ' +
+            (world === "with" ? 'a <span class="good">GuestCustomer</span> does for the chain.' : 'the <span class="bad">null</span> does to the chain.')
+        );
+      }
+
+      /* ---- boot ---- */
+      renderChain();
+      render();
+      setChecks(0);
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>
