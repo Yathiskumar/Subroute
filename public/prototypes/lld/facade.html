@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Facade — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---- Top: world toggle + counter + reset ---- */
+      .topbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+      .toggle { display: inline-flex; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 3px; }
+      .toggle button { font: 700 12px/1 var(--sans); border: 0; background: transparent; color: var(--muted); padding: 8px 15px; border-radius: 999px; cursor: pointer; transition: color .15s, background .15s; white-space: nowrap; }
+      .toggle button.on.without { background: var(--danger-soft); color: var(--danger); }
+      .toggle button.on.with { background: var(--success-soft); color: var(--success); }
+      .chip { font-family: var(--mono); font-size: 11.5px; color: var(--muted); background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 7px 13px; }
+      .chip b { color: var(--accent); font-size: 13px; }
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: border-color .15s, transform .1s; margin-left: auto; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+
+      /* ---- Facade button row (WITH world only) ---- */
+      .facade-row { display: none; gap: 9px; flex-wrap: wrap; margin-bottom: 14px; }
+      .facade-row.show { display: flex; }
+      .act { font-family: var(--mono); font-size: 12.5px; font-weight: 700; background: var(--elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 11px 18px; cursor: pointer; color: var(--fg); transition: border-color .15s, transform .1s; }
+      .act.prime { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+      .act:hover { border-color: var(--accent); }
+      .act:active { transform: scale(0.97); }
+
+      /* ---- Subsystem cards ---- */
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 14px; margin-bottom: 12px; }
+      .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+      @media (max-width: 560px) { .cards { grid-template-columns: repeat(2, 1fr); } }
+      .card { display: flex; align-items: center; gap: 9px; background: var(--elevated); border: 1.5px solid var(--border-strong); border-radius: var(--r-md); padding: 12px 13px; cursor: pointer; color: var(--fg); font: 600 12.5px/1.2 var(--sans); text-align: left; transition: border-color .15s, transform .1s, opacity .2s; }
+      .card:hover { border-color: var(--info); }
+      .card:active { transform: scale(0.97); }
+      .card .ico { font-size: 18px; }
+      .card .nm { flex: 1; }
+      .card .light { font-size: 11px; }
+      .card.on { border-color: var(--success); box-shadow: 0 0 0 3px var(--success-soft); }
+      .card.dim { opacity: .55; cursor: not-allowed; pointer-events: none; border-style: dashed; }
+      .card.dim.on { opacity: .9; }
+      .card.bad { border-color: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); animation: shake .35s; }
+      @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        20% { transform: translateX(-5px); }
+        40% { transform: translateX(5px); }
+        60% { transform: translateX(-4px); }
+        80% { transform: translateX(4px); }
+      }
+
+      /* ---- Movie banner ---- */
+      .banner { display: none; align-items: center; justify-content: center; gap: 8px; margin-top: 12px; background: var(--success-soft); border: 1px solid var(--success); border-radius: var(--r-md); padding: 10px; font: 700 13px/1 var(--sans); color: var(--success); animation: pop .25s ease; }
+      .banner.show { display: flex; }
+      @keyframes pop { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+      /* ---- Fixed explain panel (replaced, never grows) ---- */
+      .explain { min-height: 72px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 13px 15px; display: flex; align-items: center; }
+      .explain-body { font-size: 13px; line-height: 1.55; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .dim { color: var(--muted); }
+
+      .hint { margin-top: 12px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: center; }
+      .hint .b { color: var(--accent); }
+      .hint code { font-family: var(--mono); font-size: 11.5px; }
+    </style>
+  </head>
+  <body>
+    <!-- TOP: world toggle + call counter + reset -->
+    <div class="topbar">
+      <div class="toggle">
+        <button class="without on" id="tg-without" onclick="setWorld('without')">✕ WITHOUT Facade</button>
+        <button class="with" id="tg-with" onclick="setWorld('with')">✓ WITH Facade</button>
+      </div>
+      <span class="chip">calls you made: <b id="calls-n">0</b></span>
+      <button class="btn" onclick="reset()">↺ Reset</button>
+    </div>
+
+    <!-- FACADE BUTTONS (WITH world only) -->
+    <div class="facade-row" id="facade-row">
+      <button class="act prime" id="btn-watch" onclick="watchMovie()">▶ watchMovie()</button>
+      <button class="act" id="btn-end" onclick="endMovie()">⏹ endMovie()</button>
+    </div>
+
+    <!-- SUBSYSTEM CARDS -->
+    <div class="stage">
+      <div class="cards">
+        <button class="card" id="card-amp" onclick="clickSub('amp')"><span class="ico">🔊</span><span class="nm">Amplifier</span><span class="light" id="light-amp">⚫</span></button>
+        <button class="card" id="card-dvd" onclick="clickSub('dvd')"><span class="ico">💿</span><span class="nm">DVD Player</span><span class="light" id="light-dvd">⚫</span></button>
+        <button class="card" id="card-screen" onclick="clickSub('screen')"><span class="ico">🎞</span><span class="nm">Screen</span><span class="light" id="light-screen">⚫</span></button>
+        <button class="card" id="card-lights" onclick="clickSub('lights')"><span class="ico">💡</span><span class="nm">Lights</span><span class="light" id="light-lights">⚫</span></button>
+        <button class="card" id="card-projector" onclick="clickSub('projector')"><span class="ico">📽</span><span class="nm">Projector</span><span class="light" id="light-projector">⚫</span></button>
+        <button class="card" id="card-play" onclick="clickSub('play')"><span class="ico">▶</span><span class="nm">Playback</span><span class="light" id="light-play">⚫</span></button>
+      </div>
+      <div class="banner" id="banner">🎬 movie playing</div>
+    </div>
+
+    <!-- FIXED EXPLAIN PANEL -->
+    <div class="explain">
+      <div class="explain-body" id="ex-body">You are the client — start the movie yourself. <span class="dim">Order matters.</span></div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>Order: 🔊 → 💿 → 🎞 → 💡 → 📽 → ▶</span>
+    </div>
+
+    <script>
+      /* ---- one explain panel, REPLACED (never appended) ---- */
+      function setExplain(html) {
+        document.getElementById("ex-body").innerHTML = html;
+      }
+
+      var ORDER = ["amp", "dvd", "screen", "lights", "projector", "play"];
+      var NAME = { amp: "Amplifier", dvd: "DVD Player", screen: "Screen", lights: "Lights", projector: "Projector", play: "Playback" };
+
+      var world = "without";     // "without" | "with"
+      var on = {};               // id -> true when that part is on
+      var calls = 0;             // "calls you made"
+      var playing = false;
+      var busy = false;          // facade animation in progress
+      var timers = [];
+
+      function nextOff() {
+        for (var i = 0; i < ORDER.length; i++) if (!on[ORDER[i]]) return ORDER[i];
+        return null;
+      }
+
+      /* ---- WITHOUT world: user drives each subsystem ---- */
+      function clickSub(id) {
+        if (world !== "without" || busy) return;
+        if (on[id]) {
+          setExplain(NAME[id] + " is already on.");
+          return;
+        }
+        var expected = nextOff();
+        if (id !== expected) {
+          shake(id);
+          setExplain(
+            id === "projector" && !on.dvd
+              ? '<span class="bad">Projector has no signal</span> — DVD Player isn’t on.'
+              : id === "play" && !on.projector
+                ? '<span class="bad">Nothing to play on</span> — Projector isn’t on.'
+                : '<span class="bad">' + NAME[id] + " won’t respond</span> — " + NAME[expected] + " is still off."
+          );
+          render();
+          return;
+        }
+        on[id] = true;
+        calls++;
+        playing = !nextOff();
+        render();
+        if (playing) {
+          setExplain('🎬 Movie on — <span class="bad">that took you ' + calls + " careful calls</span>.");
+        } else {
+          setExplain(NAME[id] + ' on. <span class="dim">Next: ' + NAME[nextOff()] + ".</span>");
+        }
+      }
+
+      function shake(id) {
+        var el = document.getElementById("card-" + id);
+        el.classList.add("bad");
+        timers.push(setTimeout(function () { el.classList.remove("bad"); }, 380));
+      }
+
+      /* ---- WITH world: one facade call runs the sequence ---- */
+      function watchMovie() {
+        if (world !== "with" || busy) return;
+        if (playing) { setExplain("Movie is already playing."); return; }
+        busy = true;
+        calls++;
+        render();
+        setExplain('<code>watchMovie()</code> is running all six steps for you…');
+        ORDER.forEach(function (id, i) {
+          timers.push(setTimeout(function () {
+            on[id] = true;
+            if (i === ORDER.length - 1) {
+              playing = true;
+              busy = false;
+              setExplain('🎬 Same six steps, right order — <span class="good">1 call</span> from you.');
+            }
+            render();
+          }, 250 * (i + 1)));
+        });
+      }
+
+      function endMovie() {
+        if (world !== "with" || busy) return;
+        if (!on.amp) { setExplain("Everything is already off."); return; }
+        busy = true;
+        calls++;
+        playing = false;
+        render();
+        setExplain('<code>endMovie()</code> is shutting everything down…');
+        var rev = ORDER.slice().reverse();
+        rev.forEach(function (id, i) {
+          timers.push(setTimeout(function () {
+            on[id] = false;
+            if (i === rev.length - 1) {
+              busy = false;
+              setExplain('All off, in reverse — <span class="good">still 1 call</span>.');
+            }
+            render();
+          }, 250 * (i + 1)));
+        });
+      }
+
+      /* ---- render ---- */
+      function render() {
+        document.getElementById("tg-without").className = "without" + (world === "without" ? " on" : "");
+        document.getElementById("tg-with").className = "with" + (world === "with" ? " on" : "");
+        document.getElementById("calls-n").textContent = calls;
+        document.getElementById("facade-row").className = "facade-row" + (world === "with" ? " show" : "");
+        document.getElementById("banner").className = "banner" + (playing ? " show" : "");
+        ORDER.forEach(function (id) {
+          var card = document.getElementById("card-" + id);
+          var isBad = card.classList.contains("bad");
+          card.className = "card" + (on[id] ? " on" : "") + (world === "with" ? " dim" : "") + (isBad ? " bad" : "");
+          document.getElementById("light-" + id).textContent = on[id] ? "🟢" : "⚫";
+        });
+      }
+
+      /* ---- switch worlds / reset ---- */
+      function clearTimers() {
+        timers.forEach(function (t) { clearTimeout(t); });
+        timers = [];
+        busy = false;
+      }
+
+      function setWorld(w) {
+        if (w === world) return;
+        clearTimers();
+        world = w;
+        on = {};
+        calls = 0;
+        playing = false;
+        render();
+        setExplain(
+          w === "with"
+            ? 'The cards are the facade’s job now — press <code>▶ watchMovie()</code>.'
+            : 'You are the client again — six clicks, <span class="dim">in order</span>.'
+        );
+      }
+
+      function reset() {
+        clearTimers();
+        on = {};
+        calls = 0;
+        playing = false;
+        render();
+        setExplain(
+          world === "with"
+            ? 'Fresh start — press <code>▶ watchMovie()</code>.'
+            : 'Fresh start — Amplifier first. <span class="dim">Order matters.</span>'
+        );
+      }
+
+      /* ---- boot ---- */
+      render();
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

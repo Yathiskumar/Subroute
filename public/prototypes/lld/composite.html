@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Composite — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---- Top bar ---- */
+      .topbar { display: flex; align-items: center; gap: 9px; margin-bottom: 14px; flex-wrap: wrap; }
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: border-color .15s, transform .1s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .btn.add { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); font-family: var(--mono); font-weight: 700; }
+      .btn.add:hover { border-color: var(--accent); }
+      .btn.reset { margin-left: auto; }
+
+      /* ---- Stage: the file tree ---- */
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 12px; margin-bottom: 14px; }
+      .row { display: flex; align-items: center; gap: 8px; padding: 7px 10px; margin-bottom: 2px; border: 1.5px solid transparent; border-radius: var(--r-md); cursor: pointer; transition: border-color .15s, background .2s; min-width: 0; }
+      .row:hover { border-color: var(--border-strong); }
+      .row.sel { border-color: var(--accent-border); box-shadow: 0 0 0 2px var(--accent-soft); }
+      .row.lit { background: var(--info-soft); border-color: var(--info); }
+      .row.done { background: var(--success-soft); border-color: var(--success); }
+      .row .ico { font-size: 15px; flex: none; }
+      .row .nm { font-family: var(--mono); font-size: 12.5px; font-weight: 600; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .row .meta { font-family: var(--mono); font-size: 10.5px; color: var(--subtle); white-space: nowrap; flex: none; }
+      .row .spacer { flex: 1; min-width: 4px; }
+      .badge { font-family: var(--mono); font-size: 10.5px; font-weight: 700; white-space: nowrap; flex: none; position: relative; min-width: 0; }
+      .badge .fl { display: inline-block; color: var(--info); animation: floatUp 1.5s ease forwards; }
+      .badge .total { display: inline-block; background: var(--success-soft); color: var(--success); border: 1px solid var(--success); border-radius: 999px; padding: 2px 8px; animation: pop .25s ease; }
+      @keyframes floatUp { 0% { opacity: 0; transform: translateY(5px); } 15% { opacity: 1; transform: translateY(0); } 75% { opacity: 1; } 100% { opacity: 0; transform: translateY(-8px); } }
+      @keyframes pop { from { opacity: 0; transform: scale(.85); } to { opacity: 1; transform: none; } }
+      .chip { font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--accent); background: var(--elevated); border: 1px solid var(--border-strong); border-radius: 999px; padding: 4px 10px; cursor: pointer; flex: none; transition: border-color .15s, transform .1s; }
+      .chip:hover { border-color: var(--accent); }
+      .chip:active { transform: scale(0.94); }
+
+      /* ---- Fixed explain panel (replaced, never grows) ---- */
+      .explain { min-height: 72px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 13px 15px; display: flex; align-items: center; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .cool { color: var(--info); font-weight: 700; }
+      .explain-body .dim { color: var(--muted); }
+
+      .hint { margin-top: 12px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <!-- TOP: add + reset -->
+    <div class="topbar">
+      <button class="btn add" onclick="addFile()">＋ File</button>
+      <button class="btn add" onclick="addFolder()">＋ Folder</button>
+      <button class="btn reset" onclick="reset()">↺ Reset</button>
+    </div>
+
+    <!-- STAGE: the tree -->
+    <div class="stage" id="tree"></div>
+
+    <!-- FIXED EXPLAIN PANEL -->
+    <div class="explain">
+      <div class="explain-body" id="ex">Click any <code>size()</code> chip — file or folder, same call.</div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>Every row carries the same <b style="color:var(--fg)">size()</b> chip — one interface for a single file and a whole tree.</span>
+    </div>
+
+    <script>
+      /* ---------- data ---------- */
+      function seed() {
+        return {
+          id: 0, type: "folder", name: "project", children: [
+            { id: 1, type: "file", name: "readme.md", kb: 2, ico: "📄", children: [] },
+            { id: 2, type: "folder", name: "src", children: [
+              { id: 3, type: "file", name: "app.ts", kb: 14, ico: "📄", children: [] },
+              { id: 4, type: "file", name: "utils.ts", kb: 6, ico: "📄", children: [] },
+            ] },
+            { id: 5, type: "folder", name: "assets", children: [
+              { id: 6, type: "file", name: "logo.png", kb: 48, ico: "🖼", children: [] },
+            ] },
+          ],
+        };
+      }
+      var FILE_POOL = [
+        { name: "notes.txt", kb: 3, ico: "📄" },
+        { name: "photo.png", kb: 21, ico: "🖼" },
+        { name: "data.json", kb: 5, ico: "📄" },
+        { name: "style.css", kb: 4, ico: "📄" },
+        { name: "song.mp3", kb: 64, ico: "📄" },
+        { name: "index.html", kb: 7, ico: "📄" },
+      ];
+      var FOLDER_POOL = ["docs", "tests", "lib", "images", "config", "build"];
+
+      var tree = seed();
+      var selectedId = 0;
+      var nextId = 7;
+      var filePick = 0, folderPick = 0;
+      var timers = [];
+
+      /* ---------- tree helpers ---------- */
+      function findNode(id, node) {
+        node = node || tree;
+        if (node.id === id) return node;
+        for (var i = 0; i < node.children.length; i++) {
+          var hit = findNode(id, node.children[i]);
+          if (hit) return hit;
+        }
+        return null;
+      }
+      function findParent(id, node) {
+        node = node || tree;
+        for (var i = 0; i < node.children.length; i++) {
+          if (node.children[i].id === id) return node;
+          var hit = findParent(id, node.children[i]);
+          if (hit) return hit;
+        }
+        return null;
+      }
+      function subtreeSize(node) {
+        if (node.type === "file") return node.kb;
+        var sum = 0;
+        for (var i = 0; i < node.children.length; i++) sum += subtreeSize(node.children[i]);
+        return sum;
+      }
+      // post-order: children float their answers before their own folder does
+      function cascadeOrder(node) {
+        var out = [];
+        (function walk(n) {
+          n.children.forEach(function (c) {
+            if (c.type === "folder") walk(c);
+            out.push(c);
+          });
+        })(node);
+        return out;
+      }
+      function icon(node) { return node.type === "folder" ? "📁" : (node.ico || "📄"); }
+
+      /* ---------- render ---------- */
+      function rowHtml(node, depth) {
+        var meta = node.type === "file"
+          ? node.kb + " KB"
+          : "· " + node.children.length + (node.children.length === 1 ? " item" : " items");
+        return (
+          '<div class="row' + (node.id === selectedId ? " sel" : "") + '" id="row-' + node.id + '"' +
+          ' style="padding-left:' + (10 + depth * 22) + 'px" onclick="rowClick(' + node.id + ')">' +
+          '<span class="ico">' + icon(node) + "</span>" +
+          '<span class="nm">' + node.name + "</span>" +
+          '<span class="meta">' + meta + "</span>" +
+          '<span class="spacer"></span>' +
+          '<span class="badge" id="badge-' + node.id + '"></span>' +
+          '<button class="chip" onclick="sizeClick(' + node.id + ');event.stopPropagation()">size()</button>' +
+          "</div>"
+        );
+      }
+      function render() {
+        var html = "";
+        (function walk(node, depth) {
+          html += rowHtml(node, depth);
+          node.children.forEach(function (c) { walk(c, depth + 1); });
+        })(tree, 0);
+        document.getElementById("tree").innerHTML = html;
+      }
+      function setExplain(html) {
+        document.getElementById("ex").innerHTML = html;
+      }
+
+      /* ---------- animation ---------- */
+      function cancelAnim() {
+        timers.forEach(clearTimeout);
+        timers = [];
+        render(); // wipes lit/done classes and badges
+      }
+      function later(fn, ms) { timers.push(setTimeout(fn, ms)); }
+
+      /* ---------- interactions ---------- */
+      function sizeClick(id) {
+        cancelAnim();
+        var node = findNode(id);
+        if (!node) return;
+
+        if (node.type === "file") {
+          // a leaf: same call, answers directly — no special case
+          var row = document.getElementById("row-" + id);
+          if (row) row.classList.add("done");
+          document.getElementById("badge-" + id).innerHTML =
+            '<span class="total">= ' + node.kb + " KB</span>";
+          setExplain(icon(node) + " <code>" + node.name + "</code> is a leaf — <code>size()</code> just returned <span class=\"good\">" + node.kb + " KB</span>.");
+          later(function () { if (row) row.classList.remove("done"); }, 1600);
+          return;
+        }
+
+        var order = cascadeOrder(node);
+        var total = subtreeSize(node);
+        var step = 260;
+
+        order.forEach(function (child, i) {
+          later(function () {
+            var row = document.getElementById("row-" + child.id);
+            if (row) row.classList.add("lit");
+            document.getElementById("badge-" + child.id).innerHTML =
+              '<span class="fl">↑ ' + subtreeSize(child) + " KB</span>";
+            later(function () { if (row) row.classList.remove("lit"); }, 1200);
+          }, i * step);
+        });
+
+        later(function () {
+          var row = document.getElementById("row-" + id);
+          if (row) row.classList.add("done");
+          document.getElementById("badge-" + id).innerHTML =
+            '<span class="total">= ' + total + " KB</span>";
+        }, order.length * step);
+
+        setExplain(
+          order.length === 0
+            ? "📁 <code>" + node.name + "</code> has no children yet — total <span class=\"good\">0 KB</span>."
+            : "One call on 📁 <code>" + node.name + "</code> → it asked its <span class=\"cool\">" +
+              node.children.length + "</span> " + (node.children.length === 1 ? "child" : "children") +
+              ". Total <span class=\"good\">" + total + " KB</span>."
+        );
+      }
+
+      function rowClick(id) {
+        cancelAnim();
+        var node = findNode(id);
+        if (!node) return;
+        if (node.type === "folder") {
+          selectedId = id;
+          render();
+          setExplain("📁 <code>" + node.name + "</code> selected — <code>＋ File</code> / <code>＋ Folder</code> drop items here.");
+        } else {
+          var parent = findParent(id) || tree;
+          selectedId = parent.id;
+          render();
+          setExplain(icon(node) + " <code>" + node.name + "</code> sits in 📁 <code>" + parent.name + "</code> — that folder is selected now.");
+        }
+      }
+
+      function uniqueName(base, taken) {
+        if (!taken[base]) return base;
+        var n = 2, dot = base.lastIndexOf(".");
+        var stem = dot === -1 ? base : base.slice(0, dot);
+        var ext = dot === -1 ? "" : base.slice(dot);
+        while (taken[stem + "-" + n + ext]) n++;
+        return stem + "-" + n + ext;
+      }
+      function takenNames() {
+        var t = {};
+        (function walk(n) { t[n.name] = true; n.children.forEach(walk); })(tree);
+        return t;
+      }
+
+      function addFile() {
+        cancelAnim();
+        var host = findNode(selectedId) || tree;
+        var pick = FILE_POOL[filePick++ % FILE_POOL.length];
+        var name = uniqueName(pick.name, takenNames());
+        host.children.push({ id: nextId++, type: "file", name: name, kb: pick.kb, ico: pick.ico, children: [] });
+        render();
+        setExplain("Added " + pick.ico + " <code>" + name + "</code> (" + pick.kb + " KB) to 📁 <code>" + host.name + "</code> — now call <code>size()</code> above it.");
+      }
+
+      function addFolder() {
+        cancelAnim();
+        var host = findNode(selectedId) || tree;
+        var name = uniqueName(FOLDER_POOL[folderPick++ % FOLDER_POOL.length], takenNames());
+        var node = { id: nextId++, type: "folder", name: name, children: [] };
+        host.children.push(node);
+        selectedId = node.id;
+        render();
+        setExplain("Added 📁 <code>" + name + "</code> inside 📁 <code>" + host.name + "</code> — folders hold folders, same interface.");
+      }
+
+      function reset() {
+        timers.forEach(clearTimeout);
+        timers = [];
+        tree = seed();
+        selectedId = 0;
+        nextId = 7;
+        filePick = 0;
+        folderPick = 0;
+        render();
+        setExplain("Fresh tree. Click any <code>size()</code> chip — file or folder, same call.");
+      }
+
+      /* ---------- boot ---------- */
+      render();
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

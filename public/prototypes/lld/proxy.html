@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Proxy — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---- Top: tab toggle ---- */
+      .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+      .toggle { display: inline-flex; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 3px; }
+      .toggle button { font: 700 12px/1 var(--sans); border: 0; background: transparent; color: var(--muted); padding: 8px 15px; border-radius: 999px; cursor: pointer; transition: color .15s, background .15s; white-space: nowrap; }
+      .toggle button.on.lazy { background: var(--info-soft); color: var(--info); }
+      .toggle button.on.prot { background: var(--danger-soft); color: var(--danger); }
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: border-color .15s, transform .1s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+
+      /* ---- Action row ---- */
+      .actions { display: flex; gap: 9px; flex-wrap: wrap; margin-bottom: 14px; align-items: center; }
+      .act { font-family: var(--mono); font-size: 12px; font-weight: 700; background: var(--elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 10px 14px; cursor: pointer; color: var(--fg); transition: border-color .15s, transform .1s; }
+      .act.prime { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+      .act:hover { border-color: var(--accent); }
+      .act:active { transform: scale(0.97); }
+      .act:disabled { opacity: .4; cursor: not-allowed; }
+      .act.role { border-radius: 999px; }
+      .act.role.on { background: var(--info-soft); border-color: var(--info); color: var(--info); }
+      .chip { margin-left: auto; display: inline-flex; gap: 8px; }
+      .stat { font-family: var(--mono); font-size: 11.5px; color: var(--muted); background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 7px 12px; }
+      .stat b { color: var(--fg); }
+      .stat.hot b { color: var(--accent); }
+
+      /* ---- Stage & flow ---- */
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 14px; margin-bottom: 14px; }
+      .stage-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
+      .flow { display: flex; align-items: stretch; gap: 10px; }
+      @media (max-width: 560px) { .flow { flex-direction: column; } .arrow { transform: rotate(90deg); align-self: center; } }
+      .card { flex: 1; background: var(--elevated); border: 1.5px solid var(--border-strong); border-radius: var(--r-md); padding: 11px; text-align: center; position: relative; transition: border-color .2s, box-shadow .2s; min-width: 0; }
+      .card.lit { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+      .card.ok { border-color: var(--success); box-shadow: 0 0 0 3px var(--success-soft); }
+      .card.no { border-color: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); }
+      .card .ico { font-size: 20px; }
+      .card .name { font-family: var(--mono); font-size: 11px; font-weight: 700; margin-top: 4px; }
+      .card .sub { font-family: var(--mono); font-size: 9.5px; color: var(--subtle); margin-top: 3px; }
+      .arrow { align-self: center; font-size: 18px; color: var(--subtle); transition: color .15s, text-shadow .15s; flex: none; }
+      .arrow.go { color: var(--accent); text-shadow: 0 0 10px var(--accent); }
+
+      /* proxy cache slots */
+      .slots { display: flex; gap: 5px; justify-content: center; margin-top: 8px; }
+      .slot { font-family: var(--mono); font-size: 9px; padding: 3px 6px; border-radius: 4px; background: var(--surface); border: 1px solid var(--border); color: var(--subtle); }
+      .slot.full { background: var(--success-soft); border-color: var(--success); color: var(--success); }
+      .zap { position: absolute; top: 6px; right: 8px; font-size: 15px; opacity: 0; transition: opacity .15s; }
+      .zap.show { opacity: 1; }
+      .badge { display: inline-block; font-family: var(--mono); font-size: 9px; padding: 2px 7px; border-radius: 4px; margin-top: 7px; visibility: hidden; }
+      .badge.cache { background: var(--success-soft); color: var(--success); visibility: visible; }
+      .badge.deny { background: var(--danger-soft); color: var(--danger); visibility: visible; }
+      .badge.load { background: var(--accent-soft); color: var(--accent); visibility: visible; }
+
+      /* real image frame */
+      .frame { width: 84px; height: 60px; margin: 8px auto 0; border-radius: 6px; border: 1.5px dashed var(--border-strong); background: var(--surface); display: flex; align-items: center; justify-content: center; font-size: 20px; filter: grayscale(1); opacity: .55; transition: filter .3s, opacity .3s; }
+      .frame.loaded { border-style: solid; filter: none; opacity: 1; font-size: 0; }
+      .frame.dead { filter: grayscale(1); opacity: .3; }
+      .loadbar { height: 4px; border-radius: 2px; background: var(--surface); margin-top: 8px; overflow: hidden; }
+      .loadbar div { height: 100%; width: 0; background: var(--accent); transition: width .6s linear; }
+
+      /* ---- Fixed explain panel ---- */
+      .explain { min-height: 72px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 13px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .dim { color: var(--muted); }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <!-- TOP: tabs -->
+    <div class="topbar">
+      <div class="toggle">
+        <button class="lazy on" id="tab-lazy" onclick="setTab('lazy')">💤 Lazy + cache</button>
+        <button class="prot" id="tab-prot" onclick="setTab('prot')">🔒 Protection</button>
+      </div>
+    </div>
+
+    <!-- ================= LAZY TAB ================= -->
+    <div id="panel-lazy">
+      <div class="actions">
+        <button class="act prime" id="p1" onclick="displayPhoto('photo-1')">🖼 photo-1</button>
+        <button class="act prime" id="p2" onclick="displayPhoto('photo-2')">🖼 photo-2</button>
+        <button class="act prime" id="p3" onclick="displayPhoto('photo-3')">🖼 photo-3</button>
+        <button class="act" onclick="resetLazy()">↺ Reset</button>
+        <span class="chip">
+          <span class="stat" id="stat-req">requests: <b>0</b></span>
+          <span class="stat hot" id="stat-disk">disk loads: <b>0</b></span>
+        </span>
+      </div>
+
+      <div class="stage">
+        <div class="stage-cap">client → proxy → real image · same interface: <span style="color:var(--fg)">display()</span></div>
+        <div class="flow">
+          <div class="card" id="lz-client">
+            <div class="ico">👤</div>
+            <div class="name">CLIENT</div>
+            <div class="sub">calls display()</div>
+          </div>
+          <div class="arrow" id="lz-a1">➜</div>
+          <div class="card" id="lz-proxy">
+            <span class="zap" id="lz-zap">⚡</span>
+            <div class="ico">🪞</div>
+            <div class="name">PROXY</div>
+            <div class="sub">ImageProxy · cache</div>
+            <div class="slots">
+              <span class="slot" id="slot-photo-1">p1</span>
+              <span class="slot" id="slot-photo-2">p2</span>
+              <span class="slot" id="slot-photo-3">p3</span>
+            </div>
+            <span class="badge" id="lz-badge">from cache</span>
+          </div>
+          <div class="arrow" id="lz-a2">➜</div>
+          <div class="card" id="lz-real">
+            <div class="ico">💾</div>
+            <div class="name">REAL IMAGE</div>
+            <div class="sub">RealImage · 5 MB on disk</div>
+            <div class="frame" id="lz-frame">🖼</div>
+            <div class="loadbar"><div id="lz-bar"></div></div>
+            <span class="badge" id="lz-loaded">loaded 5 MB</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= PROTECTION TAB ================= -->
+    <div id="panel-prot" style="display:none">
+      <div class="actions">
+        <button class="act role on" id="role-guest" onclick="setRole('guest')">🙂 Guest</button>
+        <button class="act role" id="role-admin" onclick="setRole('admin')">🛡 Admin</button>
+        <button class="act prime" id="del-btn" onclick="doDelete()">▶ Delete photo</button>
+        <button class="act" onclick="resetProt()">↺ Reset</button>
+        <span class="chip">
+          <span class="stat hot" id="stat-real">real object calls: <b>0</b></span>
+        </span>
+      </div>
+
+      <div class="stage">
+        <div class="stage-cap">client → proxy → real object · same interface: <span style="color:var(--fg)">deleteImage()</span></div>
+        <div class="flow">
+          <div class="card" id="pr-client">
+            <div class="ico">👤</div>
+            <div class="name">CLIENT</div>
+            <div class="sub" id="pr-who">role: guest</div>
+          </div>
+          <div class="arrow" id="pr-a1">➜</div>
+          <div class="card" id="pr-proxy">
+            <div class="ico">🪞</div>
+            <div class="name">PROXY</div>
+            <div class="sub">checks role first</div>
+            <span class="badge" id="pr-badge">✗ denied</span>
+          </div>
+          <div class="arrow" id="pr-a2">➜</div>
+          <div class="card ok" id="pr-real">
+            <div class="ico">🗑</div>
+            <div class="name">REAL OBJECT</div>
+            <div class="sub">deleteImage()</div>
+            <div class="frame loaded" id="pr-frame" style="background:linear-gradient(135deg,#5e9ff6,#a78bfa)">🖼</div>
+            <span class="badge" id="pr-state">untouched</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FIXED EXPLAIN PANEL -->
+    <div class="explain">
+      <div class="explain-title" id="ex-title">Proxy — a stand-in with the same interface</div>
+      <div class="explain-body" id="ex-body">Click a photo — the proxy decides whether the disk is touched.</div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span id="hint-text">Click the <b style="color:var(--fg)">same photo twice</b> — watch which chip moves.</span>
+    </div>
+
+    <script>
+      function setExplain(title, bodyHtml) {
+        document.getElementById("ex-title").textContent = title;
+        document.getElementById("ex-body").innerHTML = bodyHtml;
+      }
+      function el(id) { return document.getElementById(id); }
+      function flash(node, cls, ms) {
+        node.classList.add(cls);
+        setTimeout(function () { node.classList.remove(cls); }, ms);
+      }
+
+      /* ================= LAZY + CACHE ================= */
+      var GRADS = {
+        "photo-1": "linear-gradient(135deg,#fb863a,#f06868)",
+        "photo-2": "linear-gradient(135deg,#5e9ff6,#a78bfa)",
+        "photo-3": "linear-gradient(135deg,#5cc66f,#2dd4bf)",
+      };
+      var cache = {};        // filename -> true once loaded (the proxy's memory)
+      var requests = 0;
+      var diskLoads = 0;
+      var busy = false;
+
+      function renderLazyStats() {
+        el("stat-req").innerHTML = "requests: <b>" + requests + "</b>";
+        el("stat-disk").innerHTML = "disk loads: <b>" + diskLoads + "</b>";
+      }
+
+      function showFrame(name) {
+        var f = el("lz-frame");
+        f.className = "frame loaded";
+        f.style.background = GRADS[name];
+      }
+
+      function displayPhoto(name) {
+        if (busy) return;
+        requests++;
+        renderLazyStats();
+        el("lz-badge").className = "badge";
+        el("lz-loaded").className = "badge";
+        flash(el("lz-client"), "lit", 400);
+        flash(el("lz-a1"), "go", 400);
+
+        if (!cache[name]) {
+          /* ---- first display(): proxy forwards to disk ---- */
+          busy = true;
+          setTimeout(function () {
+            flash(el("lz-proxy"), "lit", 350);
+            flash(el("lz-a2"), "go", 750);
+            flash(el("lz-real"), "lit", 750);
+            el("lz-bar").style.width = "100%";
+            setTimeout(function () {
+              cache[name] = true;
+              diskLoads++;
+              renderLazyStats();
+              el("slot-" + name).className = "slot full";
+              showFrame(name);
+              el("lz-loaded").className = "badge load";
+              el("lz-bar").style.width = "0";
+              busy = false;
+              setExplain(
+                "First display(" + name + ") → disk",
+                'The proxy had <span class="bad">nothing cached</span>, so it built the real image — <b>5 MB from disk</b>.'
+              );
+            }, 700);
+          }, 300);
+        } else {
+          /* ---- cache hit: proxy answers, disk untouched ---- */
+          flash(el("lz-proxy"), "ok", 500);
+          flash(el("lz-zap"), "show", 500);
+          el("lz-badge").className = "badge cache";
+          showFrame(name);
+          setExplain(
+            "display(" + name + ") → cache hit ⚡",
+            'The proxy answered from memory — the <span class="good">disk was never touched</span>.'
+          );
+        }
+      }
+
+      function resetLazy() {
+        cache = {};
+        requests = 0;
+        diskLoads = 0;
+        busy = false;
+        renderLazyStats();
+        ["photo-1", "photo-2", "photo-3"].forEach(function (n) {
+          el("slot-" + n).className = "slot";
+        });
+        var f = el("lz-frame");
+        f.className = "frame";
+        f.style.background = "";
+        el("lz-bar").style.width = "0";
+        el("lz-badge").className = "badge";
+        el("lz-loaded").className = "badge";
+        setExplain("Proxy cache cleared", 'Next <code>display()</code> pays the <b>5 MB</b> disk cost again.');
+      }
+
+      /* ================= PROTECTION ================= */
+      var role = "guest";
+      var realCalls = 0;
+      var deleted = false;
+
+      function setRole(r) {
+        role = r;
+        el("role-guest").className = "act role" + (r === "guest" ? " on" : "");
+        el("role-admin").className = "act role" + (r === "admin" ? " on" : "");
+        el("pr-who").textContent = "role: " + r;
+        setExplain(
+          r === "admin" ? "Now calling as 🛡 Admin" : "Now calling as 🙂 Guest",
+          r === "admin"
+            ? 'The proxy will let <code>deleteImage()</code> <span class="good">through</span>.'
+            : 'The proxy will <span class="bad">block</span> <code>deleteImage()</code>.'
+        );
+      }
+
+      function doDelete() {
+        if (busy) return;
+        el("pr-badge").className = "badge";
+        flash(el("pr-client"), "lit", 400);
+        flash(el("pr-a1"), "go", 400);
+
+        if (role === "guest") {
+          /* ---- stopped AT the proxy ---- */
+          busy = true;
+          setTimeout(function () {
+            flash(el("pr-proxy"), "no", 900);
+            el("pr-badge").className = "badge deny";
+            busy = false;
+            setExplain(
+              "✗ Denied at the proxy",
+              'The call <span class="bad">stopped here</span> — the real object was <b>never touched</b>.'
+            );
+          }, 300);
+        } else {
+          /* ---- admin: passes through ---- */
+          busy = true;
+          setTimeout(function () {
+            flash(el("pr-proxy"), "ok", 400);
+            flash(el("pr-a2"), "go", 400);
+            setTimeout(function () {
+              realCalls++;
+              deleted = true;
+              el("stat-real").innerHTML = "real object calls: <b>" + realCalls + "</b>";
+              el("pr-frame").className = "frame loaded dead";
+              var rc = el("pr-real");
+              rc.className = "card no";
+              el("pr-state").className = "badge deny";
+              el("pr-state").textContent = "deleted";
+              busy = false;
+              setExplain(
+                "✓ Allowed → deleteImage() ran",
+                'Admin passed the check, so the proxy <span class="good">forwarded the call</span> to the real object.'
+              );
+            }, 300);
+          }, 300);
+        }
+      }
+
+      function resetProt() {
+        realCalls = 0;
+        deleted = false;
+        busy = false;
+        el("stat-real").innerHTML = "real object calls: <b>0</b>";
+        el("pr-frame").className = "frame loaded";
+        el("pr-real").className = "card ok";
+        el("pr-badge").className = "badge";
+        el("pr-state").className = "badge";
+        el("pr-state").textContent = "untouched";
+        setRole("guest");
+        setExplain("Photo restored", 'Try <code>▶ Delete photo</code> as Guest, then as Admin.');
+      }
+
+      /* ================= TABS ================= */
+      var tab = "lazy";
+      function setTab(t) {
+        if (t === tab) return;
+        tab = t;
+        busy = false;
+        el("tab-lazy").className = "lazy" + (t === "lazy" ? " on" : "");
+        el("tab-prot").className = "prot" + (t === "prot" ? " on" : "");
+        el("panel-lazy").style.display = t === "lazy" ? "" : "none";
+        el("panel-prot").style.display = t === "prot" ? "" : "none";
+        el("hint-text").innerHTML =
+          t === "lazy"
+            ? 'Click the <b style="color:var(--fg)">same photo twice</b> — watch which chip moves.'
+            : 'Try <b style="color:var(--fg)">Guest first</b>, then Admin — watch where the call stops.';
+        setExplain(
+          t === "lazy" ? "Virtual proxy — lazy load + cache" : "Protection proxy — role check",
+          t === "lazy"
+            ? 'Click a photo — the proxy decides whether the <b>disk</b> is touched.'
+            : 'Same interface — but the proxy checks <b>who is calling</b> first.'
+        );
+      }
+
+      renderLazyStats();
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

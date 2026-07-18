@@ -346,13 +346,13 @@ export const ROADMAPS: Roadmap[] = [
           {
             label: "Structural",
             items: [
-              { title: "Adapter", note: "Make incompatible interfaces work together." },
-              { title: "Bridge", note: "Split abstraction from implementation so both can vary." },
-              { title: "Composite", note: "Treat trees of objects like a single object." },
-              { title: "Decorator", note: "Add behavior by wrapping, not subclassing." },
-              { title: "Facade", note: "One simple front door to a complex subsystem." },
-              { title: "Flyweight", note: "Share common state across many objects to save memory." },
-              { title: "Proxy", note: "A stand-in that controls access to the real object." },
+              { title: "Adapter", note: "Make incompatible interfaces work together.", slug: "adapter" },
+              { title: "Bridge", note: "Split abstraction from implementation so both can vary.", slug: "bridge" },
+              { title: "Composite", note: "Treat trees of objects like a single object.", slug: "composite" },
+              { title: "Decorator", note: "Add behavior by wrapping, not subclassing.", slug: "decorator" },
+              { title: "Facade", note: "One simple front door to a complex subsystem.", slug: "facade" },
+              { title: "Flyweight", note: "Share common state across many objects to save memory.", slug: "flyweight" },
+              { title: "Proxy", note: "A stand-in that controls access to the real object.", slug: "proxy" },
             ],
           },
           {

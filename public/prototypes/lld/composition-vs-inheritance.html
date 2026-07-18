@@ -465,6 +465,6 @@
       log('<span class="c-danger">inheritance</span> <span class="muted">needs the class</span> <span class="c-accent">FlyLaserShieldHero</span> <span class="muted">— 1 of 18 you\'d have to write</span>');
       log('<span class="c-success">composition</span> <span class="muted">needs</span> <span class="c-fg">1 Character</span> <span class="muted">holding FlyBehavior + LaserAttack + ShieldBehavior</span>');
     </script>
-    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
   </body>
 </html>

@@ -410,6 +410,6 @@
       log('<span class="muted">// p1 and p2 hold the same value (2,3) but live at different addresses.</span>');
       log('<span class="muted">// override is OFF → press "Add both to a HashSet" to watch a duplicate sneak in.</span>');
     </script>
-    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
   </body>
 </html>
