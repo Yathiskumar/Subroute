@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MVC / MVP / MVVM — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---- Tabs ---- */
+      .tabs { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+      .tab { font-family: var(--mono); font-size: 12px; font-weight: 700; background: var(--elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 9px 16px; cursor: pointer; color: var(--muted); transition: border-color .15s, color .15s, background .15s, transform .1s; }
+      .tab:hover { border-color: var(--border-strong); color: var(--fg); }
+      .tab:active { transform: scale(0.97); }
+      .tab.active { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+
+      /* ---- Action row ---- */
+      .actions { display: flex; gap: 9px; flex-wrap: wrap; margin-bottom: 14px; align-items: center; }
+      .act { font-family: var(--mono); font-size: 12px; font-weight: 700; background: var(--elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 10px 14px; cursor: pointer; color: var(--fg); transition: border-color .15s, transform .1s; }
+      .act.prime { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+      .act:hover { border-color: var(--accent); }
+      .act:active { transform: scale(0.97); }
+      .act:disabled { opacity: .4; cursor: not-allowed; }
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: border-color .15s, transform .1s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .listcheck { margin-left: auto; font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+      .listcheck b { color: var(--fg); }
+      .listcheck b.zero { color: var(--success); }
+      .listcheck b.some { color: var(--accent); }
+
+      /* ---- Stage ---- */
+      .stage { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 16px 14px 18px; margin-bottom: 14px; overflow: hidden; }
+      .stage-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 16px; display: flex; justify-content: space-between; gap: 10px; }
+      .stage-cap b { color: var(--fg); }
+      .thermo { color: var(--accent); }
+
+      .wires { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+      .wires line { stroke: var(--border-strong); stroke-width: 2; stroke-dasharray: 5 5; transition: stroke .2s, stroke-width .2s; }
+      .wires line.live { stroke: var(--accent); stroke-width: 3; stroke-dasharray: none; }
+      .wires text { fill: var(--subtle); font-family: var(--mono); font-size: 9px; }
+      .wires text.live { fill: var(--accent); }
+
+      /* ---- Boxes ---- */
+      .grid { position: relative; z-index: 1; display: grid; grid-template-columns: 1fr; gap: 40px; align-items: center; justify-items: center; }
+      .box { width: 210px; max-width: 100%; background: var(--elevated); border: 1.5px solid var(--border-strong); border-radius: var(--r-md); padding: 12px; text-align: center; transition: border-color .2s, box-shadow .2s; }
+      .box.pulse { border-color: var(--accent); box-shadow: 0 0 0 5px var(--accent-soft); }
+      .box-head { display: flex; align-items: center; justify-content: center; gap: 7px; }
+      .box-ico { font-size: 18px; }
+      .box-name { font-size: 13px; font-weight: 700; color: var(--fg); }
+      .box-sub { font-family: var(--mono); font-size: 10px; color: var(--subtle); margin-top: 4px; min-height: 13px; }
+      .box-val { font-family: var(--mono); font-size: 22px; font-weight: 700; color: var(--accent); margin-top: 6px; }
+
+      /* the View box holds the button */
+      .view-btn { margin-top: 10px; font-family: var(--mono); font-size: 12px; font-weight: 700; padding: 8px 12px; border-radius: var(--r-md); cursor: pointer; background: var(--accent-soft); border: 1px solid var(--accent-border); color: var(--accent); transition: border-color .15s, transform .1s; width: 100%; }
+      .view-btn:hover { border-color: var(--accent); }
+      .view-btn:active { transform: scale(0.96); }
+      .view-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+      /* ---- Travelling packet ---- */
+      .packet { position: absolute; padding: 2px 7px; border-radius: 999px; background: var(--accent); color: #0c0d10; font-family: var(--mono); font-size: 9.5px; font-weight: 700; white-space: nowrap; z-index: 3; pointer-events: none; box-shadow: 0 0 10px var(--accent); transition: left .5s cubic-bezier(.4,.1,.3,1), top .5s cubic-bezier(.4,.1,.3,1), opacity .3s; transform: translate(-50%, -50%); }
+
+      /* ---- Fixed explain panel (replaced, never grows) ---- */
+      .explain { min-height: 76px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .accent { color: var(--accent); font-weight: 700; }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+
+      @media (max-width: 560px) {
+        .box { width: 100%; }
+        .grid { gap: 34px; }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- TABS -->
+    <div class="tabs" id="tabs">
+      <button class="tab active" data-mode="mvc">MVC</button>
+      <button class="tab" data-mode="mvp">MVP</button>
+      <button class="tab" data-mode="mvvm">MVVM</button>
+    </div>
+
+    <!-- ACTIONS -->
+    <div class="actions">
+      <button class="act prime" id="reset-btn">↺ Reset</button>
+      <span class="listcheck" id="listcheck">glue you wrote: <b class="zero">0</b> lines</span>
+    </div>
+
+    <!-- STAGE -->
+    <div class="stage" id="stage">
+      <div class="stage-cap">
+        <span id="cap-flow"><b>MVC</b> — Controller takes input, View reads Model</span>
+        <span>temperature: <b class="thermo" id="cap-temp">20°C</b></span>
+      </div>
+      <svg class="wires" id="wires"></svg>
+      <div class="grid">
+        <div class="box" id="box-model">
+          <div class="box-head"><span class="box-ico">📦</span><span class="box-name">Model</span></div>
+          <div class="box-sub">data + rules</div>
+          <div class="box-val" id="model-val">20°C</div>
+        </div>
+        <div class="box" id="box-mid">
+          <div class="box-head"><span class="box-ico">🧭</span><span class="box-name" id="mid-name">Controller</span></div>
+          <div class="box-sub" id="mid-sub">routes input</div>
+        </div>
+        <div class="box" id="box-view">
+          <div class="box-head"><span class="box-ico">🖼</span><span class="box-name">View</span></div>
+          <div class="box-sub">what you see</div>
+          <div class="box-val" id="view-val">20°C</div>
+          <button class="view-btn" id="plus-btn">＋1°C</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- FIXED EXPLAIN PANEL -->
+    <div class="explain">
+      <div class="explain-title" id="ex-title">MVC — the classic</div>
+      <div class="explain-body" id="ex-body">Press <code>＋1°C</code> in the View and watch the arrows. The <span class="accent">Controller</span> takes your input; the View reads the Model back.</div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>Same app, same number. The only thing that changes between tabs is <b style="color:var(--fg)">who the middleman is</b> and <b style="color:var(--accent)">which arrows light up</b>.</span>
+    </div>
+
+    <script>
+      /* ---- one explain panel, REPLACED (never appended) ---- */
+      function setExplain(title, bodyHtml) {
+        document.getElementById("ex-title").textContent = title;
+        document.getElementById("ex-body").innerHTML = bodyHtml;
+      }
+
+      var mode = "mvc";      // mvc | mvp | mvvm
+      var celsius = 20;      // the shared Model state
+      var glue = 0;          // "glue you wrote" counter (manual pushes)
+      var busy = false;
+
+      var MID = {
+        mvc:  { name: "Controller", sub: "routes input" },
+        mvp:  { name: "Presenter",  sub: "does everything" },
+        mvvm: { name: "ViewModel",  sub: "bindable state" }
+      };
+
+      /* ---- draw the arrows between the three boxes for the current mode ---- */
+      function drawWires(liveKey) {
+        var svg = document.getElementById("wires");
+        var stage = document.getElementById("stage");
+        var model = document.getElementById("box-model");
+        var mid = document.getElementById("box-mid");
+        var view = document.getElementById("box-view");
+        if (!svg || !stage || !model || !mid || !view) return;
+        svg.innerHTML = "";
+        var s = stage.getBoundingClientRect();
+
+        function center(el) {
+          var r = el.getBoundingClientRect();
+          return { x: r.left - s.left + r.width / 2, top: r.top - s.top, bot: r.top - s.top + r.height, cy: r.top - s.top + r.height / 2 };
+        }
+        var M = center(model), C = center(mid), V = center(view);
+
+        // segment key: which arrow(s) are highlighted this step
+        function seg(x1, y1, x2, y2, key, dx, label) {
+          var ln = document.createElementNS("http://www.w3.org/2000/svg", "line");
+          ln.setAttribute("x1", x1 + (dx || 0)); ln.setAttribute("y1", y1);
+          ln.setAttribute("x2", x2 + (dx || 0)); ln.setAttribute("y2", y2);
+          if (liveKey === key) ln.setAttribute("class", "live");
+          svg.appendChild(ln);
+          if (label) {
+            var tx = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            tx.setAttribute("x", (x1 + x2) / 2 + (dx || 0) + 8);
+            tx.setAttribute("y", (y1 + y2) / 2);
+            tx.textContent = label;
+            if (liveKey === key) tx.setAttribute("class", "live");
+            svg.appendChild(tx);
+          }
+        }
+
+        if (mode === "mvc") {
+          // View -> Controller, Controller -> Model, Model -> View (reads)
+          seg(V.x, V.top, C.x, C.bot, "v2c", -6, "input");
+          seg(C.x, C.top, M.x, M.bot, "c2m", 0, "update");
+          // Model -> View: a long line down the right side (view reads model)
+          seg(M.x, M.cy, V.x, V.cy, "m2v", 92, "View reads");
+        } else if (mode === "mvp") {
+          // View <-> Presenter (via interface), Presenter -> Model
+          seg(V.x, V.top, C.x, C.bot, "v2p", -8, "calls");
+          seg(C.x, C.bot, V.x, V.top, "p2v", 8, "pushes");
+          seg(C.x, C.top, M.x, M.bot, "p2m", 0, "update");
+        } else {
+          // MVVM: ViewModel -> Model, and View <=> ViewModel two-way binding
+          seg(C.x, C.top, M.x, M.bot, "vm2m", 0, "update");
+          seg(V.x, V.top, C.x, C.bot, "bind", -8, "⇄ bind");
+          seg(C.x, C.bot, V.x, V.top, "bind", 8, "");
+        }
+      }
+
+      /* ---- fly a labelled packet from one box to another ---- */
+      function flyBetween(fromEl, toEl, label, cb) {
+        var stage = document.getElementById("stage");
+        var s = stage.getBoundingClientRect();
+        function pt(el) { var r = el.getBoundingClientRect(); return { x: r.left - s.left + r.width / 2, y: r.top - s.top + r.height / 2 }; }
+        var a = pt(fromEl), b = pt(toEl);
+        var pk = document.createElement("div");
+        pk.className = "packet";
+        pk.textContent = label;
+        pk.style.left = a.x + "px";
+        pk.style.top = a.y + "px";
+        stage.appendChild(pk);
+        setTimeout(function () { pk.style.left = b.x + "px"; pk.style.top = b.y + "px"; }, 20);
+        setTimeout(function () { pk.style.opacity = "0"; }, 520);
+        setTimeout(function () { if (pk.parentNode) pk.parentNode.removeChild(pk); if (cb) cb(); }, 640);
+      }
+
+      function pulse(el) {
+        el.classList.add("pulse");
+        setTimeout(function () { el.classList.remove("pulse"); }, 480);
+      }
+
+      /* ---- ＋1°C pressed in the View ---- */
+      function plus() {
+        if (busy) return;
+        busy = true;
+        document.getElementById("plus-btn").disabled = true;
+
+        var model = document.getElementById("box-model");
+        var mid = document.getElementById("box-mid");
+        var view = document.getElementById("box-view");
+
+        if (mode === "mvc") runMvc(model, mid, view);
+        else if (mode === "mvp") runMvp(model, mid, view);
+        else runMvvm(model, mid, view);
+      }
+
+      function done() {
+        busy = false;
+        document.getElementById("plus-btn").disabled = false;
+      }
+
+      function bumpModel() { celsius += 1; }
+
+      function runMvc(model, mid, view) {
+        setExplain("Step 1 — View → Controller",
+          'The View forwards your click: <code>controller.onPlus()</code>.');
+        drawWires("v2c"); pulse(view);
+        flyBetween(view, mid, "onPlus()", function () {
+          setExplain("Step 2 — Controller → Model",
+            'The Controller updates the Model: <code>model.celsius += 1</code>.');
+          drawWires("c2m"); pulse(mid);
+          flyBetween(mid, model, "+1", function () {
+            bumpModel(); render();
+            setExplain("Step 3 — View reads the Model",
+              'The View <span class="accent">reads the Model itself</span> to redraw: <code>view = model.celsius + "°C"</code>. No push needed — the View pulls.');
+            drawWires("m2v"); pulse(model);
+            flyBetween(model, view, celsius + "°C", function () {
+              pulse(view); render(); done();
+              setExplain("MVC round trip complete",
+                'View → Controller → Model, then the <span class="accent">View read the Model</span> back. Note the glue counter stayed low — MVC leans on the View pulling data.');
+            });
+          });
+        });
+      }
+
+      function runMvp(model, mid, view) {
+        setExplain("Step 1 — View → Presenter",
+          'The View is <span class="accent">dumb</span> — it only forwards: <code>presenter.onPlus()</code>. It never reads the Model.');
+        drawWires("v2p"); pulse(view);
+        flyBetween(view, mid, "onPlus()", function () {
+          setExplain("Step 2 — Presenter → Model",
+            'The Presenter updates the Model: <code>model.celsius += 1</code>.');
+          drawWires("p2m"); pulse(mid);
+          flyBetween(mid, model, "+1", function () {
+            bumpModel(); render();
+            glue += 1; render();
+            setExplain("Step 3 — Presenter → View (via interface)",
+              'The Presenter formats and <span class="accent">pushes</span> the result back: <code>view.showTemperature("' + celsius + '°C")</code>. That push is <span class="accent">glue you wrote</span>.');
+            drawWires("p2v"); pulse(mid);
+            flyBetween(mid, view, celsius + "°C", function () {
+              pulse(view); render(); done();
+              setExplain("MVP round trip complete",
+                'The View only ever talked <span class="accent">through the Presenter</span>. Every UI update is a manual push — the glue counter ticked up.');
+            });
+          });
+        });
+      }
+
+      function runMvvm(model, mid, view) {
+        setExplain("Two-way binding fires",
+          'You press ＋1°C. The <span class="accent">binding</span> carries it to the ViewModel — no handler code you wrote.');
+        drawWires("bind"); pulse(view); pulse(mid);
+        flyBetween(view, mid, "⇄", function () {
+          setExplain("ViewModel → Model",
+            'The ViewModel updates the Model: <code>model.celsius += 1</code>, then sets its bindable <code>temperatureText</code>.');
+          drawWires("vm2m"); pulse(mid);
+          flyBetween(mid, model, "+1", function () {
+            bumpModel(); render();
+            setExplain("Binding updates the View — automatically",
+              'The bound label refreshes itself. <span class="good">Glue you wrote: 0.</span> Data binding did the copying both ways.');
+            drawWires("bind"); pulse(mid);
+            flyBetween(mid, view, celsius + "°C", function () {
+              pulse(view); render(); done();
+              setExplain("MVVM round trip complete",
+                'One glowing <span class="accent">⇄ binding</span> synced View and ViewModel with <span class="good">zero manual glue</span>. That is the MVVM difference.');
+            });
+          });
+        });
+      }
+
+      /* ---- render (idempotent) ---- */
+      function render() {
+        document.getElementById("model-val").textContent = celsius + "°C";
+        document.getElementById("view-val").textContent = celsius + "°C";
+        document.getElementById("cap-temp").textContent = celsius + "°C";
+        document.getElementById("mid-name").textContent = MID[mode].name;
+        document.getElementById("mid-sub").textContent = MID[mode].sub;
+        var caps = {
+          mvc: "<b>MVC</b> — Controller takes input, View reads Model",
+          mvp: "<b>MVP</b> — Presenter does everything, View is passive",
+          mvvm: "<b>MVVM</b> — two-way data binding, no manual glue"
+        };
+        document.getElementById("cap-flow").innerHTML = caps[mode];
+        var lc = document.getElementById("listcheck");
+        var cls = glue === 0 ? "zero" : "some";
+        lc.innerHTML = 'glue you wrote: <b class="' + cls + '">' + glue + '</b> lines';
+        drawWires(null);
+      }
+
+      /* ---- switch tab ---- */
+      function setMode(m) {
+        if (busy) return;
+        mode = m;
+        glue = 0;
+        var tabs = document.querySelectorAll("#tabs .tab");
+        tabs.forEach(function (t) {
+          t.className = "tab" + (t.getAttribute("data-mode") === m ? " active" : "");
+        });
+        render();
+        var intro = {
+          mvc: ["MVC — the classic", 'Press <code>＋1°C</code>. The <span class="accent">Controller</span> takes input; the View reads the Model to redraw.'],
+          mvp: ["MVP — the testable one", 'Press <code>＋1°C</code>. The View is dumb — it talks only <span class="accent">through the Presenter</span>, which pushes results back.'],
+          mvvm: ["MVVM — the bound one", 'Press <code>＋1°C</code>. Watch one <span class="accent">⇄ binding</span> arrow do the work both ways, with zero glue.']
+        };
+        setExplain(intro[m][0], intro[m][1]);
+      }
+
+      /* ---- ↺ Reset ---- */
+      function reset() {
+        if (busy) return;
+        celsius = 20;
+        glue = 0;
+        render();
+        var intro = {
+          mvc: ["MVC — the classic", 'Press <code>＋1°C</code>. The <span class="accent">Controller</span> takes input; the View reads the Model to redraw.'],
+          mvp: ["MVP — the testable one", 'Press <code>＋1°C</code>. The View is dumb — it talks only <span class="accent">through the Presenter</span>, which pushes results back.'],
+          mvvm: ["MVVM — the bound one", 'Press <code>＋1°C</code>. Watch one <span class="accent">⇄ binding</span> arrow do the work both ways, with zero glue.']
+        };
+        setExplain(intro[mode][0], intro[mode][1]);
+      }
+
+      /* ---- boot ---- */
+      document.getElementById("plus-btn").addEventListener("click", plus);
+      document.getElementById("reset-btn").addEventListener("click", reset);
+      document.querySelectorAll("#tabs .tab").forEach(function (t) {
+        t.addEventListener("click", function () { setMode(t.getAttribute("data-mode")); });
+      });
+      render();
+      window.addEventListener("resize", function () { drawWires(null); });
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

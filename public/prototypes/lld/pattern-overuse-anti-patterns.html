@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pattern overuse & anti-patterns — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---- Action row ---- */
+      .actions { display: flex; gap: 9px; flex-wrap: wrap; margin-bottom: 14px; align-items: center; }
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: border-color .15s, transform .1s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .req { margin-left: auto; font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+      .req b { color: var(--fg); }
+
+      /* ---- Bench: two columns ---- */
+      .bench { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+      .col { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 13px; overflow: hidden; transition: border-color .25s, box-shadow .25s; }
+      .col.waste { border-color: rgba(240,104,104,.5); }
+      .col.justified { border-color: rgba(92,198,111,.55); box-shadow: 0 0 0 4px var(--success-soft); }
+      .col-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+      .col-title { font-size: 13px; font-weight: 700; color: var(--fg); display: flex; align-items: center; gap: 7px; }
+      .stamp { font-family: var(--mono); font-size: 9.5px; font-weight: 700; letter-spacing: .06em; padding: 3px 8px; border-radius: 999px; text-transform: uppercase; }
+      .stamp.hidden { visibility: hidden; }
+      .stamp.waste { background: var(--danger-soft); border: 1px solid rgba(240,104,104,.45); color: var(--danger); }
+      .stamp.justified { background: var(--success-soft); border: 1px solid rgba(92,198,111,.45); color: var(--success); }
+      .stamp.simple { background: var(--success-soft); border: 1px solid rgba(92,198,111,.45); color: var(--success); }
+
+      /* ---- Class/file stack ---- */
+      .stack { display: flex; flex-direction: column; gap: 5px; margin-bottom: 11px; min-height: 118px; }
+      .file { font-family: var(--mono); font-size: 10.5px; padding: 5px 9px; border-radius: 6px; background: var(--elevated); border: 1px solid var(--border); color: var(--muted); display: flex; align-items: center; gap: 7px; }
+      .file .k { color: var(--subtle); }
+      .file.plain { color: var(--fg); border-color: rgba(92,198,111,.35); background: var(--success-soft); }
+
+      /* ---- Complexity meter ---- */
+      .meter { margin-top: 4px; }
+      .meter-row { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 10px; color: var(--muted); margin-bottom: 5px; }
+      .meter-row .lab { width: 78px; flex: none; }
+      .track { flex: 1; height: 8px; background: var(--elevated); border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
+      .fill { height: 100%; border-radius: 999px; transition: width .4s cubic-bezier(.4,.1,.3,1), background .3s; }
+      .fill.hi { background: var(--danger); }
+      .fill.hi.ok { background: var(--success); }
+      .fill.lo { background: var(--success); }
+      .meter-row .val { width: 22px; flex: none; text-align: right; color: var(--fg); }
+
+      /* ---- Requirement chips ---- */
+      .reqs { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 13px; margin-bottom: 14px; }
+      .reqs-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 11px; }
+      .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+      .chip { font-family: var(--mono); font-size: 11px; font-weight: 600; padding: 8px 12px; border-radius: 999px; cursor: pointer; background: var(--elevated); border: 1px solid var(--border); color: var(--muted); transition: border-color .15s, color .15s, background .15s, transform .1s; text-align: left; }
+      .chip:hover { border-color: var(--border-strong); color: var(--fg); }
+      .chip:active { transform: scale(0.97); }
+      .chip.soft.on { background: var(--info-soft); border-color: rgba(94,159,246,.45); color: var(--info); }
+      .chip.real.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+
+      /* ---- Verdict banner ---- */
+      .verdict { border-radius: var(--r-lg); padding: 13px 15px; margin-bottom: 14px; border: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; gap: 12px; transition: border-color .25s, background .25s; }
+      .verdict.keep { border-color: rgba(92,198,111,.5); background: var(--success-soft); }
+      .verdict.earns { border-color: var(--accent-border); background: var(--accent-soft); }
+      .v-ico { font-size: 22px; flex: none; }
+      .v-text { font-size: 13.5px; font-weight: 700; }
+      .verdict.keep .v-text { color: var(--success); }
+      .verdict.earns .v-text { color: var(--accent); }
+      .v-sub { font-size: 11.5px; font-weight: 400; color: var(--muted); margin-top: 2px; }
+
+      /* ---- Fixed explain panel (replaced, never grows) ---- */
+      .explain { min-height: 72px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+
+      @media (max-width: 560px) {
+        .bench { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ACTIONS -->
+    <div class="actions">
+      <button class="btn" id="reset-btn">↺ Reset</button>
+      <span class="req">Requirement: <b>greet a user</b></span>
+    </div>
+
+    <!-- BENCH -->
+    <div class="bench">
+      <!-- Over-engineered column -->
+      <div class="col waste" id="col-over">
+        <div class="col-head">
+          <span class="col-title">🧩 Over-engineered</span>
+          <span class="stamp waste" id="stamp-over">Waste</span>
+        </div>
+        <div class="stack">
+          <div class="file"><span class="k">factory</span> GreeterFactory</div>
+          <div class="file"><span class="k">interface</span> IGreeter</div>
+          <div class="file"><span class="k">interface</span> GreetingStrategy</div>
+          <div class="file"><span class="k">class</span> DefaultStrategy</div>
+          <div class="file"><span class="k">class</span> Greeter</div>
+        </div>
+        <div class="meter">
+          <div class="meter-row"><span class="lab">files/classes</span><span class="track"><span class="fill hi" id="fill-over-files"></span></span><span class="val" id="val-over-files">5</span></div>
+          <div class="meter-row"><span class="lab">indirection</span><span class="track"><span class="fill hi" id="fill-over-hops"></span></span><span class="val" id="val-over-hops">3</span></div>
+        </div>
+      </div>
+
+      <!-- Simple column -->
+      <div class="col" id="col-simple">
+        <div class="col-head">
+          <span class="col-title">✅ Simple</span>
+          <span class="stamp simple">Honest</span>
+        </div>
+        <div class="stack">
+          <div class="file plain">function greet(name) {</div>
+          <div class="file plain">&nbsp;&nbsp;return "Hi " + name;</div>
+          <div class="file plain">}</div>
+        </div>
+        <div class="meter">
+          <div class="meter-row"><span class="lab">files/classes</span><span class="track"><span class="fill lo" id="fill-simple-files"></span></span><span class="val">1</span></div>
+          <div class="meter-row"><span class="lab">indirection</span><span class="track"><span class="fill lo" id="fill-simple-hops"></span></span><span class="val">0</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- REQUIREMENT CHIPS -->
+    <div class="reqs">
+      <div class="reqs-cap">New requirement? Flip what's actually true</div>
+      <div class="chips" id="chips"></div>
+    </div>
+
+    <!-- VERDICT -->
+    <div class="verdict keep" id="verdict">
+      <span class="v-ico" id="v-ico">✅</span>
+      <div>
+        <div class="v-text" id="v-text">Keep it simple — YAGNI</div>
+        <div class="v-sub" id="v-sub">No force varies. The 5-file build buys nothing the problem asked for.</div>
+      </div>
+    </div>
+
+    <!-- FIXED EXPLAIN PANEL -->
+    <div class="explain">
+      <div class="explain-title" id="ex-title">Same job, two costs</div>
+      <div class="explain-body" id="ex-body">The requirement is tiny: <code>greet a user</code>. Both columns produce <b class="good">"Hi Ada"</b> — but the left one pays for 5 files. Flip a chip below to see when that cost is justified.</div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>The same pattern is <b style="color:var(--danger)">waste</b> or <b style="color:var(--success)">wisdom</b> depending on one thing: whether a <b style="color:var(--fg)">real, present force</b> demands it.</span>
+    </div>
+
+    <script>
+      /* ---- one explain panel, REPLACED (never appended) ---- */
+      function setExplain(title, bodyHtml) {
+        document.getElementById("ex-title").textContent = title;
+        document.getElementById("ex-body").innerHTML = bodyHtml;
+      }
+
+      /* soft = "what if someday" (speculative, never justifies)
+         real = a genuine present, varying force (justifies the pattern) */
+      var CHIPS = [
+        { id: "soft-lang",  kind: "soft", label: "Might need more languages someday" },
+        { id: "soft-one",   kind: "soft", label: "Only ever one greeting" },
+        { id: "real-lang",  kind: "real", label: "Greetings vary by language at runtime" },
+        { id: "real-swap",  kind: "real", label: "Swap greeting logic per A/B test at runtime" }
+      ];
+
+      var state = {};   // chip id -> on
+      var chipEls = {};
+
+      function buildChips() {
+        var host = document.getElementById("chips");
+        host.innerHTML = "";
+        CHIPS.forEach(function (c) {
+          state[c.id] = false;
+          var b = document.createElement("button");
+          b.className = "chip " + c.kind;
+          b.textContent = "☐ " + c.label;
+          b.addEventListener("click", (function (id) {
+            return function () { toggle(id); };
+          })(c.id));
+          host.appendChild(b);
+          chipEls[c.id] = b;
+        });
+      }
+
+      function chipById(id) {
+        return CHIPS.filter(function (c) { return c.id === id; })[0];
+      }
+      function anyReal() {
+        return CHIPS.some(function (c) { return c.kind === "real" && state[c.id]; });
+      }
+      function realOn() {
+        return CHIPS.filter(function (c) { return c.kind === "real" && state[c.id]; });
+      }
+
+      function toggle(id) {
+        state[id] = !state[id];
+        var c = chipById(id);
+        render();
+
+        if (c.kind === "soft") {
+          if (state[id]) {
+            setExplain("“What if someday…” is not a force",
+              'A <span class="dim">maybe-future</span> doesn’t justify indirection today. That’s <b class="bad">speculative generality</b> — a YAGNI violation. Verdict stays <b class="good">keep it simple</b>.');
+          } else {
+            setExplain("Soft requirement cleared",
+              'Nothing changes — a speculative “someday” never moved the needle either way.');
+          }
+        } else {
+          if (state[id]) {
+            setExplain("A real force appeared",
+              'Now something <b class="good">actually varies at runtime</b>. The interface + Strategy finally relieve a pain you can point at — the pattern <b class="good">earns its keep</b>.');
+          } else {
+            var still = anyReal();
+            setExplain("Real force removed",
+              still
+                ? 'Another real force is still on, so the pattern is <b class="good">still justified</b>.'
+                : 'No varying force left — the same 5 files snap back to <b class="bad">waste</b>. Structure without a force is just cost.');
+          }
+        }
+      }
+
+      function render() {
+        // chip visuals
+        CHIPS.forEach(function (c) {
+          var on = !!state[c.id];
+          var el = chipEls[c.id];
+          if (!el) return;
+          el.className = "chip " + c.kind + (on ? " on" : "");
+          el.textContent = (on ? "☑ " : "☐ ") + c.label;
+        });
+
+        var justified = anyReal();
+
+        // over-engineered column + stamp
+        var col = document.getElementById("col-over");
+        col.className = "col " + (justified ? "justified" : "waste");
+        var stamp = document.getElementById("stamp-over");
+        stamp.className = "stamp " + (justified ? "justified" : "waste");
+        stamp.textContent = justified ? "Justified" : "Waste";
+
+        // over-engineered meter turns green when justified
+        var ff = document.getElementById("fill-over-files");
+        var fh = document.getElementById("fill-over-hops");
+        ff.className = "fill hi" + (justified ? " ok" : "");
+        fh.className = "fill hi" + (justified ? " ok" : "");
+        ff.style.width = "100%";
+        fh.style.width = "78%";
+
+        // simple meter (always low)
+        document.getElementById("fill-simple-files").style.width = "20%";
+        document.getElementById("fill-simple-hops").style.width = "4%";
+
+        // verdict
+        var v = document.getElementById("verdict");
+        var vIco = document.getElementById("v-ico");
+        var vText = document.getElementById("v-text");
+        var vSub = document.getElementById("v-sub");
+        if (justified) {
+          v.className = "verdict earns";
+          vIco.textContent = "🧩";
+          vText.textContent = "Now a Strategy earns its keep";
+          var names = realOn().map(function (c) { return c.label.toLowerCase(); });
+          vSub.textContent = "A real force is present (" + names[0] + "). The pattern relieves a pain you can point at.";
+        } else {
+          v.className = "verdict keep";
+          vIco.textContent = "✅";
+          vText.textContent = "Keep it simple — YAGNI";
+          vSub.textContent = "No force varies. The 5-file build buys nothing the problem asked for.";
+        }
+      }
+
+      function reset() {
+        CHIPS.forEach(function (c) { state[c.id] = false; });
+        render();
+        setExplain("Same job, two costs",
+          'The requirement is tiny: <code>greet a user</code>. Both columns produce <b class="good">"Hi Ada"</b> — but the left one pays for 5 files. Flip a chip below to see when that cost is justified.');
+      }
+
+      /* ---- boot ---- */
+      document.getElementById("reset-btn").addEventListener("click", reset);
+      buildChips();
+      render();
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>
