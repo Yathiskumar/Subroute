@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Template Method — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --tea: #5cc66f;
+        --tea-soft: rgba(92, 198, 111, 0.14);
+        --coffee: #c9895a;
+        --coffee-soft: rgba(201, 137, 90, 0.16);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---- Top: drink chips + actions ---- */
+      .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+      .chips { display: inline-flex; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 3px; }
+      .chips button { font: 700 12.5px/1 var(--sans); border: 0; background: transparent; color: var(--muted); padding: 8px 16px; border-radius: 999px; cursor: pointer; transition: color .15s, background .15s; white-space: nowrap; }
+      .chips button.on.tea { background: var(--tea-soft); color: var(--tea); }
+      .chips button.on.coffee { background: var(--coffee-soft); color: var(--coffee); }
+      .btns { display: flex; gap: 9px; }
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: border-color .15s, transform .1s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .btn.prime { font-family: var(--mono); font-weight: 700; background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+      .btn.prime:hover { border-color: var(--accent); }
+
+      /* ---- Stage ---- */
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 14px; margin-bottom: 14px; }
+      .grid { display: grid; grid-template-columns: 1fr 170px; gap: 16px; align-items: start; }
+      @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
+      .col-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+      .col-cap b { color: var(--fg); text-transform: none; letter-spacing: 0; }
+
+      /* ---- Template column: 4 step cards ---- */
+      .steps { display: flex; flex-direction: column; }
+      .arrow { text-align: center; color: var(--subtle); font-size: 11px; line-height: 1; padding: 3px 0; }
+      .step { background: var(--elevated); border: 1.5px solid var(--border-strong); border-radius: var(--r-md); padding: 9px 12px; transition: border-color .2s, box-shadow .2s, background .2s, transform .2s; }
+      .step.abstract { border-style: dashed; background: var(--surface); }
+      .step-head { display: flex; align-items: center; gap: 9px; }
+      .num { font-family: var(--mono); font-size: 10.5px; font-weight: 700; color: var(--muted); background: var(--surface); border: 1px solid var(--border); border-radius: 5px; padding: 3px 7px; }
+      .step.abstract .num { background: var(--elevated); }
+      .fn { font-family: var(--mono); font-size: 12.5px; font-weight: 700; color: var(--fg); }
+      .tag { font-family: var(--mono); font-size: 9px; padding: 2px 7px; border-radius: 4px; margin-left: auto; white-space: nowrap; background: var(--surface); border: 1px solid var(--border); color: var(--subtle); }
+      .step.abstract .tag { color: var(--info); background: var(--info-soft); border-color: transparent; }
+      .tag.hook { margin-left: 6px; color: var(--accent); background: var(--accent-soft); }
+      .slot { margin-top: 7px; min-height: 26px; display: flex; align-items: center; }
+      .slot-empty { font-size: 10.5px; color: var(--subtle); font-style: italic; }
+      .impl { font-family: var(--mono); font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 5px; animation: pop .3s ease; }
+      .impl.tea { color: var(--tea); background: var(--tea-soft); border: 1px solid rgba(92,198,111,.4); }
+      .impl.coffee { color: var(--coffee); background: var(--coffee-soft); border: 1px solid rgba(201,137,90,.45); }
+      @keyframes pop { from { opacity: 0; transform: translateY(-5px) scale(.95); } to { opacity: 1; transform: none; } }
+
+      .hookrow { display: flex; align-items: center; gap: 7px; margin-top: 8px; font-family: var(--mono); font-size: 10.5px; color: var(--muted); cursor: pointer; user-select: none; }
+      .hookrow input { accent-color: var(--accent); cursor: pointer; margin: 0; }
+      .hookrow input:disabled { cursor: not-allowed; opacity: .5; }
+
+      /* run highlights */
+      .step.run-neutral { border-color: var(--fg); background: #20242b; box-shadow: 0 0 0 3px rgba(232,228,220,.08); }
+      .step.run-tea { border-color: var(--tea); background: var(--tea-soft); box-shadow: 0 0 0 3px rgba(92,198,111,.15); border-style: solid; }
+      .step.run-coffee { border-color: var(--coffee); background: var(--coffee-soft); box-shadow: 0 0 0 3px rgba(201,137,90,.15); border-style: solid; }
+      .step.done { border-color: var(--border-strong); }
+      .step.done .num { color: var(--success); border-color: rgba(92,198,111,.4); }
+      .step.hop { animation: hop .55s ease; opacity: .45; }
+      @keyframes hop { 0% { transform: none; } 35% { transform: translateY(-9px) rotate(-1.2deg); } 70% { transform: translateY(2px); } 100% { transform: none; } }
+
+      /* ---- Cup column ---- */
+      .cupcol { display: flex; flex-direction: column; align-items: center; padding-top: 6px; }
+      .extras-chip { font-family: var(--mono); font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; margin-bottom: 10px; opacity: 0; transition: opacity .3s; }
+      .extras-chip.show { opacity: 1; animation: pop .35s ease; }
+      .extras-chip.tea { color: var(--tea); background: var(--tea-soft); }
+      .extras-chip.coffee { color: var(--coffee); background: var(--coffee-soft); }
+      .cup { width: 92px; height: 78px; border: 3px solid var(--border-strong); border-radius: 5px 5px 30px 30px; position: relative; background: var(--surface); }
+      .cup::after { content: ""; position: absolute; right: -26px; top: 12px; width: 20px; height: 32px; border: 3px solid var(--border-strong); border-left: 0; border-radius: 0 14px 14px 0; }
+      .fill { position: absolute; bottom: 2px; left: 2px; right: 2px; height: 0; border-radius: 2px 2px 26px 26px; transition: height .6s ease, background .3s; }
+      .fill.tea { background: var(--tea); opacity: .75; }
+      .fill.coffee { background: var(--coffee); opacity: .8; }
+      .cup-cap { margin-top: 12px; font-family: var(--mono); font-size: 10.5px; color: var(--muted); text-align: center; }
+      .cup-cap b { color: var(--fg); }
+
+      /* ---- Fixed explain panel (replaced, never grows) ---- */
+      .explain { min-height: 72px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 11.5px; font-weight: 700; color: var(--accent); margin-bottom: 4px; }
+      .explain-body { font-size: 13px; line-height: 1.55; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .tea-c { color: var(--tea); font-weight: 700; }
+      .explain-body .cof-c { color: var(--coffee); font-weight: 700; }
+      .explain-body .dim { color: var(--muted); }
+
+      .hint { margin-top: 13px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <!-- TOP: subclass chips + actions -->
+    <div class="topbar">
+      <div class="chips">
+        <button class="tea" id="chip-tea" onclick="selectDrink('tea')">🍵 Tea</button>
+        <button class="coffee" id="chip-coffee" onclick="selectDrink('coffee')">☕ Coffee</button>
+      </div>
+      <div class="btns">
+        <button class="btn prime" id="run-btn" onclick="runPrepare()">▶ prepare()</button>
+        <button class="btn" onclick="reset()">↺ Reset</button>
+      </div>
+    </div>
+
+    <!-- STAGE -->
+    <div class="stage">
+      <div class="grid">
+        <div>
+          <div class="col-cap"><b>HotDrink.prepare()</b> · final — order locked</div>
+          <div class="steps">
+            <div class="step" id="step-1">
+              <div class="step-head"><span class="num">1</span><span class="fn">boilWater()</span><span class="tag">🔩 fixed in HotDrink</span></div>
+            </div>
+            <div class="arrow">▼</div>
+            <div class="step abstract" id="step-2">
+              <div class="step-head"><span class="num">2</span><span class="fn">brew()</span><span class="tag">filled by subclass</span></div>
+              <div class="slot" id="slot-brew"><span class="slot-empty">abstract — pick a subclass</span></div>
+            </div>
+            <div class="arrow">▼</div>
+            <div class="step" id="step-3">
+              <div class="step-head"><span class="num">3</span><span class="fn">pourInCup()</span><span class="tag">🔩 fixed in HotDrink</span></div>
+            </div>
+            <div class="arrow">▼</div>
+            <div class="step abstract" id="step-4">
+              <div class="step-head"><span class="num">4</span><span class="fn">addExtras()</span><span class="tag">filled by subclass</span><span class="tag hook">hook</span></div>
+              <div class="slot" id="slot-extras"><span class="slot-empty">abstract — pick a subclass</span></div>
+              <label class="hookrow"><input type="checkbox" id="hook-cb" checked disabled onchange="onHookChange()" /> hook: wantsExtras()</label>
+            </div>
+          </div>
+        </div>
+        <div class="cupcol">
+          <div class="col-cap">the cup</div>
+          <div class="extras-chip" id="extras-chip">·</div>
+          <div class="cup"><div class="fill" id="fill"></div></div>
+          <div class="cup-cap" id="cup-cap">empty</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FIXED EXPLAIN PANEL -->
+    <div class="explain">
+      <div class="explain-title" id="ex-title">One skeleton, two drinks</div>
+      <div class="explain-body" id="ex-body">Pick <span class="tea-c">🍵 Tea</span> or <span class="cof-c">☕ Coffee</span> — the skeleton stays put; only the dashed steps get filled.</div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>Pick a drink, run <b style="color:var(--fg)">prepare()</b>, then untick the <b style="color:var(--accent)">hook</b> on step 4 and run again.</span>
+    </div>
+
+    <script>
+      /* ---- one explain panel, REPLACED (never appended) ---- */
+      function setExplain(title, bodyHtml) {
+        document.getElementById("ex-title").textContent = title;
+        document.getElementById("ex-body").innerHTML = bodyHtml;
+      }
+
+      var DRINKS = {
+        tea:    { name: "Tea",    icon: "🍵", cls: "tea",    brew: "steep tea bag", extras: "add lemon",      chip: "+ lemon",        span: '<span class="tea-c">Tea</span>' },
+        coffee: { name: "Coffee", icon: "☕", cls: "coffee", brew: "drip grounds",  extras: "add milk+sugar", chip: "+ milk & sugar", span: '<span class="cof-c">Coffee</span>' },
+      };
+
+      var drink = null;                       // "tea" | "coffee" | null
+      var hookOn = { tea: true, coffee: true };
+      var runTimers = [];
+      window.__runLog = [];                   // executed step sequence (for tests)
+
+      /* ---- pick a subclass: fill the dashed sockets ---- */
+      function selectDrink(d) {
+        cancelRun();
+        drink = d;
+        var D = DRINKS[d];
+        document.getElementById("chip-tea").className = "tea" + (d === "tea" ? " on" : "");
+        document.getElementById("chip-coffee").className = "coffee" + (d === "coffee" ? " on" : "");
+        document.getElementById("slot-brew").innerHTML = '<span class="impl ' + D.cls + '">' + D.brew + "</span>";
+        document.getElementById("slot-extras").innerHTML = '<span class="impl ' + D.cls + '">' + D.extras + "</span>";
+        var cb = document.getElementById("hook-cb");
+        cb.disabled = false;
+        cb.checked = hookOn[d];
+        emptyCup();
+        setExplain(
+          D.icon + " " + D.name + " slotted into the skeleton",
+          D.span + ' supplied only <code>brew()</code> and <code>addExtras()</code> — steps 1 &amp; 3 didn\'t move. <span class="dim">Now run</span> <code>prepare()</code>.'
+        );
+      }
+
+      /* ---- hook toggle on step 4 ---- */
+      function onHookChange() {
+        if (!drink) return;
+        var on = document.getElementById("hook-cb").checked;
+        hookOn[drink] = on;
+        setExplain(
+          "hook: wantsExtras() → " + on,
+          on
+            ? 'The hook is back to its default — the skeleton will run step 4 again. <span class="dim">Run</span> <code>prepare()</code>.'
+            : 'The subclass overrode the hook to <code>false</code> — run <code>prepare()</code> and watch the skeleton <b>skip step 4</b>.'
+        );
+      }
+
+      /* ---- run the template method ---- */
+      function runPrepare() {
+        if (!drink) {
+          setExplain("brew() is still abstract", 'Pick <span class="tea-c">🍵 Tea</span> or <span class="cof-c">☕ Coffee</span> first — steps 2 &amp; 4 have no code yet.');
+          return;
+        }
+        cancelRun();
+        emptyCup();
+        window.__runLog = [];
+        var D = DRINKS[drink];
+        var runCls = "run-" + D.cls;
+        var skip = !hookOn[drink];
+        var STEP_MS = 750;
+
+        var plan = [
+          { n: 1, cls: "run-neutral", title: "1 · boilWater()", body: "HotDrink's own code — <b>fixed</b>, same for every drink." },
+          { n: 2, cls: runCls,        title: "2 · brew()",      body: D.span + "'s code — <code>" + D.brew + "</code> — <b>called by HotDrink</b>, not by you." },
+          { n: 3, cls: "run-neutral", title: "3 · pourInCup()", body: "HotDrink's own code again — the cup fills with " + D.span.toLowerCase() + "." },
+        ];
+        plan.forEach(function (s, i) {
+          runTimers.push(setTimeout(function () {
+            markStep(s.n, s.cls);
+            window.__runLog.push(s.n);
+            if (s.n === 3) fillCup();
+            setExplain(s.title, s.body);
+          }, i * STEP_MS));
+        });
+
+        runTimers.push(setTimeout(function () {
+          var el4 = document.getElementById("step-4");
+          if (skip) {
+            settlePrev();
+            el4.classList.add("hop");
+            window.__runLog.push("skip4");
+            setExplain("4 · skipped", "<code>wantsExtras()</code> said <b>false</b> — the <b>skeleton itself</b> hopped over step 4.");
+            runTimers.push(setTimeout(function () { el4.classList.remove("hop"); }, 600));
+          } else {
+            markStep(4, runCls);
+            window.__runLog.push(4);
+            showExtras();
+            setExplain("4 · addExtras()", D.span + " finishes: <code>" + D.extras + "</code>.");
+          }
+        }, 3 * STEP_MS));
+
+        runTimers.push(setTimeout(function () {
+          settlePrev();
+          setExplain(
+            "Same skeleton, every run",
+            "<b>HotDrink</b> ran the skeleton — " + D.span + " only supplied steps 2 &amp; 4" + (skip ? ' <span class="dim">(and its hook skipped 4)</span>' : "") + '. <span class="dim">Switch drinks and re-run.</span>'
+          );
+        }, 4 * STEP_MS));
+      }
+
+      function markStep(n, cls) {
+        settlePrev();
+        var el = document.getElementById("step-" + n);
+        el.classList.add(cls);
+      }
+      function settlePrev() {
+        [1, 2, 3, 4].forEach(function (n) {
+          var el = document.getElementById("step-" + n);
+          ["run-neutral", "run-tea", "run-coffee"].forEach(function (c) {
+            if (el.classList.contains(c)) { el.classList.remove(c); el.classList.add("done"); }
+          });
+        });
+      }
+      function clearRunMarks() {
+        [1, 2, 3, 4].forEach(function (n) {
+          var el = document.getElementById("step-" + n);
+          ["run-neutral", "run-tea", "run-coffee", "done", "hop"].forEach(function (c) { el.classList.remove(c); });
+        });
+      }
+      function cancelRun() {
+        runTimers.forEach(function (t) { clearTimeout(t); });
+        runTimers = [];
+        clearRunMarks();
+      }
+
+      /* ---- cup ---- */
+      function fillCup() {
+        var f = document.getElementById("fill");
+        f.className = "fill " + DRINKS[drink].cls;
+        f.style.height = "70%";
+        document.getElementById("cup-cap").innerHTML = DRINKS[drink].icon + " <b>" + DRINKS[drink].name + "</b>";
+      }
+      function showExtras() {
+        var c = document.getElementById("extras-chip");
+        c.className = "extras-chip show " + DRINKS[drink].cls;
+        c.textContent = DRINKS[drink].chip;
+      }
+      function emptyCup() {
+        var f = document.getElementById("fill");
+        f.className = "fill";
+        f.style.height = "0";
+        document.getElementById("cup-cap").textContent = "empty";
+        var c = document.getElementById("extras-chip");
+        c.className = "extras-chip";
+        c.textContent = "·";
+      }
+
+      /* ---- reset ---- */
+      function reset() {
+        cancelRun();
+        drink = null;
+        hookOn = { tea: true, coffee: true };
+        document.getElementById("chip-tea").className = "tea";
+        document.getElementById("chip-coffee").className = "coffee";
+        document.getElementById("slot-brew").innerHTML = '<span class="slot-empty">abstract — pick a subclass</span>';
+        document.getElementById("slot-extras").innerHTML = '<span class="slot-empty">abstract — pick a subclass</span>';
+        var cb = document.getElementById("hook-cb");
+        cb.checked = true;
+        cb.disabled = true;
+        emptyCup();
+        setExplain("One skeleton, two drinks", 'Pick <span class="tea-c">🍵 Tea</span> or <span class="cof-c">☕ Coffee</span> — the skeleton stays put; only the dashed steps get filled.');
+      }
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

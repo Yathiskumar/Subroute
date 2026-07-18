@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Memento — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      .topbar { display: flex; align-items: center; justify-content: flex-end; margin-bottom: 14px; }
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: border-color .15s, transform .1s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+
+      .stage { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+      @media (max-width: 620px) { .stage { grid-template-columns: 1fr; } }
+
+      .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 14px; }
+      .panel-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
+      .panel-cap b { color: var(--fg); }
+
+      /* ---- GAME (originator) ---- */
+      .hero-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+      .hero { font-size: 30px; line-height: 1; }
+      .stats { flex: 1; min-width: 0; }
+      .lv { font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--fg); margin-bottom: 6px; }
+      .hpbar { height: 10px; background: var(--elevated); border: 1px solid var(--border-strong); border-radius: 999px; overflow: hidden; }
+      .hpfill { height: 100%; width: 100%; background: var(--success); border-radius: 999px; transition: width .3s ease, background .3s; }
+      .hpfill.low { background: var(--danger); }
+      .hpnum { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 4px; }
+
+      .map { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-bottom: 12px; }
+      .cell { aspect-ratio: 1; background: var(--elevated); border: 1px solid var(--border); border-radius: 5px; display: flex; align-items: center; justify-content: center; }
+      .cell .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: pop .25s ease; }
+      @keyframes pop { from { opacity: 0; transform: scale(.4); } to { opacity: 1; transform: none; } }
+
+      .acts { display: flex; gap: 8px; flex-wrap: wrap; }
+      .act { font-family: var(--mono); font-size: 12px; font-weight: 700; background: var(--elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 9px 12px; cursor: pointer; color: var(--fg); transition: border-color .15s, transform .1s; }
+      .act:hover { border-color: var(--accent); }
+      .act:active { transform: scale(0.97); }
+
+      .game-card { transition: box-shadow .3s; }
+      .game-card.restored { box-shadow: 0 0 0 3px var(--info-soft), 0 0 0 1.5px var(--info); }
+
+      /* ---- SAVE SLOTS (caretaker) ---- */
+      .save-btn { width: 100%; font-family: var(--mono); font-size: 12px; font-weight: 700; background: var(--accent-soft); border: 1px solid var(--accent-border); color: var(--accent); border-radius: var(--r-md); padding: 10px 14px; cursor: pointer; transition: border-color .15s, transform .1s; margin-bottom: 12px; }
+      .save-btn:hover { border-color: var(--accent); }
+      .save-btn:active { transform: scale(0.97); }
+
+      .slots { display: flex; flex-direction: column; gap: 9px; }
+      .slot { min-height: 52px; border: 1.5px dashed var(--border-strong); border-radius: var(--r-md); display: flex; align-items: center; justify-content: center; padding: 9px 11px; transition: opacity .3s; }
+      .slot.empty { color: var(--subtle); font-size: 11px; font-style: italic; }
+      .slot.filled { border-style: solid; border-color: var(--info); background: var(--info-soft); justify-content: flex-start; gap: 9px; }
+      .slot.recycling { opacity: 0; }
+      .cart-label { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--fg); }
+      .lock { display: inline-block; }
+      .lock.wobble { animation: wobble .45s ease; }
+      @keyframes wobble {
+        0%, 100% { transform: rotate(0); }
+        20% { transform: rotate(-16deg); }
+        40% { transform: rotate(13deg); }
+        60% { transform: rotate(-9deg); }
+        80% { transform: rotate(5deg); }
+      }
+      .chip { font-family: var(--mono); font-size: 10.5px; font-weight: 700; border-radius: 5px; padding: 5px 9px; cursor: pointer; transition: border-color .15s, transform .1s; }
+      .chip:active { transform: scale(0.95); }
+      .load-chip { margin-left: auto; background: var(--elevated); border: 1px solid var(--border-strong); color: var(--success); }
+      .load-chip:hover { border-color: var(--success); }
+      .peek-chip { background: transparent; border: 1px dashed var(--border-strong); color: var(--subtle); }
+      .peek-chip:hover { border-color: var(--muted); color: var(--muted); }
+
+      /* ---- Fixed explain panel (replaced, never grows) ---- */
+      .explain { min-height: 72px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 13px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .cool { color: var(--info); font-weight: 700; }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <div class="topbar">
+      <button class="btn" onclick="reset()">↺ Reset</button>
+    </div>
+
+    <div class="stage">
+      <!-- GAME = originator -->
+      <div class="panel game-card" id="game-card">
+        <div class="panel-cap">🎮 Game <b>· originator</b></div>
+        <div class="hero-row">
+          <div class="hero">🧙</div>
+          <div class="stats">
+            <div class="lv" id="lv">Lv 1</div>
+            <div class="hpbar"><div class="hpfill" id="hpfill"></div></div>
+            <div class="hpnum" id="hpnum">HP 100 / 100</div>
+          </div>
+        </div>
+        <div class="map" id="map"></div>
+        <div class="acts">
+          <button class="act" onclick="fight()">⚔ Fight</button>
+          <button class="act" onclick="potion()">🧪 Potion</button>
+          <button class="act" onclick="move()">👣 Move</button>
+        </div>
+      </div>
+
+      <!-- SAVE SLOTS = caretaker -->
+      <div class="panel">
+        <div class="panel-cap">💾 Save slots <b>· caretaker</b></div>
+        <button class="save-btn" onclick="saveGame()">💾 Save</button>
+        <div class="slots" id="slots"></div>
+      </div>
+    </div>
+
+    <!-- FIXED EXPLAIN PANEL -->
+    <div class="explain">
+      <div class="explain-title" id="ex-title">Play, then save</div>
+      <div class="explain-body" id="ex-body">Change the hero with <code>⚔ Fight</code>, <code>🧪 Potion</code>, <code>👣 Move</code> — then hit <code>💾 Save</code> to snapshot this exact moment.</div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>The slot menu shows only <b style="color:var(--fg)">SAVE #n · 🔒</b> — no stats. It stores sealed snapshots it can't open; only the game reads one back on <b style="color:var(--success)">⏪ Load</b>.</span>
+    </div>
+
+    <script>
+      /* ---- one explain panel, REPLACED (never appended) ---- */
+      function setExplain(title, bodyHtml) {
+        document.getElementById("ex-title").textContent = title;
+        document.getElementById("ex-body").innerHTML = bodyHtml;
+      }
+
+      var CELLS = 15; // 5×3 map
+
+      /* ORIGINATOR — the game's private state */
+      var game = { lv: 1, hp: 100, pos: 0 };
+
+      /* CARETAKER — 3 fixed slots; each null or { n, state } (state = sealed memento) */
+      var slots = [null, null, null];
+      var saveCounter = 0;
+
+      /* ---- game actions (mutate the originator) ---- */
+      function fight() {
+        game.lv += 1;
+        game.hp = Math.max(0, game.hp - 20);
+        render();
+        setExplain("⚔ Fought a monster",
+          'Level up to <code>Lv ' + game.lv + '</code>, HP down to <code>' + game.hp + '</code> — private state only the game can touch.');
+      }
+      function potion() {
+        game.hp = Math.min(100, game.hp + 30);
+        render();
+        setExplain("🧪 Drank a potion",
+          'HP back up to <code>' + game.hp + '</code>. <span class="dim">Snapshot a good moment with</span> <code>💾 Save</code>.');
+      }
+      function move() {
+        game.pos = (game.pos + 1) % CELLS;
+        render();
+        setExplain("👣 Moved",
+          'The hero advanced on the map. Position is part of the state a save will capture.');
+      }
+
+      /* ---- 💾 Save: originator packs a sealed memento, caretaker stores it ---- */
+      function saveGame() {
+        saveCounter++;
+        var memento = { n: saveCounter, state: { lv: game.lv, hp: game.hp, pos: game.pos } };
+        var idx = slots.indexOf(null);
+        if (idx === -1) {
+          // all full → recycle the OLDEST slot
+          idx = 0;
+          for (var i = 1; i < slots.length; i++) if (slots[i].n < slots[idx].n) idx = i;
+          var recycled = slots[idx].n;
+          slots[idx] = memento;
+          renderRecycle(idx);
+          setExplain("Oldest save recycled",
+            'All 3 slots were full, so <code>SAVE #' + recycled + '</code> was dropped for <code>SAVE #' + memento.n + '</code>. <span class="dim">Snapshots cost memory — real systems cap history too.</span>');
+          return;
+        }
+        slots[idx] = memento;
+        render();
+        setExplain("Sealed save stored 🔒",
+          'The game packed its state into <code>SAVE #' + memento.n + '</code>. The menu shows <span class="cool">no stats</span> — it holds the box but <b>can\'t see inside</b>.');
+      }
+
+      /* ---- ⏪ Load: caretaker hands the memento back; only the game reads it ---- */
+      function loadGame(idx) {
+        var m = slots[idx];
+        if (!m) return;
+        game.lv = m.state.lv;
+        game.hp = m.state.hp;
+        game.pos = m.state.pos;
+        render();
+        var card = document.getElementById("game-card");
+        card.classList.add("restored");
+        setTimeout(function () { card.classList.remove("restored"); }, 700);
+        setExplain("⏪ Loaded SAVE #" + m.n,
+          'The game <span class="good">restored itself</span> to that exact moment — <code>Lv ' + m.state.lv + '</code>, <code>HP ' + m.state.hp + '</code>, same position. The menu never touched a field.');
+      }
+
+      /* ---- peek?: the caretaker tries to open a save — and can't ---- */
+      function peek(idx) {
+        var lock = document.getElementById("lock-" + idx);
+        if (lock) {
+          lock.classList.remove("wobble");
+          void lock.offsetWidth; // restart animation
+          lock.classList.add("wobble");
+        }
+        setExplain("🔒 Sealed shut",
+          'Caretaker can\'t open a memento — <span class="cool">only the game can</span>. That\'s the whole point: undo without exposing internals.');
+      }
+
+      /* ---- render ---- */
+      function render() {
+        // game stats
+        document.getElementById("lv").textContent = "Lv " + game.lv;
+        var fill = document.getElementById("hpfill");
+        fill.style.width = game.hp + "%";
+        fill.className = "hpfill" + (game.hp <= 30 ? " low" : "");
+        document.getElementById("hpnum").textContent = "HP " + game.hp + " / 100";
+
+        // map
+        var map = document.getElementById("map");
+        map.innerHTML = "";
+        for (var i = 0; i < CELLS; i++) {
+          var c = document.createElement("div");
+          c.className = "cell";
+          if (i === game.pos) c.innerHTML = '<span class="dot"></span>';
+          map.appendChild(c);
+        }
+
+        // slots
+        var host = document.getElementById("slots");
+        host.innerHTML = "";
+        slots.forEach(function (s, idx) {
+          var el = document.createElement("div");
+          if (!s) {
+            el.className = "slot empty";
+            el.textContent = "empty slot";
+          } else {
+            el.className = "slot filled";
+            el.innerHTML =
+              '<span class="cart-label">SAVE #' + s.n + ' · <span class="lock" id="lock-' + idx + '">🔒</span></span>' +
+              '<button class="chip peek-chip" onclick="peek(' + idx + ')">peek?</button>' +
+              '<button class="chip load-chip" onclick="loadGame(' + idx + ')">⏪ Load</button>';
+          }
+          host.appendChild(el);
+        });
+      }
+
+      /* fade the recycled slot, then re-render */
+      function renderRecycle(idx) {
+        render();
+        var el = document.getElementById("slots").children[idx];
+        if (el) {
+          el.classList.add("recycling");
+          setTimeout(function () { el.classList.remove("recycling"); }, 300);
+        }
+      }
+
+      /* ---- reset ---- */
+      function reset() {
+        game = { lv: 1, hp: 100, pos: 0 };
+        slots = [null, null, null];
+        saveCounter = 0;
+        render();
+        setExplain("Play, then save",
+          'Change the hero with <code>⚔ Fight</code>, <code>🧪 Potion</code>, <code>👣 Move</code> — then hit <code>💾 Save</code> to snapshot this exact moment.');
+      }
+
+      /* ---- boot ---- */
+      render();
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>
