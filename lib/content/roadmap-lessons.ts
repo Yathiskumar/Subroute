@@ -66,6 +66,10 @@ import { strategy } from "./lld/strategy";
 import { templateMethod } from "./lld/template-method";
 import { visitor } from "./lld/visitor";
 import { nullObject } from "./lld/null-object";
+import { mvcMvpMvvm } from "./lld/mvc-mvp-mvvm";
+import { repository } from "./lld/repository";
+import { pubSubEventDriven } from "./lld/pub-sub-event-driven";
+import { patternOveruseAntiPatterns } from "./lld/pattern-overuse-anti-patterns";
 
 /** Indexed by `${roadmapSlug}/${topicSlug}`. */
 const ROADMAP_LESSONS: Record<string, RoadmapLesson> = {
@@ -136,6 +140,10 @@ const ROADMAP_LESSONS: Record<string, RoadmapLesson> = {
   "lld/template-method": templateMethod,
   "lld/visitor": visitor,
   "lld/null-object": nullObject,
+  "lld/mvc-mvp-mvvm": mvcMvpMvvm,
+  "lld/repository": repository,
+  "lld/pub-sub-event-driven": pubSubEventDriven,
+  "lld/pattern-overuse-anti-patterns": patternOveruseAntiPatterns,
 };
 
 export function getRoadmapLesson(

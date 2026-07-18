@@ -374,9 +374,9 @@ export const ROADMAPS: Roadmap[] = [
           {
             label: "Architectural",
             items: [
-              { title: "MVC / MVP / MVVM", note: "Separating data, presentation, and control." },
-              { title: "Repository", note: "Abstract data access behind a collection-like API." },
-              { title: "Pub/Sub & Event-driven", note: "Decouple producers from consumers via events." },
+              { title: "MVC / MVP / MVVM", note: "Separating data, presentation, and control.", slug: "mvc-mvp-mvvm" },
+              { title: "Repository", note: "Abstract data access behind a collection-like API.", slug: "repository" },
+              { title: "Pub/Sub & Event-driven", note: "Decouple producers from consumers via events.", slug: "pub-sub-event-driven" },
             ],
           },
           {
@@ -386,6 +386,7 @@ export const ROADMAPS: Roadmap[] = [
                 title: "Pattern overuse & anti-patterns",
                 note: "Singleton abuse, speculative generality, and knowing when a pattern is the wrong call.",
                 tag: "interview",
+                slug: "pattern-overuse-anti-patterns",
               },
             ],
           },

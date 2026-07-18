@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pub/Sub & Event-driven — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---- Action row ---- */
+      .actions { display: flex; gap: 9px; flex-wrap: wrap; margin-bottom: 14px; align-items: center; }
+      .act { font-family: var(--mono); font-size: 12px; font-weight: 700; background: var(--elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 10px 14px; cursor: pointer; color: var(--fg); transition: border-color .15s, transform .1s; }
+      .act.orders { background: var(--success-soft); border-color: rgba(92,198,111,.45); color: var(--success); }
+      .act.payments { background: var(--info-soft); border-color: rgba(94,159,246,.45); color: var(--info); }
+      .act:hover { border-color: var(--accent); }
+      .act:active { transform: scale(0.97); }
+      .act:disabled { opacity: .4; cursor: not-allowed; }
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: border-color .15s, transform .1s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .codeline { margin-left: auto; font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+      .codeline b { color: var(--success); }
+
+      /* ---- Stage ---- */
+      .stage { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 14px; margin-bottom: 14px; overflow: hidden; }
+      .stage-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; display: flex; justify-content: space-between; gap: 10px; }
+      .stage-cap b { color: var(--fg); }
+      .wires { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+      .wires line { stroke: var(--border-strong); stroke-width: 1.5; stroke-dasharray: 4 4; transition: stroke .25s; }
+      .wires line.live-orders { stroke: var(--success); }
+      .wires line.live-payments { stroke: var(--info); }
+
+      /* ---- Grid: publishers | broker | subscribers ---- */
+      .grid { display: grid; grid-template-columns: 150px 1fr 1fr; gap: 16px; align-items: start; position: relative; z-index: 1; }
+
+      .col-label { font-family: var(--mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--subtle); margin-bottom: 9px; }
+
+      /* ---- Publisher column ---- */
+      .pub { background: var(--elevated); border: 1.5px solid var(--border-strong); border-radius: var(--r-md); padding: 10px; text-align: center; }
+      .pub-head { display: flex; align-items: center; justify-content: center; gap: 6px; }
+      .pub-ico { font-size: 17px; }
+      .pub-name { font-size: 12px; font-weight: 700; color: var(--fg); }
+      .pub-sub { font-family: var(--mono); font-size: 9.5px; color: var(--subtle); margin-top: 3px; }
+
+      /* ---- Broker card ---- */
+      .broker { background: var(--elevated); border: 1.5px solid var(--accent-border); border-radius: var(--r-md); padding: 11px 12px; text-align: center; transition: box-shadow .25s, transform .2s; }
+      .broker.pulse { box-shadow: 0 0 0 6px var(--accent-soft); transform: scale(1.02); }
+      .bk-head { display: flex; align-items: center; justify-content: center; gap: 7px; }
+      .bk-ico { font-size: 18px; }
+      .bk-name { font-size: 13px; font-weight: 700; color: var(--fg); }
+      .bk-topics { display: flex; flex-direction: column; gap: 7px; margin-top: 10px; }
+      .topic { border-radius: var(--r-md); padding: 7px 9px; border: 1px solid var(--border); background: var(--surface); transition: box-shadow .2s, border-color .2s; }
+      .topic.flash-orders { box-shadow: 0 0 0 4px var(--success-soft); border-color: rgba(92,198,111,.5); }
+      .topic.flash-payments { box-shadow: 0 0 0 4px var(--info-soft); border-color: rgba(94,159,246,.5); }
+      .topic-name { font-family: var(--mono); font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+      .topic.orders .topic-name { color: var(--success); }
+      .topic.payments .topic-name { color: var(--info); }
+      .topic-count { font-family: var(--mono); font-size: 9.5px; color: var(--muted); font-weight: 400; }
+
+      /* ---- Subscriber cards ---- */
+      .subs { display: flex; flex-direction: column; gap: 10px; }
+      .svc { background: var(--elevated); border: 1.5px solid var(--border-strong); border-radius: var(--r-md); padding: 10px; transition: border-color .2s, box-shadow .2s, opacity .2s; opacity: .58; }
+      .svc.on { border-color: var(--accent-border); opacity: 1; }
+      .svc.flash { box-shadow: 0 0 0 5px var(--accent-soft); }
+      .svc-head { display: flex; align-items: center; gap: 8px; }
+      .svc-ico { font-size: 16px; }
+      .svc-name { font-size: 12px; font-weight: 700; color: var(--fg); flex: 1; }
+      .svc-badge { font-family: var(--mono); font-size: 9.5px; padding: 2px 6px; border-radius: 4px; background: var(--surface); border: 1px solid var(--border); color: var(--subtle); transition: color .2s, border-color .2s; }
+      .svc-badge.has { color: var(--accent); border-color: var(--accent-border); }
+      .svc-chips { display: flex; gap: 6px; margin-top: 9px; }
+      .chip { flex: 1; font-family: var(--mono); font-size: 10px; font-weight: 700; padding: 5px 4px; border-radius: 999px; cursor: pointer; background: var(--surface); border: 1px solid var(--border); color: var(--muted); transition: border-color .15s, color .15s, background .15s, transform .1s; }
+      .chip:hover { border-color: var(--border-strong); color: var(--fg); }
+      .chip:active { transform: scale(0.95); }
+      .chip.on-orders { background: var(--success-soft); border-color: rgba(92,198,111,.45); color: var(--success); }
+      .chip.on-payments { background: var(--info-soft); border-color: rgba(94,159,246,.45); color: var(--info); }
+
+      /* ---- Message dots ---- */
+      .dot { position: absolute; width: 11px; height: 11px; margin: -5.5px 0 0 -5.5px; border-radius: 50%; z-index: 2; pointer-events: none; transition: left .5s cubic-bezier(.4,.1,.3,1), top .5s cubic-bezier(.4,.1,.3,1); }
+      .dot.orders { background: var(--success); box-shadow: 0 0 9px var(--success); }
+      .dot.payments { background: var(--info); box-shadow: 0 0 9px var(--info); }
+
+      /* ---- Fixed explain panel (replaced, never grows) ---- */
+      .explain { min-height: 72px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .info { color: var(--info); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+
+      @media (max-width: 560px) {
+        .grid { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ACTIONS -->
+    <div class="actions">
+      <button class="act orders" id="pub-orders">▶ Publish to orders</button>
+      <button class="act payments" id="pub-payments">▶ Publish to payments</button>
+      <button class="btn" id="reset-btn">↺ Reset</button>
+      <span class="codeline" id="codeline">publisher code changed: <b>0 lines</b></span>
+    </div>
+
+    <!-- STAGE -->
+    <div class="stage" id="stage">
+      <div class="stage-cap">
+        <span>Publisher → broker → subscribers</span>
+        <span>last publish reached: <b id="last-n">—</b></span>
+      </div>
+      <svg class="wires" id="wires"></svg>
+      <div class="grid">
+        <!-- Publisher column -->
+        <div>
+          <div class="col-label">Publisher</div>
+          <div class="pub" id="pub">
+            <div class="pub-head"><span class="pub-ico">📢</span><span class="pub-name">Order API</span></div>
+            <div class="pub-sub">knows: a topic name</div>
+          </div>
+        </div>
+
+        <!-- Broker column -->
+        <div>
+          <div class="col-label">Broker</div>
+          <div class="broker" id="broker">
+            <div class="bk-head"><span class="bk-ico">📮</span><span class="bk-name">Event Bus</span></div>
+            <div class="bk-topics">
+              <div class="topic orders" id="topic-orders">
+                <div class="topic-name"><span>🟢 orders</span><span class="topic-count" id="count-orders">0 subs</span></div>
+              </div>
+              <div class="topic payments" id="topic-payments">
+                <div class="topic-name"><span>🔵 payments</span><span class="topic-count" id="count-payments">0 subs</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Subscriber column -->
+        <div>
+          <div class="col-label">Subscribers</div>
+          <div class="subs" id="subs"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FIXED EXPLAIN PANEL -->
+    <div class="explain">
+      <div class="explain-title" id="ex-title">Nobody is subscribed yet</div>
+      <div class="explain-body" id="ex-body">Flip a <code>🟢 orders</code> or <code>🔵 payments</code> chip on a service, then <code>▶ Publish</code>.</div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>The publisher's dot stops <b style="color:var(--fg)">at the broker</b> — it has no wire to the services and never learns <b style="color:var(--accent)">who</b> received the message.</span>
+    </div>
+
+    <script>
+      /* ---- one explain panel, REPLACED (never appended) ---- */
+      function setExplain(title, bodyHtml) {
+        document.getElementById("ex-title").textContent = title;
+        document.getElementById("ex-body").innerHTML = bodyHtml;
+      }
+
+      var TOPICS = ["orders", "payments"];
+
+      var SERVICES = [
+        { id: "email", name: "EmailService", emoji: "📧" },
+        { id: "inventory", name: "InventoryService", emoji: "📦" },
+        { id: "analytics", name: "AnalyticsService", emoji: "📊" }
+      ];
+
+      var subsMap = {};   // "id|topic" -> true when subscribed
+      var inbox = {};     // service id -> messages received
+      var lastN = null;   // count reached by previous publish
+      var busy = false;
+
+      function key(id, topic) { return id + "|" + topic; }
+      function isSub(id, topic) { return !!subsMap[key(id, topic)]; }
+      function topicCount(topic) {
+        return SERVICES.filter(function (s) { return isSub(s.id, topic); }).length;
+      }
+      function serviceOn(id) {
+        return TOPICS.some(function (t) { return isSub(id, t); });
+      }
+      function byId(id) {
+        return SERVICES.filter(function (s) { return s.id === id; })[0];
+      }
+
+      /* ---- build service cards once; keep refs ---- */
+      function buildServices() {
+        var host = document.getElementById("subs");
+        host.innerHTML = "";
+        SERVICES.forEach(function (s) {
+          var card = document.createElement("div");
+          card.className = "svc";
+
+          var head = document.createElement("div");
+          head.className = "svc-head";
+          var ico = document.createElement("span");
+          ico.className = "svc-ico";
+          ico.textContent = s.emoji;
+          var name = document.createElement("span");
+          name.className = "svc-name";
+          name.textContent = s.name;
+          var badge = document.createElement("span");
+          badge.className = "svc-badge";
+          badge.textContent = "📥 0";
+          head.appendChild(ico);
+          head.appendChild(name);
+          head.appendChild(badge);
+
+          var chips = document.createElement("div");
+          chips.className = "svc-chips";
+          var chipEls = {};
+          TOPICS.forEach(function (t) {
+            var chip = document.createElement("button");
+            chip.className = "chip";
+            chip.textContent = (t === "orders" ? "🟢 " : "🔵 ") + t;
+            chip.addEventListener("click", (function (sid, topic) {
+              return function () { toggle(sid, topic); };
+            })(s.id, t));
+            chips.appendChild(chip);
+            chipEls[t] = chip;
+          });
+
+          card.appendChild(head);
+          card.appendChild(chips);
+          host.appendChild(card);
+
+          s.el = card;
+          s.badgeEl = badge;
+          s.chipEls = chipEls;
+          inbox[s.id] = 0;
+          TOPICS.forEach(function (t) { subsMap[key(s.id, t)] = false; });
+        });
+      }
+
+      /* ---- wires from broker to each service (drawn only when subscribed) ---- */
+      function drawWires() {
+        var svg = document.getElementById("wires");
+        var stage = document.getElementById("stage");
+        var broker = document.getElementById("broker");
+        if (!svg || !stage || !broker) return;
+        svg.innerHTML = "";
+        var st = stage.getBoundingClientRect();
+        var b = broker.getBoundingClientRect();
+        var x1 = b.left - st.left + b.width;          // right edge of broker
+        var y1 = b.top - st.top + b.height / 2;
+        SERVICES.forEach(function (s) {
+          if (!s.el) return;
+          var r = s.el.getBoundingClientRect();
+          var x2 = r.left - st.left;                  // left edge of card
+          var y2 = r.top - st.top + r.height / 2;
+          s.wire = { x1: x1, y1: y1, x2: x2, y2: y2 };
+          var live = "";
+          if (isSub(s.id, "orders")) live = " live-orders";
+          else if (isSub(s.id, "payments")) live = " live-payments";
+          if (!serviceOn(s.id)) return;               // no wire if not subscribed to anything
+          var ln = document.createElementNS("http://www.w3.org/2000/svg", "line");
+          ln.setAttribute("x1", x1); ln.setAttribute("y1", y1);
+          ln.setAttribute("x2", x2); ln.setAttribute("y2", y2);
+          ln.setAttribute("class", "wire" + live);
+          svg.appendChild(ln);
+        });
+      }
+
+      /* ---- chip toggle = subscribe(topic, handler) / unsubscribe ---- */
+      function toggle(id, topic) {
+        var k = key(id, topic);
+        subsMap[k] = !subsMap[k];
+        var s = byId(id);
+        render();
+        var col = topic === "orders" ? "good" : "info";
+        if (subsMap[k]) {
+          setExplain("subscribe(\"" + topic + "\", " + s.name + ")",
+            s.name + ' signed up for <b class="' + col + '">' + topic + '</b> on the broker — <span class="dim">nothing is delivered until someone publishes.</span>');
+        } else {
+          setExplain("unsubscribe(\"" + topic + "\", " + s.name + ")",
+            s.name + ' left the <b class="bad">' + topic + '</b> list — the <b class="bad">next</b> publish on that topic will skip it.');
+        }
+      }
+
+      /* ---- Publish = broker routes to that topic's subscriber list ---- */
+      function publish(topic) {
+        if (busy) return;
+        var recipients = SERVICES.filter(function (s) { return isSub(s.id, topic); });
+        var names = recipients.map(function (s) { return s.name; }).join(", ");
+        var col = topic === "orders" ? "good" : "info";
+
+        // broker + topic pulse
+        var broker = document.getElementById("broker");
+        broker.classList.add("pulse");
+        setTimeout(function () { broker.classList.remove("pulse"); }, 420);
+        var topicEl = document.getElementById("topic-" + topic);
+        topicEl.classList.add("flash-" + topic);
+        setTimeout(function () { topicEl.classList.remove("flash-" + topic); }, 520);
+
+        // dot from publisher INTO the broker (always stops at broker)
+        flyToBroker(topic);
+
+        if (recipients.length === 0) {
+          lastN = 0;
+          render();
+          setExplain("publish(\"" + topic + "\") → 0 subscribers",
+            'The message reached the broker’s <b class="' + col + '">' + topic + '</b> topic, but nobody subscribed — <span class="dim">it goes nowhere. The publisher never knew, and never waited.</span>');
+          return;
+        }
+
+        busy = true;
+        setButtons(true);
+        setExplain("publish(\"" + topic + "\") → " + recipients.length + " subscriber" + (recipients.length === 1 ? "" : "s"),
+          'The broker routes the message to <b class="' + col + '">' + names + '</b> — <span class="dim">the publisher only named a topic; the broker did the delivery.</span>');
+
+        // after the publisher->broker leg, fan out broker->subscribers
+        recipients.forEach(function (s, i) {
+          setTimeout(function () { fanOut(s, topic); }, 620 + i * 100);
+        });
+        setTimeout(function () {
+          lastN = recipients.length;
+          busy = false;
+          setButtons(false);
+          render();
+        }, 620 + recipients.length * 100 + 640);
+      }
+
+      function setButtons(disabled) {
+        document.getElementById("pub-orders").disabled = disabled;
+        document.getElementById("pub-payments").disabled = disabled;
+      }
+
+      /* ---- dot travels publisher -> broker, then vanishes at the broker ---- */
+      function flyToBroker(topic) {
+        var stage = document.getElementById("stage");
+        var pub = document.getElementById("pub");
+        var broker = document.getElementById("broker");
+        var st = stage.getBoundingClientRect();
+        var p = pub.getBoundingClientRect();
+        var b = broker.getBoundingClientRect();
+        var x1 = p.left - st.left + p.width / 2;
+        var y1 = p.top - st.top + p.height / 2;
+        var x2 = b.left - st.left;                    // stops at broker's left edge
+        var y2 = b.top - st.top + b.height / 2;
+        var dot = document.createElement("div");
+        dot.className = "dot " + topic;
+        dot.style.left = x1 + "px";
+        dot.style.top = y1 + "px";
+        stage.appendChild(dot);
+        setTimeout(function () { dot.style.left = x2 + "px"; dot.style.top = y2 + "px"; }, 20);
+        setTimeout(function () { if (dot.parentNode) dot.parentNode.removeChild(dot); }, 600);
+      }
+
+      /* ---- dot travels broker -> a subscriber, then lands ---- */
+      function fanOut(s, topic) {
+        var stage = document.getElementById("stage");
+        var w = s.wire || { x1: 0, y1: 0, x2: 0, y2: 0 };
+        var dot = document.createElement("div");
+        dot.className = "dot " + topic;
+        dot.style.left = w.x1 + "px";
+        dot.style.top = w.y1 + "px";
+        stage.appendChild(dot);
+        setTimeout(function () { dot.style.left = w.x2 + "px"; dot.style.top = w.y2 + "px"; }, 20);
+        setTimeout(function () {
+          if (dot.parentNode) dot.parentNode.removeChild(dot);
+          inbox[s.id]++;                              // handler(payload) ran
+          if (s.el) s.el.classList.add("flash");
+          setTimeout(function () { if (s.el) s.el.classList.remove("flash"); }, 340);
+          render();
+        }, 560);
+      }
+
+      /* ---- render (idempotent, no growth) ---- */
+      function render() {
+        document.getElementById("count-orders").textContent = topicCount("orders") + " subs";
+        document.getElementById("count-payments").textContent = topicCount("payments") + " subs";
+        document.getElementById("last-n").textContent = lastN === null ? "—" : (lastN + " subscriber" + (lastN === 1 ? "" : "s"));
+
+        SERVICES.forEach(function (s) {
+          if (!s.el) return;
+          var on = serviceOn(s.id);
+          var flashing = s.el.className.indexOf("flash") !== -1 && s.el.className.indexOf("flash-") === -1;
+          s.el.className = "svc" + (on ? " on" : "") + (flashing ? " flash" : "");
+          s.badgeEl.textContent = "📥 " + inbox[s.id];
+          s.badgeEl.className = "svc-badge" + (inbox[s.id] > 0 ? " has" : "");
+          TOPICS.forEach(function (t) {
+            var chip = s.chipEls[t];
+            var sub = isSub(s.id, t);
+            chip.className = "chip" + (sub ? (t === "orders" ? " on-orders" : " on-payments") : "");
+          });
+        });
+        drawWires();
+      }
+
+      /* ---- ↺ Reset ---- */
+      function reset() {
+        SERVICES.forEach(function (s) {
+          inbox[s.id] = 0;
+          TOPICS.forEach(function (t) { subsMap[key(s.id, t)] = false; });
+        });
+        lastN = null;
+        busy = false;
+        setButtons(false);
+        render();
+        setExplain("Nobody is subscribed yet",
+          'Flip a <code>🟢 orders</code> or <code>🔵 payments</code> chip on a service, then <code>▶ Publish</code>.');
+      }
+
+      /* ---- boot ---- */
+      document.getElementById("pub-orders").addEventListener("click", function () { publish("orders"); });
+      document.getElementById("pub-payments").addEventListener("click", function () { publish("payments"); });
+      document.getElementById("reset-btn").addEventListener("click", reset);
+      buildServices();
+      render();
+      window.addEventListener("resize", drawWires);
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

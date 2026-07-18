@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Repository — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---- Action row ---- */
+      .actions { display: flex; gap: 9px; flex-wrap: wrap; margin-bottom: 14px; align-items: center; }
+      .act { font-family: var(--mono); font-size: 12px; font-weight: 700; background: var(--elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 10px 14px; cursor: pointer; color: var(--fg); transition: border-color .15s, transform .1s; }
+      .act.prime { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+      .act:hover { border-color: var(--accent); }
+      .act:active { transform: scale(0.97); }
+      .act:disabled { opacity: .4; cursor: not-allowed; }
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: border-color .15s, transform .1s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .listcheck { margin-left: auto; font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+      .listcheck b { color: var(--success); }
+
+      /* ---- Layout ---- */
+      .grid { display: grid; grid-template-columns: 1fr 150px 1.15fr; gap: 12px; align-items: stretch; margin-bottom: 14px; }
+      .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 12px; position: relative; }
+      .panel-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+      .panel-cap b { color: var(--fg); }
+
+      /* ---- Caller code panel (fixed / unchanging) ---- */
+      .caller { border-color: var(--border-strong); }
+      .code { font-family: var(--mono); font-size: 12px; line-height: 1.75; color: var(--fg); background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px 12px; margin-bottom: 12px; white-space: pre; overflow-x: auto; }
+      .code .cm { color: var(--subtle); }
+      .code .kw { color: var(--info); }
+      .code .fn { color: var(--accent); }
+      .caller-btns { display: flex; flex-direction: column; gap: 7px; }
+      .caller-btns .act { text-align: left; }
+
+      /* ---- Repository box (the librarian — the only thing that knows) ---- */
+      .repo { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; border-color: var(--accent-border); background: var(--elevated); transition: box-shadow .25s, transform .2s; }
+      .repo.pulse { box-shadow: 0 0 0 6px var(--accent-soft); transform: scale(1.03); }
+      .repo-ico { font-size: 26px; }
+      .repo-name { font-size: 13px; font-weight: 700; color: var(--accent); margin-top: 4px; }
+      .repo-sub { font-family: var(--mono); font-size: 9.5px; color: var(--subtle); margin-top: 3px; line-height: 1.5; }
+      .repo-wire { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 9px; padding: 4px 8px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); }
+      .repo-wire b { color: var(--success); }
+
+      /* ---- Backend switcher + viz ---- */
+      .chips { display: flex; gap: 6px; margin-bottom: 11px; flex-wrap: wrap; }
+      .chip { font-family: var(--mono); font-size: 10.5px; font-weight: 700; padding: 6px 9px; border-radius: 999px; cursor: pointer; background: var(--surface); border: 1px solid var(--border); color: var(--muted); transition: border-color .15s, color .15s, background .15s, transform .1s; }
+      .chip:hover { border-color: var(--border-strong); color: var(--fg); }
+      .chip:active { transform: scale(0.96); }
+      .chip.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+      .viz { min-height: 150px; }
+
+      /* SQL table */
+      .sqltable { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 11px; }
+      .sqltable th { text-align: left; color: var(--muted); font-weight: 700; padding: 5px 8px; border-bottom: 1px solid var(--border-strong); }
+      .sqltable td { padding: 5px 8px; border-bottom: 1px solid var(--border); color: var(--fg); }
+      .sqltable tr.flash td { background: var(--success-soft); }
+      .sqltable tr.leaving td { background: var(--danger-soft); color: var(--danger); }
+
+      /* array / json */
+      .jsonbox { font-family: var(--mono); font-size: 11.5px; line-height: 1.7; color: var(--fg); white-space: pre-wrap; word-break: break-word; }
+      .jsonbox .row { padding: 2px 6px; border-radius: 4px; transition: background .2s; }
+      .jsonbox .row.flash { background: var(--success-soft); }
+      .jsonbox .row.leaving { background: var(--danger-soft); color: var(--danger); }
+      .jsonbox .p { color: var(--subtle); }
+      .jsonbox .k { color: var(--info); }
+
+      /* rest fetch */
+      .fetchline { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-bottom: 10px; padding: 6px 9px; border-radius: var(--r-md); background: #0a0b0e; border: 1px solid var(--border); overflow-x: auto; white-space: pre; }
+      .fetchline .verb { color: var(--accent); font-weight: 700; }
+
+      .empty { font-family: var(--mono); font-size: 11px; color: var(--subtle); padding: 8px 4px; }
+
+      /* ---- Fixed explain panel (replaced, never grows) ---- */
+      .explain { min-height: 72px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+
+      @media (max-width: 620px) {
+        .grid { grid-template-columns: 1fr; }
+        .repo { flex-direction: row; gap: 10px; padding: 14px; }
+        .repo .repo-wire { margin-top: 0; }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ACTIONS -->
+    <div class="actions">
+      <button class="btn" id="reset-btn">↺ Reset</button>
+      <span class="listcheck">client code changed: <b id="changed">0</b> lines</span>
+    </div>
+
+    <!-- GRID: caller  |  repository  |  backend -->
+    <div class="grid">
+      <!-- CALLER (unchanging) -->
+      <div class="panel caller">
+        <div class="panel-cap">Business code · <b>never changes</b></div>
+        <div class="code"><span class="cm">// talks only to the interface</span>
+repo.<span class="fn">findAll</span>()
+repo.<span class="fn">save</span>(user)
+repo.<span class="fn">delete</span>(id)</div>
+        <div class="caller-btns">
+          <button class="act prime" id="add-btn">＋ Add user</button>
+          <button class="act" id="find-btn">🔍 Find all</button>
+          <button class="act" id="del-btn">🗑 Delete</button>
+        </div>
+      </div>
+
+      <!-- REPOSITORY (the librarian) -->
+      <div class="panel repo" id="repo">
+        <div class="repo-ico">📚</div>
+        <div class="repo-name">UserRepository</div>
+        <div class="repo-sub" id="repo-sub">the only thing<br />that knows<br />the backend</div>
+        <div class="repo-wire">→ <b id="repo-wire">In-Memory</b></div>
+      </div>
+
+      <!-- BACKEND SWITCHER + VIZ -->
+      <div class="panel">
+        <div class="panel-cap">Storage backend · <b>swappable</b></div>
+        <div class="chips">
+          <button class="chip" id="chip-sql" data-backend="sql">🗄 SQL Database</button>
+          <button class="chip on" id="chip-mem" data-backend="mem">🧠 In-Memory</button>
+          <button class="chip" id="chip-api" data-backend="api">🌐 REST API</button>
+        </div>
+        <div class="viz" id="viz"></div>
+      </div>
+    </div>
+
+    <!-- FIXED EXPLAIN PANEL -->
+    <div class="explain">
+      <div class="explain-title" id="ex-title">Same API, swappable storage</div>
+      <div class="explain-body" id="ex-body">Click a backend chip on the right, then run <code>＋ Add user</code>. Watch the caller code stay <b class="good">identical</b> while the storage changes.</div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>The caller never touches the shelves — it just asks the <b style="color:var(--fg)">librarian</b>. Only the <b style="color:var(--accent)">Repository</b> knows which backend answers.</span>
+    </div>
+
+    <script>
+      /* ---- one explain panel, REPLACED (never appended) ---- */
+      function setExplain(title, bodyHtml) {
+        document.getElementById("ex-title").textContent = title;
+        document.getElementById("ex-body").innerHTML = bodyHtml;
+      }
+
+      var NAMES = ["Ada", "Linus", "Grace", "Alan"];
+      var BACKENDS = {
+        sql: { label: "SQL Database", wire: "SQL Database" },
+        mem: { label: "In-Memory", wire: "In-Memory" },
+        api: { label: "REST API", wire: "REST API" }
+      };
+
+      var users = [];        // shared collection the repository exposes
+      var nextId = 1;
+      var namePtr = 0;
+      var backend = "mem";
+      var busy = false;
+      var flashId = null;    // id to briefly highlight after an add/find
+      var leavingId = null;  // id being deleted (brief red state)
+      var findingAll = false;
+
+      function seed() {
+        users = [
+          { id: 1, name: "Ada" },
+          { id: 2, name: "Linus" }
+        ];
+        nextId = 3;
+        namePtr = 2;
+      }
+
+      /* ---- render the repository box's wire label ---- */
+      function renderRepo() {
+        document.getElementById("repo-wire").textContent = BACKENDS[backend].wire;
+      }
+
+      /* ---- render whichever backend is active (same data, different shape) ---- */
+      function renderViz() {
+        var viz = document.getElementById("viz");
+        viz.innerHTML = "";
+        if (backend === "sql") return renderSql(viz);
+        if (backend === "mem") return renderMem(viz);
+        return renderApi(viz);
+      }
+
+      function rowClass(u) {
+        if (leavingId === u.id) return " leaving";
+        if (findingAll) return " flash";
+        if (flashId === u.id) return " flash";
+        return "";
+      }
+
+      function renderSql(viz) {
+        if (users.length === 0) { viz.innerHTML = '<div class="empty">users table — 0 rows</div>'; return; }
+        var t = document.createElement("table");
+        t.className = "sqltable";
+        var head = document.createElement("tr");
+        head.innerHTML = "<th>id</th><th>name</th>";
+        t.appendChild(head);
+        users.forEach(function (u) {
+          var tr = document.createElement("tr");
+          tr.className = rowClass(u).trim();
+          tr.innerHTML = "<td>" + u.id + "</td><td>" + u.name + "</td>";
+          t.appendChild(tr);
+        });
+        viz.appendChild(t);
+      }
+
+      function renderMem(viz) {
+        var box = document.createElement("div");
+        box.className = "jsonbox";
+        if (users.length === 0) { box.innerHTML = '<span class="p">users = []</span>'; viz.appendChild(box); return; }
+        var open = document.createElement("div");
+        open.innerHTML = '<span class="p">users = [</span>';
+        box.appendChild(open);
+        users.forEach(function (u, i) {
+          var r = document.createElement("div");
+          r.className = "row" + rowClass(u);
+          var comma = i < users.length - 1 ? "," : "";
+          r.innerHTML = '  { <span class="k">id</span>: ' + u.id + ', <span class="k">name</span>: "' + u.name + '" }' + comma;
+          box.appendChild(r);
+        });
+        var close = document.createElement("div");
+        close.innerHTML = '<span class="p">]</span>';
+        box.appendChild(close);
+        viz.appendChild(box);
+      }
+
+      function renderApi(viz) {
+        var line = document.createElement("div");
+        line.className = "fetchline";
+        line.innerHTML = 'fetch("<span class="verb">https://api/users</span>")';
+        viz.appendChild(line);
+        var box = document.createElement("div");
+        box.className = "jsonbox";
+        if (users.length === 0) { box.innerHTML = '<span class="p">// 200 OK · []</span>'; viz.appendChild(box); return; }
+        users.forEach(function (u) {
+          var r = document.createElement("div");
+          r.className = "row" + rowClass(u);
+          r.innerHTML = '<span class="p">←</span> { <span class="k">id</span>: ' + u.id + ', <span class="k">name</span>: "' + u.name + '" }';
+          box.appendChild(r);
+        });
+        viz.appendChild(box);
+      }
+
+      function renderAll() {
+        renderRepo();
+        renderViz();
+      }
+
+      function pulseRepo() {
+        var r = document.getElementById("repo");
+        r.classList.add("pulse");
+        setTimeout(function () { r.classList.remove("pulse"); }, 420);
+      }
+
+      /* ---- switch backend: caller code changes 0 lines ---- */
+      function switchBackend(next) {
+        if (next === backend) return;
+        backend = next;
+        ["sql", "mem", "api"].forEach(function (k) {
+          var c = document.getElementById("chip-" + k);
+          if (c) c.className = "chip" + (k === backend ? " on" : "");
+        });
+        pulseRepo();
+        renderAll();
+        setExplain("Swapped to " + BACKENDS[backend].wire,
+          'Same <code>UserRepository</code> interface — the caller ran <b class="bad">zero</b> new lines. Only the Repository re-wired to a <b class="good">' + BACKENDS[backend].wire + '</b> backend.');
+      }
+
+      /* ---- ＋ Add user = repo.save(user) ---- */
+      function addUser() {
+        if (busy) return;
+        var name = NAMES[namePtr % NAMES.length] + (namePtr >= NAMES.length ? " " + (Math.floor(namePtr / NAMES.length) + 1) : "");
+        namePtr++;
+        var u = { id: nextId++, name: name };
+        users.push(u);
+        flashId = u.id; leavingId = null; findingAll = false;
+        pulseRepo();
+        renderAll();
+        var where = {
+          sql: 'an <code>INSERT</code> into the users <b class="good">table</b>',
+          mem: 'a <code>push</code> onto the JS <b class="good">array</b>',
+          api: 'a <code>POST /users</code> <b class="good">fetch</b>'
+        }[backend];
+        setExplain("repo.save(user) → " + BACKENDS[backend].wire,
+          'The caller just said <code>save</code>. The Repository turned that into ' + where + ' — the caller never knew.');
+        setTimeout(function () { flashId = null; renderAll(); }, 700);
+      }
+
+      /* ---- 🔍 Find all = repo.findAll() ---- */
+      function findAll() {
+        if (busy) return;
+        flashId = null; leavingId = null; findingAll = true;
+        renderAll();
+        setExplain("repo.findAll() → " + users.length + " user" + (users.length === 1 ? "" : "s"),
+          users.length === 0
+            ? 'The collection is <b class="bad">empty</b> — <code>findAll()</code> returns nothing.'
+            : 'One call returns the <b class="good">whole collection</b>, no matter which backend holds it right now.');
+        setTimeout(function () { findingAll = false; renderAll(); }, 800);
+      }
+
+      /* ---- 🗑 Delete = repo.delete(id) ---- */
+      function deleteUser() {
+        if (busy || users.length === 0) {
+          if (users.length === 0) setExplain("Nothing to delete",
+            'The collection is <b class="bad">empty</b> — add a user first.');
+          return;
+        }
+        var victim = users[users.length - 1];
+        leavingId = victim.id; flashId = null; findingAll = false;
+        busy = true;
+        renderAll();
+        var where = {
+          sql: 'a <code>DELETE FROM users</code>',
+          mem: 'a <code>splice</code> from the array',
+          api: 'a <code>DELETE /users/' + victim.id + '</code>'
+        }[backend];
+        setExplain("repo.delete(id) → " + BACKENDS[backend].wire,
+          'The caller said <code>delete</code>; the Repository issued ' + where + ' — <b class="bad">' + victim.name + '</b> leaves the store.');
+        setTimeout(function () {
+          users = users.filter(function (x) { return x.id !== victim.id; });
+          leavingId = null;
+          busy = false;
+          renderAll();
+        }, 620);
+      }
+
+      /* ---- ↺ Reset ---- */
+      function reset() {
+        seed();
+        backend = "mem";
+        flashId = null; leavingId = null; findingAll = false; busy = false;
+        ["sql", "mem", "api"].forEach(function (k) {
+          var c = document.getElementById("chip-" + k);
+          if (c) c.className = "chip" + (k === backend ? " on" : "");
+        });
+        renderAll();
+        setExplain("Same API, swappable storage",
+          'Click a backend chip on the right, then run <code>＋ Add user</code>. Watch the caller code stay <b class="good">identical</b> while the storage changes.');
+      }
+
+      /* ---- boot ---- */
+      document.getElementById("add-btn").addEventListener("click", addUser);
+      document.getElementById("find-btn").addEventListener("click", findAll);
+      document.getElementById("del-btn").addEventListener("click", deleteUser);
+      document.getElementById("reset-btn").addEventListener("click", reset);
+      ["sql", "mem", "api"].forEach(function (k) {
+        document.getElementById("chip-" + k).addEventListener("click", function () { switchBackend(k); });
+      });
+      seed();
+      renderAll();
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>
