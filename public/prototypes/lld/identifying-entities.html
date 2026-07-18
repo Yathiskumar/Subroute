@@ -438,6 +438,6 @@
       log('<span class="muted">// underline the nouns &amp; verbs — nouns → classes/attributes, verbs → methods</span>');
       log('<span class="muted">// click a word and classify it; watch out for synonyms &amp; noise</span>');
     </script>
-    <script>(function(){function p(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
   </body>
 </html>

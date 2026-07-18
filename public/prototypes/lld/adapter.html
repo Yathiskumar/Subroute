@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Adapter — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---- Top bar: actions + counter + reset ---- */
+      .topbar { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-bottom: 14px; }
+      .act { font-family: var(--mono); font-size: 12px; font-weight: 700; background: var(--elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 10px 14px; cursor: pointer; color: var(--fg); transition: border-color .15s, transform .1s, opacity .15s; }
+      .act.prime { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+      .act:hover:not(:disabled) { border-color: var(--accent); }
+      .act:active:not(:disabled) { transform: scale(0.97); }
+      .act:disabled { opacity: .35; cursor: not-allowed; }
+      .chip { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--muted); background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 7px 12px; }
+      .chip b { color: var(--success); }
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: border-color .15s, transform .1s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+
+      /* ---- Stage: client | slot | library ---- */
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 16px 14px 18px; margin-bottom: 14px; }
+      .stage-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 14px; }
+      .zones { display: grid; grid-template-columns: 1fr 176px 1fr; gap: 34px; align-items: stretch; }
+      @media (max-width: 560px) { .zones { grid-template-columns: 1fr; gap: 30px; } }
+
+      .zone-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .05em; text-transform: uppercase; color: var(--subtle); margin-bottom: 8px; }
+      .card { position: relative; background: var(--elevated); border: 1.5px solid var(--border-strong); border-radius: var(--r-md); padding: 12px; min-height: 108px; transition: border-color .2s, box-shadow .2s, transform .1s; }
+      .card .name { font-size: 12px; font-weight: 700; margin-bottom: 7px; }
+      .card .line { font-family: var(--mono); font-size: 11px; color: var(--muted); background: var(--surface); border: 1px solid var(--border); border-radius: 5px; padding: 5px 8px; word-break: break-all; }
+      .card.client { border-color: var(--info); }
+      .card.lib { border-color: var(--accent-border); }
+      .card.rx { border-color: var(--success); box-shadow: 0 0 0 3px var(--success-soft); }
+      .card.bad { border-color: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); }
+      .card.shake { animation: shake .45s ease; }
+      @keyframes shake { 0%,100% { transform: translateX(0); } 20% { transform: translateX(-6px); } 40% { transform: translateX(6px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(4px); } }
+
+      /* round socket sticking out of the client card's right edge */
+      .socket { position: absolute; right: -16px; top: 50%; transform: translateY(-50%); width: 30px; height: 30px; border-radius: 50%; background: var(--surface); border: 2.5px solid var(--info); display: flex; align-items: center; justify-content: center; }
+      .socket::after { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--info); opacity: .8; }
+      /* square plug sticking out of the library card's left edge */
+      .plug { position: absolute; left: -14px; top: 50%; transform: translateY(-50%); width: 24px; height: 24px; border-radius: 3px; background: var(--accent); box-shadow: 0 0 0 2px var(--bg); }
+      @media (max-width: 560px) {
+        .socket { right: auto; top: auto; bottom: -16px; left: 50%; transform: translateX(-50%); }
+        .plug { left: 50%; top: -13px; transform: translateX(-50%); }
+      }
+
+      /* middle slot */
+      .slot { border: 1.5px dashed var(--border-strong); border-radius: var(--r-md); min-height: 108px; display: flex; align-items: center; justify-content: center; padding: 8px; transition: border-color .2s; }
+      .slot .empty { font-size: 11px; color: var(--subtle); font-style: italic; }
+      .slot .miss { font-size: 26px; color: var(--danger); font-weight: 700; animation: pop .25s ease; }
+      .slot.filled { border-style: solid; border-color: var(--success); }
+      .adapter { width: 100%; background: var(--success-soft); border: 1.5px solid var(--success); border-radius: 999px 4px 4px 999px; padding: 10px 10px 10px 16px; animation: pop .3s ease; }
+      @media (max-width: 560px) { .adapter { border-radius: 999px 999px 6px 6px; padding: 12px 10px; } }
+      .adapter .tag { font-family: var(--mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--success); font-weight: 700; margin-bottom: 4px; }
+      .adapter .map { font-family: var(--mono); font-size: 10px; color: var(--fg); line-height: 1.5; word-break: break-all; }
+      @keyframes pop { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+      /* travelling message chip (one per zone, shown in sequence) */
+      .msg { margin-top: 8px; font-family: var(--mono); font-size: 10.5px; border-radius: 5px; padding: 4px 8px; display: none; word-break: break-all; animation: pop .25s ease; }
+      .msg.show { display: block; }
+      .msg.plain { background: var(--info-soft); color: var(--info); border: 1px solid var(--info); }
+      .msg.xml { background: var(--success-soft); color: var(--success); border: 1px solid var(--success); }
+
+      /* ---- Fixed explain panel (replaced, never grows) ---- */
+      .explain { min-height: 72px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 15px; display: flex; align-items: center; }
+      .explain-body { font-size: 13px; line-height: 1.55; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .dim { color: var(--muted); }
+
+      .hint { margin-top: 12px; font-size: 11.5px; color: var(--muted); display: flex; gap: 7px; }
+      .hint .b { color: var(--accent); }
+      .hint code { font-family: var(--mono); font-size: 10.5px; }
+    </style>
+  </head>
+  <body>
+    <!-- ACTIONS -->
+    <div class="topbar">
+      <button class="act" id="plug-btn" onclick="plugDirect()">▶ Plug in directly</button>
+      <button class="act prime" id="adapter-btn" onclick="addAdapter()">＋ Add adapter</button>
+      <button class="act" id="send-btn" onclick="sendCall()" disabled>▶ logger.log(...)</button>
+      <span class="chip">client code changed: <b>0 lines</b></span>
+      <button class="btn" onclick="reset()">↺ Reset</button>
+    </div>
+
+    <!-- STAGE -->
+    <div class="stage">
+      <div class="stage-cap">client · adapter slot · third-party library</div>
+      <div class="zones">
+        <div>
+          <div class="zone-cap">Client — your app</div>
+          <div class="card client" id="client-card">
+            <div class="name">App code</div>
+            <div class="line">logger.log("User signed up")</div>
+            <div class="msg plain" id="client-msg">"User signed up"</div>
+            <div class="socket"></div>
+          </div>
+        </div>
+        <div>
+          <div class="zone-cap">Slot</div>
+          <div class="slot" id="slot"><span class="empty">empty</span></div>
+        </div>
+        <div>
+          <div class="zone-cap">Library — can't change</div>
+          <div class="card lib" id="lib-card">
+            <div class="name">XmlLoggerLib</div>
+            <div class="line">writeXml(xml)</div>
+            <div class="msg xml" id="lib-msg">&lt;log&gt;User signed up&lt;/log&gt;</div>
+            <div class="plug"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FIXED EXPLAIN PANEL -->
+    <div class="explain">
+      <div class="explain-body" id="ex-body">Round socket, square plug. Try <code>▶ Plug in directly</code>.</div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>Round = <code>log(msg)</code> the client expects · square = <code>writeXml(xml)</code> the library speaks.</span>
+    </div>
+
+    <script>
+      /* ---- one explain panel, REPLACED (never appended) ---- */
+      function setExplain(bodyHtml) {
+        document.getElementById("ex-body").innerHTML = bodyHtml;
+      }
+
+      var hasAdapter = false;
+      var animating = false;
+
+      /* ---- try to connect the square plug to the round socket ---- */
+      function plugDirect() {
+        if (animating) return;
+        animating = true;
+        var lib = document.getElementById("lib-card");
+        var client = document.getElementById("client-card");
+        var slot = document.getElementById("slot");
+        if (!hasAdapter) slot.innerHTML = '<span class="miss">✗</span>';
+        lib.classList.add("shake", "bad");
+        client.classList.add("shake");
+        setExplain('<span class="bad">✗ Interfaces don\'t match</span> — <code>log(msg)</code> is round, <code>writeXml(xml)</code> is square.');
+        setTimeout(function () {
+          lib.classList.remove("shake", "bad");
+          client.classList.remove("shake");
+          if (!hasAdapter) slot.innerHTML = '<span class="empty">empty</span>';
+          animating = false;
+        }, 550);
+      }
+
+      /* ---- drop the adapter into the slot ---- */
+      function addAdapter() {
+        if (hasAdapter) {
+          setExplain('<span class="dim">Adapter already in place — try</span> <code>▶ logger.log(...)</code>');
+          return;
+        }
+        hasAdapter = true;
+        var slot = document.getElementById("slot");
+        slot.classList.add("filled");
+        slot.innerHTML =
+          '<div class="adapter"><div class="tag">Adapter</div>' +
+          '<div class="map">log(msg) → writeXml(&lt;log&gt;msg&lt;/log&gt;)</div></div>';
+        document.getElementById("send-btn").disabled = false;
+        setExplain('<span class="good">Adapter fits both sides</span> — round for the client, square for the library.');
+      }
+
+      /* ---- send a call through the adapter ---- */
+      function sendCall() {
+        if (!hasAdapter || animating) return;
+        animating = true;
+        var clientMsg = document.getElementById("client-msg");
+        var libMsg = document.getElementById("lib-msg");
+        var lib = document.getElementById("lib-card");
+        clientMsg.classList.add("show");
+        libMsg.classList.remove("show");
+        lib.classList.remove("rx");
+        setExplain('<code>log("User signed up")</code> leaves the client…');
+        setTimeout(function () {
+          setExplain('Adapter wraps it: <code>&lt;log&gt;User signed up&lt;/log&gt;</code>');
+        }, 550);
+        setTimeout(function () {
+          libMsg.classList.add("show");
+          lib.classList.add("rx");
+          setExplain('<span class="good">✓ Adapter translated the call</span> — client and library unchanged.');
+          animating = false;
+        }, 1100);
+      }
+
+      /* ---- reset ---- */
+      function reset() {
+        hasAdapter = false;
+        animating = false;
+        var slot = document.getElementById("slot");
+        slot.classList.remove("filled");
+        slot.innerHTML = '<span class="empty">empty</span>';
+        document.getElementById("send-btn").disabled = true;
+        document.getElementById("client-msg").classList.remove("show");
+        document.getElementById("lib-msg").classList.remove("show");
+        var lib = document.getElementById("lib-card");
+        lib.classList.remove("rx", "bad", "shake");
+        document.getElementById("client-card").classList.remove("shake");
+        setExplain('Round socket, square plug. Try <code>▶ Plug in directly</code>.');
+      }
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

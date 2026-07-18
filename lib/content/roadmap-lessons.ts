@@ -48,6 +48,13 @@ import { abstractFactory } from "./lld/abstract-factory";
 import { builder } from "./lld/builder";
 import { prototypePattern } from "./lld/prototype";
 import { objectPool } from "./lld/object-pool";
+import { adapter } from "./lld/adapter";
+import { bridge } from "./lld/bridge";
+import { composite } from "./lld/composite";
+import { decorator } from "./lld/decorator";
+import { facade } from "./lld/facade";
+import { flyweight } from "./lld/flyweight";
+import { proxy } from "./lld/proxy";
 
 /** Indexed by `${roadmapSlug}/${topicSlug}`. */
 const ROADMAP_LESSONS: Record<string, RoadmapLesson> = {
@@ -100,6 +107,13 @@ const ROADMAP_LESSONS: Record<string, RoadmapLesson> = {
   "lld/builder": builder,
   "lld/prototype": prototypePattern,
   "lld/object-pool": objectPool,
+  "lld/adapter": adapter,
+  "lld/bridge": bridge,
+  "lld/composite": composite,
+  "lld/decorator": decorator,
+  "lld/facade": facade,
+  "lld/flyweight": flyweight,
+  "lld/proxy": proxy,
 };
 
 export function getRoadmapLesson(
