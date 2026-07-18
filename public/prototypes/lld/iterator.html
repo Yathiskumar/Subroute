@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Iterator — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---- Control row ---- */
+      .controls { display: flex; gap: 9px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+      .grp { display: inline-flex; align-items: center; gap: 7px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md); padding: 6px 9px; }
+      .grp-cap { font-family: var(--mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--subtle); }
+      .act { font-family: var(--mono); font-size: 12px; font-weight: 700; background: var(--elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 9px 13px; cursor: pointer; color: var(--fg); transition: border-color .15s, transform .1s; white-space: nowrap; }
+      .act.prime { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+      .act.bcur { background: var(--info-soft); border-color: rgba(94, 159, 246, 0.45); color: var(--info); }
+      .act:hover { border-color: var(--accent); }
+      .act.bcur:hover { border-color: var(--info); }
+      .act:active { transform: scale(0.97); }
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: border-color .15s, transform .1s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .reset { margin-left: auto; }
+      .chip { font-family: var(--mono); font-size: 10.5px; font-weight: 700; padding: 4px 9px; border-radius: 999px; white-space: nowrap; }
+      .chip.ok { background: var(--success-soft); color: var(--success); }
+      .chip.no { background: var(--danger-soft); color: var(--danger); }
+      .hidden { display: none !important; }
+
+      /* ---- Two collection cards ---- */
+      .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+      @media (max-width: 640px) { .cols { grid-template-columns: 1fr; } }
+      .card { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 14px; overflow: hidden; }
+      .card.shake { animation: shake .35s ease; }
+      @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-4px); }
+        50% { transform: translateX(4px); }
+        75% { transform: translateX(-3px); }
+      }
+      .card-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; display: flex; justify-content: space-between; gap: 8px; }
+      .card-cap .dim { color: var(--subtle); text-transform: none; letter-spacing: 0; }
+
+      /* floating returned song */
+      .float { position: absolute; left: 50%; top: 44px; transform: translate(-50%, 0); font-family: var(--mono); font-size: 12px; font-weight: 700; padding: 5px 11px; border-radius: 999px; pointer-events: none; animation: floatup .9s ease forwards; z-index: 5; }
+      .float.fa { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-border); }
+      .float.fb { background: var(--info-soft); color: var(--info); border: 1px solid rgba(94,159,246,.45); }
+      @keyframes floatup {
+        0% { opacity: 0; transform: translate(-50%, 8px); }
+        20% { opacity: 1; transform: translate(-50%, 0); }
+        100% { opacity: 0; transform: translate(-50%, -26px); }
+      }
+
+      /* array slots */
+      .slots { display: flex; gap: 6px; padding-top: 8px; min-height: 118px; align-items: flex-start; }
+      .slot { position: relative; flex: 1; min-width: 0; background: var(--elevated); border: 1.5px solid var(--border-strong); border-radius: var(--r-md); padding: 9px 6px 10px; text-align: center; transition: border-color .15s, box-shadow .15s, opacity .15s; }
+      .slot .idx { display: block; font-family: var(--mono); font-size: 9.5px; color: var(--subtle); margin-bottom: 5px; }
+      .slot .ssong { display: block; font-size: 11px; font-weight: 600; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .slot.seen { opacity: .45; }
+      .slot.cur-a { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+      .slot.cur-b { outline: 2px solid var(--info); outline-offset: 2px; }
+      .cb { position: absolute; top: -8px; font-family: var(--mono); font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 4px; }
+      .cb.cba { right: -4px; background: var(--accent); color: #0c0d10; }
+      .cb.cbb { left: -4px; background: var(--info); color: #0c0d10; }
+
+      /* linked list — scattered nodes + pointer arrows */
+      .lwrap { position: relative; height: 168px; margin-top: 8px; }
+      .lwrap svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+      .lnode { position: absolute; display: flex; align-items: center; gap: 6px; background: var(--elevated); border: 1.5px solid var(--border-strong); border-radius: var(--r-md); padding: 7px 10px; transition: border-color .15s, box-shadow .15s, opacity .15s; z-index: 2; }
+      .lnode .dot { color: var(--subtle); font-size: 10px; }
+      .lnode .nsong { font-size: 10.5px; font-weight: 600; color: var(--fg); white-space: nowrap; }
+      .lnode.seen { opacity: .45; }
+      .lnode.cur { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+      .lnode.cur .dot { color: var(--accent); }
+      .n0 { left: 2%;  top: 4%; }
+      .n1 { left: 55%; top: 12%; }
+      .n2 { left: 24%; top: 42%; }
+      .n3 { left: 63%; top: 58%; }
+      .n4 { left: 6%;  top: 72%; }
+      .head-tag { position: absolute; left: 2%; top: -8px; font-family: var(--mono); font-size: 8.5px; letter-spacing: .08em; color: var(--accent); z-index: 3; }
+
+      /* ---- Fixed explain panel (replaced, never grows) ---- */
+      .explain { min-height: 72px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 4px; }
+      .explain-body { font-size: 13px; line-height: 1.55; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .qcol { color: var(--info); font-weight: 700; }
+      .explain-body .acol { color: var(--accent); font-weight: 700; }
+
+      .hint { margin-top: 12px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <!-- ONE shared control row -->
+    <div class="controls">
+      <div class="grp">
+        <span class="grp-cap">Array</span>
+        <button class="act" id="btn-a" onclick="nextArr('a')">▶ next()</button>
+        <span class="chip ok" id="chip-a">hasNext ✓</span>
+        <button class="act bcur" id="btn-addb" onclick="addB()">＋ 2nd cursor</button>
+        <button class="act bcur hidden" id="btn-b" onclick="nextArr('b')">▶ next() B</button>
+        <span class="chip ok hidden" id="chip-b">hasNext ✓</span>
+      </div>
+      <div class="grp">
+        <span class="grp-cap">List</span>
+        <button class="act" id="btn-l" onclick="nextList()">▶ next()</button>
+        <span class="chip ok" id="chip-l">hasNext ✓</span>
+      </div>
+      <button class="act prime" id="btn-both" onclick="nextBoth()">▶ next() on both</button>
+      <button class="btn reset" onclick="reset()">↺ Reset</button>
+    </div>
+
+    <!-- Two collections, same 5 songs -->
+    <div class="cols">
+      <div class="card" id="card-arr">
+        <div class="card-cap"><span>Array</span><span class="dim">songs[i] · i++</span></div>
+        <div class="slots" id="slots"></div>
+      </div>
+      <div class="card" id="card-list">
+        <div class="card-cap"><span>Linked list</span><span class="dim">node = node.next</span></div>
+        <div class="lwrap" id="lwrap">
+          <svg id="larrows" aria-hidden="true"></svg>
+          <span class="head-tag">HEAD ↓</span>
+          <div class="lnode n0" id="ln0"><span class="dot">●</span><span class="nsong">Neon Sky</span></div>
+          <div class="lnode n1" id="ln1"><span class="dot">●</span><span class="nsong">Midnight Run</span></div>
+          <div class="lnode n2" id="ln2"><span class="dot">●</span><span class="nsong">Paper Moon</span></div>
+          <div class="lnode n3" id="ln3"><span class="dot">●</span><span class="nsong">Golden Hour</span></div>
+          <div class="lnode n4" id="ln4"><span class="dot">●</span><span class="nsong">Static Love</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FIXED EXPLAIN PANEL -->
+    <div class="explain">
+      <div class="explain-title" id="ex-title">Same call, different walk</div>
+      <div class="explain-body" id="ex-body">Press <code>▶ next()</code> on either side — or <code>▶ next() on both</code>.</div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>Identical client action on both sides — the array iterator <b style="color:var(--fg)">hops an index</b>, the list iterator <b style="color:var(--fg)">follows a pointer</b>.</span>
+    </div>
+
+    <script>
+      var SONGS = ["Neon Sky", "Midnight Run", "Paper Moon", "Golden Hour", "Static Love"];
+      var N = SONGS.length;
+
+      var aCur = 0;      // array iterator A (index)
+      var bCur = null;   // array iterator B (null until added)
+      var lCur = 0;      // list iterator (node position along the chain)
+      var floats = {};   // one floating chip per card, replaced
+
+      /* ---- one explain panel, REPLACED (never appended) ---- */
+      function setExplain(title, bodyHtml) {
+        document.getElementById("ex-title").textContent = title;
+        document.getElementById("ex-body").innerHTML = bodyHtml;
+      }
+
+      function shake(cardId) {
+        var el = document.getElementById(cardId);
+        el.classList.remove("shake");
+        setTimeout(function () { el.classList.add("shake"); }, 10);
+        setTimeout(function () { el.classList.remove("shake"); }, 400);
+      }
+
+      function floatSong(cardId, text, kind) {
+        if (floats[cardId] && floats[cardId].remove) floats[cardId].remove();
+        var chip = document.createElement("div");
+        chip.className = "float " + kind;
+        chip.textContent = text;
+        document.getElementById(cardId).appendChild(chip);
+        floats[cardId] = chip;
+        setTimeout(function () {
+          if (floats[cardId] === chip && chip.remove) { chip.remove(); floats[cardId] = null; }
+        }, 950);
+      }
+
+      /* ---- next() on the ARRAY (cursor 'a' or 'b') ---- */
+      function nextArr(which) {
+        var cur = which === "b" ? bCur : aCur;
+        if (cur === null) return null;
+        if (cur >= N) {
+          shake("card-arr");
+          setExplain("hasNext() → false", "done");
+          return null;
+        }
+        var song = SONGS[cur];
+        if (which === "b") bCur = cur + 1; else aCur = cur + 1;
+        render();
+        floatSong("card-arr", "♪ " + song, which === "b" ? "fb" : "fa");
+        setExplain(
+          'next() → "' + song + '"',
+          which === "b"
+            ? 'Cursor <span class="qcol">B</span> hopped index ' + cur + " → " + (cur + 1) + ' — <span class="acol">A</span> didn\'t move.'
+            : "Array iterator hopped index " + cur + " → " + (cur + 1) + "."
+        );
+        return song;
+      }
+
+      /* ---- next() on the LINKED LIST ---- */
+      function nextList() {
+        if (lCur >= N) {
+          shake("card-list");
+          setExplain("hasNext() → false", "done");
+          return null;
+        }
+        var song = SONGS[lCur];
+        lCur++;
+        render();
+        floatSong("card-list", "♪ " + song, "fa");
+        setExplain(
+          'next() → "' + song + '"',
+          "List iterator followed the pointer to the next node — same song, different walk."
+        );
+        return song;
+      }
+
+      /* ---- one identical client call drives BOTH ---- */
+      function nextBoth() {
+        var canA = aCur < N, canL = lCur < N;
+        if (!canA && !canL) {
+          shake("card-arr");
+          shake("card-list");
+          setExplain("hasNext() → false", "done");
+          return;
+        }
+        var songA = null, songL = null;
+        if (canA) { songA = SONGS[aCur]; aCur++; } else shake("card-arr");
+        if (canL) { songL = SONGS[lCur]; lCur++; } else shake("card-list");
+        render();
+        if (songA !== null) floatSong("card-arr", "♪ " + songA, "fa");
+        if (songL !== null) floatSong("card-list", "♪ " + songL, "fa");
+        setExplain(
+          "one call → both collections",
+          'Identical client action — <span class="dim">index hop on the left, pointer follow on the right.</span>'
+        );
+      }
+
+      /* ---- a second, independent cursor on the array ---- */
+      function addB() {
+        if (bCur !== null) return;
+        bCur = 0;
+        document.getElementById("btn-addb").classList.add("hidden");
+        document.getElementById("btn-b").classList.remove("hidden");
+        document.getElementById("chip-b").classList.remove("hidden");
+        render();
+        setExplain(
+          "createIterator() again",
+          'Cursor <span class="qcol">B</span> starts at [0] — its position is independent of <span class="acol">A</span>.'
+        );
+      }
+
+      /* ---- reset ---- */
+      function reset() {
+        aCur = 0;
+        lCur = 0;
+        bCur = null;
+        document.getElementById("btn-addb").classList.remove("hidden");
+        document.getElementById("btn-b").classList.add("hidden");
+        document.getElementById("chip-b").classList.add("hidden");
+        render();
+        setExplain(
+          "Same call, different walk",
+          'Press <code>▶ next()</code> on either side — or <code>▶ next() on both</code>.'
+        );
+      }
+
+      /* ---- render ---- */
+      function setChip(id, has) {
+        var el = document.getElementById(id);
+        el.textContent = has ? "hasNext ✓" : "hasNext ✗";
+        var hidden = el.className.indexOf("hidden") !== -1;
+        el.className = "chip " + (has ? "ok" : "no") + (hidden ? " hidden" : "");
+      }
+
+      function render() {
+        // array slots
+        var html = "";
+        for (var i = 0; i < N; i++) {
+          var cls = "slot";
+          if (bCur === null && i < aCur) cls += " seen";
+          if (i === aCur && aCur < N) cls += " cur-a";
+          if (bCur !== null && i === bCur && bCur < N) cls += " cur-b";
+          var badges = "";
+          if (bCur !== null) {
+            if (i === aCur && aCur < N) badges += '<span class="cb cba">A</span>';
+            if (i === bCur && bCur < N) badges += '<span class="cb cbb">B</span>';
+          }
+          html += '<div class="' + cls + '"><span class="idx">[' + i + ']</span><span class="ssong">' + SONGS[i] + "</span>" + badges + "</div>";
+        }
+        document.getElementById("slots").innerHTML = html;
+
+        // list nodes
+        for (var j = 0; j < N; j++) {
+          var ncls = "lnode n" + j;
+          if (j < lCur) ncls += " seen";
+          if (j === lCur && lCur < N) ncls += " cur";
+          document.getElementById("ln" + j).className = ncls;
+        }
+
+        // hasNext chips
+        setChip("chip-a", aCur < N);
+        setChip("chip-l", lCur < N);
+        if (bCur !== null) setChip("chip-b", bCur < N);
+      }
+
+      /* ---- pointer arrows between scattered nodes ---- */
+      function edgePoint(cx, cy, dx, dy, hw, hh) {
+        var sx = Math.abs(dx) / hw, sy = Math.abs(dy) / hh;
+        var s = Math.max(sx, sy);
+        if (s < 0.0001) return [cx, cy];
+        return [cx + dx / s, cy + dy / s];
+      }
+
+      function drawArrows() {
+        var wrap = document.getElementById("lwrap");
+        var svg = document.getElementById("larrows");
+        var wr = wrap.getBoundingClientRect();
+        if (!wr || wr.width < 10) return;
+        svg.setAttribute("viewBox", "0 0 " + wr.width + " " + wr.height);
+        var out =
+          '<defs><marker id="arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">' +
+          '<path d="M0,0 L8,4 L0,8 z" fill="#6b7280"/></marker></defs>';
+        for (var i = 0; i < N - 1; i++) {
+          var a = document.getElementById("ln" + i).getBoundingClientRect();
+          var b = document.getElementById("ln" + (i + 1)).getBoundingClientRect();
+          var ax = a.left - wr.left + a.width / 2, ay = a.top - wr.top + a.height / 2;
+          var bx = b.left - wr.left + b.width / 2, by = b.top - wr.top + b.height / 2;
+          var dx = bx - ax, dy = by - ay;
+          var len = Math.sqrt(dx * dx + dy * dy);
+          if (len < 1) continue;
+          var p1 = edgePoint(ax, ay, dx, dy, a.width / 2 + 4, a.height / 2 + 4);
+          var p2 = edgePoint(bx, by, -dx, -dy, b.width / 2 + 8, b.height / 2 + 8);
+          out += '<line x1="' + p1[0] + '" y1="' + p1[1] + '" x2="' + p2[0] + '" y2="' + p2[1] +
+                 '" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="none" opacity="0.85" marker-end="url(#arr)"/>';
+        }
+        svg.innerHTML = out;
+      }
+
+      /* ---- boot ---- */
+      render();
+      drawArrows();
+      window.addEventListener("resize", drawArrows);
+      window.addEventListener("load", drawArrows);
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

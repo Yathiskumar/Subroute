@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Chain of Responsibility — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --warn: #e6b45a;
+        --warn-soft: rgba(230, 180, 90, 0.14);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---- Top: request chips + reset ---- */
+      .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+      .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+      .chip { font-family: var(--mono); font-size: 11.5px; font-weight: 700; background: var(--elevated); border: 1px solid var(--border-strong); border-radius: 999px; padding: 8px 13px; cursor: pointer; color: var(--muted); transition: border-color .15s, color .15s, transform .1s; white-space: nowrap; }
+      .chip:hover { border-color: var(--accent); }
+      .chip:active { transform: scale(0.96); }
+      .chip.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: border-color .15s, transform .1s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+
+      /* ---- Action row ---- */
+      .actions { display: flex; gap: 9px; flex-wrap: wrap; margin-bottom: 14px; align-items: center; }
+      .act { font-family: var(--mono); font-size: 12px; font-weight: 700; background: var(--elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 10px 14px; cursor: pointer; color: var(--fg); transition: border-color .15s, transform .1s; }
+      .act.prime { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+      .act:hover { border-color: var(--accent); }
+      .act:active { transform: scale(0.97); }
+      .act:disabled { opacity: .4; cursor: not-allowed; }
+      .act.l2off { background: var(--danger-soft); border-color: var(--danger); color: var(--danger); }
+      .counter { margin-left: auto; font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+      .counter b { color: var(--info); }
+
+      /* ---- Stage: the chain ---- */
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 14px; margin-bottom: 14px; }
+      .stage-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+      .stage-cap b { color: var(--fg); }
+      .chain { display: flex; align-items: stretch; gap: 8px; flex-wrap: wrap; }
+      .node { flex: 1 1 118px; min-width: 118px; background: var(--elevated); border: 1.5px solid var(--border-strong); border-radius: var(--r-md); padding: 11px 10px 9px; text-align: center; transition: border-color .2s, box-shadow .2s, opacity .25s; }
+      .node .ico { font-size: 20px; }
+      .node .name { font-size: 12px; font-weight: 700; color: var(--fg); margin-top: 5px; }
+      .node .rule { font-family: var(--mono); font-size: 9.5px; color: var(--subtle); margin-top: 3px; }
+      .node .badge { font-family: var(--mono); font-size: 10.5px; font-weight: 700; height: 20px; line-height: 20px; margin-top: 7px; border-radius: 4px; color: transparent; }
+      .node.asking { border-color: var(--info); box-shadow: 0 0 0 3px var(--info-soft); }
+      .node.asking .badge { background: var(--info-soft); color: var(--info); }
+      .node.pass { border-color: var(--warn); }
+      .node.pass .badge { background: var(--warn-soft); color: var(--warn); }
+      .node.handled { border-color: var(--success); box-shadow: 0 0 0 3px var(--success-soft); }
+      .node.handled .badge { background: var(--success-soft); color: var(--success); }
+      .node.dim { opacity: .32; }
+      .arrow { align-self: center; color: var(--subtle); font-size: 15px; font-weight: 700; flex: 0 0 auto; transition: opacity .25s; }
+      .arrow.dim { opacity: .25; }
+      .endcap { flex: 0 0 74px; border: 1.5px dashed var(--border-strong); border-radius: var(--r-md); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: var(--subtle); font-family: var(--mono); font-size: 9.5px; padding: 8px 4px; transition: border-color .2s, opacity .25s; }
+      .endcap .eico { font-size: 15px; }
+      .endcap.unhandled { border-color: var(--danger); color: var(--danger); background: var(--danger-soft); border-style: solid; }
+      .endcap.dim { opacity: .25; }
+      @media (max-width: 560px) {
+        .chain { flex-direction: column; }
+        .node { min-width: 0; }
+        .arrow { transform: rotate(90deg); align-self: center; }
+        .endcap { flex: 0 0 auto; padding: 10px; }
+      }
+
+      /* ---- Fixed explain panel (replaced, never grows) ---- */
+      .explain { min-height: 76px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 13px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .amber { color: var(--warn); font-weight: 700; }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <!-- TOP: request chips + reset -->
+    <div class="topbar">
+      <div class="chips" id="chips"></div>
+      <button class="btn" onclick="reset()">↺ Reset</button>
+    </div>
+
+    <!-- ACTIONS -->
+    <div class="actions">
+      <button class="act prime" id="send-btn" onclick="send()">▶ Send</button>
+      <button class="act" id="l2-btn" onclick="toggleL2()">⏏ Remove L2</button>
+      <span class="counter">handlers asked: <b id="asked-n">0</b></span>
+    </div>
+
+    <!-- STAGE: the chain -->
+    <div class="stage">
+      <div class="stage-cap">
+        <span>support hotline · request enters at the first link</span>
+        <span>sender knows <b>L1 only</b></span>
+      </div>
+      <div class="chain" id="chain"></div>
+    </div>
+
+    <!-- FIXED EXPLAIN PANEL -->
+    <div class="explain">
+      <div class="explain-title" id="ex-title">Handle it, or pass it on?</div>
+      <div class="explain-body" id="ex-body">Pick a request chip, then press <code>▶ Send</code> — each handler either takes it or passes it along.</div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>Try <code style="font-family:var(--mono)">⏏ Remove L2</code>, then resend <b style="color:var(--fg)">💳 refund $80</b> — same request, different handler. That's runtime re-wiring.</span>
+    </div>
+
+    <script>
+      /* ---- one explain panel, REPLACED (never appended) ---- */
+      function setExplain(title, bodyHtml) {
+        document.getElementById("ex-title").textContent = title;
+        document.getElementById("ex-body").innerHTML = bodyHtml;
+      }
+
+      var HANDLERS = [
+        { id: "l1",  ico: "🧑‍💻", name: "L1 Support", rule: "password resets",  why: "only does password resets",
+          can: function (r) { return r.type === "password"; } },
+        { id: "l2",  ico: "👩‍🔧", name: "L2 Support", rule: "refunds ≤ $100",   why: "limit is $100",
+          can: function (r) { return r.type === "refund" && r.amount <= 100; } },
+        { id: "mgr", ico: "👔", name: "Manager",     rule: "refunds ≤ $2,000",  why: "limit is $2,000",
+          can: function (r) { return r.type === "refund" && r.amount <= 2000; } },
+        { id: "dir", ico: "🏢", name: "Director",    rule: "refunds ≤ $10,000", why: "limit is $10,000",
+          can: function (r) { return r.type === "refund" && r.amount <= 10000; } },
+      ];
+
+      var REQUESTS = [
+        { id: "pw",  ico: "🔑", label: "reset password", type: "password", amount: 0 },
+        { id: "r1",  ico: "💳", label: "refund $80",     type: "refund",   amount: 80 },
+        { id: "r2",  ico: "💸", label: "refund $1,500",  type: "refund",   amount: 1500 },
+        { id: "r3",  ico: "🏦", label: "refund $9,000",  type: "refund",   amount: 9000 },
+        { id: "r4",  ico: "🚀", label: "refund $50,000", type: "refund",   amount: 50000 },
+      ];
+
+      var l2Removed = false;   // ⏏ toggle state
+      var selectedId = "pw";   // which request chip is picked
+      var busy = false;        // true while a request walks the chain
+      var askedCount = 0;      // "handlers asked" readout
+
+      function activeChain() {
+        return HANDLERS.filter(function (h) { return !(l2Removed && h.id === "l2"); });
+      }
+      function selectedReq() {
+        return REQUESTS.filter(function (r) { return r.id === selectedId; })[0];
+      }
+
+      /* ---- render: chips ---- */
+      function renderChips() {
+        var host = document.getElementById("chips");
+        host.innerHTML = "";
+        REQUESTS.forEach(function (r) {
+          var el = document.createElement("button");
+          el.className = "chip" + (r.id === selectedId ? " on" : "");
+          el.textContent = r.ico + " " + r.label;
+          el.onclick = (function (id) { return function () { pickRequest(id); }; })(r.id);
+          host.appendChild(el);
+        });
+      }
+
+      /* ---- render: chain (rebuilt on re-wire / reset) ---- */
+      function renderChain() {
+        var host = document.getElementById("chain");
+        host.innerHTML = "";
+        var chain = activeChain();
+        chain.forEach(function (h, i) {
+          var el = document.createElement("div");
+          el.className = "node";
+          el.id = "node-" + h.id;
+          el.innerHTML =
+            '<div class="ico">' + h.ico + '</div>' +
+            '<div class="name">' + h.name + '</div>' +
+            '<div class="rule">' + h.rule + '</div>' +
+            '<div class="badge" id="badge-' + h.id + '">·</div>';
+          host.appendChild(el);
+          var ar = document.createElement("div");
+          ar.className = "arrow";
+          ar.id = "arrow-" + i;
+          ar.textContent = "→";
+          host.appendChild(ar);
+        });
+        var end = document.createElement("div");
+        end.className = "endcap";
+        end.id = "endcap";
+        end.innerHTML = '<span class="eico">∅</span><span id="end-label">end of chain</span>';
+        host.appendChild(end);
+      }
+
+      function setNodeState(id, state, badgeText) {
+        var node = document.getElementById("node-" + id);
+        var badge = document.getElementById("badge-" + id);
+        if (!node || !badge) return;
+        node.className = "node" + (state ? " " + state : "");
+        badge.textContent = badgeText || "·";
+      }
+
+      function clearStates() {
+        activeChain().forEach(function (h) { setNodeState(h.id, "", "·"); });
+        var chain = activeChain();
+        for (var i = 0; i < chain.length; i++) {
+          var ar = document.getElementById("arrow-" + i);
+          if (ar) ar.className = "arrow";
+        }
+        var end = document.getElementById("endcap");
+        end.className = "endcap";
+        document.getElementById("end-label").textContent = "end of chain";
+      }
+
+      function updateCounter() {
+        document.getElementById("asked-n").textContent = askedCount;
+      }
+
+      /* ---- pick a request chip ---- */
+      function pickRequest(id) {
+        if (busy) return;
+        selectedId = id;
+        renderChips();
+        clearStates();
+        askedCount = 0;
+        updateCounter();
+        var r = selectedReq();
+        setExplain(r.ico + " " + r.label + " picked",
+          'Press <code>▶ Send</code> — it enters at <b>L1 Support</b>, the only link the sender knows.');
+      }
+
+      /* ---- ▶ Send: walk the request along the chain ---- */
+      function send() {
+        if (busy) return;
+        busy = true;
+        document.getElementById("send-btn").disabled = true;
+        document.getElementById("l2-btn").disabled = true;
+        clearStates();
+        var chain = activeChain();
+        var req = selectedReq();
+        askedCount = 0;
+        updateCounter();
+        var i = 0;
+
+        function finish() {
+          busy = false;
+          document.getElementById("send-btn").disabled = false;
+          document.getElementById("l2-btn").disabled = false;
+        }
+
+        function step() {
+          if (i >= chain.length) {
+            /* fell off the end — nobody handled it */
+            var end = document.getElementById("endcap");
+            end.className = "endcap unhandled";
+            document.getElementById("end-label").textContent = "✗ nobody handled it";
+            setExplain("✗ " + req.label + " — unhandled",
+              'All ' + askedCount + ' handlers passed — the request <span class="bad">fell off the end</span>, so a real chain needs a fallback.');
+            finish();
+            return;
+          }
+          var h = chain[i];
+          askedCount++;
+          updateCounter();
+          setNodeState(h.id, "asking", req.ico + " ?");
+          setTimeout(function () {
+            if (h.can(req)) {
+              setNodeState(h.id, "handled", "✓ handled");
+              for (var j = i + 1; j < chain.length; j++) {
+                setNodeState(chain[j].id, "dim", "·");
+                var ar = document.getElementById("arrow-" + j);
+                if (ar) ar.className = "arrow dim";
+              }
+              var arSelf = document.getElementById("arrow-" + i);
+              if (arSelf) arSelf.className = "arrow dim";
+              document.getElementById("endcap").className = "endcap dim";
+              setExplain("✓ " + h.name + " handled it",
+                req.ico + ' ' + req.label + ' stopped after <span class="good">' + askedCount +
+                (askedCount === 1 ? ' handler' : ' handlers') + '</span> — everything past ' + h.name + ' <span class="dim">never saw it</span>.');
+              finish();
+              return;
+            }
+            setNodeState(h.id, "pass", "→ pass");
+            setExplain("→ " + h.name + " passes",
+              h.name + ' ' + h.why + ', so ' + req.ico + ' ' + req.label + ' moves to the <span class="amber">next link</span>.');
+            i++;
+            setTimeout(step, 300);
+          }, 480);
+        }
+        step();
+      }
+
+      /* ---- ⏏ Remove / ＋ Add L2: runtime re-wiring ---- */
+      function toggleL2() {
+        if (busy) return;
+        l2Removed = !l2Removed;
+        var btn = document.getElementById("l2-btn");
+        btn.textContent = l2Removed ? "＋ Add L2" : "⏏ Remove L2";
+        btn.className = "act" + (l2Removed ? " l2off" : "");
+        renderChain();
+        askedCount = 0;
+        updateCounter();
+        if (l2Removed) {
+          setExplain("⏏ L2 unplugged",
+            'The chain re-wired to <b>3 links</b> — resend 💳 refund $80 and watch the <span class="amber">path change</span>.');
+        } else {
+          setExplain("＋ L2 is back",
+            'Four links again — resend 💳 refund $80 and it stops at <span class="good">L2</span> once more.');
+        }
+      }
+
+      /* ---- ↺ Reset ---- */
+      function reset() {
+        if (busy) return;
+        l2Removed = false;
+        selectedId = "pw";
+        askedCount = 0;
+        var btn = document.getElementById("l2-btn");
+        btn.textContent = "⏏ Remove L2";
+        btn.className = "act";
+        renderChips();
+        renderChain();
+        updateCounter();
+        setExplain("Handle it, or pass it on?",
+          'Pick a request chip, then press <code>▶ Send</code> — each handler either takes it or passes it along.');
+      }
+
+      /* ---- boot ---- */
+      renderChips();
+      renderChain();
+      updateCounter();
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

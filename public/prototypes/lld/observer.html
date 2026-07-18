@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Observer — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---- Action row ---- */
+      .actions { display: flex; gap: 9px; flex-wrap: wrap; margin-bottom: 14px; align-items: center; }
+      .act { font-family: var(--mono); font-size: 12px; font-weight: 700; background: var(--elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 10px 14px; cursor: pointer; color: var(--fg); transition: border-color .15s, transform .1s; }
+      .act.prime { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+      .act:hover { border-color: var(--accent); }
+      .act:active { transform: scale(0.97); }
+      .act:disabled { opacity: .4; cursor: not-allowed; }
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: border-color .15s, transform .1s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .listcheck { margin-left: auto; font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+      .listcheck b { color: var(--success); }
+      .listcheck b.zero { color: var(--danger); }
+
+      /* ---- Stage ---- */
+      .stage { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 14px; margin-bottom: 14px; overflow: hidden; }
+      .stage-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; display: flex; justify-content: space-between; gap: 10px; }
+      .stage-cap b { color: var(--fg); }
+      .wires { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+      .wires line { stroke: var(--border-strong); stroke-width: 1.5; stroke-dasharray: 4 4; transition: stroke .25s; }
+      .wires line.live { stroke: var(--success); }
+
+      /* ---- Channel card ---- */
+      .channel-row { display: flex; justify-content: center; position: relative; z-index: 1; }
+      .channel { width: 250px; max-width: 100%; background: var(--elevated); border: 1.5px solid var(--accent-border); border-radius: var(--r-md); padding: 11px 12px; text-align: center; transition: box-shadow .25s, transform .2s; }
+      .channel.pulse { box-shadow: 0 0 0 6px var(--accent-soft); transform: scale(1.03); }
+      .ch-head { display: flex; align-items: center; justify-content: center; gap: 7px; }
+      .ch-ico { font-size: 18px; }
+      .ch-name { font-size: 13px; font-weight: 700; color: var(--fg); }
+      .ch-sub { font-family: var(--mono); font-size: 10px; color: var(--subtle); margin-top: 3px; }
+      .ch-chips { display: flex; justify-content: center; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+      .ch-chip { font-family: var(--mono); font-size: 10px; padding: 3px 8px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); color: var(--muted); }
+      .ch-chip.subs { background: var(--success-soft); border-color: rgba(92,198,111,.4); color: var(--success); }
+      .ch-chip.subs.zero { background: var(--danger-soft); border-color: rgba(240,104,104,.4); color: var(--danger); }
+
+      .spine { height: 40px; }
+
+      /* ---- Viewer cards ---- */
+      .viewers { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; position: relative; z-index: 1; }
+      .viewer { width: 132px; background: var(--elevated); border: 1.5px solid var(--border-strong); border-radius: var(--r-md); padding: 10px; text-align: center; transition: border-color .2s, box-shadow .2s, opacity .2s; opacity: .58; }
+      .viewer.on { border-color: var(--success); opacity: 1; }
+      .viewer.flash { box-shadow: 0 0 0 5px var(--success-soft); }
+      .v-head { display: flex; align-items: center; justify-content: center; gap: 6px; }
+      .v-ico { font-size: 17px; }
+      .v-name { font-size: 12px; font-weight: 700; color: var(--fg); }
+      .v-badge { font-family: var(--mono); font-size: 9.5px; padding: 2px 6px; border-radius: 4px; background: var(--surface); border: 1px solid var(--border); color: var(--subtle); margin-top: 6px; display: inline-block; transition: color .2s, border-color .2s; }
+      .v-badge.has { color: var(--success); border-color: rgba(92,198,111,.4); }
+      .chip { display: block; width: 100%; margin-top: 8px; font-family: var(--mono); font-size: 10.5px; font-weight: 700; padding: 6px 4px; border-radius: 999px; cursor: pointer; background: var(--surface); border: 1px solid var(--border); color: var(--muted); transition: border-color .15s, color .15s, background .15s, transform .1s; }
+      .chip:hover { border-color: var(--border-strong); color: var(--fg); }
+      .chip:active { transform: scale(0.96); }
+      .chip.on { background: var(--success-soft); border-color: rgba(92,198,111,.45); color: var(--success); }
+
+      /* ---- Notification dots ---- */
+      .dot { position: absolute; width: 11px; height: 11px; margin: -5.5px 0 0 -5.5px; border-radius: 50%; background: var(--success); box-shadow: 0 0 9px var(--success); z-index: 2; pointer-events: none; transition: left .5s cubic-bezier(.4,.1,.3,1), top .5s cubic-bezier(.4,.1,.3,1); }
+
+      /* ---- Fixed explain panel (replaced, never grows) ---- */
+      .explain { min-height: 72px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+
+      @media (max-width: 560px) {
+        .viewer { width: calc(50% - 6px); }
+        .spine { height: 28px; }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ACTIONS -->
+    <div class="actions">
+      <button class="act prime" id="upload-btn">▶ Upload video</button>
+      <button class="btn" id="reset-btn">↺ Reset</button>
+      <span class="listcheck" id="listcheck">subscribers.length = <b class="zero">0</b></span>
+    </div>
+
+    <!-- STAGE -->
+    <div class="stage" id="stage">
+      <div class="stage-cap">
+        <span>Subject → observers</span>
+        <span>notified last upload: <b id="last-n">—</b></span>
+      </div>
+      <svg class="wires" id="wires"></svg>
+      <div class="channel-row">
+        <div class="channel" id="channel">
+          <div class="ch-head"><span class="ch-ico">📺</span><span class="ch-name">DesignPatterns TV</span></div>
+          <div class="ch-sub" id="ch-videos">videos: 0</div>
+          <div class="ch-chips">
+            <span class="ch-chip subs zero" id="ch-subs">subscribers: 0</span>
+          </div>
+        </div>
+      </div>
+      <div class="spine"></div>
+      <div class="viewers" id="viewers"></div>
+    </div>
+
+    <!-- FIXED EXPLAIN PANEL -->
+    <div class="explain">
+      <div class="explain-title" id="ex-title">Nobody is on the list yet</div>
+      <div class="explain-body" id="ex-body">Hit <code>🔔 Subscribe</code> on a viewer or two, then <code>▶ Upload video</code>.</div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>The channel never knows <b style="color:var(--fg)">who</b> is watching — it only walks whatever its list says <b style="color:var(--success)">right now</b>.</span>
+    </div>
+
+    <script>
+      /* ---- one explain panel, REPLACED (never appended) ---- */
+      function setExplain(title, bodyHtml) {
+        document.getElementById("ex-title").textContent = title;
+        document.getElementById("ex-body").innerHTML = bodyHtml;
+      }
+
+      var VIEWERS = [
+        { id: "ana", name: "Ana", emoji: "🧑" },
+        { id: "ben", name: "Ben", emoji: "👨" },
+        { id: "chloe", name: "Chloe", emoji: "👩" },
+        { id: "dan", name: "Dan", emoji: "🧔" }
+      ];
+
+      var subs = {};        // id -> true when on the channel's list
+      var inbox = {};       // id -> notifications received
+      var videos = 0;       // channel state
+      var lastSet = null;   // ids notified by the previous upload
+      var busy = false;
+
+      /* ---- build viewer cards once; keep refs (no getElementById churn) ---- */
+      function buildViewers() {
+        var host = document.getElementById("viewers");
+        host.innerHTML = "";
+        VIEWERS.forEach(function (v) {
+          var card = document.createElement("div");
+          card.className = "viewer";
+
+          var head = document.createElement("div");
+          head.className = "v-head";
+          var ico = document.createElement("span");
+          ico.className = "v-ico";
+          ico.textContent = v.emoji;
+          var name = document.createElement("span");
+          name.className = "v-name";
+          name.textContent = v.name;
+          head.appendChild(ico);
+          head.appendChild(name);
+
+          var badge = document.createElement("span");
+          badge.className = "v-badge";
+          badge.textContent = "📥 0";
+
+          var chip = document.createElement("button");
+          chip.className = "chip";
+          chip.textContent = "🔔 Subscribe";
+          chip.addEventListener("click", (function (id) {
+            return function () { toggle(id); };
+          })(v.id));
+
+          card.appendChild(head);
+          card.appendChild(badge);
+          card.appendChild(chip);
+          host.appendChild(card);
+
+          v.el = card;
+          v.badgeEl = badge;
+          v.chipEl = chip;
+          subs[v.id] = false;
+          inbox[v.id] = 0;
+        });
+      }
+
+      /* ---- wires from channel to each viewer ---- */
+      function drawWires() {
+        var svg = document.getElementById("wires");
+        var stage = document.getElementById("stage");
+        var ch = document.getElementById("channel");
+        if (!svg || !stage || !ch) return;
+        svg.innerHTML = "";
+        var s = stage.getBoundingClientRect();
+        var c = ch.getBoundingClientRect();
+        var x1 = c.left - s.left + c.width / 2;
+        var y1 = c.top - s.top + c.height;
+        VIEWERS.forEach(function (v) {
+          if (!v.el) return;
+          var r = v.el.getBoundingClientRect();
+          var x2 = r.left - s.left + r.width / 2;
+          var y2 = r.top - s.top;
+          var ln = document.createElementNS("http://www.w3.org/2000/svg", "line");
+          ln.setAttribute("x1", x1); ln.setAttribute("y1", y1);
+          ln.setAttribute("x2", x2); ln.setAttribute("y2", y2);
+          if (subs[v.id]) ln.setAttribute("class", "live");
+          svg.appendChild(ln);
+          v.wire = { x1: x1, y1: y1, x2: x2, y2: y2 };
+        });
+      }
+
+      /* ---- 🔔 / 🔕 toggle = subscribe() / unsubscribe() ---- */
+      function toggle(id) {
+        subs[id] = !subs[id];
+        var v = byId(id);
+        render();
+        var n = count();
+        if (subs[id]) {
+          setExplain("🔔 " + v.name + " subscribed",
+            'One <code>subscribe()</code> call — the list is now <b class="good">' + n + '</b>, but nothing is pushed until the state changes.');
+        } else {
+          setExplain("🔕 " + v.name + " unsubscribed",
+            'Off the list — <code>notify()</code> will skip ' + v.name + ' from the <b class="bad">next</b> upload on.');
+        }
+      }
+
+      function byId(id) {
+        return VIEWERS.filter(function (v) { return v.id === id; })[0];
+      }
+      function count() {
+        return VIEWERS.filter(function (v) { return subs[v.id]; }).length;
+      }
+
+      /* ---- ▶ Upload video = state change → notify() walks the list ---- */
+      function upload() {
+        if (busy) return;
+        videos++;
+        var list = VIEWERS.filter(function (v) { return subs[v.id]; });
+        var ids = list.map(function (v) { return v.id; }).sort().join(",");
+        var names = list.map(function (v) { return v.name; }).join(", ");
+        var skipped = VIEWERS.filter(function (v) { return !subs[v.id]; })
+          .map(function (v) { return v.name; }).join(", ");
+
+        var ch = document.getElementById("channel");
+        ch.classList.add("pulse");
+        setTimeout(function () { ch.classList.remove("pulse"); }, 420);
+
+        if (list.length === 0) {
+          lastSet = ids;
+          render();
+          setExplain("Notified 0 of 4",
+            'The list is <b class="bad">empty</b>, so <code>notify()</code> loops zero times — <span class="dim">the upload happened, nobody heard it.</span>');
+          return;
+        }
+
+        var changed = lastSet !== null && lastSet !== ids;
+        lastSet = ids;
+        busy = true;
+        document.getElementById("upload-btn").disabled = true;
+
+        setExplain("Notified " + list.length + " of 4",
+          changed
+            ? 'A <b class="good">different set</b> — <code>upload()</code> never changed, only the list did.'
+            : 'The channel just walks its list and pushes to <b class="good">' + names + '</b>' +
+              (skipped ? ' — <span class="dim">' + skipped + ' skipped.</span>' : '.'));
+
+        list.forEach(function (v, i) {
+          setTimeout(function () { fly(v); }, 220 + i * 90);
+        });
+        setTimeout(function () {
+          busy = false;
+          document.getElementById("upload-btn").disabled = false;
+          render();
+        }, 220 + list.length * 90 + 620);
+      }
+
+      /* ---- a notification dot travels the wire, then lands ---- */
+      function fly(v) {
+        var stage = document.getElementById("stage");
+        var w = v.wire || { x1: 0, y1: 0, x2: 0, y2: 0 };
+        var dot = document.createElement("div");
+        dot.className = "dot";
+        dot.style.left = w.x1 + "px";
+        dot.style.top = w.y1 + "px";
+        stage.appendChild(dot);
+        setTimeout(function () {
+          dot.style.left = w.x2 + "px";
+          dot.style.top = w.y2 + "px";
+        }, 20);
+        setTimeout(function () {
+          if (dot.parentNode) dot.parentNode.removeChild(dot);
+          inbox[v.id]++;                       // observer.update(video) landed
+          if (v.el) v.el.classList.add("flash");
+          setTimeout(function () { if (v.el) v.el.classList.remove("flash"); }, 340);
+          render();
+        }, 560);
+      }
+
+      /* ---- render (idempotent, no growth) ---- */
+      function render() {
+        var n = count();
+        var subsChip = document.getElementById("ch-subs");
+        subsChip.textContent = "subscribers: " + n;
+        subsChip.className = "ch-chip subs" + (n === 0 ? " zero" : "");
+        document.getElementById("ch-videos").textContent = "videos: " + videos;
+        document.getElementById("last-n").textContent =
+          lastSet === null ? "—" : (lastSet === "" ? "0 of 4" : lastSet.split(",").length + " of 4");
+        var lc = document.getElementById("listcheck");
+        lc.innerHTML = 'subscribers.length = <b class="' + (n === 0 ? "zero" : "") + '">' + n + "</b>";
+
+        VIEWERS.forEach(function (v) {
+          if (!v.el) return;
+          var on = !!subs[v.id];
+          var flashing = v.el.className.indexOf("flash") !== -1;
+          v.el.className = "viewer" + (on ? " on" : "") + (flashing ? " flash" : "");
+          v.chipEl.className = "chip" + (on ? " on" : "");
+          v.chipEl.textContent = on ? "🔕 Unsubscribe" : "🔔 Subscribe";
+          v.badgeEl.textContent = "📥 " + inbox[v.id];
+          v.badgeEl.className = "v-badge" + (inbox[v.id] > 0 ? " has" : "");
+        });
+        drawWires();
+      }
+
+      /* ---- ↺ Reset ---- */
+      function reset() {
+        VIEWERS.forEach(function (v) { subs[v.id] = false; inbox[v.id] = 0; });
+        videos = 0;
+        lastSet = null;
+        busy = false;
+        document.getElementById("upload-btn").disabled = false;
+        render();
+        setExplain("Nobody is on the list yet",
+          'Hit <code>🔔 Subscribe</code> on a viewer or two, then <code>▶ Upload video</code>.');
+      }
+
+      /* ---- boot ---- */
+      document.getElementById("upload-btn").addEventListener("click", upload);
+      document.getElementById("reset-btn").addEventListener("click", reset);
+      buildViewers();
+      render();
+      window.addEventListener("resize", drawWires);
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>
