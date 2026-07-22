@@ -70,6 +70,17 @@ import { mvcMvpMvvm } from "./lld/mvc-mvp-mvvm";
 import { repository } from "./lld/repository";
 import { pubSubEventDriven } from "./lld/pub-sub-event-driven";
 import { patternOveruseAntiPatterns } from "./lld/pattern-overuse-anti-patterns";
+import { threadsAndLifecycle } from "./lld/threads-and-lifecycle";
+import { locksMutexSemaphore } from "./lld/locks-mutex-semaphore";
+import { threadSafeSingleton } from "./lld/thread-safe-singleton";
+import { producerConsumer } from "./lld/producer-consumer";
+import { readWriteLocks } from "./lld/read-write-locks";
+import { deadlockRaceStarvation } from "./lld/deadlock-race-starvation";
+import { atomicOperationsAndCas } from "./lld/atomic-operations-and-cas";
+import { memoryVisibility } from "./lld/memory-visibility";
+import { threadPoolsAndExecutors } from "./lld/thread-pools-and-executors";
+import { futuresPromisesAsync } from "./lld/futures-promises-async";
+import { immutableObjectsForSafety } from "./lld/immutable-objects-for-safety";
 
 /** Indexed by `${roadmapSlug}/${topicSlug}`. */
 const ROADMAP_LESSONS: Record<string, RoadmapLesson> = {
@@ -144,6 +155,17 @@ const ROADMAP_LESSONS: Record<string, RoadmapLesson> = {
   "lld/repository": repository,
   "lld/pub-sub-event-driven": pubSubEventDriven,
   "lld/pattern-overuse-anti-patterns": patternOveruseAntiPatterns,
+  "lld/threads-and-lifecycle": threadsAndLifecycle,
+  "lld/locks-mutex-semaphore": locksMutexSemaphore,
+  "lld/thread-safe-singleton": threadSafeSingleton,
+  "lld/producer-consumer": producerConsumer,
+  "lld/read-write-locks": readWriteLocks,
+  "lld/deadlock-race-starvation": deadlockRaceStarvation,
+  "lld/atomic-operations-and-cas": atomicOperationsAndCas,
+  "lld/memory-visibility": memoryVisibility,
+  "lld/thread-pools-and-executors": threadPoolsAndExecutors,
+  "lld/futures-promises-async": futuresPromisesAsync,
+  "lld/immutable-objects-for-safety": immutableObjectsForSafety,
 };
 
 export function getRoadmapLesson(

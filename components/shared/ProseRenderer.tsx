@@ -1,5 +1,7 @@
 import { Fragment } from "react";
+import Link from "next/link";
 import { Callout } from "@/components/shared/Callout";
+import { prettifySlug, resolveCrossRef } from "@/lib/content/cross-ref";
 import { CodeBlock } from "@/components/shared/CodeBlock";
 import type { ProseBlock } from "@/lib/content/types";
 
@@ -8,7 +10,9 @@ export function renderInline(text: string): React.ReactNode {
   const parts: React.ReactNode[] = [];
   // Order matters: **bold** is tried before *italic* so the latter never
   // swallows a bold token. The [^*] guards keep the two from colliding.
-  const regex = /(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g;
+  // [[kebab-slug]] is a cross-reference to another lesson/concept; the strict
+  // slug shape keeps it from matching nested array literals like [["a", b]].
+  const regex = /(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\[\[[a-z0-9-]+\]\])/g;
   let lastIdx = 0;
   let match: RegExpExecArray | null;
   let key = 0;
@@ -20,6 +24,22 @@ export function renderInline(text: string): React.ReactNode {
         <strong key={key++} className="font-semibold text-foreground">
           {token.slice(2, -2)}
         </strong>,
+      );
+    } else if (token.startsWith("[[")) {
+      const slug = token.slice(2, -2);
+      const ref = resolveCrossRef(slug);
+      parts.push(
+        ref ? (
+          <Link
+            key={key++}
+            href={ref.href}
+            className="font-medium text-accent underline decoration-accent/40 underline-offset-2 transition-colors hover:decoration-accent"
+          >
+            {ref.title}
+          </Link>
+        ) : (
+          <span key={key++}>{prettifySlug(slug)}</span>
+        ),
       );
     } else if (token.startsWith("*")) {
       parts.push(

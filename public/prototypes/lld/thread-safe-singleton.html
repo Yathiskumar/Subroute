@@ -1,0 +1,615 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Thread-safe Singleton — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---- Mode chips ---- */
+      .modes { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+      .mode { font-family: var(--mono); font-size: 11.5px; font-weight: 700; padding: 8px 13px; border-radius: 999px; cursor: pointer; background: var(--elevated); border: 1px solid var(--border); color: var(--muted); transition: border-color .15s, color .15s, background .15s, transform .1s; }
+      .mode:hover { border-color: var(--border-strong); color: var(--fg); }
+      .mode:active { transform: scale(0.96); }
+      .mode.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+
+      /* ---- Actions ---- */
+      .actions { display: flex; gap: 9px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+      .act { font-family: var(--mono); font-size: 12px; font-weight: 700; background: var(--elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 10px 14px; cursor: pointer; color: var(--fg); transition: border-color .15s, transform .1s; }
+      .act.prime { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+      .act:hover { border-color: var(--accent); }
+      .act:active { transform: scale(0.97); }
+      .act:disabled { opacity: .4; cursor: not-allowed; }
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px 14px; cursor: pointer; transition: border-color .15s, transform .1s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .btn:disabled { opacity: .4; cursor: not-allowed; }
+      .vol { margin-left: auto; display: flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: 10.5px; color: var(--subtle); }
+      .vol.hide { display: none; }
+      .sw { font-family: var(--mono); font-size: 10.5px; font-weight: 700; padding: 6px 11px; border-radius: 999px; cursor: pointer; background: var(--success-soft); border: 1px solid rgba(92,198,111,.45); color: var(--success); transition: background .15s, border-color .15s, color .15s; }
+      .sw.off { background: var(--danger-soft); border-color: rgba(240,104,104,.45); color: var(--danger); }
+
+      /* ---- Stage ---- */
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 14px; margin-bottom: 13px; }
+      .stage-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+      .stage-cap b { color: var(--fg); }
+      .lanes { display: grid; grid-template-columns: 1fr 190px 1fr; gap: 12px; align-items: start; }
+
+      /* ---- Thread lanes ---- */
+      .lane { background: var(--elevated); border: 1.5px solid var(--border-strong); border-radius: var(--r-md); padding: 10px; transition: border-color .2s, box-shadow .2s; }
+      .lane.run { border-color: var(--success); box-shadow: 0 0 0 4px var(--success-soft); }
+      .lane.wait { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+      .lane.warn { border-color: var(--danger); box-shadow: 0 0 0 4px var(--danger-soft); }
+      .lane.done { border-color: rgba(92,198,111,.4); }
+      .lane-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 8px; }
+      .lane-name { font-size: 12.5px; font-weight: 700; color: var(--fg); }
+      .lane-state { font-family: var(--mono); font-size: 9px; padding: 2px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--subtle); background: var(--surface); white-space: nowrap; }
+      .lane-state.run { color: var(--success); border-color: rgba(92,198,111,.4); }
+      .lane-state.wait { color: var(--accent); border-color: var(--accent-border); }
+      .lane-state.warn { color: var(--danger); border-color: rgba(240,104,104,.45); }
+      .ins { font-family: var(--mono); font-size: 10px; color: var(--subtle); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; margin-bottom: 5px; transition: color .18s, border-color .18s, background .18s, transform .18s; }
+      .ins.active { color: var(--fg); border-color: var(--success); background: var(--success-soft); transform: translateX(3px); }
+      .ins.activewait { color: var(--accent); border-color: var(--accent-border); background: var(--accent-soft); transform: translateX(3px); }
+      .ins.activewarn { color: var(--danger); border-color: rgba(240,104,104,.5); background: var(--danger-soft); transform: translateX(3px); }
+      .holds { margin-top: 8px; font-family: var(--mono); font-size: 10px; color: var(--subtle); border-top: 1px dashed var(--border); padding-top: 7px; }
+      .holds b { color: var(--success); }
+      .holds b.bad { color: var(--danger); }
+
+      /* ---- Shared middle column ---- */
+      .shared { background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px; text-align: center; }
+      .shared-cap { font-family: var(--mono); font-size: 9px; letter-spacing: .06em; text-transform: uppercase; color: var(--subtle); margin-bottom: 8px; }
+      .field { font-family: var(--mono); font-size: 11px; color: var(--muted); background: var(--surface); border: 1px dashed var(--border-strong); border-radius: 6px; padding: 7px 6px; }
+      .field b { color: var(--success); }
+      .field b.nul { color: var(--subtle); }
+      .objs { display: flex; flex-direction: column; gap: 6px; margin-top: 9px; min-height: 34px; }
+      .obj { font-family: var(--mono); font-size: 10px; padding: 6px 7px; border-radius: 6px; border: 1.5px solid rgba(92,198,111,.5); background: var(--success-soft); color: var(--success); }
+      .obj.dup { border-color: rgba(240,104,104,.55); background: var(--danger-soft); color: var(--danger); }
+      .obj.half { border-color: var(--accent-border); background: var(--accent-soft); color: var(--accent); }
+      .obj.empty { border: 1px dashed var(--border); background: none; color: var(--subtle); }
+      .ctrs { margin-top: 9px; display: flex; flex-direction: column; gap: 5px; }
+      .ctr { font-family: var(--mono); font-size: 10px; color: var(--muted); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 5px 7px; display: flex; justify-content: space-between; gap: 6px; }
+      .ctr b { color: var(--fg); }
+      .ctr b.bad { color: var(--danger); }
+      .ctr b.good { color: var(--success); }
+      .ctr b.warn { color: var(--accent); }
+      .ctr.hide { display: none; }
+
+      /* ---- Scoreboard ---- */
+      .board { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; margin-bottom: 13px; }
+      .brow { display: grid; grid-template-columns: 1.25fr .75fr .6fr .5fr 1.5fr; gap: 8px; align-items: center; padding: 7px 12px; font-family: var(--mono); font-size: 10.5px; color: var(--muted); border-top: 1px solid var(--border); }
+      .brow.head { border-top: none; background: #0a0b0e; color: var(--subtle); font-size: 8.5px; letter-spacing: .07em; text-transform: uppercase; }
+      .brow.on { background: var(--accent-soft); color: var(--fg); }
+      .brow.ref { opacity: .55; }
+      .brow b.good { color: var(--success); }
+      .brow b.bad { color: var(--danger); }
+      .brow b.warn { color: var(--accent); }
+      .brow .vd.good { color: var(--success); }
+      .brow .vd.bad { color: var(--danger); }
+      .brow .vd.warn { color: var(--accent); }
+      .brow .dimc { color: var(--subtle); }
+
+      /* ---- Fixed explain panel (replaced, never grows) ---- */
+      .explain { min-height: 72px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .warn { color: var(--accent); font-weight: 700; }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+
+      @media (max-width: 560px) {
+        .lanes { grid-template-columns: 1fr; }
+        .brow { grid-template-columns: 1fr .6fr .5fr .4fr; font-size: 9.5px; }
+        .brow span:nth-child(5) { display: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- MODE CHIPS -->
+    <div class="modes" id="modes">
+      <button class="mode on" data-m="naive">❌ Naive</button>
+      <button class="mode" data-m="sync">🐢 synchronized</button>
+      <button class="mode" data-m="dcl">⚡ DCL + volatile</button>
+      <button class="mode" data-m="holder">🏅 Holder</button>
+    </div>
+
+    <!-- ACTIONS -->
+    <div class="actions">
+      <button class="act prime" id="run-btn">▶ Both call getInstance()</button>
+      <button class="btn" id="step-btn">⏭ Step</button>
+      <button class="btn" id="reset-btn">↺ Reset</button>
+      <span class="vol hide" id="vol">field is <button class="sw" id="vol-btn">volatile: ON</button></span>
+    </div>
+
+    <!-- STAGE -->
+    <div class="stage">
+      <div class="stage-cap">
+        <span id="sig">static Printer getInstance()</span>
+        <span>call round: <b id="round-n">0</b> / 3</span>
+      </div>
+      <div class="lanes">
+        <div class="lane" id="lane1">
+          <div class="lane-head"><span class="lane-name">🧵 T1</span><span class="lane-state" id="st1">idle</span></div>
+          <div id="prog1"></div>
+          <div class="holds" id="got1">got: —</div>
+        </div>
+
+        <div class="shared">
+          <div class="shared-cap">shared static field</div>
+          <div class="field" id="field">instance = <b class="nul">null</b></div>
+          <div class="objs" id="objs"></div>
+          <div class="ctrs">
+            <div class="ctr"><span>🏭 instances created</span><b id="c-inst">0</b></div>
+            <div class="ctr"><span>🔒 lock acquisitions</span><b id="c-lock">0</b></div>
+            <div class="ctr hide" id="lock-row"><span>🔑 lock</span><b id="c-holder">free</b></div>
+          </div>
+        </div>
+
+        <div class="lane" id="lane2">
+          <div class="lane-head"><span class="lane-name">🧵 T2</span><span class="lane-state" id="st2">idle</span></div>
+          <div id="prog2"></div>
+          <div class="holds" id="got2">got: —</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCOREBOARD -->
+    <div class="board" id="board"></div>
+
+    <!-- FIXED EXPLAIN PANEL -->
+    <div class="explain">
+      <div class="explain-title" id="ex-title">Two threads, one instant</div>
+      <div class="explain-body" id="ex-body">Press <code>▶ Both call getInstance()</code> — T1 and T2 call it at the same moment.</div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>Run each mode once. The scoreboard fills in and the winner becomes obvious: <b style="color:var(--success)">one instance, zero locks, still lazy</b>.</span>
+    </div>
+
+    <script>
+      /* ---- one explain panel, REPLACED (never appended) ---- */
+      function setExplain(title, bodyHtml) {
+        document.getElementById("ex-title").textContent = title;
+        document.getElementById("ex-body").innerHTML = bodyHtml;
+      }
+
+      var MODES = {
+        naive: {
+          sig: "static Printer getInstance()   // no lock at all",
+          prog: ["if (instance == null)", "instance = new Printer()", "return instance"]
+        },
+        sync: {
+          sig: "static 🔒 synchronized Printer getInstance()",
+          prog: ["🔒 acquire lock", "if (instance == null)", "instance = new Printer()", "🔓 release → return"]
+        },
+        dcl: {
+          sig: "static Printer getInstance()   // volatile instance",
+          prog: ["if (instance == null)", "🔒 acquire lock", "if (instance == null)  // again", "instance = new Printer()", "return instance"]
+        },
+        holder: {
+          sig: "static Printer getInstance()   // static Holder class",
+          prog: ["Holder.INSTANCE", "return instance"]
+        }
+      };
+
+      var BOARD = [
+        { k: "naive", name: "❌ Naive lazy" },
+        { k: "sync", name: "🐢 synchronized" },
+        { k: "dcl", name: "⚡ DCL + volatile" },
+        { k: "holder", name: "🏅 Holder idiom" },
+        { k: "eager", name: "🥱 Eager field", ref: true }
+      ];
+
+      /* ---- state ---- */
+      var mode = "naive";
+      var volatileOn = true;
+      var results = {};            // mode -> remembered scoreboard row
+      var created = 0, locks = 0, round = 0;
+      var field = null;            // what the shared static field points at
+      var objs = [];               // real objects in memory
+      var lockHolder = null;
+      var L = { 1: blankLane(), 2: blankLane() };
+      var script = [], idx = 0, busy = false, timer = null;
+
+      function blankLane() { return { ptr: -1, status: "idle", made: null, got: null }; }
+
+      /* ---- state mutations used by steps ---- */
+      function mk(lane, half) {
+        created++;
+        objs.push({ id: created, half: !!half, by: lane });
+        field = created;
+        L[lane].made = created;
+      }
+      function finish() { if (objs.length) objs[objs.length - 1].half = false; }
+      function ret(lane) {
+        L[lane].got = L[lane].made || field;
+        if (lockHolder === lane) lockHolder = null;
+      }
+      function lock(lane) { locks++; lockHolder = lane; }
+      function st(lane, instr, status, text, fn) {
+        return { lane: lane, instr: instr, status: status, text: text, fn: fn };
+      }
+
+      /* ---- the fixed, deliberate interleavings ---- */
+      function buildScript() {
+        var s = [], first = (created === 0);
+
+        if (mode === "naive") {
+          if (first) {
+            s.push(st(1, 0, "run", "T1 reads the field: <b class='bad'>null</b>. So it will build one."));
+            s.push(st(2, 0, "run", "T2 reads it too — <b class='bad'>still null</b>. Both passed the check."));
+            s.push(st(1, 1, "run", "T1 builds instance <b class='good'>#1</b> and stores it.", function () { mk(1, false); }));
+            s.push(st(2, 1, "run", "T2 builds <b class='bad'>#2</b> and overwrites the field.", function () { mk(2, false); }));
+            s.push(st(1, 2, "done", "T1 returns the object it made: <b>#1</b>.", function () { ret(1); }));
+            s.push(st(2, 2, "warn", "T2 returns <b class='bad'>#2</b>. Two threads, <b class='bad'>two singletons</b> ✗", function () { ret(2); }));
+          } else {
+            s.push(st(1, 0, "run", "The field is not null now, so T1 skips building."));
+            s.push(st(2, 0, "run", "T2 also sees a non-null field."));
+            s.push(st(1, 2, "done", "T1 returns the stored object.", function () { ret(1); }));
+            s.push(st(2, 2, "warn", "Same for T2 — but round 1 already leaked a <b class='bad'>second</b> instance.", function () { ret(2); }));
+          }
+        }
+
+        if (mode === "sync") {
+          if (first) {
+            s.push(st(1, 0, "run", "T1 takes the lock. Only one thread may be inside the method.", function () { lock(1); }));
+            s.push(st(2, 0, "wait", "T2 calls too, but the lock is held — so T2 <b class='warn'>waits</b>."));
+            s.push(st(1, 1, "run", "Inside the lock, T1 sees <code>null</code>."));
+            s.push(st(1, 2, "run", "T1 builds the one instance <b class='good'>#1</b>.", function () { mk(1, false); }));
+            s.push(st(1, 3, "done", "T1 releases the lock and returns #1.", function () { ret(1); }));
+            s.push(st(2, 0, "run", "T2 wakes up and takes the lock — acquisition <b>2</b>.", function () { lock(2); }));
+            s.push(st(2, 1, "run", "Now the check is false: the instance already exists."));
+            s.push(st(2, 3, "done", "T2 returns the <b class='good'>same #1</b>. Correct — one instance ✓", function () { ret(2); }));
+          } else {
+            s.push(st(1, 0, "run", "The instance already exists — yet T1 <b>still</b> takes the lock.", function () { lock(1); }));
+            s.push(st(2, 0, "wait", "And T2 <b class='warn'>waits</b> behind it again. Every single call."));
+            s.push(st(1, 1, "run", "Check is false. Nothing to build."));
+            s.push(st(1, 3, "done", "T1 returns #1 and releases.", function () { ret(1); }));
+            s.push(st(2, 0, "run", "T2 finally gets the lock — that is the <b class='warn'>ongoing cost</b>.", function () { lock(2); }));
+            s.push(st(2, 3, "done", "T2 returns #1. Correct, but every call paid for a lock.", function () { ret(2); }));
+          }
+        }
+
+        if (mode === "dcl") {
+          if (first && volatileOn) {
+            s.push(st(1, 0, "run", "T1's first check is <b>lock-free</b>: the field is null."));
+            s.push(st(2, 0, "run", "T2's first check also sees null — both head for the lock."));
+            s.push(st(1, 1, "run", "T1 takes the lock (acquisition 1).", function () { lock(1); }));
+            s.push(st(2, 1, "wait", "T2 <b class='warn'>waits</b> at the lock."));
+            s.push(st(1, 2, "run", "Second check, now inside the lock: still null."));
+            s.push(st(1, 3, "run", "T1 builds <b class='good'>#1</b>. <code>volatile</code> publishes it fully built.", function () { mk(1, false); }));
+            s.push(st(1, 4, "done", "T1 leaves the lock and returns #1.", function () { ret(1); }));
+            s.push(st(2, 1, "run", "T2 gets the lock — acquisition 2.", function () { lock(2); }));
+            s.push(st(2, 2, "run", "The <b class='good'>second check</b> saves it: the field is no longer null."));
+            s.push(st(2, 4, "done", "T2 returns the same #1 — one instance ✓", function () { ret(2); }));
+          } else if (first && !volatileOn) {
+            s.push(st(1, 0, "run", "T1's first check: null."));
+            s.push(st(1, 1, "run", "T1 takes the lock.", function () { lock(1); }));
+            s.push(st(1, 2, "run", "Second check inside the lock: still null."));
+            s.push(st(1, 3, "run", "Without <code>volatile</code> the field can be set <b class='bad'>before</b> the object is finished.", function () { mk(1, true); }));
+            s.push(st(2, 0, "warn", "⚠️ T2 sees non-null, skips the lock, and takes a <b class='bad'>half-built</b> object.", function () { ret(2); }));
+            s.push(st(1, 3, "run", "T1 finally finishes the constructor — too late for T2.", function () { finish(); }));
+            s.push(st(1, 4, "done", "T1 returns a good #1; T2 already left with a <b class='bad'>broken</b> one.", function () { ret(1); }));
+          } else {
+            s.push(st(1, 0, "run", "First check is false — T1 <b class='good'>skips the lock entirely</b>."));
+            s.push(st(2, 0, "run", "T2 too: no lock, no waiting."));
+            s.push(st(1, 4, "done", "T1 returns #1 on the fast path.", function () { ret(1); }));
+            s.push(st(2, 4, "done", "Lock acquisitions <b class='good'>stops rising</b> — that is the point of DCL.", function () { ret(2); }));
+          }
+        }
+
+        if (mode === "holder") {
+          if (first) {
+            s.push(st(1, 0, "run", "T1 touches <code>Holder.INSTANCE</code> — the class loads and builds it <b class='good'>once</b>.", function () { mk(1, false); }));
+            s.push(st(2, 0, "run", "T2 touches it too: already loaded, so nothing is built."));
+            s.push(st(1, 1, "done", "T1 returns #1.", function () { ret(1); }));
+            s.push(st(2, 1, "done", "T2 returns the same #1 — <b class='good'>no lock, no null check</b> ✓", function () { ret(2); }));
+          } else {
+            s.push(st(1, 0, "run", "Already loaded — this is just a plain field read."));
+            s.push(st(2, 0, "run", "Same for T2. There is nothing left to synchronise."));
+            s.push(st(1, 1, "done", "T1 returns #1.", function () { ret(1); }));
+            s.push(st(2, 1, "done", "T2 returns #1. Lock acquisitions: <b class='good'>0</b>, forever.", function () { ret(2); }));
+          }
+        }
+        return s;
+      }
+
+      /* ---- lane program chips (rebuilt on mode change) ---- */
+      function renderProgs() {
+        [1, 2].forEach(function (n) {
+          var host = document.getElementById("prog" + n);
+          host.innerHTML = "";
+          MODES[mode].prog.forEach(function (line) {
+            var d = document.createElement("div");
+            d.className = "ins";
+            d.textContent = line;
+            host.appendChild(d);
+          });
+        });
+      }
+
+      /* ---- verdict for the active mode ---- */
+      function verdict() {
+        if (mode === "naive") {
+          return created > 1
+            ? { t: "✗ two singletons", c: "bad" }
+            : { t: "no lock, no safety", c: "warn" };
+        }
+        if (mode === "sync") return { t: "⚠ locks on every call", c: "warn" };
+        if (mode === "dcl") {
+          return volatileOn
+            ? { t: "✓ lock-free after the 1st", c: "good" }
+            : { t: "⚠ unsafe without volatile", c: "bad" };
+        }
+        return { t: "🏅 no lock, still lazy", c: "good" };
+      }
+
+      /* ---- render (idempotent, never grows) ---- */
+      function render() {
+        [1, 2].forEach(function (n) {
+          var l = L[n];
+          document.getElementById("lane" + n).className = "lane " + (l.status === "idle" ? "" : l.status);
+          var badge = document.getElementById("st" + n);
+          badge.textContent =
+            l.status === "idle" ? "idle" :
+            l.status === "wait" ? "⏸ waiting for lock" :
+            l.status === "warn" ? "⚠️ got a bad object" :
+            l.status === "done" ? "✓ returned" : "running";
+          badge.className = "lane-state " + (l.status === "done" ? "run" : (l.status === "idle" ? "" : l.status));
+
+          var chips = document.getElementById("prog" + n).children;
+          for (var i = 0; i < chips.length; i++) {
+            var cls = "ins";
+            if (i === l.ptr) {
+              cls += l.status === "wait" ? " activewait" : (l.status === "warn" ? " activewarn" : " active");
+            }
+            chips[i].className = cls;
+          }
+
+          var g = document.getElementById("got" + n);
+          if (l.got === null) g.innerHTML = "got: —";
+          else {
+            var o = objs.filter(function (x) { return x.id === l.got; })[0];
+            var bad = (l.status === "warn") || (o && o.half);
+            g.innerHTML = "got: <b class='" + (bad ? "bad" : "") + "'>Printer #" + l.got + "</b>";
+          }
+        });
+
+        document.getElementById("field").innerHTML =
+          "instance = " + (field === null ? "<b class='nul'>null</b>" : "<b>#" + field + "</b>");
+
+        var host = document.getElementById("objs");
+        host.innerHTML = "";
+        if (!objs.length) {
+          var e = document.createElement("div");
+          e.className = "obj empty";
+          e.textContent = "no object yet";
+          host.appendChild(e);
+        } else {
+          objs.forEach(function (o) {
+            var d = document.createElement("div");
+            d.className = "obj" + (o.half ? " half" : (o.id > 1 ? " dup" : ""));
+            d.textContent = "🖨 Printer #" + o.id + (o.half ? "  ⚠️ half-built" : "");
+            host.appendChild(d);
+          });
+        }
+
+        var ci = document.getElementById("c-inst");
+        ci.textContent = String(created);
+        ci.className = created > 1 ? "bad" : (created === 1 ? "good" : "");
+        var cl = document.getElementById("c-lock");
+        cl.textContent = String(locks);
+        cl.className = locks === 0 ? "good" : (mode === "sync" ? "bad" : "warn");
+        document.getElementById("lock-row").className =
+          "ctr" + (mode === "sync" || mode === "dcl" ? "" : " hide");
+        document.getElementById("c-holder").textContent =
+          lockHolder === null ? "free" : "held by T" + lockHolder;
+        document.getElementById("round-n").textContent = String(round);
+        document.getElementById("sig").textContent = MODES[mode].sig;
+
+        if (round > 0 || busy) {
+          var v = verdict();
+          results[mode] = {
+            inst: String(created),
+            instBad: created > 1,
+            locks: String(locks),
+            lockCls: locks === 0 ? "good" : (mode === "sync" ? "bad" : "warn"),
+            lazy: "✓",
+            verdict: v.t,
+            cls: v.c
+          };
+        }
+        renderBoard();
+        syncButtons();
+      }
+
+      function renderBoard() {
+        var html =
+          "<div class='brow head'><span>implementation</span><span>instances</span><span>locks</span><span>lazy?</span><span>verdict</span></div>";
+        BOARD.forEach(function (b) {
+          var r = b.k === "eager"
+            ? { inst: "1", instBad: false, locks: "0", lockCls: "good", lazy: "✗", verdict: "built even if never used", cls: "warn" }
+            : results[b.k];
+          html += "<div class='brow" + (b.k === mode ? " on" : "") + (b.ref ? " ref" : "") + "'>";
+          html += "<span>" + b.name + "</span>";
+          if (r) {
+            html += "<span><b class='" + (r.instBad ? "bad" : "good") + "'>" + r.inst + "</b></span>";
+            html += "<span><b class='" + r.lockCls + "'>" + r.locks + "</b></span>";
+            html += "<span><b class='" + (r.lazy === "✓" ? "good" : "warn") + "'>" + r.lazy + "</b></span>";
+            html += "<span class='vd " + r.cls + "'>" + r.verdict + "</span>";
+          } else {
+            html += "<span class='dimc'>·</span><span class='dimc'>·</span><span class='dimc'>·</span><span class='dimc'>not run yet</span>";
+          }
+          html += "</div>";
+        });
+        document.getElementById("board").innerHTML = html;
+      }
+
+      function syncButtons() {
+        var over = round >= 3 && !script.length;
+        document.getElementById("run-btn").disabled = busy || over;
+        document.getElementById("step-btn").disabled = busy || over;
+        document.getElementById("run-btn").textContent =
+          over ? "✓ 3 calls done" : (round === 0 ? "▶ Both call getInstance()" : "▶ Call again · " + (round + 1) + " of 3");
+        document.getElementById("vol").className = "vol" + (mode === "dcl" ? "" : " hide");
+        var sw = document.getElementById("vol-btn");
+        sw.textContent = volatileOn ? "volatile: ON" : "volatile: OFF";
+        sw.className = "sw" + (volatileOn ? "" : " off");
+      }
+
+      /* ---- stepping ---- */
+      function applyStep(s) {
+        L[s.lane].ptr = s.instr;
+        L[s.lane].status = s.status;
+        if (s.fn) s.fn();
+        setExplain("T" + s.lane + " · " + MODES[mode].prog[s.instr], s.text);
+        render();
+      }
+
+      function startRound() {
+        if (round >= 3) return false;
+        round++;
+        L[1].ptr = -1; L[1].status = "idle"; L[1].made = null; L[1].got = null;
+        L[2].ptr = -1; L[2].status = "idle"; L[2].made = null; L[2].got = null;
+        script = buildScript();
+        idx = 0;
+        return true;
+      }
+
+      function stepOnce() {
+        if (busy) return;
+        if (!script.length && !startRound()) return;
+        applyStep(script[idx++]);
+        if (idx >= script.length) {
+          script = []; idx = 0;
+          if (round >= 3) {
+            var v = verdict();
+            setExplain("3 calls done · " + v.t,
+              "Switch mode with the chips above and run again — the <b>scoreboard</b> keeps every verdict side by side.");
+          }
+        }
+        render();
+      }
+
+      function play() {
+        if (busy) return;
+        if (!script.length && !startRound()) return;
+        busy = true;
+        render();
+        tick();
+      }
+
+      function tick() {
+        applyStep(script[idx++]);
+        if (idx < script.length) {
+          timer = setTimeout(tick, 700);
+        } else {
+          timer = setTimeout(function () {
+            script = []; idx = 0; busy = false;
+            if (round >= 3) {
+              var v = verdict();
+              setExplain("3 calls done · " + v.t,
+                "Switch mode with the chips above and run again — the <b>scoreboard</b> keeps every verdict side by side.");
+            }
+            render();
+          }, 700);
+        }
+      }
+
+      /* ---- controls ---- */
+      function clearRun() {
+        if (timer) { clearTimeout(timer); timer = null; }
+        busy = false; script = []; idx = 0;
+        created = 0; locks = 0; round = 0; field = null; objs = []; lockHolder = null;
+        L[1] = blankLane(); L[2] = blankLane();
+      }
+
+      function setMode(m) {
+        if (m === mode) return;
+        clearRun();
+        mode = m;
+        var chips = document.getElementById("modes").children;
+        for (var i = 0; i < chips.length; i++) {
+          chips[i].className = "mode" + (chips[i].getAttribute("data-m") === m ? " on" : "");
+        }
+        renderProgs();
+        render();
+        if (m === "naive") setExplain("❌ Naive lazy — no protection", "Just <code>if (instance == null) instance = new Printer()</code>. Run it and count the instances.");
+        if (m === "sync") setExplain("🐢 synchronized getInstance()", "One lock around the whole method. Correct — but watch <b class='warn'>lock acquisitions</b> climb.");
+        if (m === "dcl") setExplain("⚡ Double-checked locking", "Check, lock, check <b>again</b>. Flip <code>volatile</code> off later to see what breaks.");
+        if (m === "holder") setExplain("🏅 Static holder idiom", "No lock, no null check — the class loader builds it once, on first use.");
+      }
+
+      function toggleVolatile() {
+        volatileOn = !volatileOn;
+        clearRun();
+        render();
+        setExplain(volatileOn ? "volatile: ON" : "volatile: OFF",
+          volatileOn
+            ? "<code>volatile</code> = every thread sees the finished object, never a partly-built one."
+            : "Without it another thread can see the reference <b class='bad'>before</b> the constructor finished. Run it.");
+      }
+
+      function reset() {
+        clearRun();
+        delete results[mode];
+        render();
+        setExplain("Two threads, one instant", "Press <code>▶ Both call getInstance()</code> — T1 and T2 call it at the same moment.");
+      }
+
+      /* ---- boot ---- */
+      (function () {
+        var chips = document.getElementById("modes").children;
+        for (var i = 0; i < chips.length; i++) {
+          chips[i].addEventListener("click", (function (m) {
+            return function () { setMode(m); };
+          })(chips[i].getAttribute("data-m")));
+        }
+        document.getElementById("run-btn").addEventListener("click", play);
+        document.getElementById("step-btn").addEventListener("click", stepOnce);
+        document.getElementById("reset-btn").addEventListener("click", reset);
+        document.getElementById("vol-btn").addEventListener("click", toggleVolatile);
+        renderProgs();
+        render();
+      })();
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>
