@@ -16,7 +16,11 @@ import { SectionHeading } from "@/components/shared/SectionHeading";
 import { CodeBlock } from "@/components/shared/CodeBlock";
 import { MultiCodeBlock } from "@/components/shared/MultiCodeBlock";
 import { FurtherReading } from "@/components/shared/FurtherReading";
-import { ProseRenderer, renderInline } from "@/components/shared/ProseRenderer";
+import {
+  ProseRenderer,
+  renderInline,
+  stripInline,
+} from "@/components/shared/ProseRenderer";
 import { PrototypeFrame } from "@/components/prototype/PrototypeFrame";
 import { QuizContainer } from "@/components/quiz/QuizContainer";
 import { LessonCompleteButton } from "@/components/roadmap/LessonCompleteButton";
@@ -68,7 +72,7 @@ export async function generateMetadata({
   if (!lesson || !roadmap) return { title: "Lesson not found" };
   return {
     title: `${lesson.title} — ${roadmap.abbr} Roadmap`,
-    description: lesson.oneLiner,
+    description: stripInline(lesson.oneLiner),
   };
 }
 
@@ -158,7 +162,7 @@ export default async function RoadmapLessonPage({
               {lesson.title}
             </h1>
             <p className="max-w-2xl text-pretty text-lg text-muted">
-              {lesson.oneLiner}
+              {renderInline(lesson.oneLiner)}
             </p>
             <LessonCompleteButton
               roadmapSlug={roadmap.slug}
@@ -233,7 +237,7 @@ export default async function RoadmapLessonPage({
                       <Wrench className="h-3.5 w-3.5 text-accent" />
                     </div>
                     <h4 className="text-base font-semibold tracking-tight">
-                      {ex.title.replace(/^\d+\s·\s*/, "")}
+                      {renderInline(ex.title.replace(/^\d+\s·\s*/, ""))}
                     </h4>
                     <p className="text-sm text-muted">{renderInline(ex.body)}</p>
                   </div>
@@ -341,7 +345,7 @@ export default async function RoadmapLessonPage({
                     {prevLesson.title}
                   </span>
                   <span className="line-clamp-2 text-sm text-muted">
-                    {prevLesson.oneLiner}
+                    {renderInline(prevLesson.oneLiner)}
                   </span>
                 </Link>
               ) : (
@@ -363,7 +367,7 @@ export default async function RoadmapLessonPage({
                     {nextLesson.title}
                   </span>
                   <span className="line-clamp-2 text-sm text-muted">
-                    {nextLesson.oneLiner}
+                    {renderInline(nextLesson.oneLiner)}
                   </span>
                 </Link>
               ) : (

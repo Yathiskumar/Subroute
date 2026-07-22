@@ -20,7 +20,11 @@ import { FeedbackWidget } from "@/components/shared/FeedbackWidget";
 import { PrototypeFrame } from "@/components/prototype/PrototypeFrame";
 import { QuizContainer } from "@/components/quiz/QuizContainer";
 import { Button } from "@/components/ui/button";
-import { ProseRenderer, renderInline } from "@/components/shared/ProseRenderer";
+import {
+  ProseRenderer,
+  renderInline,
+  stripInline,
+} from "@/components/shared/ProseRenderer";
 import { FurtherReading } from "@/components/shared/FurtherReading";
 import { TOPICS, getConcept } from "@/lib/data/topics";
 import { SAMPLE_QUIZ } from "@/lib/data/quiz";
@@ -42,7 +46,7 @@ export async function generateMetadata({
   if (!data) return {};
   return {
     title: `${data.concept.title} — ${data.topic.title}`,
-    description: data.concept.oneLiner,
+    description: stripInline(data.concept.oneLiner),
   };
 }
 
@@ -99,7 +103,7 @@ export default async function ConceptDetailPage({
               {concept.title}
             </h1>
             <p className="max-w-2xl text-pretty text-lg text-muted">
-              {concept.oneLiner}
+              {renderInline(concept.oneLiner)}
             </p>
           </div>
         </div>
@@ -185,7 +189,7 @@ export default async function ConceptDetailPage({
                       <Wrench className="h-3.5 w-3.5 text-accent" />
                     </div>
                     <h4 className="text-base font-semibold tracking-tight">
-                      {ex.title.replace(/^\d+\s·\s*/, "")}
+                      {renderInline(ex.title.replace(/^\d+\s·\s*/, ""))}
                     </h4>
                     <p className="text-sm text-muted">{renderInline(ex.body)}</p>
                   </div>
@@ -297,7 +301,9 @@ export default async function ConceptDetailPage({
                   <span className="text-base font-semibold tracking-tight group-hover:text-accent">
                     {prev.title}
                   </span>
-                  <span className="text-sm text-muted">{prev.oneLiner}</span>
+                  <span className="text-sm text-muted">
+                    {renderInline(prev.oneLiner)}
+                  </span>
                 </Link>
               ) : (
                 <div className="flex items-center gap-2 rounded-xl border border-dashed border-border-subtle p-5 text-sm text-subtle">
@@ -316,7 +322,9 @@ export default async function ConceptDetailPage({
                   <span className="text-base font-semibold tracking-tight group-hover:text-accent">
                     {next.title}
                   </span>
-                  <span className="text-sm text-muted">{next.oneLiner}</span>
+                  <span className="text-sm text-muted">
+                    {renderInline(next.oneLiner)}
+                  </span>
                 </Link>
               ) : (
                 <div className="flex items-center justify-end gap-2 rounded-xl border border-dashed border-border-subtle p-5 text-right text-sm text-subtle">

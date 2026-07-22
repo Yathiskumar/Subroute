@@ -5,28 +5,85 @@ import { prettifySlug, resolveCrossRef } from "@/lib/content/cross-ref";
 import { CodeBlock } from "@/components/shared/CodeBlock";
 import type { ProseBlock } from "@/lib/content/types";
 
-/** Tiny inline-markup renderer: handles **bold**, *italic*, and `code`. */
+/**
+ * Strips inline markup down to plain text. For contexts that can't render JSX —
+ * `<meta>` descriptions, OG tags, JSON-LD — where the raw `**stars**` would
+ * otherwise leak into search results and social cards.
+ */
+/**
+ * One pass of the inline grammar. Alternation order is the precedence:
+ * `code` wins outright (never parsed further), then **bold**, then *italic*,
+ * then a [[cross-ref]].
+ *
+ * The delimiters are markdown's own rules, and they earn their keep:
+ *  - `(?!\s)` / `(?<!\s)` means the marker must hug its text, so prose like
+ *    "n * 2 * m" or a UML "0..*" is never mistaken for emphasis.
+ *  - `(?!\*)` on the closing marker lets a run of three stars close correctly,
+ *    which is what makes `**its *monitor***` parse as bold-wrapping-italic
+ *    instead of leaving a stray star behind. Italic additionally refuses a
+ *    closing star that *follows* one, so `*many readers **or** one writer*`
+ *    closes at the end rather than snapping shut on the inner bold.
+ *  - the bodies are lazy and unrestricted, so emphasis can *contain* other
+ *    markup — that nesting is why this is recursive rather than one flat pass.
+ * Built fresh per call: the regex is stateful (`g`), and recursion shares it otherwise.
+ */
+const inlineGrammar = () =>
+  /`([^`]+)`|\*\*(?!\s)([\s\S]+?)(?<!\s)\*\*(?!\*)|\*(?!\s)([\s\S]+?)(?<!\s)(?<!\*)\*(?!\*)|\[\[([a-z0-9-]+)\]\]/g;
+
+/**
+ * Strips inline markup down to plain text. For contexts that can't render JSX —
+ * `<meta>` descriptions, OG tags, JSON-LD — where the raw `**stars**` would
+ * otherwise leak into search results and social cards.
+ */
+export function stripInline(text: string): string {
+  const regex = inlineGrammar();
+  let out = "";
+  let lastIdx = 0;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(text)) !== null) {
+    out += text.slice(lastIdx, match.index);
+    const [, code, bold, italic, slug] = match;
+    if (code !== undefined) out += code;
+    else if (bold !== undefined) out += stripInline(bold);
+    else if (italic !== undefined) out += stripInline(italic);
+    else if (slug !== undefined) out += resolveCrossRef(slug)?.title ?? prettifySlug(slug);
+    lastIdx = regex.lastIndex;
+  }
+  return out + text.slice(lastIdx);
+}
+
+/** Tiny inline-markup renderer: handles **bold**, *italic*, `code`, and [[cross-refs]], nested freely. */
 export function renderInline(text: string): React.ReactNode {
   const parts: React.ReactNode[] = [];
-  // Order matters: **bold** is tried before *italic* so the latter never
-  // swallows a bold token. The [^*] guards keep the two from colliding.
-  // [[kebab-slug]] is a cross-reference to another lesson/concept; the strict
-  // slug shape keeps it from matching nested array literals like [["a", b]].
-  const regex = /(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\[\[[a-z0-9-]+\]\])/g;
+  const regex = inlineGrammar();
   let lastIdx = 0;
   let match: RegExpExecArray | null;
   let key = 0;
   while ((match = regex.exec(text)) !== null) {
     if (match.index > lastIdx) parts.push(text.slice(lastIdx, match.index));
-    const token = match[0];
-    if (token.startsWith("**")) {
+    const [, code, bold, italic, slug] = match;
+    if (code !== undefined) {
+      parts.push(
+        <code
+          key={key++}
+          className="rounded-sm border border-border-subtle bg-surface-elevated px-1.5 py-0.5 font-mono text-[0.9em]"
+        >
+          {code}
+        </code>,
+      );
+    } else if (bold !== undefined) {
       parts.push(
         <strong key={key++} className="font-semibold text-foreground">
-          {token.slice(2, -2)}
+          {renderInline(bold)}
         </strong>,
       );
-    } else if (token.startsWith("[[")) {
-      const slug = token.slice(2, -2);
+    } else if (italic !== undefined) {
+      parts.push(
+        <em key={key++} className="italic">
+          {renderInline(italic)}
+        </em>,
+      );
+    } else if (slug !== undefined) {
       const ref = resolveCrossRef(slug);
       parts.push(
         ref ? (
@@ -41,23 +98,8 @@ export function renderInline(text: string): React.ReactNode {
           <span key={key++}>{prettifySlug(slug)}</span>
         ),
       );
-    } else if (token.startsWith("*")) {
-      parts.push(
-        <em key={key++} className="italic">
-          {token.slice(1, -1)}
-        </em>,
-      );
-    } else {
-      parts.push(
-        <code
-          key={key++}
-          className="rounded-sm border border-border-subtle bg-surface-elevated px-1.5 py-0.5 font-mono text-[0.9em]"
-        >
-          {token.slice(1, -1)}
-        </code>,
-      );
     }
-    lastIdx = match.index + token.length;
+    lastIdx = regex.lastIndex;
   }
   if (lastIdx < text.length) parts.push(text.slice(lastIdx));
   return parts.length ? parts : text;
@@ -80,7 +122,7 @@ export function ProseRenderer({ blocks }: { blocks: ProseBlock[] }) {
                 key={i}
                 className="mt-8 mb-3 text-lg font-semibold tracking-tight text-foreground"
               >
-                {block.text}
+                {renderInline(block.text)}
               </h3>
             );
           case "ul":

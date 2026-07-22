@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, Timer, MousePointerClick } from "lucide-react";
 import { DifficultyBadge } from "@/components/shared/DifficultyBadge";
+import { renderInline } from "@/components/shared/ProseRenderer";
 import { cn } from "@/lib/utils/cn";
 import type { Concept } from "@/lib/types";
 
@@ -44,7 +45,7 @@ export function ConceptCard({
             <h3 className="text-base font-semibold tracking-tight text-foreground transition-colors group-hover:text-accent">
               {concept.title}
             </h3>
-            <p className="text-sm text-muted">{concept.oneLiner}</p>
+            <p className="text-sm text-muted">{renderInline(concept.oneLiner)}</p>
           </div>
           <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-subtle transition-all duration-300 group-hover:translate-x-1 group-hover:text-accent" />
         </div>

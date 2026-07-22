@@ -51,7 +51,7 @@ export const astar: ConceptContent = {
       type: "callout",
       variant: "warning",
       title: "Inadmissible heuristics are a real choice",
-      text: "If you don't need provably-optimal paths — e.g. game pathfinding where 'good enough fast' beats 'best slow' — overshooting `h(n)` by a constant factor can give you 5-10× speedups. This is *weighted A**: `f(n) = g(n) + w · h(n)` with `w > 1` returns paths within a factor `w` of optimal but with vastly less expansion. Common in real-time-strategy games and motion planning.",
+      text: "If you don't need provably-optimal paths — e.g. game pathfinding where 'good enough fast' beats 'best slow' — overshooting `h(n)` by a constant factor can give you 5-10× speedups. This is *weighted* `A*`: `f(n) = g(n) + w · h(n)` with `w > 1` returns paths within a factor `w` of optimal but with vastly less expansion. Common in real-time-strategy games and motion planning.",
     },
   ],
 
@@ -345,7 +345,7 @@ std::vector<Cell> astar(Cell start, Cell goal,
       kind: "paper",
     },
     {
-      label: "Amit Patel — *Introduction to A**",
+      label: "Amit Patel — *Introduction to* `A*`",
       href: "https://theory.stanford.edu/~amitp/GameProgramming/AStarComparison.html",
       note: "The canonical online tutorial. Step-by-step animations, heuristic discussion, and comparisons with BFS/Dijkstra/Greedy-BFS.",
       kind: "article",
