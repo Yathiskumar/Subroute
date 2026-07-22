@@ -1,0 +1,605 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Thread pools &amp; Executors — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+        --warn: #e8b23a;
+        --warn-soft: rgba(232, 178, 58, 0.12);
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---- Top: mode toggle + reset ---- */
+      .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 13px; flex-wrap: wrap; }
+      .toggle { display: inline-flex; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 3px; }
+      .toggle button { font: 700 12px/1 var(--sans); border: 0; background: transparent; color: var(--muted); padding: 8px 15px; border-radius: 999px; cursor: pointer; transition: color .15s, background .15s; white-space: nowrap; }
+      .toggle button.on.without { background: var(--danger-soft); color: var(--danger); }
+      .toggle button.on.with { background: var(--success-soft); color: var(--success); }
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: border-color .15s, transform .1s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+
+      /* ---- Metrics ---- */
+      .metrics { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 13px; }
+      .metric { flex: 1 1 140px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 10px 13px; }
+      .metric.big { border-color: var(--accent-border); background: var(--accent-soft); }
+      .metric .label { font-family: var(--mono); font-size: 10px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); margin-bottom: 5px; }
+      .metric .value { font-family: var(--mono); font-size: 24px; font-weight: 700; line-height: 1; color: var(--fg); }
+      .metric .value.flat { color: var(--success); }
+      .metric .value.runaway { color: var(--danger); }
+      .metric .unit { font-size: 10.5px; color: var(--muted); margin-top: 5px; }
+
+      /* ---- Actions ---- */
+      .actions { display: flex; gap: 9px; flex-wrap: wrap; margin-bottom: 13px; align-items: center; }
+      .act { font-family: var(--mono); font-size: 12px; font-weight: 700; background: var(--elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 10px 14px; cursor: pointer; color: var(--fg); transition: border-color .15s, transform .1s; }
+      .act.prime { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+      .act:hover { border-color: var(--accent); }
+      .act:active { transform: scale(0.97); }
+      .act:disabled { opacity: .4; cursor: not-allowed; }
+
+      .sizer { display: inline-flex; align-items: center; gap: 7px; background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r-md); padding: 6px 10px; }
+      .sizer .sz-lab { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+      .sizer b { font-family: var(--mono); font-size: 13px; color: var(--success); min-width: 12px; text-align: center; }
+      .sz { width: 24px; height: 24px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--fg); font: 700 13px/1 var(--sans); cursor: pointer; padding: 0; }
+      .sz:hover { border-color: var(--accent); }
+      .sz:disabled { opacity: .35; cursor: not-allowed; }
+      .sizer.off { opacity: .35; }
+
+      .qbtn { font-family: var(--mono); font-size: 11.5px; font-weight: 700; border-radius: 999px; padding: 8px 13px; cursor: pointer; background: var(--elevated); border: 1px solid var(--border-strong); color: var(--muted); transition: border-color .15s, color .15s, background .15s; }
+      .qbtn:hover { border-color: var(--accent); }
+      .qbtn.on { background: var(--warn-soft); border-color: var(--warn); color: var(--warn); }
+
+      /* ---- Stage ---- */
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 13px; margin-bottom: 13px; }
+      .stage-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+      .stage-cap b { color: var(--fg); }
+      .costbar { height: 5px; border-radius: 3px; background: var(--elevated); overflow: hidden; margin-bottom: 12px; }
+      .costbar i { display: block; height: 100%; width: 0%; background: var(--danger); transition: width .3s ease, background .2s; }
+      .costbar i.flat { background: var(--success); }
+
+      .lanes { display: flex; gap: 12px; align-items: stretch; }
+      .col-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .05em; text-transform: uppercase; color: var(--subtle); margin-bottom: 7px; }
+      .qcol { width: 118px; flex: 0 0 118px; border-right: 1px dashed var(--border-strong); padding-right: 12px; }
+      .qchips { display: flex; flex-wrap: wrap; gap: 6px; align-content: flex-start; min-height: 118px; }
+      .qchips.empty::before { content: "empty"; font-size: 10.5px; font-style: italic; color: var(--subtle); }
+      .tk { font-family: var(--mono); font-size: 10.5px; font-weight: 700; padding: 4px 7px; border-radius: 5px; background: var(--elevated); border: 1px solid var(--border-strong); color: var(--muted); }
+      .tk.rej { background: var(--danger-soft); border-color: var(--danger); color: var(--danger); }
+
+      .wcol { flex: 1 1 auto; min-width: 0; }
+      .workers { display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; min-height: 118px; }
+
+      /* pool worker lane */
+      .worker { width: 118px; background: var(--elevated); border: 1.5px solid var(--border-strong); border-radius: var(--r-md); padding: 9px 10px; transition: border-color .2s, box-shadow .2s; }
+      .worker.busy { border-color: var(--success); box-shadow: 0 0 0 3px var(--success-soft); }
+      .worker.flash { border-color: var(--success); box-shadow: 0 0 0 6px var(--success-soft); }
+      .w-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+      .w-id { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--fg); }
+      .w-tag { font-family: var(--mono); font-size: 9px; padding: 2px 5px; border-radius: 4px; margin-left: auto; background: var(--surface); color: var(--subtle); }
+      .worker.busy .w-tag, .worker.flash .w-tag { background: var(--success-soft); color: var(--success); }
+      .w-body { font-family: var(--mono); font-size: 11px; color: var(--subtle); background: var(--surface); border-radius: 5px; padding: 5px 7px; text-align: center; }
+      .worker.busy .w-body { color: var(--success); }
+      .worker.flash .w-body { color: var(--success); }
+
+      /* thread-per-task card */
+      .tcard { width: 92px; background: var(--elevated); border: 1.5px solid var(--danger); border-radius: var(--r-md); padding: 8px 9px; }
+      .tcard .t-id { font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--fg); }
+      .tcard .t-ph { font-family: var(--mono); font-size: 9.5px; margin-top: 4px; color: var(--danger); }
+      .tcard.run { border-color: var(--warn); }
+      .tcard.run .t-ph { color: var(--warn); }
+      .tcard.done { border-color: var(--border-strong); opacity: .5; }
+      .tcard.done .t-ph { color: var(--muted); }
+
+      .donetray { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; min-height: 22px; align-items: center; }
+      .donetray .dc { font-family: var(--mono); font-size: 10px; padding: 3px 6px; border-radius: 4px; background: var(--success-soft); border: 1px solid rgba(92,198,111,.4); color: var(--success); }
+      .donetray.empty::before { content: "finished tasks appear here"; font-size: 10.5px; font-style: italic; color: var(--subtle); }
+
+      /* ---- Fixed explain panel (replaced, never grows) ---- */
+      .explain { min-height: 76px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .warn { color: var(--warn); font-weight: 700; }
+
+      .hint { margin-top: 13px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+
+      @media (max-width: 560px) {
+        .lanes { flex-direction: column; }
+        .qcol { width: auto; flex: 1 1 auto; border-right: 0; border-bottom: 1px dashed var(--border-strong); padding-right: 0; padding-bottom: 10px; }
+        .qchips { min-height: 34px; }
+        .worker, .tcard { width: calc(50% - 4px); }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- TOP: mode toggle -->
+    <div class="topbar">
+      <div class="toggle" id="toggle">
+        <button class="without on" id="tg-thread">🧵 new Thread() per task</button>
+        <button class="with" id="tg-pool">🏊 Thread pool (3)</button>
+      </div>
+      <button class="btn" id="reset-btn">↺ Reset</button>
+    </div>
+
+    <!-- METRICS -->
+    <div class="metrics">
+      <div class="metric big">
+        <div class="label">threads created</div>
+        <div class="value runaway" id="m-threads">0</div>
+        <div class="unit" id="m-threads-u">one 🔨 per task</div>
+      </div>
+      <div class="metric">
+        <div class="label">tasks done</div>
+        <div class="value" id="m-done">0/8</div>
+        <div class="unit">of 8 submitted</div>
+      </div>
+      <div class="metric">
+        <div class="label">queued</div>
+        <div class="value" id="m-queued">0</div>
+        <div class="unit" id="m-queued-u">waiting for a worker</div>
+      </div>
+    </div>
+
+    <!-- ACTIONS -->
+    <div class="actions">
+      <button class="act prime" id="submit-btn">▶ Submit 8 tasks</button>
+      <div class="sizer off" id="sizer">
+        <span class="sz-lab">pool size</span>
+        <button class="sz" id="size-minus">−</button>
+        <b id="size-val">3</b>
+        <button class="sz" id="size-plus">＋</button>
+      </div>
+      <button class="qbtn" id="bound-btn">📦 queue: unbounded</button>
+    </div>
+
+    <!-- STAGE -->
+    <div class="stage">
+      <div class="stage-cap">
+        <span id="cap-left">queue → <b>a brand-new thread per task</b></span>
+        <span id="cap-right">create cost: <b>0 × 🔨</b></span>
+      </div>
+      <div class="costbar"><i id="costfill"></i></div>
+      <div class="lanes">
+        <div class="qcol">
+          <div class="col-cap" id="qcap">task queue</div>
+          <div class="qchips empty" id="qchips"></div>
+        </div>
+        <div class="wcol">
+          <div class="col-cap" id="wcap">threads</div>
+          <div class="workers" id="workers"></div>
+          <div class="donetray empty" id="donetray"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FIXED EXPLAIN PANEL -->
+    <div class="explain">
+      <div class="explain-title" id="ex-title">🧵 A new thread for every task</div>
+      <div class="explain-body" id="ex-body">Hit <code>▶ Submit 8 tasks</code> and watch how many threads get built.</div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>You submit a <b style="color:var(--fg)">task</b>; the executor picks <b style="color:var(--success)">which thread and when</b>.</span>
+    </div>
+
+    <script>
+      /* ---------------- one explain panel, REPLACED (never appended) --------- */
+      function setExplain(title, bodyHtml) {
+        document.getElementById("ex-title").textContent = title;
+        document.getElementById("ex-body").innerHTML = bodyHtml;
+      }
+
+      var TOTAL = 8;        // tasks submitted per click
+      var QCAP = 4;         // bounded queue capacity
+      var TICK = 620;       // pool tick
+      var SPAWN = 430;      // thread-per-task spawn tick
+      var MAXSTEPS = 60;    // hard cap — every auto-drain terminates
+
+      var mode = "thread";  // "thread" | "pool"
+      var poolSize = 3;
+      var bounded = false;
+
+      var tasks = [];       // { id, state: queued|creating|running|done|rejected }
+      var workers = [];     // { id, taskId, flash }
+      var threadsCreated = 0;
+      var doneCount = 0;
+      var busy = false;
+      var step = 0;
+      var timers = [];
+
+      function thr(n) { return n + (n === 1 ? " thread" : " threads"); }
+      function wrk(n) { return n + (n === 1 ? " worker" : " workers"); }
+      function later(fn, ms) { var t = setTimeout(fn, ms); timers.push(t); return t; }
+      function clearTimers() { for (var i = 0; i < timers.length; i++) clearTimeout(timers[i]); timers = []; }
+
+      /* ---------------- model helpers ---------------- */
+      function makeTasks() {
+        tasks = [];
+        for (var i = 1; i <= TOTAL; i++) tasks.push({ id: i, state: "idle", el: null });
+      }
+      function firstQueued() {
+        for (var i = 0; i < tasks.length; i++) if (tasks[i].state === "queued") return tasks[i];
+        return null;
+      }
+      function countState(s) {
+        var n = 0;
+        for (var i = 0; i < tasks.length; i++) if (tasks[i].state === s) n++;
+        return n;
+      }
+      function anyBusyWorker() {
+        for (var i = 0; i < workers.length; i++) if (workers[i].taskId !== null) return true;
+        return false;
+      }
+      function anyInFlight() {
+        return countState("creating") > 0 || countState("running") > 0;
+      }
+
+      /* ---------------- workers (pool lanes) ---------------- */
+      function makeWorkers() {
+        workers = [];
+        for (var i = 1; i <= poolSize; i++) workers.push({ id: i, taskId: null, flash: false });
+      }
+
+      function renderWorkArea() {
+        var host = document.getElementById("workers");
+        host.innerHTML = "";
+        if (mode === "pool") {
+          for (var i = 0; i < workers.length; i++) {
+            var w = workers[i];
+            var card = document.createElement("div");
+            card.className = "worker";
+            var head = document.createElement("div");
+            head.className = "w-head";
+            var ico = document.createElement("span");
+            ico.textContent = "⚙";
+            var id = document.createElement("span");
+            id.className = "w-id";
+            id.textContent = "W" + w.id;
+            var tag = document.createElement("span");
+            tag.className = "w-tag";
+            tag.textContent = "idle";
+            head.appendChild(ico); head.appendChild(id); head.appendChild(tag);
+            var body = document.createElement("div");
+            body.className = "w-body";
+            body.textContent = "—";
+            card.appendChild(head); card.appendChild(body);
+            host.appendChild(card);
+            w.el = card; w.tagEl = tag; w.bodyEl = body;
+          }
+        }
+        updateWorkers();
+      }
+
+      function updateWorkers() {
+        if (mode !== "pool") return;
+        for (var i = 0; i < workers.length; i++) {
+          var w = workers[i];
+          if (!w.el) continue;
+          var cls = "worker";
+          if (w.flash) cls += " flash";
+          else if (w.taskId !== null) cls += " busy";
+          w.el.className = cls;
+          w.tagEl.textContent = w.flash ? "✓ done" : (w.taskId !== null ? "running" : "idle");
+          w.bodyEl.textContent = w.flash ? "✓" : (w.taskId !== null ? "▶ #" + w.taskId : "—");
+        }
+      }
+
+      /* ---------------- thread-per-task cards (appended, kept) -------------- */
+      function spawnThreadCard(task) {
+        var host = document.getElementById("workers");
+        var card = document.createElement("div");
+        card.className = "tcard";
+        var idEl = document.createElement("div");
+        idEl.className = "t-id";
+        idEl.textContent = "🧵 T" + task.id;
+        var ph = document.createElement("div");
+        ph.className = "t-ph";
+        ph.textContent = "🔨 create";
+        card.appendChild(idEl); card.appendChild(ph);
+        host.appendChild(card);
+        task.el = card; task.phEl = ph;
+        return card;
+      }
+      function setThreadPhase(task, phase) {
+        if (!task.el) return;
+        task.el.className = "tcard" + (phase === "run" ? " run" : phase === "done" ? " done" : "");
+        task.phEl.textContent = phase === "run" ? "▶ #" + task.id : phase === "done" ? "✓ done" : "🔨 create";
+      }
+
+      /* ---------------- queue + counters ---------------- */
+      function renderQueue() {
+        var host = document.getElementById("qchips");
+        host.innerHTML = "";
+        var shown = 0;
+        for (var i = 0; i < tasks.length; i++) {
+          var t = tasks[i];
+          if (t.state !== "queued" && t.state !== "rejected") continue;
+          var chip = document.createElement("span");
+          chip.className = "tk" + (t.state === "rejected" ? " rej" : "");
+          chip.textContent = t.state === "rejected" ? "#" + t.id + " ✕" : "#" + t.id;
+          host.appendChild(chip);
+          shown++;
+        }
+        host.className = "qchips" + (shown === 0 ? " empty" : "");
+        document.getElementById("qcap").textContent =
+          "task queue" + (bounded && mode === "pool" ? " (max " + QCAP + ")" : "");
+      }
+
+      function renderDoneTray() {
+        var tray = document.getElementById("donetray");
+        tray.innerHTML = "";
+        var n = 0;
+        for (var i = 0; i < tasks.length; i++) {
+          if (tasks[i].state !== "done") continue;
+          var d = document.createElement("span");
+          d.className = "dc";
+          d.textContent = "✓ #" + tasks[i].id;
+          tray.appendChild(d);
+          n++;
+        }
+        tray.className = "donetray" + (n === 0 ? " empty" : "");
+      }
+
+      function renderMetrics() {
+        var tv = document.getElementById("m-threads");
+        tv.textContent = String(threadsCreated);
+        tv.className = "value " + (mode === "pool" ? "flat" : "runaway");
+        document.getElementById("m-threads-u").textContent =
+          mode === "pool" ? "created once, reused" : "one 🔨 per task";
+        document.getElementById("m-done").textContent = doneCount + "/" + TOTAL;
+        document.getElementById("m-queued").textContent = String(countState("queued"));
+        document.getElementById("m-queued-u").textContent =
+          mode === "pool" ? "waiting for a free worker" : "waiting to spawn a thread";
+
+        var fill = document.getElementById("costfill");
+        fill.style.width = Math.round((threadsCreated / TOTAL) * 100) + "%";
+        fill.className = mode === "pool" ? "flat" : "";
+        document.getElementById("cap-right").innerHTML =
+          "create cost: <b>" + threadsCreated + " × 🔨</b>" +
+          (mode === "pool" ? " <span style='color:var(--success)'>(once, at startup)</span>" : "");
+        document.getElementById("cap-left").innerHTML =
+          mode === "pool"
+            ? "queue → <b>" + poolSize + " reused workers</b>"
+            : "queue → <b>a brand-new thread per task</b>";
+      }
+
+      function renderAll() {
+        renderMetrics();
+        renderQueue();
+        renderDoneTray();
+        updateWorkers();
+      }
+
+      /* ---------------- run control ---------------- */
+      function clearRun() {
+        clearTimers();
+        busy = false;
+        step = 0;
+        doneCount = 0;
+        makeTasks();
+        if (mode === "pool") { makeWorkers(); threadsCreated = poolSize; }
+        else { threadsCreated = 0; }
+        document.getElementById("submit-btn").disabled = false;
+        renderWorkArea();
+        renderAll();
+      }
+
+      function finishRun() {
+        busy = false;
+        document.getElementById("submit-btn").disabled = false;
+        renderAll();
+        if (mode === "pool") {
+          var rej = countState("rejected");
+          setExplain("Done — " + doneCount + " tasks, only " + thr(poolSize),
+            rej > 0
+              ? '<b class="bad">' + rej + ' rejected</b> when the queue filled — <span class="dim">back-pressure, not an endless backlog.</span>'
+              : 'Same work, <b class="good">threads reused</b> — <span class="dim">the queue absorbed the rush.</span>');
+        } else {
+          setExplain("Done — 8 tasks, 8 threads",
+            'Each thread was built, used <b class="bad">once</b>, thrown away. <span class="dim">10 000 requests → 10 000 threads.</span>');
+        }
+      }
+
+      function submit() {
+        if (busy) return;
+        clearRun();
+        busy = true;
+        step = 0;
+        document.getElementById("submit-btn").disabled = true;
+
+        if (mode === "thread") {
+          for (var i = 0; i < tasks.length; i++) tasks[i].state = "queued";
+          setExplain("▶ 8 tasks → 8 new threads",
+            'Every task pays a <b class="bad">🔨 create</b> cost — <span class="dim">an OS call plus ~1 MB of stack.</span>');
+          renderAll();
+          later(tickThread, 240);
+        } else {
+          var cap = bounded ? poolSize + QCAP : TOTAL;
+          for (var j = 0; j < tasks.length; j++) tasks[j].state = j < cap ? "queued" : "rejected";
+          var rej = countState("rejected");
+          if (rej > 0) {
+            setExplain(poolSize + " running + " + QCAP + " queued = " + cap + " accepted",
+              'The rest are <b class="bad">REJECTED</b> — <span class="dim">abort, caller-runs or drop: the pool picks a policy.</span>');
+          } else {
+            setExplain("▶ 8 tasks into one queue",
+              '<b class="good">' + wrk(poolSize) + '</b> pull tasks one at a time — <span class="dim">threads created stays at ' + poolSize + '.</span>');
+          }
+          renderAll();
+          later(tickPool, 240);
+        }
+      }
+
+      /* ---- WITHOUT: one brand-new thread per task ---- */
+      function tickThread() {
+        if (step++ > MAXSTEPS) { finishRun(); return; }
+        var t = firstQueued();
+        if (!t) {
+          if (anyInFlight()) { later(tickThread, 260); return; }
+          finishRun();
+          return;
+        }
+        t.state = "creating";
+        threadsCreated++;
+        spawnThreadCard(t);
+        renderMetrics();
+        renderQueue();
+        (function (task) {
+          later(function () {
+            if (task.state !== "creating") return;
+            task.state = "running";
+            setThreadPhase(task, "run");
+          }, 300);
+          later(function () {
+            if (task.state === "done") return;
+            task.state = "done";
+            doneCount++;
+            setThreadPhase(task, "done");
+            renderMetrics();
+            renderDoneTray();
+          }, 820);
+        })(t);
+        later(tickThread, SPAWN);
+      }
+
+      /* ---- WITH: N workers loop forever, taking the next task ---- */
+      function tickPool() {
+        if (step++ > MAXSTEPS) { finishRun(); return; }
+        var i, w;
+        /* 1. workers finish what they were running */
+        for (i = 0; i < workers.length; i++) {
+          w = workers[i];
+          if (w.taskId === null) continue;
+          tasks[w.taskId - 1].state = "done";
+          doneCount++;
+          w.taskId = null;
+          w.flash = true;
+          (function (ww) {
+            later(function () { ww.flash = false; updateWorkers(); }, 280);
+          })(w);
+        }
+        /* 2. every free worker immediately takes the next task */
+        for (i = 0; i < workers.length; i++) {
+          w = workers[i];
+          if (w.taskId !== null) continue;
+          var t = firstQueued();
+          if (!t) break;
+          t.state = "running";
+          w.taskId = t.id;
+          w.flash = false;
+        }
+        renderAll();
+        if (!firstQueued() && !anyBusyWorker()) { finishRun(); return; }
+        later(tickPool, TICK);
+      }
+
+      /* ---------------- controls ---------------- */
+      function setMode(next) {
+        if (busy) return;
+        mode = next;
+        document.getElementById("tg-thread").className = "without" + (mode === "thread" ? " on" : "");
+        document.getElementById("tg-pool").className = "with" + (mode === "pool" ? " on" : "");
+        document.getElementById("wcap").textContent = mode === "pool" ? "workers (reused)" : "threads (one per task)";
+        document.getElementById("sizer").className = "sizer" + (mode === "pool" ? "" : " off");
+        document.getElementById("size-minus").disabled = mode !== "pool";
+        document.getElementById("size-plus").disabled = mode !== "pool";
+        clearRun();
+        if (mode === "pool") {
+          setExplain("🏊 " + wrk(poolSize) + ", created once",
+            'The pool builds its threads <b class="good">up front</b>; tasks now wait in a <code>queue</code>.');
+        } else {
+          setExplain("🧵 A new thread for every task",
+            'No queue, no reuse — <span class="dim">every task spawns its own thread and throws it away.</span>');
+        }
+      }
+
+      function setPoolSize(n) {
+        if (busy || mode !== "pool") return;
+        if (n < 1 || n > 4) return;
+        poolSize = n;
+        document.getElementById("size-val").textContent = String(poolSize);
+        document.getElementById("tg-pool").textContent = "🏊 Thread pool (" + poolSize + ")";
+        clearRun();
+        if (poolSize === 1) {
+          setExplain("pool size = 1",
+            'One worker drains the queue <b class="warn">serially</b> — <span class="dim">no parallelism at all.</span>');
+        } else if (poolSize === 4) {
+          setExplain("pool size = 4",
+            'Finishes sooner. <span class="dim">CPU-bound ≈ one worker per core; I/O-bound can go much higher.</span>');
+        } else {
+          setExplain("pool size = " + poolSize,
+            'Size it to the work: <span class="dim">CPU-bound ≈ cores, I/O-bound larger — those threads mostly wait.</span>');
+        }
+      }
+
+      function toggleBounded() {
+        if (busy) return;
+        bounded = !bounded;
+        var b = document.getElementById("bound-btn");
+        b.className = "qbtn" + (bounded ? " on" : "");
+        b.textContent = bounded ? "📦 queue: bounded 4" : "📦 queue: unbounded";
+        clearRun();
+        if (bounded) {
+          setExplain("📦 bounded queue: 4",
+            'Queue full → extra tasks are <b class="bad">REJECTED</b>. <span class="dim">Back-pressure instead of a silent pile-up.</span>');
+        } else {
+          setExplain("📦 unbounded queue",
+            'Nothing is rejected — <span class="dim">but a backlog can grow until memory runs out.</span>');
+        }
+      }
+
+      function resetAll() {
+        clearRun();
+        setExplain(mode === "pool" ? "🏊 " + wrk(poolSize) + ", created once" : "🧵 A new thread for every task",
+          'Hit <code>▶ Submit 8 tasks</code> and watch <b>threads created</b>.');
+      }
+
+      /* ---------------- boot ---------------- */
+      document.getElementById("tg-thread").addEventListener("click", function () { setMode("thread"); });
+      document.getElementById("tg-pool").addEventListener("click", function () { setMode("pool"); });
+      document.getElementById("submit-btn").addEventListener("click", submit);
+      document.getElementById("reset-btn").addEventListener("click", resetAll);
+      document.getElementById("size-minus").addEventListener("click", function () { setPoolSize(poolSize - 1); });
+      document.getElementById("size-plus").addEventListener("click", function () { setPoolSize(poolSize + 1); });
+      document.getElementById("bound-btn").addEventListener("click", toggleBounded);
+      document.getElementById("size-minus").disabled = true;
+      document.getElementById("size-plus").disabled = true;
+      clearRun();
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

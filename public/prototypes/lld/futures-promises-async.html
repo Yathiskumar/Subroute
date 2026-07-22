@@ -1,0 +1,557 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Futures, Promises &amp; async — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+        --nw: 112px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---- Action row ---- */
+      .actions { display: flex; gap: 9px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; }
+      .act { font-family: var(--mono); font-size: 12px; font-weight: 700; background: var(--elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 10px 14px; cursor: pointer; color: var(--fg); transition: border-color .15s, transform .1s; }
+      .act.prime { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+      .act:hover { border-color: var(--accent); }
+      .act:active { transform: scale(0.97); }
+      .act:disabled { opacity: .4; cursor: not-allowed; }
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: border-color .15s, transform .1s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+
+      /* ---- Segmented mode toggle ---- */
+      .seg { display: inline-flex; background: var(--elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 3px; gap: 3px; }
+      .seg-btn { font-family: var(--mono); font-size: 11.5px; font-weight: 700; background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 7px 11px; cursor: pointer; color: var(--muted); transition: background .15s, color .15s, border-color .15s; }
+      .seg-btn:hover { color: var(--fg); }
+      .seg-btn.on.block { background: var(--danger-soft); border-color: rgba(240,104,104,.45); color: var(--danger); }
+      .seg-btn.on.async { background: var(--success-soft); border-color: rgba(92,198,111,.45); color: var(--success); }
+
+      /* ---- Small toggle chips ---- */
+      .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; }
+      .chip { font-family: var(--mono); font-size: 11px; font-weight: 700; padding: 6px 11px; border-radius: 999px; cursor: pointer; background: var(--surface); border: 1px solid var(--border); color: var(--muted); transition: border-color .15s, color .15s, background .15s, transform .1s; }
+      .chip:hover { border-color: var(--border-strong); color: var(--fg); }
+      .chip:active { transform: scale(0.96); }
+      .chip.on.fail { background: var(--danger-soft); border-color: rgba(240,104,104,.45); color: var(--danger); }
+      .chip.on.chain { background: var(--info-soft); border-color: rgba(94,159,246,.45); color: var(--info); }
+
+      /* ---- Stage ---- */
+      .stage { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 13px 14px 14px; margin-bottom: 12px; }
+      .stage-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; display: flex; justify-content: space-between; gap: 10px; }
+      .stage-cap b { color: var(--fg); }
+
+      /* ---- Ruler + lanes ---- */
+      .row { display: grid; grid-template-columns: var(--nw) 1fr; gap: 10px; align-items: center; }
+      .ruler { height: 18px; margin-bottom: 6px; }
+      .ruler-track { position: relative; height: 18px; }
+      .rtick { position: absolute; top: 0; font-family: var(--mono); font-size: 9.5px; color: var(--subtle); transform: translateX(-50%); }
+      .rtick.zero { transform: none; }
+      .rtick.end { transform: translateX(-100%); }
+
+      .lanes { position: relative; }
+      .lane { margin-bottom: 6px; }
+      .lname { font-family: var(--mono); font-size: 10.5px; color: var(--muted); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .lane.main .lname { color: var(--fg); font-weight: 700; }
+      .track { position: relative; height: 26px; background: rgba(255,255,255,0.028); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+
+      .bar { position: absolute; top: 2px; bottom: 2px; border-radius: 4px; display: flex; align-items: center; padding: 0 7px; font-family: var(--mono); font-size: 10px; font-weight: 700; white-space: nowrap; overflow: hidden; }
+      .bar.run { background: var(--info-soft); border: 1px solid rgba(94,159,246,.5); color: var(--info); }
+      .bar.done { background: var(--success-soft); border: 1px solid rgba(92,198,111,.5); color: var(--success); }
+      .bar.fail { background: var(--danger-soft); border: 1px solid rgba(240,104,104,.55); color: var(--danger); }
+      .bar.blocked { background: var(--accent-soft); border: 1px solid var(--accent-border); color: var(--accent); }
+      .bar.free { background: var(--success-soft); border: 1px solid rgba(92,198,111,.4); color: var(--success); }
+      .bar.skip { background: transparent; border: 1px dashed var(--border-strong); color: var(--subtle); }
+      .wtick { position: absolute; top: 5px; font-size: 10px; color: var(--success); transform: translateX(-50%); }
+
+      .playhead { position: absolute; top: -2px; bottom: 2px; width: 1.5px; background: var(--accent); opacity: .75; pointer-events: none; }
+      .playhead .ph-lbl { position: absolute; top: -16px; left: 50%; transform: translateX(-50%); font-family: var(--mono); font-size: 9px; color: var(--accent); white-space: nowrap; }
+
+      /* ---- Future card + chain ---- */
+      .fzone { display: flex; align-items: stretch; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+      .fcard { flex: 1 1 210px; min-width: 190px; background: var(--elevated); border: 1.5px dashed var(--border-strong); border-radius: var(--r-md); padding: 9px 11px; opacity: .5; transition: border-color .2s, opacity .2s, box-shadow .25s; }
+      .fcard.live { opacity: 1; border-style: solid; }
+      .fcard.pending { border-color: var(--accent-border); box-shadow: 0 0 0 4px var(--accent-soft); }
+      .fcard.done { border-color: var(--success); }
+      .fcard.fail { border-color: var(--danger); }
+      .fhead { font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--fg); }
+      .fmeta { font-family: var(--mono); font-size: 9.5px; color: var(--subtle); margin-top: 3px; }
+      .fstate { display: inline-block; margin-top: 7px; font-family: var(--mono); font-size: 11px; font-weight: 700; padding: 4px 9px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); color: var(--subtle); }
+      .fstate.pending { border-color: var(--accent-border); color: var(--accent); background: var(--accent-soft); }
+      .fstate.done { border-color: rgba(92,198,111,.5); color: var(--success); background: var(--success-soft); }
+      .fstate.fail { border-color: rgba(240,104,104,.5); color: var(--danger); background: var(--danger-soft); }
+
+      .arrow { align-self: center; color: var(--subtle); font-size: 14px; }
+      .cbox { flex: 0 1 150px; min-width: 130px; background: var(--elevated); border: 1.5px solid var(--border); border-radius: var(--r-md); padding: 9px 11px; opacity: .45; transition: border-color .2s, opacity .2s; display: flex; flex-direction: column; justify-content: center; }
+      .cbox.on { opacity: 1; border-color: var(--success); }
+      .cbox.on.err { border-color: var(--danger); }
+      .cbox.skip { opacity: .3; }
+      .cname { font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--fg); }
+      .cnote { font-family: var(--mono); font-size: 9.5px; color: var(--subtle); margin-top: 3px; }
+      .cbox.on .cnote { color: var(--success); }
+      .cbox.on.err .cnote { color: var(--danger); }
+
+      /* ---- Readouts ---- */
+      .stats { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+      .stat { font-family: var(--mono); font-size: 11px; color: var(--muted); background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px; }
+      .stat b { color: var(--fg); }
+      .stat b.good { color: var(--success); }
+      .stat b.bad { color: var(--danger); }
+      .stat b.warn { color: var(--accent); }
+
+      /* ---- Fixed explain panel (replaced, never grows) ---- */
+      .explain { min-height: 72px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .warn { color: var(--accent); font-weight: 700; }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+
+      @media (max-width: 560px) {
+        :root { --nw: 74px; }
+        .lname { font-size: 9.5px; }
+        .bar { font-size: 9px; padding: 0 4px; }
+        .cbox { flex: 1 1 100%; }
+        .arrow { display: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ACTIONS -->
+    <div class="actions">
+      <div class="seg">
+        <button class="seg-btn block on" id="mode-block">⛔ Blocking get()</button>
+        <button class="seg-btn async" id="mode-async">⚡ Async .then()</button>
+      </div>
+      <button class="act prime" id="run-btn">▶ Run</button>
+      <button class="btn" id="reset-btn">↺ Reset</button>
+    </div>
+
+    <div class="chips">
+      <button class="chip fail" id="fail-chip">⚠️ Fail</button>
+      <button class="chip chain" id="chain-chip">🔗 then chain</button>
+    </div>
+
+    <!-- STAGE -->
+    <div class="stage">
+      <div class="stage-cap">
+        <span>timeline — 3 calls × 300 ms</span>
+        <span>clock: <b id="cap-clock">0 ms</b></span>
+      </div>
+
+      <div class="row ruler">
+        <span></span>
+        <div class="ruler-track" id="ruler"></div>
+      </div>
+
+      <div class="lanes" id="lanes">
+        <div class="row lane main">
+          <span class="lname">🧵 Main thread</span>
+          <div class="track" id="tr-main"></div>
+        </div>
+        <div class="row lane">
+          <span class="lname">☕ fetchPrice</span>
+          <div class="track" id="tr-price"></div>
+        </div>
+        <div class="row lane">
+          <span class="lname">☕ fetchStock</span>
+          <div class="track" id="tr-stock"></div>
+        </div>
+        <div class="row lane">
+          <span class="lname">☕ fetchReviews</span>
+          <div class="track" id="tr-reviews"></div>
+        </div>
+        <div class="playhead" id="playhead" style="left:0;display:none"><span class="ph-lbl" id="ph-lbl">0</span></div>
+      </div>
+
+      <div class="fzone">
+        <div class="fcard" id="fcard">
+          <div class="fhead">🧾 Future&lt;Price&gt; priceF</div>
+          <div class="fmeta" id="fmeta">not created yet</div>
+          <div class="fstate" id="fstate">—</div>
+        </div>
+        <span class="arrow">→</span>
+        <div class="cbox" id="then-box">
+          <span class="cname">.then(show)</span>
+          <span class="cnote" id="then-note">waiting</span>
+        </div>
+        <span class="arrow">→</span>
+        <div class="cbox err" id="catch-box">
+          <span class="cname">.catch(err)</span>
+          <span class="cnote" id="catch-note">waiting</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- READOUTS -->
+    <div class="stats">
+      <span class="stat" id="st-total">total: <b>— ms</b></span>
+      <span class="stat" id="st-blocked">main thread blocked: <b>— ms</b></span>
+      <span class="stat" id="st-pending">pending: <b>3/3</b></span>
+    </div>
+
+    <!-- FIXED EXPLAIN PANEL -->
+    <div class="explain">
+      <div class="explain-title" id="ex-title">Blocking mode — press ▶ Run</div>
+      <div class="explain-body" id="ex-body">Three 300 ms calls, each waited on with <code>get()</code> before the next starts.</div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>You get the <b style="color:var(--fg)">receipt</b> instantly; the value comes <b style="color:var(--success)">later</b> — calling <b style="color:var(--accent)">get()</b> right away throws the whole win away.</span>
+    </div>
+
+    <script>
+      /* ---- one explain panel, REPLACED (never appended) ---- */
+      function setExplain(title, bodyHtml) {
+        document.getElementById("ex-title").textContent = title;
+        document.getElementById("ex-body").innerHTML = bodyHtml;
+      }
+
+      var SCALE = 900;      // ruler spans 0 → 900 ms
+      var STEP = 40;        // real ms per animation tick
+      var SIM_PER_TICK = 20; // simulated ms per tick
+
+      var TASKS = [
+        { id: "price",   key: "tr-price",   name: "fetchPrice",   value: "$42.10" },
+        { id: "stock",   key: "tr-stock",   name: "fetchStock",   value: "12 left" },
+        { id: "reviews", key: "tr-reviews", name: "fetchReviews", value: "4.6 ★" }
+      ];
+
+      var MODE = "blocking";
+      var FAIL = false;
+      var CHAIN = false;
+      var clock = 0;
+      var running = false;
+      var timer = null;
+      var plan = null;
+      var announced = false;   // fires the settle sentence once per run
+
+      function pct(ms) { return (ms / SCALE) * 100; }
+
+      /* ---- schedule: who starts when ---- */
+      function buildPlan() {
+        var t = [];
+        for (var i = 0; i < 3; i++) {
+          var start = MODE === "blocking" ? i * 300 : 0;
+          if (MODE === "async" && CHAIN && TASKS[i].id === "stock") start = 300;
+          t.push({ start: start, end: start + 300, fails: FAIL && TASKS[i].id === "price", skipped: false });
+        }
+        // a failed upstream short-circuits its dependent
+        if (MODE === "async" && CHAIN && FAIL) { t[1].skipped = true; }
+        var total = 0;
+        for (var j = 0; j < 3; j++) { if (!t[j].skipped && t[j].end > total) total = t[j].end; }
+        plan = { tasks: t, total: total, blocked: MODE === "blocking" ? total : 0 };
+      }
+
+      /* ---- ruler ticks ---- */
+      function drawRuler() {
+        var host = document.getElementById("ruler");
+        var html = "";
+        var marks = [0, 300, 600, 900];
+        for (var i = 0; i < marks.length; i++) {
+          var cls = i === 0 ? "rtick zero" : (i === marks.length - 1 ? "rtick end" : "rtick");
+          html += "<span class='" + cls + "' style='left:" + pct(marks[i]) + "%'>" + marks[i] + " ms</span>";
+        }
+        host.innerHTML = html;
+      }
+
+      /* ---- one task lane ---- */
+      function laneHtml(i) {
+        var p = plan.tasks[i];
+        var t = TASKS[i];
+        if (p.skipped) {
+          if (clock < 300) return "";
+          return "<div class='bar skip' style='left:" + pct(300) + "%;width:" + pct(300) + "%'>skipped — upstream failed</div>";
+        }
+        if (clock <= p.start) return "";
+        var w = Math.min(clock, p.end) - p.start;
+        var settled = clock >= p.end;
+        var cls = settled ? (p.fails ? "fail" : "done") : "run";
+        var label = settled ? (p.fails ? "✗ timeout" : "✓ " + t.value) : t.name + " …";
+        return "<div class='bar " + cls + "' style='left:" + pct(p.start) + "%;width:" + pct(w) + "%'>" + label + "</div>";
+      }
+
+      /* ---- the main-thread lane: blocked vs free ---- */
+      function mainHtml() {
+        if (clock <= 0) return "";
+        var html = "";
+        if (MODE === "blocking") {
+          html += "<div class='bar blocked' style='left:0;width:" + pct(clock) + "%'>⏸ BLOCKED in get() — idle</div>";
+        } else {
+          html += "<div class='bar free' style='left:0;width:" + pct(clock) + "%'>free · doing other work</div>";
+          var marks = [0.22, 0.5, 0.78];
+          for (var i = 0; i < marks.length; i++) {
+            var at = plan.total * marks[i];
+            if (clock >= at) html += "<span class='wtick' style='left:" + pct(at) + "%'>✔</span>";
+          }
+        }
+        return html;
+      }
+
+      /* ---- the Future card + .then / .catch chain ---- */
+      function renderFuture() {
+        var p = plan.tasks[0];
+        var card = document.getElementById("fcard");
+        var state = document.getElementById("fstate");
+        var meta = document.getElementById("fmeta");
+        var thenBox = document.getElementById("then-box");
+        var catchBox = document.getElementById("catch-box");
+        var thenNote = document.getElementById("then-note");
+        var catchNote = document.getElementById("catch-note");
+
+        if (clock <= 0) {
+          card.className = "fcard";
+          state.className = "fstate";
+          state.textContent = "—";
+          meta.textContent = "not created yet";
+          thenBox.className = "cbox";
+          catchBox.className = "cbox err";
+          thenNote.textContent = "waiting";
+          catchNote.textContent = "waiting";
+          return;
+        }
+        if (clock < p.end) {
+          card.className = "fcard live pending";
+          state.className = "fstate pending";
+          state.textContent = "PENDING ⋯";
+          meta.textContent = "receipt handed back at t = 0 ms";
+          thenBox.className = "cbox";
+          catchBox.className = "cbox err";
+          thenNote.textContent = "not yet";
+          catchNote.textContent = "not yet";
+          return;
+        }
+        if (p.fails) {
+          card.className = "fcard live fail";
+          state.className = "fstate fail";
+          state.textContent = "FAILED ✗ timeout";
+          meta.textContent = "settled at t = 300 ms — settled once, forever";
+          thenBox.className = "cbox skip";
+          catchBox.className = "cbox err on";
+          thenNote.textContent = "skipped";
+          catchNote.textContent = "caught the error";
+        } else {
+          card.className = "fcard live done";
+          state.className = "fstate done";
+          state.textContent = "COMPLETED ✓ $42.10";
+          meta.textContent = "value arrived at t = 300 ms — settled once, forever";
+          thenBox.className = "cbox on";
+          catchBox.className = "cbox err";
+          thenNote.textContent = "ran with $42.10";
+          catchNote.textContent = "not needed";
+        }
+      }
+
+      /* ---- readouts ---- */
+      function renderStats() {
+        var settledTotal = clock >= plan.total;
+        var pending = 0;
+        for (var i = 0; i < 3; i++) {
+          var p = plan.tasks[i];
+          if (!p.skipped && clock < p.end) pending++;
+        }
+        var totalTxt = clock <= 0 ? "— ms" : (settledTotal ? plan.total + " ms" : Math.round(clock) + " ms …");
+        document.getElementById("st-total").innerHTML =
+          "total: <b class='" + (clock <= 0 ? "" : (plan.total <= 300 ? "good" : (plan.total >= 900 ? "bad" : "warn"))) + "'>" + totalTxt + "</b>";
+
+        var blockedNow = MODE === "blocking" ? Math.round(clock) : 0;
+        document.getElementById("st-blocked").innerHTML =
+          "main thread blocked: <b class='" + (blockedNow > 0 ? "bad" : "good") + "'>" + blockedNow + " ms</b>";
+
+        document.getElementById("st-pending").innerHTML =
+          "pending: <b class='" + (pending === 0 ? "good" : "warn") + "'>" + pending + "/3</b>";
+
+        document.getElementById("cap-clock").textContent = Math.round(clock) + " ms";
+      }
+
+      /* ---- full render (idempotent, never grows) ---- */
+      function render() {
+        document.getElementById("tr-main").innerHTML = mainHtml();
+        for (var i = 0; i < 3; i++) {
+          document.getElementById(TASKS[i].key).innerHTML = laneHtml(i);
+        }
+        var ph = document.getElementById("playhead");
+        if (clock <= 0) {
+          ph.style.display = "none";
+        } else {
+          ph.style.display = "block";
+          ph.style.left = "calc(var(--nw) + 10px + (100% - var(--nw) - 10px) * " + (clock / SCALE) + ")";
+          document.getElementById("ph-lbl").textContent = Math.round(clock) + " ms";
+        }
+        renderFuture();
+        renderStats();
+      }
+
+      /* ---- ▶ Run: bounded tick loop, always terminates ---- */
+      function tick() {
+        clock += SIM_PER_TICK;
+        if (clock >= plan.total) {
+          clock = plan.total;
+          running = false;
+          document.getElementById("run-btn").disabled = false;
+          render();
+          finishExplain();
+          return;
+        }
+        render();
+        if (!announced && clock >= 300) { announced = true; settleExplain(); }
+        timer = setTimeout(tick, STEP);
+      }
+
+      function run() {
+        if (running) return;
+        if (timer) { clearTimeout(timer); timer = null; }
+        buildPlan();
+        clock = 0;
+        announced = false;
+        running = true;
+        document.getElementById("run-btn").disabled = true;
+        render();
+        if (MODE === "blocking") {
+          setExplain("get() called right away",
+            "The main thread stands at the counter — <b class='bad'>one call at a time</b>, nothing overlaps.");
+        } else {
+          setExplain("All three fired at once",
+            "Receipt now, value later — the main thread stays <b class='good'>free</b> while calls run.");
+        }
+        timer = setTimeout(tick, STEP);
+      }
+
+      function settleExplain() {
+        if (FAIL) {
+          setExplain("The Future settled: FAILED",
+            "An error travels down the chain — <b class='bad'>handle it</b> with <code>.catch()</code> or it vanishes.");
+        } else {
+          setExplain("PENDING → COMPLETED",
+            "The value landed in the receipt at 300 ms. A Future settles <b class='good'>once</b>, never again.");
+        }
+      }
+
+      function finishExplain() {
+        if (MODE === "blocking") {
+          setExplain("900 ms — serial with extra steps",
+            "3 × 300 ms one after another, and the main thread was <b class='bad'>idle for all 900 ms</b>.");
+        } else if (CHAIN && FAIL) {
+          setExplain("The chain short-circuited",
+            "<code>fetchPrice</code> failed, so its dependent call <b class='bad'>never ran</b> — only <code>.catch()</code> did.");
+        } else if (CHAIN) {
+          setExplain(plan.total + " ms — chained work",
+            "<code>thenCompose</code>: the dependent call starts only <b class='warn'>after</b> the first settles.");
+        } else {
+          setExplain("~300 ms — the same work, overlapped",
+            "Three waits happened <b class='good'>at the same time</b>, and nothing blocked the main thread.");
+        }
+      }
+
+      /* ---- controls ---- */
+      function stop() {
+        if (timer) { clearTimeout(timer); timer = null; }
+        running = false;
+        clock = 0;
+        announced = false;
+        document.getElementById("run-btn").disabled = false;
+        buildPlan();
+        render();
+      }
+
+      function setMode(m) {
+        MODE = m;
+        document.getElementById("mode-block").className = "seg-btn block" + (m === "blocking" ? " on" : "");
+        document.getElementById("mode-async").className = "seg-btn async" + (m === "async" ? " on" : "");
+        stop();
+        if (m === "blocking") {
+          setExplain("Blocking mode — press ▶ Run",
+            "Submit, then <code>get()</code> immediately: the wait is <b class='bad'>serial</b>, one call after another.");
+        } else {
+          setExplain("Async mode — press ▶ Run",
+            "Fire all three, keep the receipts, react in <code>.then()</code> — <b class='good'>no thread waits</b>.");
+        }
+      }
+
+      function toggleFail() {
+        FAIL = !FAIL;
+        document.getElementById("fail-chip").className = "chip fail" + (FAIL ? " on" : "");
+        stop();
+        if (FAIL) {
+          setExplain("⚠️ fetchPrice will time out",
+            "Run it: the bar turns <b class='bad'>red</b>, <code>.then()</code> is skipped and <code>.catch()</code> fires.");
+        } else {
+          setExplain("Failure off",
+            "All three calls will complete normally again.");
+        }
+      }
+
+      function toggleChain() {
+        CHAIN = !CHAIN;
+        document.getElementById("chain-chip").className = "chip chain" + (CHAIN ? " on" : "");
+        stop();
+        if (!CHAIN) {
+          setExplain("Chaining off",
+            "Independent calls again — they can all start at <b class='good'>t = 0</b>.");
+        } else if (MODE === "async") {
+          setExplain("🔗 fetchStock now depends on fetchPrice",
+            "Dependent work can't overlap: it starts only when the first Future <b class='warn'>settles</b>.");
+        } else {
+          setExplain("🔗 Chaining changes nothing here",
+            "Blocking is <b class='bad'>already serial</b> — chaining only matters when calls could overlap.");
+        }
+      }
+
+      function reset() {
+        FAIL = false;
+        CHAIN = false;
+        document.getElementById("fail-chip").className = "chip fail";
+        document.getElementById("chain-chip").className = "chip chain";
+        setMode("blocking");
+      }
+
+      /* ---- boot ---- */
+      document.getElementById("run-btn").addEventListener("click", run);
+      document.getElementById("reset-btn").addEventListener("click", reset);
+      document.getElementById("mode-block").addEventListener("click", function () { setMode("blocking"); });
+      document.getElementById("mode-async").addEventListener("click", function () { setMode("async"); });
+      document.getElementById("fail-chip").addEventListener("click", toggleFail);
+      document.getElementById("chain-chip").addEventListener("click", toggleChain);
+
+      drawRuler();
+      buildPlan();
+      render();
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

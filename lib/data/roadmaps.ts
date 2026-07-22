@@ -406,51 +406,62 @@ export const ROADMAPS: Roadmap[] = [
               {
                 title: "Threads & lifecycle",
                 note: "Creating, starting, and coordinating threads.",
+                slug: "threads-and-lifecycle",
               },
               {
                 title: "Locks, Mutex, Semaphore",
                 note: "The core tools for guarding shared state.",
                 tag: "core",
+                slug: "locks-mutex-semaphore",
               },
               {
                 title: "Thread-safe Singleton",
                 note: "Double-checked locking and the holder idiom.",
                 tag: "interview",
+                slug: "thread-safe-singleton",
               },
               {
                 title: "Producer–Consumer",
                 note: "Bounded buffers and blocking queues.",
                 tag: "interview",
+                slug: "producer-consumer",
               },
               {
                 title: "Read-Write locks",
                 note: "Let many readers in, one writer at a time.",
+                slug: "read-write-locks",
               },
               {
                 title: "Deadlock, race conditions, starvation",
                 note: "The three classic ways concurrency goes wrong.",
                 tag: "core",
+                slug: "deadlock-race-starvation",
               },
               {
                 title: "Atomic operations & CAS",
                 note: "Lock-free updates with compare-and-swap.",
+                slug: "atomic-operations-and-cas",
               },
               {
                 title: "Memory visibility & the memory model",
                 note: "volatile, happens-before, and why one thread sees another's stale values.",
                 tag: "interview",
+                slug: "memory-visibility",
               },
               {
                 title: "Thread pools & Executors",
                 note: "Reuse a fixed set of workers instead of spawning threads.",
+                slug: "thread-pools-and-executors",
               },
               {
                 title: "Futures, Promises & async",
                 note: "Composing results that aren't ready yet.",
+                slug: "futures-promises-async",
               },
               {
                 title: "Immutable objects for safety",
                 note: "Share freely when nothing can change underneath.",
+                slug: "immutable-objects-for-safety",
               },
             ],
           },

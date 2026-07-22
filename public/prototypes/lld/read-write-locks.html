@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Read-Write locks — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---- Action row ---- */
+      .actions { display: flex; gap: 9px; flex-wrap: wrap; margin-bottom: 14px; align-items: center; }
+      .seg { display: flex; gap: 0; border: 1px solid var(--border-strong); border-radius: var(--r-md); overflow: hidden; }
+      .seg button { font-family: var(--mono); font-size: 11.5px; font-weight: 700; background: var(--elevated); border: 0; padding: 10px 12px; cursor: pointer; color: var(--muted); transition: background .15s, color .15s; }
+      .seg button + button { border-left: 1px solid var(--border-strong); }
+      .seg button:hover { color: var(--fg); }
+      .seg button.on { background: var(--accent-soft); color: var(--accent); }
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px 14px; cursor: pointer; transition: border-color .15s, transform .1s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .listcheck { margin-left: auto; font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+      .listcheck b { color: var(--success); }
+      .listcheck b.w { color: var(--accent); }
+
+      /* ---- Stage ---- */
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 14px; margin-bottom: 14px; }
+      .stage-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+      .stage-cap b { color: var(--fg); }
+      .stage-cap b.on { color: var(--success); }
+      .stage-cap b.wr { color: var(--accent); }
+
+      /* ---- Room ---- */
+      .room { border: 1.5px dashed var(--border-strong); border-radius: var(--r-lg); padding: 10px 12px 12px; transition: border-color .25s, box-shadow .25s; }
+      .room.readers { border-color: rgba(92,198,111,.55); box-shadow: 0 0 0 3px var(--success-soft); }
+      .room.writer { border-color: var(--accent-border); box-shadow: 0 0 0 3px var(--accent-soft); }
+      .room.dead { border-color: rgba(240,104,104,.6); box-shadow: 0 0 0 3px var(--danger-soft); }
+      .zone-lbl { font-family: var(--mono); font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--subtle); margin-bottom: 8px; }
+      .room-body { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+
+      .doc { width: 168px; background: var(--elevated); border: 1.5px solid var(--border-strong); border-radius: var(--r-md); padding: 10px; text-align: center; transition: border-color .25s, box-shadow .25s, transform .2s; }
+      .doc.bump { border-color: var(--accent-border); box-shadow: 0 0 0 6px var(--accent-soft); transform: scale(1.04); }
+      .doc-ico { font-size: 20px; line-height: 1; }
+      .doc-name { font-size: 12px; font-weight: 700; margin-top: 4px; }
+      .doc-ver { font-family: var(--mono); font-size: 15px; font-weight: 700; color: var(--accent); margin-top: 3px; }
+
+      .occ { flex: 1; min-width: 160px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; min-height: 46px; }
+
+      /* ---- Queue ---- */
+      .queue { margin-top: 12px; border: 1.5px dashed rgba(224,179,65,.4); background: rgba(224,179,65,.05); border-radius: var(--r-lg); padding: 10px 12px; }
+      .queue .zone-lbl { color: #e0b341; }
+      .q-list { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; min-height: 40px; }
+
+      /* ---- Tray ---- */
+      .tray-wrap { margin-top: 12px; }
+      .tray-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+      .tray { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; min-height: 40px; }
+      .upgrade { margin-left: auto; font-family: var(--mono); font-size: 10.5px; font-weight: 700; background: var(--surface); border: 1px dashed var(--border-strong); color: var(--muted); border-radius: 999px; padding: 8px 12px; cursor: pointer; transition: color .15s, border-color .15s; }
+      .upgrade:hover { color: var(--danger); border-color: rgba(240,104,104,.5); }
+      .upgrade.fired { background: var(--danger-soft); border-style: solid; border-color: rgba(240,104,104,.6); color: var(--danger); }
+
+      /* ---- Actor chips ---- */
+      .actor { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11.5px; font-weight: 700; background: var(--elevated); border: 1.5px solid var(--border-strong); color: var(--muted); border-radius: 999px; padding: 7px 11px; cursor: pointer; transition: border-color .18s, color .18s, background .18s, transform .12s; }
+      .actor:hover { border-color: var(--fg); color: var(--fg); }
+      .actor:active { transform: scale(0.96); }
+      .actor.in.r { background: var(--success-soft); border-color: rgba(92,198,111,.6); color: var(--success); }
+      .actor.in.w { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+      .actor.wait { background: rgba(224,179,65,.09); border-color: rgba(224,179,65,.5); color: #e0b341; }
+      .actor.dead { background: var(--danger-soft); border-color: rgba(240,104,104,.65); color: var(--danger); }
+      .a-tag { font-size: 9.5px; font-weight: 600; padding: 2px 6px; border-radius: 999px; background: rgba(255,255,255,.05); border: 1px solid var(--border); color: inherit; opacity: .95; }
+      .empty { font-family: var(--mono); font-size: 10.5px; color: var(--subtle); }
+
+      /* ---- Fixed explain panel (replaced, never grows) ---- */
+      .explain { min-height: 72px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .warn { color: #e0b341; font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+
+      @media (max-width: 560px) {
+        .doc { width: 100%; }
+        .upgrade { margin-left: 0; }
+        .listcheck { margin-left: 0; width: 100%; }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ACTIONS -->
+    <div class="actions">
+      <div class="seg">
+        <button id="mode-mutex">🔒 Plain mutex</button>
+        <button id="mode-rw" class="on">👓✍️ Read-Write lock</button>
+      </div>
+      <button class="btn" id="done-btn">✅ Release all</button>
+      <button class="btn" id="reset-btn">↺ Reset</button>
+      <span class="listcheck" id="listcheck">reads served: <b>0</b> · writes: <b class="w">0</b></span>
+    </div>
+
+    <!-- STAGE -->
+    <div class="stage">
+      <div class="stage-cap">
+        <span>mode: <b id="cap-mode">read-write lock</b></span>
+        <span>readers inside: <b id="cap-readers">0</b> · writer: <b class="wr" id="cap-writer">none</b> · waiting: <b id="cap-wait">0</b></span>
+      </div>
+
+      <div class="room" id="room">
+        <div class="zone-lbl">🚪 room — inside the lock</div>
+        <div class="room-body">
+          <div class="doc" id="doc">
+            <div class="doc-ico">📄</div>
+            <div class="doc-name">Shared document</div>
+            <div class="doc-ver" id="doc-ver">v3</div>
+          </div>
+          <div class="occ" id="room-occ"><span class="empty" id="room-empty">nobody inside</span></div>
+        </div>
+      </div>
+
+      <div class="queue">
+        <div class="zone-lbl">⏳ waiting queue</div>
+        <div class="q-list" id="queue-list"><span class="empty" id="q-empty">nobody waiting</span></div>
+      </div>
+
+      <div class="tray-wrap">
+        <div class="zone-lbl">🎟 tray — click an actor to request the lock</div>
+        <div class="tray-row">
+          <div class="tray" id="tray"></div>
+          <button class="upgrade" id="up-btn">⚠️ Upgrade R1→W</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- FIXED EXPLAIN PANEL -->
+    <div class="explain">
+      <div class="explain-title" id="ex-title">Two doors, one room</div>
+      <div class="explain-body" id="ex-body">Click <code>👓 R1</code>, then <code>👓 R2</code> and <code>👓 R3</code> — see how many fit inside.</div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>Reading doesn't change the page, so readers never clash — only a <b style="color:var(--accent)">writer</b> needs the room to itself.</span>
+    </div>
+
+    <script>
+      /* ---- one explain panel, REPLACED (never appended) ---- */
+      function setExplain(title, bodyHtml) {
+        document.getElementById("ex-title").textContent = title;
+        document.getElementById("ex-body").innerHTML = bodyHtml;
+      }
+
+      var ACTORS = [
+        { id: "R1", role: "r", ico: "👓" },
+        { id: "R2", role: "r", ico: "👓" },
+        { id: "R3", role: "r", ico: "👓" },
+        { id: "W1", role: "w", ico: "✍️" },
+        { id: "W2", role: "w", ico: "✍️" }
+      ];
+
+      var mode = "rw";     // 'rw' | 'mutex'
+      var st = {};         // id -> 'idle' | 'in' | 'wait' | 'dead'
+      var queue = [];      // ids, FIFO
+      var version = 3, reads = 0, writes = 0, deadlock = false;
+
+      function byId(id) {
+        return ACTORS.filter(function (a) { return a.id === id; })[0];
+      }
+      function insiders() {
+        return ACTORS.filter(function (a) { return st[a.id] === "in" || st[a.id] === "dead"; });
+      }
+      function readersIn() {
+        return insiders().filter(function (a) { return a.role === "r"; }).length;
+      }
+      function writerIn() {
+        var w = insiders().filter(function (a) { return a.role === "w"; });
+        return w.length ? w[0] : null;
+      }
+      function queuedWriter() {
+        return queue.filter(function (id) { return byId(id).role === "w"; }).length > 0;
+      }
+
+      /* ---- the whole rule set, in five lines ---- */
+      function canGrant(a) {
+        if (deadlock) return false;
+        if (mode === "mutex") return insiders().length === 0;   // one holder, any role
+        if (a.role === "r") return !writerIn();                 // readers share
+        return insiders().length === 0;                         // writer needs it empty
+      }
+
+      function reasonFor(a) {
+        if (mode === "mutex") return insiders().length ? "waiting: lock held" : "waiting: in line";
+        if (a.role === "r") {
+          if (writerIn()) return "waiting: writer inside";
+          if (queuedWriter()) return "waiting: writer queued";
+          return "waiting: in line";
+        }
+        if (writerIn()) return "waiting: writer inside";
+        var n = readersIn();
+        if (n) return "waiting: " + n + (n === 1 ? " reader" : " readers");
+        return "waiting: in line";
+      }
+
+      /* ---- click an actor ---- */
+      function tap(a) {
+        var s = st[a.id];
+        if (s === "dead") {
+          setExplain("💀 R1 is stuck",
+            'It holds the <b class="good">read</b> lock and waits for the <b class="bad">write</b> lock — forever.');
+          return;
+        }
+        if (s === "in") { leave(a); return; }
+        if (s === "wait") {
+          queue = queue.filter(function (id) { return id !== a.id; });
+          st[a.id] = "idle";
+          admit(); render();
+          setExplain(a.id + " gave up", 'It left the queue — <span class="dim">no lock taken, no work done.</span>');
+          return;
+        }
+        request(a);
+      }
+
+      /* ---- readLock() / writeLock() ---- */
+      function request(a) {
+        var jump = queue.length === 0 && canGrant(a);
+        if (jump) {
+          st[a.id] = "in";
+          render();
+          if (a.role === "r") {
+            var n = readersIn();
+            if (mode === "mutex") {
+              setExplain("🔒 " + a.id + " holds the mutex",
+                'One holder only — <span class="dim">the next reader must wait, even though it changes nothing.</span>');
+            } else {
+              setExplain("👓 readers inside: " + n,
+                n > 1
+                  ? '<b class="good">' + n + ' readers share the room</b> — reads never conflict with each other.'
+                  : 'The read lock is <b class="good">shared</b> — more readers can walk straight in.');
+            }
+          } else {
+            setExplain("✍️ " + a.id + " has the room alone",
+              'The write lock is <b class="warn">exclusive</b> — nobody may read a half-written page.');
+          }
+          return;
+        }
+        a.reason = reasonFor(a);
+        st[a.id] = "wait";
+        queue.push(a.id);
+        render();
+        if (mode === "mutex") {
+          setExplain("⏳ " + a.id + " waits",
+            'A plain mutex blocks <b class="bad">reader on reader</b> too — one at a time, no exceptions.');
+        } else if (a.role === "r" && writerIn()) {
+          setExplain("⏳ " + a.id + " waits",
+            'A writer is inside, so <b class="warn">every new reader queues</b> until it leaves.');
+        } else if (a.role === "r") {
+          setExplain("⏳ " + a.id + " waits behind the writer",
+            'New readers queue behind a waiting writer — <span class="dim">that is how it avoids starving.</span>');
+        } else {
+          setExplain("⏳ " + a.id + " waits to drain",
+            'The writer needs <b class="good">every current reader</b> out before it can enter.');
+        }
+      }
+
+      /* ---- unlock() ---- */
+      function leave(a) {
+        st[a.id] = "idle";
+        if (a.role === "r") {
+          reads++;
+          admit(); render();
+          setExplain("✅ " + a.id + " done",
+            'Read finished — <code>reads served: ' + reads + '</code>.');
+        } else {
+          writes++; version++;
+          bumpDoc();
+          admit(); render();
+          setExplain("✍️ write committed",
+            'The document ticked to <b class="warn">v' + version + '</b> — readers may come back in.');
+        }
+      }
+
+      /* ---- FIFO admission: this is where the rules bite ---- */
+      function admit() {
+        while (queue.length) {
+          var a = byId(queue[0]);
+          if (!canGrant(a)) break;
+          queue.shift();
+          st[a.id] = "in";
+        }
+        queue.forEach(function (id) { byId(id).reason = reasonFor(byId(id)); });
+      }
+
+      function releaseAll() {
+        var list = insiders().filter(function (a) { return st[a.id] === "in"; });
+        if (!list.length) {
+          setExplain("Nobody is inside",
+            'Click <code>👓 R1</code> in the tray first — <span class="dim">then release it.</span>');
+          return;
+        }
+        var nr = 0, nw = 0;
+        list.forEach(function (a) {
+          st[a.id] = "idle";
+          if (a.role === "r") { nr++; reads++; } else { nw++; writes++; version++; }
+        });
+        if (nw) bumpDoc();
+        admit(); render();
+        setExplain("✅ released " + list.length,
+          nr > 1
+            ? '<b class="good">' + nr + ' reads</b> finished in one turn — <code>reads served: ' + reads + '</code>.'
+            : 'One turn of the lock done — <code>reads served: ' + reads + '</code>.');
+      }
+
+      function bumpDoc() {
+        var d = document.getElementById("doc");
+        d.classList.add("bump");
+        setTimeout(function () { d.classList.remove("bump"); }, 450);
+      }
+
+      /* ---- ⚠️ the classic gotcha ---- */
+      function upgrade() {
+        if (st.R1 !== "in") {
+          setExplain("R1 holds no read lock",
+            'Click <code>👓 R1</code> into the room first, <span class="dim">then try to upgrade it.</span>');
+          return;
+        }
+        deadlock = true;
+        st.R1 = "dead";
+        document.getElementById("up-btn").classList.add("fired");
+        render();
+        setExplain("💀 deadlock",
+          'Upgrading while holding the read lock <b class="bad">deadlocks</b> — R1 waits for itself.');
+      }
+
+      /* ---- mode switch ---- */
+      function setMode(m) {
+        if (mode === m) {
+          setExplain(m === "rw" ? "Already a read-write lock" : "Already a plain mutex",
+            m === "rw"
+              ? 'Many readers <b class="good">or</b> one writer — <span class="dim">never both.</span>'
+              : 'One holder at a time — <span class="dim">readers block readers.</span>');
+          return;
+        }
+        mode = m;
+        clearRoom();
+        render();
+        if (m === "mutex") {
+          setExplain("🔒 plain mutex",
+            'One door, one holder — <span class="dim">click R1, R2, R3 and watch two of them queue.</span>');
+        } else {
+          setExplain("👓✍️ read-write lock",
+            'Two doors now — <span class="dim">click R1, R2, R3 and watch all three fit inside.</span>');
+        }
+      }
+
+      function clearRoom() {
+        ACTORS.forEach(function (a) { st[a.id] = "idle"; a.reason = ""; });
+        queue = [];
+        deadlock = false;
+        document.getElementById("up-btn").classList.remove("fired");
+      }
+
+      /* ---- build the five chips once ---- */
+      function buildActors() {
+        ACTORS.forEach(function (a) {
+          var el = document.createElement("button");
+          el.className = "actor " + a.role;
+          var ico = document.createElement("span");
+          ico.textContent = a.ico;
+          var name = document.createElement("span");
+          name.textContent = a.id;
+          var tag = document.createElement("span");
+          tag.className = "a-tag";
+          el.appendChild(ico);
+          el.appendChild(name);
+          el.appendChild(tag);
+          el.addEventListener("click", (function (id) {
+            return function () { tap(byId(id)); };
+          })(a.id));
+          a.el = el;
+          a.tagEl = tag;
+          st[a.id] = "idle";
+          a.reason = "";
+        });
+      }
+
+      /* ---- render (idempotent: every chip is re-placed each time) ---- */
+      function render() {
+        var room = document.getElementById("room-occ");
+        var q = document.getElementById("queue-list");
+        var tray = document.getElementById("tray");
+
+        ACTORS.forEach(function (a) {
+          var s = st[a.id];
+          var cls = "actor " + a.role;
+          if (s === "in") cls += " in";
+          else if (s === "wait") cls += " wait";
+          else if (s === "dead") cls += " dead";
+          a.el.className = cls;
+          var tagTxt = s === "in" ? "⏏ leave" : s === "dead" ? "🔒 stuck" : s === "wait" ? (a.reason || "waiting") : "";
+          a.tagEl.textContent = tagTxt;
+          a.tagEl.style.display = tagTxt ? "inline-block" : "none";
+        });
+
+        ACTORS.forEach(function (a) {
+          if (st[a.id] === "in" || st[a.id] === "dead") room.appendChild(a.el);
+        });
+        queue.forEach(function (id) { q.appendChild(byId(id).el); });
+        ACTORS.forEach(function (a) { if (st[a.id] === "idle") tray.appendChild(a.el); });
+
+        var nIn = insiders().length;
+        document.getElementById("room-empty").style.display = nIn ? "none" : "inline-block";
+        document.getElementById("q-empty").style.display = queue.length ? "none" : "inline-block";
+
+        var w = writerIn();
+        document.getElementById("cap-readers").textContent = readersIn();
+        document.getElementById("cap-writer").textContent = w ? w.id : "none";
+        document.getElementById("cap-wait").textContent = queue.length;
+        document.getElementById("cap-mode").textContent = mode === "rw" ? "read-write lock" : "plain mutex";
+        document.getElementById("doc-ver").textContent = "v" + version;
+        document.getElementById("listcheck").innerHTML =
+          'reads served: <b>' + reads + '</b> · writes: <b class="w">' + writes + "</b>";
+
+        var roomEl = document.getElementById("room");
+        roomEl.className = "room" + (deadlock ? " dead" : w ? " writer" : readersIn() ? " readers" : "");
+
+        document.getElementById("mode-rw").className = mode === "rw" ? "on" : "";
+        document.getElementById("mode-mutex").className = mode === "mutex" ? "on" : "";
+      }
+
+      /* ---- ↺ Reset ---- */
+      function reset() {
+        clearRoom();
+        version = 3; reads = 0; writes = 0;
+        render();
+        setExplain("Two doors, one room",
+          'Click <code>👓 R1</code>, then <code>👓 R2</code> and <code>👓 R3</code> — see how many fit inside.');
+      }
+
+      /* ---- boot ---- */
+      document.getElementById("mode-rw").addEventListener("click", function () { setMode("rw"); });
+      document.getElementById("mode-mutex").addEventListener("click", function () { setMode("mutex"); });
+      document.getElementById("done-btn").addEventListener("click", releaseAll);
+      document.getElementById("reset-btn").addEventListener("click", reset);
+      document.getElementById("up-btn").addEventListener("click", upgrade);
+      buildActors();
+      render();
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

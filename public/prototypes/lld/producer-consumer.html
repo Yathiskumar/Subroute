@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Producer–Consumer — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---- Action rows ---- */
+      .actions { display: flex; gap: 9px; flex-wrap: wrap; margin-bottom: 9px; align-items: center; }
+      .act { font-family: var(--mono); font-size: 12px; font-weight: 700; background: var(--elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 10px 14px; cursor: pointer; color: var(--fg); transition: border-color .15s, transform .1s; }
+      .act.prime { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+      .act:hover { border-color: var(--accent); }
+      .act:active { transform: scale(0.97); }
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: border-color .15s, transform .1s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .btn.live { background: var(--info-soft); border-color: rgba(94,159,246,.45); color: var(--info); }
+
+      .modes { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; align-items: center; }
+      .mchip { font-family: var(--mono); font-size: 10.5px; font-weight: 700; padding: 6px 11px; border-radius: 999px; cursor: pointer; background: var(--surface); border: 1px solid var(--border); color: var(--muted); transition: border-color .15s, color .15s, background .15s, transform .1s; }
+      .mchip:hover { border-color: var(--border-strong); color: var(--fg); }
+      .mchip:active { transform: scale(0.96); }
+      .mchip.on { background: var(--info-soft); border-color: rgba(94,159,246,.45); color: var(--info); }
+      .mchip.danger.on { background: var(--danger-soft); border-color: rgba(240,104,104,.5); color: var(--danger); }
+
+      /* ---- Stage ---- */
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 14px; margin-bottom: 14px; }
+      .stage-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin-bottom: 13px; display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+      .stage-cap b { color: var(--fg); }
+      .stage-cap b.hot { color: var(--accent); }
+
+      .lane { display: flex; align-items: stretch; gap: 12px; }
+
+      /* ---- Role cards ---- */
+      .role { width: 132px; flex: 0 0 auto; background: var(--elevated); border: 1.5px solid var(--border-strong); border-radius: var(--r-md); padding: 10px 9px; text-align: center; transition: border-color .2s, box-shadow .2s; }
+      .role.ok { border-color: rgba(92,198,111,.55); }
+      .role.blocked { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+      .role.flash { box-shadow: 0 0 0 5px var(--success-soft); }
+      .r-head { display: flex; align-items: center; justify-content: center; gap: 6px; }
+      .r-ico { font-size: 19px; }
+      .r-name { font-size: 12.5px; font-weight: 700; color: var(--fg); }
+      .r-state { margin-top: 8px; font-family: var(--mono); font-size: 9.5px; font-weight: 700; padding: 4px 6px; border-radius: 999px; background: var(--success-soft); border: 1px solid rgba(92,198,111,.4); color: var(--success); }
+      .r-state.wait { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+      .r-count { margin-top: 7px; font-family: var(--mono); font-size: 10px; color: var(--muted); }
+      .r-last { margin-top: 4px; font-family: var(--mono); font-size: 10px; color: var(--subtle); }
+      .r-last.has { color: var(--fg); }
+
+      /* ---- The buffer (star of the show) ---- */
+      .belt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 9px; }
+      .arrows { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 10px; color: var(--subtle); }
+      .arrows b { color: var(--muted); font-weight: 700; }
+      .slots { display: flex; gap: 7px; align-items: stretch; padding: 9px; border: 1px solid var(--border); border-radius: var(--r-md); background: #0a0b0e; transition: border-color .2s, box-shadow .2s; }
+      .slots.full { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+      .slots.over { border-color: var(--danger); box-shadow: 0 0 0 4px var(--danger-soft); }
+      .slot { flex: 1 1 0; min-width: 0; height: 54px; border-radius: var(--r-md); border: 1.5px dashed var(--border-strong); display: flex; align-items: center; justify-content: center; }
+      .slot.filled { border-style: solid; border-color: rgba(92,198,111,.55); background: var(--success-soft); }
+      .slot.filled.over { border-color: rgba(240,104,104,.6); background: var(--danger-soft); }
+      .item { font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--success); display: flex; flex-direction: column; align-items: center; gap: 2px; }
+      .slot.filled.over .item { color: var(--danger); }
+      .item .ico { font-size: 15px; }
+      .item.enter { animation: enterSlot .34s ease-out; }
+      .item.shift { animation: shiftLeft .3s ease-out; }
+      @keyframes enterSlot { from { opacity: 0; transform: translateX(-24px) scale(.7); } to { opacity: 1; transform: none; } }
+      @keyframes shiftLeft { from { transform: translateX(26px); opacity: .55; } to { transform: none; opacity: 1; } }
+
+      /* ---- The two guard lines ---- */
+      .guards { margin-top: 12px; display: flex; flex-direction: column; gap: 5px; }
+      .guard { font-family: var(--mono); font-size: 11px; color: var(--subtle); background: #0a0b0e; border: 1px solid var(--border); border-left: 3px solid var(--border-strong); border-radius: 6px; padding: 6px 10px; transition: color .2s, border-color .2s; overflow-x: auto; white-space: nowrap; }
+      .guard.hot { color: var(--accent); border-left-color: var(--accent); }
+      .guard em { font-style: normal; color: var(--muted); }
+      .guard.hot em { color: var(--accent); }
+
+      /* ---- Fixed explain panel (replaced, never grows) ---- */
+      .explain { min-height: 72px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .warn { color: var(--accent); font-weight: 700; }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+
+      @media (max-width: 560px) {
+        .lane { flex-direction: column; }
+        .role { width: 100%; }
+        .slot { height: 46px; }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ACTIONS -->
+    <div class="actions">
+      <button class="act prime" id="produce-btn">＋ Produce</button>
+      <button class="act" id="consume-btn">− Consume</button>
+      <button class="btn" id="auto-btn">▶ Auto</button>
+      <button class="btn" id="reset-btn">↺ Reset</button>
+    </div>
+    <div class="modes">
+      <button class="mchip on" id="pfast-chip">🧑‍🍳 producer fast</button>
+      <button class="mchip" id="cfast-chip">🧍 consumer fast</button>
+      <button class="mchip danger" id="unb-chip">∞ unbounded</button>
+    </div>
+
+    <!-- STAGE -->
+    <div class="stage">
+      <div class="stage-cap">
+        <span>producer → <b>bounded buffer</b> → consumer</span>
+        <span>buffer: <b id="cap-buf">0/5</b> · produced: <b id="cap-p">0</b> · consumed: <b id="cap-c">0</b></span>
+      </div>
+
+      <div class="lane">
+        <div class="role ok" id="prod-card">
+          <div class="r-head"><span class="r-ico">🧑‍🍳</span><span class="r-name">Producer</span></div>
+          <div class="r-state" id="prod-state">running</div>
+          <div class="r-count" id="prod-count">produced: 0</div>
+          <div class="r-last" id="prod-last">made —</div>
+        </div>
+
+        <div class="belt">
+          <div class="arrows">
+            <span>put() ▸ <b>tail</b></span>
+            <span><b>head</b> ▸ take()</span>
+          </div>
+          <div class="slots" id="slots"></div>
+          <div class="arrows"><span>FIFO — oldest leaves first</span><span id="belt-cap">capacity 5</span></div>
+        </div>
+
+        <div class="role ok" id="cons-card">
+          <div class="r-head"><span class="r-ico">🧍</span><span class="r-name">Consumer</span></div>
+          <div class="r-state" id="cons-state">running</div>
+          <div class="r-count" id="cons-count">consumed: 0</div>
+          <div class="r-last" id="cons-last">took —</div>
+        </div>
+      </div>
+
+      <div class="guards">
+        <div class="guard" id="guard-put">put():&nbsp;&nbsp;<em>while</em> (buffer is full) &nbsp;notFull.await();</div>
+        <div class="guard" id="guard-take">take(): <em>while</em> (buffer is empty) notEmpty.await();</div>
+      </div>
+    </div>
+
+    <!-- FIXED EXPLAIN PANEL -->
+    <div class="explain">
+      <div class="explain-title" id="ex-title">Two speeds, one buffer between them</div>
+      <div class="explain-body" id="ex-body">Hit <code>＋ Produce</code> five times, then <code>− Consume</code>. Or press <code>▶ Auto</code>.</div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>Full buffer parks the producer, empty buffer parks the consumer — that waiting <b style="color:var(--fg)">is</b> the pattern.</span>
+    </div>
+
+    <script>
+      /* ---- one explain panel, REPLACED (never appended) ---- */
+      function setExplain(title, bodyHtml) {
+        document.getElementById("ex-title").textContent = title;
+        document.getElementById("ex-body").innerHTML = bodyHtml;
+      }
+
+      var CAP = 5;          // the bound
+      var MAXU = 11;        // how far the unbounded demo is allowed to grow
+      var MAX_TICKS = 44;   // auto mode always terminates
+
+      var buffer = [];      // item numbers; buffer[0] is the head (leaves first)
+      var produced = 0, consumed = 0, seq = 0;
+      var lastMade = null, lastTook = null;
+      var pBlocked = false, cBlocked = false;
+      var unbounded = false;
+      var mode = "pfast";
+      var auto = false, ticks = 0, timer = null;
+      var animAdd = false, animShift = false;
+
+      /* ---- draw the buffer + both role cards ---- */
+      function render() {
+        var host = document.getElementById("slots");
+        host.innerHTML = "";
+        var boxes = unbounded ? Math.max(CAP, buffer.length) : CAP;
+        for (var i = 0; i < boxes; i++) {
+          var slot = document.createElement("div");
+          var over = i >= CAP;
+          slot.className = "slot" + (i < buffer.length ? " filled" : "") + (over ? " over" : "");
+          if (i < buffer.length) {
+            var item = document.createElement("span");
+            var last = i === buffer.length - 1;
+            item.className = "item" + (animAdd && last ? " enter" : animShift ? " shift" : "");
+            var ico = document.createElement("span");
+            ico.className = "ico";
+            ico.textContent = "🍽";
+            var num = document.createElement("span");
+            num.textContent = "#" + buffer[i];
+            item.appendChild(ico);
+            item.appendChild(num);
+            slot.appendChild(item);
+          }
+          host.appendChild(slot);
+        }
+        animAdd = false;
+        animShift = false;
+
+        var isFull = !unbounded && buffer.length >= CAP;
+        var isOver = unbounded && buffer.length > CAP;
+        host.className = "slots" + (isOver ? " over" : isFull ? " full" : "");
+
+        document.getElementById("cap-buf").textContent =
+          buffer.length + "/" + (unbounded ? "∞" : CAP);
+        document.getElementById("cap-p").textContent = String(produced);
+        document.getElementById("cap-c").textContent = String(consumed);
+        document.getElementById("belt-cap").textContent = unbounded ? "capacity ∞" : "capacity 5";
+
+        var pc = document.getElementById("prod-card");
+        pc.className = "role " + (pBlocked ? "blocked" : "ok");
+        var ps = document.getElementById("prod-state");
+        ps.className = "r-state" + (pBlocked ? " wait" : "");
+        ps.textContent = pBlocked ? "BLOCKED · full" : "running";
+        document.getElementById("prod-count").textContent = "produced: " + produced;
+        var pl = document.getElementById("prod-last");
+        pl.className = "r-last" + (lastMade === null ? "" : " has");
+        pl.textContent = "made " + (lastMade === null ? "—" : "🍽 #" + lastMade);
+
+        var cc = document.getElementById("cons-card");
+        cc.className = "role " + (cBlocked ? "blocked" : "ok");
+        var cs = document.getElementById("cons-state");
+        cs.className = "r-state" + (cBlocked ? " wait" : "");
+        cs.textContent = cBlocked ? "BLOCKED · empty" : "running";
+        document.getElementById("cons-count").textContent = "consumed: " + consumed;
+        var cl = document.getElementById("cons-last");
+        cl.className = "r-last" + (lastTook === null ? "" : " has");
+        cl.textContent = "took " + (lastTook === null ? "—" : "🍽 #" + lastTook);
+
+        document.getElementById("guard-put").className = "guard" + (pBlocked ? " hot" : "");
+        document.getElementById("guard-take").className = "guard" + (cBlocked ? " hot" : "");
+      }
+
+      /* ---- put(): blocks while the buffer is full ---- */
+      function produce() {
+        if (unbounded && buffer.length >= MAXU) {
+          stopAuto();
+          render();
+          setExplain("Unbounded queue → out of memory",
+            'Nothing ever pushed back, so the queue just <b class="bad">kept growing</b> until memory ran out.');
+          return;
+        }
+        if (!unbounded && buffer.length >= CAP) {
+          pBlocked = true;
+          render();
+          setExplain("Buffer full → producer waits",
+            '<code>put()</code> sits in <code>while (full) wait()</code> — back-pressure <b class="warn">parks</b> the fast side.');
+          return;
+        }
+        seq++;
+        buffer.push(seq);
+        produced++;
+        lastMade = seq;
+        pBlocked = false;
+        var woke = cBlocked;
+        cBlocked = false;
+        animAdd = true;
+        render();
+        if (unbounded && buffer.length > CAP) {
+          setExplain("No limit → memory grows",
+            'The queue spills past capacity — <b class="bad">no limit</b> means memory grows without end.');
+        } else if (woke) {
+          setExplain("Item arrived → consumer wakes",
+            '<code>notifyAll()</code> — the parked consumer re-checks <code>while (empty)</code> and takes <b class="good">#' + seq + "</b>.");
+        } else {
+          setExplain("put() → item #" + seq + " at the tail",
+            'Buffer <b class="good">' + buffer.length + "/" + CAP + '</b> — the producer never touches the consumer, only the queue.');
+        }
+      }
+
+      /* ---- take(): blocks while the buffer is empty ---- */
+      function consume() {
+        if (buffer.length === 0) {
+          cBlocked = true;
+          render();
+          setExplain("Buffer empty → consumer waits",
+            '<code>take()</code> sits in <code>while (empty) wait()</code> — no busy-spinning, the thread <b class="warn">sleeps</b>.');
+          return;
+        }
+        var it = buffer.shift();
+        consumed++;
+        lastTook = it;
+        cBlocked = false;
+        var woke = pBlocked;
+        pBlocked = false;
+        animShift = true;
+        render();
+        if (woke) {
+          setExplain("Slot freed → producer wakes",
+            '<code>notifyAll()</code> — the parked producer re-checks <code>while (full)</code> and gets the <b class="good">free slot</b>.');
+        } else {
+          setExplain("take() → item #" + it + " leaves the head",
+            'FIFO: the <b class="good">oldest</b> item goes first, and everything behind it shifts down.');
+        }
+      }
+
+      /* ---- ▶ Auto: one side is faster, so one side ends up blocked ---- */
+      function tick() {
+        if (!auto) return;
+        ticks++;
+        var pTurn = mode === "pfast" ? true : ticks % 2 === 0;
+        var cTurn = mode === "pfast" ? ticks % 2 === 0 : true;
+        if (pTurn) produce();
+        if (cTurn) consume();
+        if (!auto) return;
+        if (ticks >= MAX_TICKS) {
+          auto = false;
+          document.getElementById("auto-btn").className = "btn";
+          document.getElementById("auto-btn").textContent = "▶ Auto";
+          return;
+        }
+        timer = setTimeout(tick, 620);
+      }
+
+      function stopAuto() {
+        auto = false;
+        if (timer) { clearTimeout(timer); timer = null; }
+        var b = document.getElementById("auto-btn");
+        b.className = "btn";
+        b.textContent = "▶ Auto";
+      }
+
+      function toggleAuto() {
+        if (auto) {
+          stopAuto();
+          setExplain("Paused",
+            'Buffer holds <b class="good">' + buffer.length + "</b> item(s) — step it by hand with <code>＋ Produce</code> / <code>− Consume</code>.");
+          return;
+        }
+        auto = true;
+        ticks = 0;
+        var b = document.getElementById("auto-btn");
+        b.className = "btn live";
+        b.textContent = "⏸ Pause";
+        setExplain(mode === "pfast" ? "Producer is faster" : "Consumer is faster",
+          mode === "pfast"
+            ? 'Watch the buffer fill up — then the producer <b class="warn">parks</b> at 5/5.'
+            : 'Watch the buffer drain — then the consumer <b class="warn">parks</b> at 0/5.');
+        tick();
+      }
+
+      /* ---- speed chips: flip which side blocks ---- */
+      function setMode(m) {
+        mode = m;
+        document.getElementById("pfast-chip").className = "mchip" + (m === "pfast" ? " on" : "");
+        document.getElementById("cfast-chip").className = "mchip" + (m === "cfast" ? " on" : "");
+        setExplain(m === "pfast" ? "Buffer full → producer waits" : "Buffer empty → consumer waits",
+          m === "pfast"
+            ? 'The <b class="warn">producer</b> outruns the consumer, so the queue fills and <code>put()</code> blocks.'
+            : 'The <b class="warn">consumer</b> outruns the producer, so the queue empties and <code>take()</code> blocks.');
+      }
+
+      /* ---- ∞ chip: what happens with no bound ---- */
+      function toggleUnbounded() {
+        unbounded = !unbounded;
+        document.getElementById("unb-chip").className = "mchip danger" + (unbounded ? " on" : "");
+        if (unbounded) {
+          pBlocked = false;
+          render();
+          setExplain("Unbounded queue",
+            'No limit → the producer <b class="bad">never</b> blocks, so a fast producer grows memory without end.');
+        } else {
+          if (buffer.length > CAP) buffer = buffer.slice(0, CAP);
+          render();
+          setExplain("Bounded again",
+            'Capacity <b class="good">5</b> → a full queue stops the producer. That back-pressure is the whole point.');
+        }
+      }
+
+      /* ---- ↺ Reset ---- */
+      function reset() {
+        stopAuto();
+        buffer = [];
+        produced = 0; consumed = 0; seq = 0;
+        lastMade = null; lastTook = null;
+        pBlocked = false; cBlocked = false;
+        unbounded = false;
+        ticks = 0;
+        document.getElementById("unb-chip").className = "mchip danger";
+        setMode("pfast");
+        render();
+        setExplain("Two speeds, one buffer between them",
+          'Hit <code>＋ Produce</code> five times, then <code>− Consume</code>. Or press <code>▶ Auto</code>.');
+      }
+
+      /* ---- boot ---- */
+      document.getElementById("produce-btn").addEventListener("click", function () { stopAuto(); produce(); });
+      document.getElementById("consume-btn").addEventListener("click", function () { stopAuto(); consume(); });
+      document.getElementById("auto-btn").addEventListener("click", toggleAuto);
+      document.getElementById("reset-btn").addEventListener("click", reset);
+      document.getElementById("pfast-chip").addEventListener("click", function () { setMode("pfast"); });
+      document.getElementById("cfast-chip").addEventListener("click", function () { setMode("cfast"); });
+      document.getElementById("unb-chip").addEventListener("click", toggleUnbounded);
+      render();
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

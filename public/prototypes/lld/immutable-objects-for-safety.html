@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Immutable objects for safety — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---- Action row ---- */
+      .actions { display: flex; gap: 9px; flex-wrap: wrap; margin-bottom: 9px; align-items: center; }
+      .act { font-family: var(--mono); font-size: 12px; font-weight: 700; background: var(--elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 10px 14px; cursor: pointer; color: var(--fg); transition: border-color .15s, transform .1s; }
+      .act.prime { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+      .act:hover { border-color: var(--accent); }
+      .act:active { transform: scale(0.97); }
+      .act:disabled { opacity: .4; cursor: not-allowed; }
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: border-color .15s, transform .1s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+      /* ---- Mode toggle ---- */
+      .seg { display: inline-flex; background: var(--elevated); border: 1px solid var(--border-strong); border-radius: 999px; padding: 3px; gap: 3px; }
+      .seg-b { font-family: var(--mono); font-size: 11.5px; font-weight: 700; background: transparent; border: 0; border-radius: 999px; padding: 7px 12px; cursor: pointer; color: var(--muted); transition: background .15s, color .15s; }
+      .seg-b:hover { color: var(--fg); }
+      .seg-b.on { background: var(--danger-soft); color: var(--danger); }
+      .seg-b.on.safe { background: var(--success-soft); color: var(--success); }
+
+      .readout { margin-left: auto; font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+      .readout b { color: var(--fg); }
+      .readout b.good { color: var(--success); }
+      .readout b.bad { color: var(--danger); }
+
+      /* ---- Chip row ---- */
+      .chiprow { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; min-height: 30px; align-items: center; }
+      .tchip { font-family: var(--mono); font-size: 10.5px; font-weight: 700; padding: 6px 11px; border-radius: 999px; cursor: pointer; background: var(--surface); border: 1px dashed var(--border-strong); color: var(--muted); transition: border-color .15s, color .15s, background .15s, transform .1s; }
+      .tchip:hover { border-color: var(--accent); color: var(--fg); }
+      .tchip:active { transform: scale(0.96); }
+      .tchip.on { background: var(--accent-soft); border-style: solid; border-color: var(--accent-border); color: var(--accent); }
+      .tchip.hid { display: none; }
+
+      /* ---- Stage ---- */
+      .stage { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 14px; margin-bottom: 14px; }
+      .stage-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+      .stage-cap b { color: var(--fg); }
+      .stage-cap b.good { color: var(--success); }
+      .stage-cap b.bad { color: var(--danger); }
+
+      .lanes { display: grid; grid-template-columns: 136px 1fr 158px; gap: 12px; align-items: start; }
+      .lane-t { font-family: var(--mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--subtle); margin-bottom: 7px; }
+
+      /* ---- Writer ---- */
+      .wcard { background: var(--elevated); border: 1.5px solid var(--border-strong); border-radius: var(--r-md); padding: 11px 10px; text-align: center; transition: border-color .2s, box-shadow .2s; }
+      .wcard.busy { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+      .wcard.safe { border-color: var(--success); }
+      .w-state { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--fg); }
+      .w-sub { font-family: var(--mono); font-size: 10px; color: var(--subtle); margin-top: 5px; }
+
+      /* ---- Object cards ---- */
+      .ptrtrack { position: relative; height: 22px; }
+      .ptr { position: absolute; top: 0; left: 25%; margin-left: -34px; font-family: var(--mono); font-size: 10px; font-weight: 700; color: var(--info); background: var(--info-soft); border: 1px solid rgba(94,159,246,.4); border-radius: 999px; padding: 3px 9px; transition: left .55s cubic-bezier(.4,.1,.3,1), opacity .3s; }
+      .ptr.hid { opacity: 0; }
+
+      .objs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      .obj { width: 100%; max-width: 190px; margin: 0 auto; background: var(--elevated); border: 1.5px solid var(--success); border-radius: var(--r-md); padding: 10px; text-align: center; transition: border-color .2s, box-shadow .25s, opacity .3s, transform .3s; }
+      .obj.hid { opacity: 0; transform: translateY(8px); pointer-events: none; }
+      .obj.stale { border-color: var(--border-strong); opacity: .5; }
+      .obj.half { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+      .obj.bad { border-color: var(--danger); box-shadow: 0 0 0 5px var(--danger-soft); }
+      .obj.fresh { box-shadow: 0 0 0 5px var(--success-soft); }
+      .obj-h { display: flex; align-items: center; justify-content: center; gap: 6px; }
+      .obj-n { font-size: 12px; font-weight: 700; color: var(--fg); }
+      .obj-v { font-family: var(--mono); font-size: 9.5px; padding: 2px 6px; border-radius: 4px; background: var(--surface); border: 1px solid var(--border); color: var(--muted); }
+      .fields { display: flex; justify-content: center; gap: 6px; margin-top: 8px; }
+      .f { font-family: var(--mono); font-size: 11.5px; font-weight: 700; padding: 4px 9px; border-radius: 5px; background: var(--surface); border: 1px solid var(--border); color: var(--fg); transition: color .2s, border-color .2s; }
+      .f.new { color: var(--accent); border-color: var(--accent-border); }
+      .tagline { font-family: var(--mono); font-size: 9.5px; color: var(--subtle); margin-top: 8px; }
+      .tagline.bad { color: var(--danger); }
+
+      /* ---- Readers ---- */
+      .reader { background: var(--elevated); border: 1.5px solid var(--border-strong); border-radius: var(--r-md); padding: 9px 10px; margin-bottom: 9px; transition: border-color .2s, box-shadow .25s, opacity .2s; }
+      .reader:last-child { margin-bottom: 0; }
+      .reader.ok { border-color: var(--success); }
+      .reader.torn { border-color: var(--danger); box-shadow: 0 0 0 5px var(--danger-soft); }
+      .reader.blocked { border-color: var(--accent); opacity: .55; }
+      .r-h { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+      .r-n { font-size: 11.5px; font-weight: 700; color: var(--fg); }
+      .r-v { font-family: var(--mono); font-size: 9px; padding: 2px 5px; border-radius: 4px; background: var(--surface); border: 1px solid var(--border); color: var(--muted); }
+      .r-sees { font-family: var(--mono); font-size: 12px; font-weight: 700; margin-top: 7px; color: var(--fg); }
+      .r-sees.bad { color: var(--danger); }
+      .r-note { font-family: var(--mono); font-size: 9.5px; color: var(--subtle); margin-top: 5px; }
+      .r-note.bad { color: var(--danger); }
+      .r-note.warn { color: var(--accent); }
+
+      /* ---- Fixed explain panel (replaced, never grows) ---- */
+      .explain { min-height: 72px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .warn { color: var(--accent); font-weight: 700; }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+
+      @media (max-width: 620px) {
+        .lanes { grid-template-columns: 1fr; }
+        .readout { margin-left: 0; width: 100%; }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ACTIONS -->
+    <div class="actions">
+      <div class="seg">
+        <button class="seg-b on" id="mode-mut">✏️ Mutable</button>
+        <button class="seg-b safe" id="mode-imm">🔒 Immutable</button>
+      </div>
+      <button class="act prime" id="step-btn">▶ Update (x, y)</button>
+      <button class="btn" id="read-btn">👓 Read now</button>
+      <button class="btn" id="reset-btn">↺ Reset</button>
+      <span class="readout" id="readout">locks needed: <b>1</b> · torn reads: <b>0</b></span>
+    </div>
+
+    <div class="chiprow">
+      <button class="tchip" id="lock-chip">🔒 Add a lock</button>
+      <button class="tchip hid" id="trap-chip">🕳 shallow trap</button>
+    </div>
+
+    <!-- STAGE -->
+    <div class="stage">
+      <div class="stage-cap">
+        <span id="cap-left">one shared object · edited in place</span>
+        <span>versions: <b id="c-ver">1</b> · readers blocked: <b id="c-blk">0</b></span>
+      </div>
+
+      <div class="lanes">
+        <!-- writer -->
+        <div class="lane">
+          <div class="lane-t">✍️ Writer</div>
+          <div class="wcard" id="wcard">
+            <div class="w-state" id="w-state">idle</div>
+            <div class="w-sub" id="w-sub">press ▶ Update</div>
+          </div>
+        </div>
+
+        <!-- objects -->
+        <div class="lane">
+          <div class="lane-t">📦 Shared state</div>
+          <div class="ptrtrack"><span class="ptr hid" id="ptr">current ▼</span></div>
+          <div class="objs">
+            <div class="obj" id="obj0">
+              <div class="obj-h"><span class="obj-n">Point</span><span class="obj-v" id="o0v">v1</span></div>
+              <div class="fields"><span class="f" id="o0x">x: 1</span><span class="f" id="o0y">y: 2</span></div>
+              <div class="tagline" id="o0t">tags [ ]</div>
+            </div>
+            <div class="obj hid" id="obj1">
+              <div class="obj-h"><span class="obj-n">Point</span><span class="obj-v" id="o1v">v2</span></div>
+              <div class="fields"><span class="f" id="o1x">x: 9</span><span class="f" id="o1y">y: 9</span></div>
+              <div class="tagline" id="o1t">tags [ ]</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- readers -->
+        <div class="lane">
+          <div class="lane-t">👓 Readers</div>
+          <div class="reader ok" id="rA">
+            <div class="r-h"><span class="r-n">👓 Reader A</span><span class="r-v" id="rAv">v1</span></div>
+            <div class="r-sees" id="rAs">x: 1 · y: 2</div>
+            <div class="r-note" id="rAn">reads mid-write</div>
+          </div>
+          <div class="reader ok" id="rB">
+            <div class="r-h"><span class="r-n">👓 Reader B</span><span class="r-v" id="rBv">v1</span></div>
+            <div class="r-sees" id="rBs">x: 1 · y: 2</div>
+            <div class="r-note" id="rBn">reads after write</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FIXED EXPLAIN PANEL -->
+    <div class="explain">
+      <div class="explain-title" id="ex-title">One object, two readers</div>
+      <div class="explain-body" id="ex-body">Press <code>▶ Update (x, y)</code> and watch <b class="bad">Reader A</b> mid-write.</div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>Every bug here needs <b style="color:var(--fg)">shared + mutable</b>. Remove <b style="color:var(--success)">mutable</b> and there is nothing left to lock.</span>
+    </div>
+
+    <script>
+      /* ---- one explain panel, REPLACED (never appended) ---- */
+      function setExplain(title, bodyHtml) {
+        document.getElementById("ex-title").textContent = title;
+        document.getElementById("ex-body").innerHTML = bodyHtml;
+      }
+
+      var NEXT = [9, 5, 7, 3];
+
+      var mode = "mut";        // "mut" | "imm"
+      var lockOn = false;
+      var busy = false;
+      var trapped = false;
+      var vi = 0;              // which value comes next
+      var ver = 1;             // current version number
+      var curSlot = 0;         // which card the "current" pointer points at
+      var half = false;        // mutable: object caught half-updated
+      var torn = 0, blocked = 0;
+
+      // the two object cards
+      var slots = [
+        { ver: 1, x: 1, y: 2, live: true },
+        { ver: 0, x: 0, y: 0, live: false }
+      ];
+      // what each reader currently holds
+      var rd = {
+        A: { ver: 1, x: 1, y: 2, state: "ok" },
+        B: { ver: 1, x: 1, y: 2, state: "ok" }
+      };
+      var wState = "idle", wSub = "press ▶ Update";
+      var gen = 0;   // bumped on reset — stale timers from an old run are dropped
+
+      function T(fn, ms) {
+        var g = gen;
+        setTimeout(function () { if (g === gen) fn(); }, ms);
+      }
+
+      function cur() { return slots[curSlot]; }
+
+      /* ---------------------------------------------------------- render */
+      function flash(el, cls, ms) {
+        if (!el) return;
+        el.classList.add(cls);
+        setTimeout(function () { if (el) el.classList.remove(cls); }, ms || 700);
+      }
+
+      function paintObj(i) {
+        var s = slots[i];
+        var card = document.getElementById("obj" + i);
+        var keep = card.classList.contains("bad") ? " bad" : "";
+        var cls = "obj";
+        if (!s.live) cls += " hid";
+        else if (mode === "imm" && i !== curSlot) cls += " stale";
+        else if (mode === "mut" && half) cls += " half";
+        card.className = cls + keep;
+        document.getElementById("o" + i + "v").textContent = mode === "mut" ? "shared" : "v" + s.ver;
+        var fx = document.getElementById("o" + i + "x");
+        var fy = document.getElementById("o" + i + "y");
+        fx.textContent = "x: " + s.x;
+        fy.textContent = "y: " + s.y;
+        fx.className = "f" + (mode === "mut" && half ? " new" : "");
+        fy.className = "f";
+        var t = document.getElementById("o" + i + "t");
+        t.textContent = trapped ? 'tags [ "x" ]' : "tags [ ]";
+        t.className = "tagline" + (trapped ? " bad" : "");
+      }
+
+      function paintReader(k) {
+        var r = rd[k];
+        var card = document.getElementById("r" + k);
+        card.className = "reader " + r.state;
+        document.getElementById("r" + k + "v").textContent =
+          r.state === "blocked" ? "wait" : (mode === "mut" ? "shared" : "v" + r.ver);
+        var sees = document.getElementById("r" + k + "s");
+        sees.textContent = r.state === "blocked" ? "⏳ blocked" : "x: " + r.x + " · y: " + r.y;
+        sees.className = "r-sees" + (r.state === "torn" ? " bad" : "");
+        var note = document.getElementById("r" + k + "n");
+        var txt, ncls = "r-note";
+        if (r.state === "torn") { txt = "⚠️ torn read"; ncls += " bad"; }
+        else if (r.state === "blocked") { txt = "waiting on 🔒"; ncls += " warn"; }
+        else if (mode === "imm") { txt = k === "A" ? "holds its ref" : "reads after swap"; }
+        else { txt = k === "A" ? "reads mid-write" : "reads after write"; }
+        note.textContent = txt;
+        note.className = ncls;
+      }
+
+      function render() {
+        // mode toggle
+        document.getElementById("mode-mut").className = "seg-b" + (mode === "mut" ? " on" : "");
+        document.getElementById("mode-imm").className = "seg-b safe" + (mode === "imm" ? " on" : "");
+        document.getElementById("lock-chip").className = "tchip" + (mode === "mut" ? "" : " hid") + (lockOn ? " on" : "");
+        document.getElementById("lock-chip").textContent = lockOn ? "🔒 Lock ON" : "🔒 Add a lock";
+        document.getElementById("trap-chip").className = "tchip" + (mode === "imm" ? "" : " hid") + (trapped ? " on" : "");
+
+        // writer
+        var w = document.getElementById("wcard");
+        w.className = "wcard" + (busy ? (mode === "imm" ? " busy safe" : " busy") : "");
+        document.getElementById("w-state").textContent = wState;
+        document.getElementById("w-sub").textContent = wSub;
+
+        // objects + pointer
+        paintObj(0); paintObj(1);
+        var ptr = document.getElementById("ptr");
+        ptr.className = "ptr" + (mode === "imm" ? "" : " hid");
+        ptr.style.left = curSlot === 0 ? "25%" : "75%";
+
+        // readers
+        paintReader("A"); paintReader("B");
+
+        // counters
+        document.getElementById("cap-left").textContent =
+          mode === "mut" ? "one shared object · edited in place" : "new version per change · one pointer swap";
+        document.getElementById("c-ver").textContent = mode === "mut" ? "1" : String(ver);
+        document.getElementById("c-blk").textContent = String(blocked);
+        document.getElementById("c-blk").className = blocked > 0 ? "bad" : "good";
+        document.getElementById("readout").innerHTML =
+          mode === "mut"
+            ? 'locks needed: <b class="bad">1</b> · torn reads: <b class="' + (torn ? "bad" : "") + '">' + torn + "</b>"
+            : 'locks needed: <b class="good">0</b> · torn reads: <b class="good">' + torn + "</b>";
+      }
+
+      function setBusy(b) {
+        busy = b;
+        document.getElementById("step-btn").disabled = b;
+        document.getElementById("read-btn").disabled = b;
+      }
+
+      /* ------------------------------------------------- ▶ Update (x, y) */
+      function update() {
+        if (busy) return;
+        setBusy(true);
+        if (mode === "mut") mutableUpdate();
+        else immutableUpdate();
+      }
+
+      /* MUTABLE: two visible micro-steps on ONE shared object */
+      function mutableUpdate() {
+        var nv = NEXT[vi % NEXT.length]; vi++;
+        var s = slots[0];
+
+        if (lockOn) {
+          wState = "holds 🔒"; wSub = "writing…";
+          rd.A.state = "blocked"; rd.B.state = "blocked";
+          blocked += 2;
+          render();
+          setExplain("🔒 Writer took the lock",
+            'Both readers are <b class="warn">blocked</b> until the write finishes — correct, but they wait.');
+
+          T(function () { s.x = nv; half = true; wState = "x = " + nv; render(); }, 550);
+          T(function () { s.y = nv; half = false; wState = "y = " + nv; render(); }, 1150);
+          T(function () {
+            wState = "idle"; wSub = "lock released";
+            rd.A = { ver: 1, x: s.x, y: s.y, state: "ok" };
+            rd.B = { ver: 1, x: s.x, y: s.y, state: "ok" };
+            render();
+            setExplain("No torn read — but readers waited",
+              'The lock works. Cost so far: <b class="warn">' + blocked + '</b> reader waits, and one lock to get right.');
+            setBusy(false);
+          }, 1750);
+          return;
+        }
+
+        wState = "x = " + nv; wSub = "step 1 of 2";
+        s.x = nv; half = true;
+        rd.A.state = "ok";
+        render();
+        setExplain("Half-updated",
+          '<code>x = ' + nv + '</code> is written, <code>y</code> is still <b class="warn">' + s.y + '</b>.');
+
+        T(function () {
+          rd.A = { ver: 1, x: s.x, y: s.y, state: "torn" };
+          torn++;
+          render();
+          flash(document.getElementById("obj0"), "bad", 800);
+          setExplain("⚠️ Reader A caught it mid-write",
+            'It read <b class="bad">x: ' + s.x + " · y: " + s.y + '</b> — a state that never legally existed.');
+        }, 700);
+
+        T(function () {
+          s.y = nv; half = false;
+          wState = "y = " + nv; wSub = "step 2 of 2";
+          rd.B = { ver: 1, x: s.x, y: s.y, state: "ok" };
+          render();
+        }, 1300);
+
+        T(function () {
+          wState = "idle"; wSub = "write done";
+          render();
+          setExplain("Torn reads: " + torn,
+            'Reader B is fine. Reader A already shipped garbage — <span class="dim">try 🔒 Add a lock.</span>');
+          setBusy(false);
+        }, 1850);
+      }
+
+      /* IMMUTABLE: build a NEW version, then swap one pointer */
+      function immutableUpdate() {
+        var nv = NEXT[vi % NEXT.length]; vi++;
+        var other = 1 - curSlot;
+        ver++;
+        slots[other] = { ver: ver, x: nv, y: nv, live: true };
+        wState = "build v" + ver; wSub = "nobody sees it yet";
+        render();
+        flash(document.getElementById("obj" + other), "fresh", 900);
+        setExplain("v" + ver + " is built off to the side",
+          'Fully formed before anyone can see it — the old <b class="good">v' + (ver - 1) + '</b> is untouched.');
+
+        T(function () {
+          curSlot = other;
+          rd.B = { ver: ver, x: nv, y: nv, state: "ok" };
+          wState = "swap →"; wSub = "one pointer";
+          render();
+          setExplain("One pointer swap — all or nothing",
+            'Reader A still holds <b class="good">v' + rd.A.ver + '</b>, Reader B now reads <b class="good">v' + ver + '</b>. No mixture.');
+        }, 850);
+
+        T(function () {
+          wState = "idle"; wSub = "0 locks taken";
+          render();
+          setExplain("locks: 0 · torn reads: 0 · versions: " + ver,
+            'Nothing was written in place, so there was <b class="good">nothing to race with</b>.');
+          setBusy(false);
+        }, 1500);
+      }
+
+      /* ------------------------------------------------------ 👓 Read now */
+      function readNow() {
+        if (busy) return;
+        var s = cur();
+        rd.A = { ver: s.ver, x: s.x, y: s.y, state: "ok" };
+        rd.B = { ver: s.ver, x: s.x, y: s.y, state: "ok" };
+        render();
+        setExplain(mode === "imm" ? "Both readers re-read current" : "Both readers read the shared object",
+          mode === "imm"
+            ? 'Same snapshot, <b class="good">no lock taken</b> — any number of readers can do this at once.'
+            : 'Safe only because nobody is writing <span class="dim">right now</span>.');
+      }
+
+      /* ------------------------------------------------- 🔒 lock / 🕳 trap */
+      function toggleLock() {
+        if (busy || mode !== "mut") return;
+        lockOn = !lockOn;
+        render();
+        setExplain(lockOn ? "🔒 Lock added" : "🔒 Lock removed",
+          lockOn
+            ? 'Correct now — but every read must <b class="warn">wait</b> for the writer.'
+            : 'Back to unguarded writes: the next <code>▶ Update</code> can tear again.');
+      }
+
+      function springTrap() {
+        if (busy || mode !== "imm") return;
+        trapped = true;
+        render();
+        flash(document.getElementById("obj0"), "bad", 900);
+        flash(document.getElementById("obj1"), "bad", 900);
+        setExplain("🕳 Mutated through the list",
+          '<code>point.tags.add("x")</code> changed every version — <b class="bad">final reference ≠ frozen contents</b>.');
+      }
+
+      /* ----------------------------------------------------- mode + reset */
+      function resetState(keepMode) {
+        gen++;                       // any in-flight step from the old run is dropped
+        if (!keepMode) mode = "mut";
+        lockOn = false; trapped = false; half = false;
+        vi = 0; ver = 1; curSlot = 0; torn = 0; blocked = 0;
+        slots = [
+          { ver: 1, x: 1, y: 2, live: true },
+          { ver: 0, x: 0, y: 0, live: false }
+        ];
+        rd = { A: { ver: 1, x: 1, y: 2, state: "ok" }, B: { ver: 1, x: 1, y: 2, state: "ok" } };
+        wState = "idle"; wSub = "press ▶ Update";
+        setBusy(false);
+        render();
+      }
+
+      function setMode(m) {
+        mode = m;
+        resetState(true);
+        if (m === "mut") {
+          setExplain("One object, two readers",
+            'Press <code>▶ Update (x, y)</code> and watch <b class="bad">Reader A</b> mid-write.');
+        } else {
+          setExplain("Nothing here can change",
+            'Press <code>▶ Update (x, y)</code> — it builds a <b class="good">new version</b> instead.');
+        }
+      }
+
+      function resetAll() {
+        resetState(false);
+        setExplain("One object, two readers",
+          'Press <code>▶ Update (x, y)</code> and watch <b class="bad">Reader A</b> mid-write.');
+      }
+
+      /* ---- boot ---- */
+      document.getElementById("mode-mut").addEventListener("click", function () { setMode("mut"); });
+      document.getElementById("mode-imm").addEventListener("click", function () { setMode("imm"); });
+      document.getElementById("step-btn").addEventListener("click", update);
+      document.getElementById("read-btn").addEventListener("click", readNow);
+      document.getElementById("reset-btn").addEventListener("click", resetAll);
+      document.getElementById("lock-chip").addEventListener("click", toggleLock);
+      document.getElementById("trap-chip").addEventListener("click", springTrap);
+      render();
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

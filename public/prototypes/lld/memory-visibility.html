@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Memory visibility — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---- Action row ---- */
+      .actions { display: flex; gap: 9px; flex-wrap: wrap; margin-bottom: 14px; align-items: center; }
+      .act { font-family: var(--mono); font-size: 12px; font-weight: 700; background: var(--elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 10px 14px; cursor: pointer; color: var(--fg); transition: border-color .15s, transform .1s; }
+      .act.prime { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+      .act:hover { border-color: var(--accent); }
+      .act:active { transform: scale(0.97); }
+      .act:disabled { opacity: .4; cursor: not-allowed; }
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: border-color .15s, transform .1s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+
+      /* ---- Mode toggle ---- */
+      .seg { display: inline-flex; gap: 3px; background: var(--elevated); border: 1px solid var(--border); border-radius: 999px; padding: 3px; }
+      .segb { font-family: var(--mono); font-size: 11px; font-weight: 700; border: 1px solid transparent; border-radius: 999px; padding: 7px 11px; cursor: pointer; background: transparent; color: var(--muted); transition: background .15s, color .15s, border-color .15s; }
+      .segb:hover { color: var(--fg); }
+      .segb.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+      .segb.on.safe { background: var(--success-soft); border-color: rgba(92,198,111,.45); color: var(--success); }
+
+      /* ---- Stage ---- */
+      .stage { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 14px; margin-bottom: 12px; overflow: hidden; }
+      .stage-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+      .stage-cap b { color: var(--fg); }
+      .stage-cap b.t { color: var(--success); }
+      .stage-cap b.f { color: var(--danger); }
+      .wires { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+      .wires line { stroke: var(--border-strong); stroke-width: 1.5; stroke-dasharray: 4 4; }
+      .wires line.live { stroke: var(--success); stroke-dasharray: none; }
+
+      /* ---- Cores ---- */
+      .cores { display: flex; gap: 12px; position: relative; z-index: 1; }
+      .core { flex: 1 1 0; min-width: 0; background: var(--elevated); border: 1.5px solid var(--border-strong); border-radius: var(--r-md); padding: 10px 11px; transition: border-color .25s, box-shadow .25s; }
+      .core.act1 { border-color: var(--accent); box-shadow: 0 0 0 5px var(--accent-soft); }
+      .core.ok { border-color: var(--success); }
+      .core-head { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+      .core-ico { font-size: 15px; }
+      .core-name { font-size: 12px; font-weight: 700; color: var(--fg); }
+      .cache { font-family: var(--mono); font-size: 11px; color: var(--muted); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; display: flex; justify-content: space-between; gap: 6px; transition: border-color .25s, color .25s; }
+      .cache b { color: var(--danger); }
+      .cache.t { border-color: rgba(92,198,111,.45); }
+      .cache.t b { color: var(--success); }
+      .cache.stale { border-color: rgba(251,134,58,.5); color: var(--accent); }
+      .cache.stale b { color: var(--accent); text-decoration: line-through; }
+      .lane { margin-top: 8px; font-family: var(--mono); font-size: 11px; color: var(--fg); background: #0a0b0e; border: 1px solid var(--border); border-left: 3px solid var(--border-strong); border-radius: 6px; padding: 7px 9px; display: flex; justify-content: space-between; align-items: center; gap: 8px; transition: border-color .25s; }
+      .lane.wait { border-left-color: var(--accent); }
+      .lane.ok { border-left-color: var(--success); color: var(--success); }
+      .lane .code { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .spins { font-family: var(--mono); font-size: 10px; padding: 2px 6px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); color: var(--accent); white-space: nowrap; }
+      .spins.done { color: var(--success); border-color: rgba(92,198,111,.4); }
+      .tag { display: none; margin-top: 6px; font-family: var(--mono); font-size: 9.5px; padding: 3px 7px; border-radius: 4px; background: var(--accent-soft); border: 1px solid var(--accent-border); color: var(--accent); }
+      .tag.show { display: inline-block; }
+
+      /* ---- RAM bar ---- */
+      .gap { height: 34px; }
+      .ram { position: relative; z-index: 1; display: flex; justify-content: space-between; align-items: center; gap: 10px; background: var(--elevated); border: 1.5px solid var(--border-strong); border-radius: var(--r-md); padding: 10px 12px; font-family: var(--mono); font-size: 12px; color: var(--muted); transition: border-color .25s, box-shadow .25s; }
+      .ram.t { border-color: var(--success); box-shadow: 0 0 0 5px var(--success-soft); }
+      .ram .val { font-weight: 700; color: var(--danger); }
+      .ram.t .val { color: var(--success); }
+
+      /* ---- travelling dot ---- */
+      .dot { position: absolute; width: 11px; height: 11px; margin: -5.5px 0 0 -5.5px; border-radius: 50%; background: var(--success); box-shadow: 0 0 9px var(--success); z-index: 3; pointer-events: none; transition: left .45s cubic-bezier(.4,.1,.3,1), top .45s cubic-bezier(.4,.1,.3,1); }
+
+      /* ---- Reordering strip ---- */
+      .ro { display: flex; gap: 12px; align-items: stretch; flex-wrap: wrap; }
+      .ro-lane { flex: 1 1 190px; min-width: 0; background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r-md); padding: 8px 10px; transition: border-color .25s, box-shadow .25s; }
+      .ro-lane.bad { border-color: var(--danger); box-shadow: 0 0 0 4px var(--danger-soft); }
+      .ro-lane.good { border-color: var(--success); }
+      .ro-t { font-family: var(--mono); font-size: 9.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--subtle); margin-bottom: 6px; }
+      .stmt { font-family: var(--mono); font-size: 11px; color: var(--muted); padding: 4px 6px; border-radius: 5px; border: 1px solid transparent; margin-bottom: 4px; transition: color .2s, border-color .2s, background .2s; }
+      .stmt.done { color: var(--success); border-color: rgba(92,198,111,.35); background: var(--success-soft); }
+      .sees { font-family: var(--mono); font-size: 12px; color: var(--fg); padding: 6px 2px; }
+      .sees b { color: var(--danger); }
+      .sees b.t { color: var(--success); }
+      .ro-btns { display: flex; flex-direction: column; gap: 6px; justify-content: center; }
+
+      /* ---- Fixed explain panel (replaced, never grows) ---- */
+      .explain { min-height: 72px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+
+      @media (max-width: 560px) {
+        .cores { flex-direction: column; }
+        .gap { height: 22px; }
+        .ro-btns { flex-direction: row; }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ACTIONS -->
+    <div class="actions">
+      <div class="seg" id="seg">
+        <button class="segb on" id="m-plain">🟡 plain</button>
+        <button class="segb" id="m-volatile">⚡ volatile</button>
+        <button class="segb" id="m-lock">🔒 lock</button>
+      </div>
+      <button class="act prime" id="write-btn">▶ A: done = true</button>
+      <button class="act" id="read-btn">▶ B: check</button>
+      <button class="btn" id="reset-btn">↺ Reset</button>
+    </div>
+
+    <!-- STAGE 1 — cores, caches, RAM -->
+    <div class="stage" id="stage">
+      <div class="stage-cap">
+        <span>Two cores · one RAM</span>
+        <span>RAM done: <b id="sc-ram" class="f">false</b> · Core2 sees: <b id="sc-c2" class="f">false</b> · spins: <b id="sc-spins">0</b></span>
+      </div>
+      <svg class="wires" id="wires"></svg>
+      <div class="cores">
+        <div class="core" id="core1">
+          <div class="core-head"><span class="core-ico">🧠</span><span class="core-name">Core 1 · Thread A</span></div>
+          <div class="cache" id="c1-cache"><span>cache</span><span>done: <b>false</b></span></div>
+          <div class="lane" id="lane1"><span class="code">done = true;</span></div>
+        </div>
+        <div class="core" id="core2">
+          <div class="core-head"><span class="core-ico">🧠</span><span class="core-name">Core 2 · Thread B</span></div>
+          <div class="cache" id="c2-cache"><span>cache</span><span>done: <b>false</b></span></div>
+          <div class="lane wait" id="lane2"><span class="code" id="lane2-code">while (!done) { spin }</span><span class="spins" id="spins">spins: 0</span></div>
+          <span class="tag" id="hoist-tag">🌀 read hoisted into a register</span>
+        </div>
+      </div>
+      <div class="gap"></div>
+      <div class="ram" id="ram"><span>💾 Main memory (RAM)</span><span>done: <span class="val" id="ramval">false</span></span></div>
+    </div>
+
+    <!-- STAGE 2 — reordering -->
+    <div class="stage">
+      <div class="stage-cap">
+        <span>🔀 Reordering</span>
+        <span>order: <b id="ro-order">as written</b></span>
+      </div>
+      <div class="ro">
+        <div class="ro-lane" id="ro-a">
+          <div class="ro-t">Thread A writes</div>
+          <div class="stmt" id="st1">① data = 42;</div>
+          <div class="stmt" id="st2">② ready = true;</div>
+        </div>
+        <div class="ro-lane" id="ro-b">
+          <div class="ro-t">Thread B sees</div>
+          <div class="sees" id="sees">data: <b id="see-data">0</b> · ready: <b id="see-ready">false</b></div>
+        </div>
+        <div class="ro-btns">
+          <button class="act" id="swap-btn">⇄ Swap</button>
+          <button class="act" id="run-btn">▶ Run A</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- FIXED EXPLAIN PANEL -->
+    <div class="explain">
+      <div class="explain-title" id="ex-title">Thread B is spinning</div>
+      <div class="explain-body" id="ex-body">B keeps reading <code>done</code> from its own cache. Press <code>▶ A: done = true</code>.</div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span><b style="color:var(--fg)">volatile</b> buys you <b style="color:var(--success)">visibility</b>, not atomicity — <code style="font-family:var(--mono)">count++</code> is still a race.</span>
+    </div>
+
+    <script>
+      /* ---- one explain panel, REPLACED (never appended) ---- */
+      function setExplain(title, bodyHtml) {
+        document.getElementById("ex-title").textContent = title;
+        document.getElementById("ex-body").innerHTML = bodyHtml;
+      }
+
+      var MAX_TICKS = 40;
+
+      var mode = "plain";      // plain | volatile | lock
+      var ramDone = false;     // the real value in main memory
+      var c1 = false;          // Core 1's cached copy
+      var c2 = false;          // Core 2's cached copy
+      var c2Stale = false;     // Core 2's copy invalidated by a volatile/lock write
+      var written = false;     // has A run its write yet
+      var exited = false;      // has B's loop finished
+      var hoisted = false;     // did the JIT hoist B's read into a register
+      var spins = 0;
+      var ticks = 0;
+      var spinTimer = null;
+      var spinsAtWrite = 0;
+
+      /* reordering strip */
+      var swapped = false;
+      var seeData = 0;
+      var seeReady = false;
+      var roBusy = false;
+
+      /* ---------------------------------------------------- mode ---------- */
+      function setMode(m) {
+        mode = m;
+        resetAll(true);
+        if (m === "plain") {
+          setExplain("🟡 plain boolean",
+            'B may read a <b class="bad">cached</b> copy of <code>done</code> — A’s write can stay invisible forever.');
+        } else if (m === "volatile") {
+          setExplain("⚡ volatile",
+            'Every write goes <b class="good">straight to RAM</b>, every read comes <b class="good">from RAM</b>. No caching, no reordering.');
+        } else {
+          setExplain("🔒 lock",
+            'Unlock → lock on the same lock publishes A’s writes to RAM. <span class="dim">A lock gives visibility too.</span>');
+        }
+      }
+
+      /* ---------------------------------------------------- A writes ------ */
+      function writeDone() {
+        if (written) {
+          setExplain("Already written", 'A has run its write. Hit <code>↺ Reset</code> to replay it.');
+          return;
+        }
+        written = true;
+        c1 = true;
+        spinsAtWrite = spins;
+        var core1 = document.getElementById("core1");
+        core1.classList.add("act1");
+        setTimeout(function () { core1.classList.remove("act1"); }, 500);
+
+        if (mode === "plain") {
+          setExplain("Write stuck in Core 1",
+            '<code>done = true</code> landed in Core 1’s cache only — <b class="bad">RAM and Core 2 still say false</b>.');
+          render();
+          startSpin();
+          return;
+        }
+        // volatile / lock: the write travels down to main memory
+        fly("core1", "ram");
+        stopSpin();
+        setTimeout(function () {
+          ramDone = true;
+          c2Stale = true;
+          if (mode === "volatile") {
+            setExplain("Write went straight to RAM",
+              'RAM flips <b class="good">true</b> and Core 2’s cached copy is <b>invalidated</b> — its next read must refetch.');
+          } else {
+            setExplain("Unlock flushed it to RAM",
+              'Unlock → lock is a <b class="good">happens-before</b> edge: everything A wrote is now visible to B.');
+          }
+          render();
+          setTimeout(function () { readOnce(false); }, 1250);
+        }, 470);
+        render();
+      }
+
+      /* ---------------------------------------------------- B reads ------- */
+      function readOnce(manual) {
+        if (exited) {
+          if (manual) setExplain("B already exited", 'The loop is done. Hit <code>↺ Reset</code> to run it again.');
+          return;
+        }
+        if (manual) spins++;
+
+        if (mode === "plain") {
+          if (!hoisted && written && spins >= spinsAtWrite + 8) {
+            hoisted = true;
+            setExplain("The read got hoisted",
+              'The compiler kept <code>done</code> in a <b class="bad">register</b> — B now re-reads nothing at all.');
+          } else if (manual) {
+            setExplain(written ? "A’s write never reached B" : "B read its own cached copy",
+              written
+                ? 'B read <b class="bad">false</b> from Core 2’s cache — the new value is stuck in Core 1.'
+                : 'B reads <b class="bad">false</b> and spins again. <span class="dim">Nothing has changed yet.</span>');
+          }
+          render();
+          return;
+        }
+
+        // volatile / lock: skip the cache, go to RAM
+        var pulled = false;
+        if (c2Stale || c2 !== ramDone) {
+          c2 = ramDone;
+          c2Stale = false;
+          pulled = true;
+        }
+        if (c2) {
+          exited = true;
+          stopSpin();
+          if (pulled) fly("ram", "core2");
+          setExplain("B’s loop exits",
+            'A volatile read skips the cache and pulls <b class="good">true</b> from RAM — B finally sees it.');
+        } else if (manual) {
+          setExplain("B read RAM",
+            'RAM still says <b class="bad">false</b>, so B spins — but it will notice the <b class="good">moment</b> A writes.');
+        }
+        render();
+      }
+
+      /* ---------------------------------------------------- spin loop ----- */
+      function tick() {
+        if (exited || ticks >= MAX_TICKS) {
+          stopSpin();
+          if (!exited) {
+            setExplain("Still spinning (paused)",
+              written
+                ? 'A wrote <code>true</code> and B <b class="bad">still</b> hasn’t seen it. <span class="dim">Try ⚡ volatile.</span>'
+                : 'Paused at <b>' + spins + '</b> spins for the demo. Press <code>▶ A: done = true</code>.');
+          }
+          render();
+          return;
+        }
+        ticks++;
+        spins++;
+        readOnce(false);
+      }
+      function startSpin() {
+        stopSpin();
+        ticks = 0;
+        spinTimer = setInterval(tick, 130);
+      }
+      function stopSpin() {
+        if (spinTimer !== null) { clearInterval(spinTimer); spinTimer = null; }
+      }
+
+      /* ---------------------------------------------------- reordering ---- */
+      function swapOrder() {
+        if (mode !== "plain") {
+          setExplain("🔒 order is locked",
+            'A volatile write (or a lock) <b class="good">forbids reordering</b> across it — the data lands before the flag.');
+          return;
+        }
+        swapped = !swapped;
+        seeData = 0; seeReady = false;
+        setExplain(swapped ? "Statements swapped" : "Original order restored",
+          swapped
+            ? 'The two writes are independent, so the CPU may run <code>ready</code> <b class="bad">first</b>. Press <code>▶ Run A</code>.'
+            : '<code>data</code> is published before the flag. <span class="dim">Press <code>▶ Run A</code>.</span>');
+        renderRo();
+      }
+
+      function runOrder() {
+        if (roBusy) return;
+        roBusy = true;
+        seeData = 0; seeReady = false;
+        var flagFirst = swapped && mode === "plain";
+        renderRo();
+
+        setTimeout(function () {
+          if (flagFirst) { seeReady = true; } else { seeData = 42; }
+          renderRo();
+          if (flagFirst) {
+            document.getElementById("ro-b").classList.add("bad");
+            setExplain("B saw the flag before the data",
+              '<code>ready == true</code> but <code>data == <b class="bad">0</b></code> — B acted on a half-published value.');
+          } else {
+            setExplain("Data first, then the flag",
+              'When B sees <code>ready == true</code>, <code>data</code> is <b class="good">already 42</b>. Safe publication.');
+          }
+          renderRo();
+        }, 420);
+
+        setTimeout(function () {
+          if (flagFirst) { seeData = 42; } else { seeReady = true; }
+          roBusy = false;
+          renderRo();
+        }, 980);
+      }
+
+      /* ---------------------------------------------------- dot travel ---- */
+      function fly(fromId, toId) {
+        var stage = document.getElementById("stage");
+        var from = document.getElementById(fromId);
+        var to = document.getElementById(toId);
+        if (!stage || !from || !to) return;
+        var s = stage.getBoundingClientRect();
+        var a = from.getBoundingClientRect();
+        var b = to.getBoundingClientRect();
+        var dot = document.createElement("div");
+        dot.className = "dot";
+        dot.style.left = (a.left - s.left + a.width / 2) + "px";
+        dot.style.top = (a.top - s.top + a.height) + "px";
+        stage.appendChild(dot);
+        setTimeout(function () {
+          dot.style.left = (b.left - s.left + b.width / 2) + "px";
+          dot.style.top = (b.top - s.top) + "px";
+        }, 20);
+        setTimeout(function () {
+          if (dot.parentNode) dot.parentNode.removeChild(dot);
+        }, 620);
+      }
+
+      /* ---------------------------------------------------- wires --------- */
+      function drawWires() {
+        var svg = document.getElementById("wires");
+        var stage = document.getElementById("stage");
+        var ram = document.getElementById("ram");
+        if (!svg || !stage || !ram) return;
+        svg.innerHTML = "";
+        var s = stage.getBoundingClientRect();
+        var r = ram.getBoundingClientRect();
+        var ry = r.top - s.top;
+        ["core1", "core2"].forEach(function (id) {
+          var el = document.getElementById(id);
+          if (!el) return;
+          var c = el.getBoundingClientRect();
+          var x = c.left - s.left + c.width / 2;
+          var ln = document.createElementNS("http://www.w3.org/2000/svg", "line");
+          ln.setAttribute("x1", x);
+          ln.setAttribute("y1", c.top - s.top + c.height);
+          ln.setAttribute("x2", x);
+          ln.setAttribute("y2", ry);
+          if (mode !== "plain") ln.setAttribute("class", "live");
+          svg.appendChild(ln);
+        });
+      }
+
+      /* ---------------------------------------------------- render -------- */
+      function cacheCell(el, val, stale) {
+        el.className = "cache" + (val ? " t" : "") + (stale ? " stale" : "");
+        el.innerHTML = "<span>cache</span><span>done: <b>" + (val ? "true" : "false") + "</b></span>";
+      }
+
+      function render() {
+        cacheCell(document.getElementById("c1-cache"), c1, false);
+        cacheCell(document.getElementById("c2-cache"), c2, c2Stale);
+
+        var ram = document.getElementById("ram");
+        ram.className = "ram" + (ramDone ? " t" : "");
+        document.getElementById("ramval").textContent = ramDone ? "true" : "false";
+
+        var seen = hoisted ? false : c2;
+        var core1 = document.getElementById("core1");
+        var pulsing = core1.classList.contains("act1");
+        core1.className = "core" + (c1 ? " ok" : "") + (pulsing ? " act1" : "");
+        document.getElementById("core2").className = "core" + (exited ? " ok" : "");
+
+        var lane2 = document.getElementById("lane2");
+        lane2.className = "lane " + (exited ? "ok" : "wait");
+        document.getElementById("lane2-code").textContent =
+          exited ? "done ✓ — loop exited" : (hoisted ? "r1 = done; while (!r1) { }" : "while (!done) { spin }");
+        var sp = document.getElementById("spins");
+        sp.textContent = "spins: " + spins;
+        sp.className = "spins" + (exited ? " done" : "");
+        document.getElementById("hoist-tag").className = "tag" + (hoisted ? " show" : "");
+
+        var scRam = document.getElementById("sc-ram");
+        scRam.textContent = ramDone ? "true" : "false";
+        scRam.className = ramDone ? "t" : "f";
+        var scC2 = document.getElementById("sc-c2");
+        scC2.textContent = seen ? "true" : "false";
+        scC2.className = seen ? "t" : "f";
+        document.getElementById("sc-spins").textContent = String(spins);
+
+        var wb = document.getElementById("write-btn");
+        wb.disabled = written;
+        drawWires();
+        renderRo();
+      }
+
+      function renderRo() {
+        var first = swapped ? "① ready = true;" : "① data = 42;";
+        var second = swapped ? "② data = 42;" : "② ready = true;";
+        var s1 = document.getElementById("st1");
+        var s2 = document.getElementById("st2");
+        s1.textContent = first;
+        s2.textContent = second;
+        var firstDone = swapped ? seeReady : seeData === 42;
+        var secondDone = swapped ? seeData === 42 : seeReady;
+        s1.className = "stmt" + (firstDone ? " done" : "");
+        s2.className = "stmt" + (secondDone ? " done" : "");
+
+        document.getElementById("ro-order").textContent = swapped ? "swapped ⇄" : "as written";
+        var sd = document.getElementById("see-data");
+        sd.textContent = String(seeData);
+        sd.className = seeData === 42 ? "t" : "";
+        var sr = document.getElementById("see-ready");
+        sr.textContent = seeReady ? "true" : "false";
+        sr.className = seeReady ? "t" : "";
+
+        var lane = document.getElementById("ro-b");
+        var broken = seeReady && seeData !== 42;
+        lane.className = "ro-lane" + (broken ? " bad" : (seeReady && seeData === 42 ? " good" : ""));
+
+        var sw = document.getElementById("swap-btn");
+        sw.disabled = mode !== "plain";
+        sw.textContent = mode === "plain" ? "⇄ Swap" : "🔒 Locked";
+      }
+
+      /* ---------------------------------------------------- reset --------- */
+      function resetAll(keepMode) {
+        stopSpin();
+        ramDone = false; c1 = false; c2 = false; c2Stale = false;
+        written = false; exited = false; hoisted = false;
+        spins = 0; ticks = 0;
+        swapped = false; seeData = 0; seeReady = false; roBusy = false;
+        document.getElementById("ro-b").className = "ro-lane";
+        document.getElementById("core1").className = "core";
+        document.getElementById("m-plain").className = "segb" + (mode === "plain" ? " on" : "");
+        document.getElementById("m-volatile").className = "segb" + (mode === "volatile" ? " on safe" : "");
+        document.getElementById("m-lock").className = "segb" + (mode === "lock" ? " on safe" : "");
+        render();
+        startSpin();
+        if (!keepMode) {
+          setExplain("Thread B is spinning",
+            'B keeps reading <code>done</code> from its own cache. Press <code>▶ A: done = true</code>.');
+        }
+      }
+
+      /* ---------------------------------------------------- boot ---------- */
+      document.getElementById("m-plain").addEventListener("click", function () { setMode("plain"); });
+      document.getElementById("m-volatile").addEventListener("click", function () { setMode("volatile"); });
+      document.getElementById("m-lock").addEventListener("click", function () { setMode("lock"); });
+      document.getElementById("write-btn").addEventListener("click", writeDone);
+      document.getElementById("read-btn").addEventListener("click", function () { readOnce(true); });
+      document.getElementById("reset-btn").addEventListener("click", function () { resetAll(false); });
+      document.getElementById("swap-btn").addEventListener("click", swapOrder);
+      document.getElementById("run-btn").addEventListener("click", runOrder);
+      window.addEventListener("resize", drawWires);
+      resetAll(false);
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>
