@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Locks, Mutex, Semaphore — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---- Tabs ---- */
+      .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+      .tab { font-family: var(--mono); font-size: 12px; font-weight: 700; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 8px 15px; cursor: pointer; color: var(--muted); transition: border-color .15s, color .15s, background .15s; }
+      .tab:hover { border-color: var(--border-strong); color: var(--fg); }
+      .tab.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+
+      /* ---- Action row ---- */
+      .actions { display: flex; gap: 9px; flex-wrap: wrap; margin-bottom: 14px; align-items: center; }
+      .act { font-family: var(--mono); font-size: 12px; font-weight: 700; background: var(--elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 10px 14px; cursor: pointer; color: var(--fg); transition: border-color .15s, transform .1s; }
+      .act.prime { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+      .act:hover { border-color: var(--accent); }
+      .act:active { transform: scale(0.97); }
+      .act:disabled { opacity: .4; cursor: not-allowed; }
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 13px; cursor: pointer; transition: border-color .15s, transform .1s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .grp { display: flex; align-items: center; gap: 6px; }
+      .grp.off { display: none; }
+      .sq { font-family: var(--mono); font-weight: 700; padding: 8px 11px; }
+      .permread { font-family: var(--mono); font-size: 11.5px; color: var(--fg); min-width: 92px; text-align: center; }
+      .toggle { font-family: var(--mono); font-size: 12px; font-weight: 700; border-radius: 999px; padding: 9px 15px; cursor: pointer; background: var(--success-soft); border: 1px solid rgba(92,198,111,.45); color: var(--success); transition: background .15s, border-color .15s, color .15s; }
+      .toggle.nolock { background: var(--danger-soft); border-color: rgba(240,104,104,.45); color: var(--danger); }
+
+      /* ---- Stage ---- */
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 13px; margin-bottom: 14px; }
+      .stage-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin-bottom: 11px; display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+      .stage-cap b { color: var(--fg); }
+      .stage-cap b.ok { color: var(--success); }
+      .stage-cap b.bad { color: var(--danger); }
+      .board { display: grid; grid-template-columns: 1fr 118px 1.25fr; gap: 10px; align-items: stretch; }
+      .col { background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px; min-height: 168px; }
+      .col-lab { font-family: var(--mono); font-size: 9.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--subtle); margin-bottom: 8px; text-align: center; }
+      .col.room { border-color: rgba(94,159,246,.35); }
+
+      /* ---- Thread cards ---- */
+      .lane { display: flex; flex-direction: column; gap: 6px; }
+      .th { display: flex; align-items: center; gap: 7px; background: var(--surface); border: 1.5px solid var(--border-strong); border-radius: var(--r-md); padding: 6px 8px; cursor: pointer; opacity: .62; transition: border-color .2s, opacity .2s, box-shadow .2s, background .2s; }
+      .th:hover { opacity: 1; }
+      .th-ico { font-size: 15px; }
+      .th-name { font-family: var(--mono); font-size: 11.5px; font-weight: 700; color: var(--fg); }
+      .th-st { font-family: var(--mono); font-size: 9.5px; margin-left: auto; color: var(--subtle); white-space: nowrap; }
+      .th.wait { opacity: 1; border-color: var(--accent); background: var(--accent-soft); }
+      .th.wait .th-st { color: var(--accent); }
+      .th.in { opacity: 1; border-color: var(--success); background: var(--success-soft); }
+      .th.in .th-st { color: var(--success); }
+      .th.done { opacity: .55; border-color: rgba(92,198,111,.35); }
+      .th.done .th-st { color: var(--success); }
+      .th.clash { border-color: var(--danger); background: var(--danger-soft); }
+      .th.clash .th-st { color: var(--danger); }
+      .th.pop { box-shadow: 0 0 0 5px rgba(255,255,255,.05); }
+
+      /* ---- Door ---- */
+      .door { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; background: var(--elevated); border: 1.5px dashed var(--border-strong); border-radius: var(--r-md); padding: 9px 6px; transition: border-color .2s, background .2s; }
+      .door.shut { border-style: solid; border-color: var(--success); }
+      .door.open { border-color: var(--danger); background: var(--danger-soft); }
+      .door.sem { border-style: solid; border-color: var(--info); }
+      .door-ico { font-size: 24px; }
+      .door-lab { font-family: var(--mono); font-size: 10px; color: var(--muted); text-align: center; }
+      .keys { display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; min-height: 12px; }
+      .key { width: 12px; height: 12px; border-radius: 3px; border: 1px solid var(--border-strong); background: transparent; }
+      .key.free { border-color: var(--success); background: var(--success-soft); }
+      .key.used { border-color: var(--accent); background: var(--accent); }
+      .holder { font-family: var(--mono); font-size: 10px; color: var(--fg); text-align: center; }
+
+      /* ---- Resource room ---- */
+      .res { background: var(--surface); border: 1.5px solid var(--border-strong); border-radius: var(--r-md); padding: 8px 10px; text-align: center; margin-bottom: 8px; transition: border-color .25s, box-shadow .25s; }
+      .res.ok { border-color: var(--success); box-shadow: 0 0 0 4px var(--success-soft); }
+      .res.bad { border-color: var(--danger); box-shadow: 0 0 0 4px var(--danger-soft); }
+      .res-lab { font-family: var(--mono); font-size: 9.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--subtle); }
+      .bal { font-family: var(--mono); font-size: 26px; font-weight: 700; color: var(--fg); line-height: 1.25; }
+      .bal.ok { color: var(--success); }
+      .bal.bad { color: var(--danger); }
+      .res-sub { font-family: var(--mono); font-size: 9.5px; color: var(--muted); }
+      .empty { font-family: var(--mono); font-size: 10px; color: var(--subtle); text-align: center; padding: 12px 0; }
+
+      /* ---- Fixed explain panel (replaced, never grows) ---- */
+      .explain { min-height: 72px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .warn { color: var(--accent); font-weight: 700; }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+
+      @media (max-width: 560px) {
+        .board { grid-template-columns: 1fr; }
+        .col { min-height: 0; }
+        .door { flex-direction: row; gap: 10px; padding: 8px; }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- TABS -->
+    <div class="tabs">
+      <button class="tab on" id="tab-mutex">🔒 Mutex</button>
+      <button class="tab" id="tab-sem">🎟 Semaphore</button>
+    </div>
+
+    <!-- ACTIONS -->
+    <div class="actions">
+      <div class="grp" id="grp-mutex">
+        <button class="toggle" id="lock-toggle">🔒 With lock</button>
+      </div>
+      <div class="grp off" id="grp-sem">
+        <button class="btn sq" id="perm-minus">−</button>
+        <span class="permread" id="perm-read">permits: 3 / 3</span>
+        <button class="btn sq" id="perm-plus">＋</button>
+      </div>
+      <button class="act prime" id="run-btn">▶ Run all</button>
+      <button class="btn" id="rel-btn">✅ release</button>
+      <button class="btn" id="reset-btn">↺ Reset</button>
+    </div>
+
+    <!-- STAGE -->
+    <div class="stage">
+      <div class="stage-cap">
+        <span id="cap-left">threads → door → shared resource</span>
+        <span>inside: <b id="cap-in">0/1</b> · waiting: <b id="cap-wait">0</b> · balance: <b id="cap-bal">100</b></span>
+      </div>
+      <div class="board">
+        <div class="col">
+          <div class="col-lab">threads</div>
+          <div class="lane" id="lane"></div>
+        </div>
+        <div class="door shut" id="door">
+          <div class="door-ico" id="door-ico">🚪</div>
+          <div class="door-lab" id="door-lab">mutex · 1 key</div>
+          <div class="keys" id="keys"></div>
+          <div class="holder" id="holder">holder: —</div>
+        </div>
+        <div class="col room">
+          <div class="col-lab">critical section</div>
+          <div class="res" id="res">
+            <div class="res-lab">shared state</div>
+            <div class="bal" id="bal">balance: 100</div>
+            <div class="res-sub" id="bal-sub">4 threads × +1 → should be 104</div>
+          </div>
+          <div class="lane" id="room-lane"></div>
+          <div class="empty" id="room-empty">room is empty</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FIXED EXPLAIN PANEL -->
+    <div class="explain">
+      <div class="explain-title" id="ex-title">One key, one holder</div>
+      <div class="explain-body" id="ex-body">Hit <code>▶ Run all</code>: all four threads ask for the lock, only one gets in.</div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>A mutex is <b style="color:var(--fg)">one key</b> — one holder at a time. A semaphore is <b style="color:var(--fg)">N permits</b> — it counts how many may be inside.</span>
+    </div>
+
+    <script>
+      /* ---- one explain panel, REPLACED (never appended) ---- */
+      function setExplain(title, bodyHtml) {
+        document.getElementById("ex-title").textContent = title;
+        document.getElementById("ex-body").innerHTML = bodyHtml;
+      }
+
+      var THREADS = [
+        { id: "T1", emoji: "🧵" },
+        { id: "T2", emoji: "🧶" },
+        { id: "T3", emoji: "🪡" },
+        { id: "T4", emoji: "🎗" }
+      ];
+
+      var tab = "mutex";      // "mutex" | "sem"
+      var locked = true;      // mutex tab toggle
+      var permits = 3;        // semaphore total permits
+      var balance = 100;
+      var busy = false;       // a timed sequence is playing
+      var token = 0;          // cancels stale timers
+
+      var st = {};            // id -> "idle" | "wait" | "in" | "done"
+      var readv = {};         // id -> value read on entry (null when none)
+
+      function T(id) { for (var i = 0; i < THREADS.length; i++) if (THREADS[i].id === id) return THREADS[i]; return null; }
+      function listOf(s) { return THREADS.filter(function (t) { return st[t.id] === s; }); }
+      function capacity() {
+        if (tab === "sem") return permits;
+        return locked ? 1 : 4;
+      }
+
+      /* ---- build the 4 thread cards ONCE; they move between lanes ---- */
+      function buildThreads() {
+        THREADS.forEach(function (t) {
+          var card = document.createElement("div");
+          card.className = "th";
+
+          var ico = document.createElement("span");
+          ico.className = "th-ico";
+          ico.textContent = t.emoji;
+
+          var name = document.createElement("span");
+          name.className = "th-name";
+          name.textContent = t.id;
+
+          var badge = document.createElement("span");
+          badge.className = "th-st";
+          badge.textContent = "idle";
+
+          card.appendChild(ico);
+          card.appendChild(name);
+          card.appendChild(badge);
+          card.addEventListener("click", (function (id) {
+            return function () { request(id); };
+          })(t.id));
+
+          t.el = card;
+          t.badge = badge;
+          st[t.id] = "idle";
+          readv[t.id] = null;
+        });
+      }
+
+      /* ---- click a thread = acquire() ---- */
+      function request(id) {
+        if (busy) return;
+        if (tab === "mutex" && !locked) {
+          setExplain("🔓 No lock — nothing to ask",
+            'There is no door to knock on. Hit <code>▶ Run all</code> and watch the balance break.');
+          return;
+        }
+        if (st[id] !== "idle") { render(); return; }
+        st[id] = "wait";
+        var admitted = admit();
+        render();
+        if (admitted.length) {
+          if (tab === "sem") {
+            setExplain("🎟 " + id + " took a permit",
+              id + ' is inside and read <code>' + readv[id] + '</code>. Free permits: <b class="good">' + free() + '</b>.');
+          } else {
+            setExplain("🔑 " + id + " holds the lock",
+              id + ' is inside and read <code>' + readv[id] + '</code>. Everyone else must wait.');
+          }
+        } else {
+          setExplain("⏳ " + id + " is blocked",
+            tab === "sem"
+              ? 'No permit left, so <code>acquire()</code> <b class="warn">blocks</b> until someone releases one.'
+              : 'The key is taken, so <code>lock()</code> <b class="warn">blocks</b> until the holder releases.');
+        }
+      }
+
+      function free() { return Math.max(0, capacity() - listOf("in").length); }
+
+      /* ---- admit waiting threads while there is room (FIFO) ---- */
+      function admit() {
+        var moved = [];
+        var w = listOf("wait");
+        for (var i = 0; i < w.length; i++) {
+          if (listOf("in").length >= capacity()) break;
+          st[w[i].id] = "in";
+          readv[w[i].id] = balance;      // read inside the critical section
+          moved.push(w[i].id);
+        }
+        return moved;
+      }
+
+      /* ---- ✅ release = write, hand the key/permit back, admit next ---- */
+      function releaseOne() {
+        if (busy) return;
+        var inside = listOf("in");
+        if (!inside.length) {
+          setExplain("Nobody is inside",
+            'Nothing to release. Click a thread or <code>' + runLabel() + '</code> first.');
+          return;
+        }
+        var t = inside[0];
+        balance = readv[t.id] + 1;       // the write half of read → +1 → write
+        readv[t.id] = null;
+        st[t.id] = "done";
+        var next = admit();
+        render();
+
+        if (listOf("done").length === THREADS.length) {
+          finishLine();
+          return;
+        }
+        if (next.length) {
+          setExplain("✅ " + t.id + " released → " + next.join(", ") + " in",
+            t.id + ' wrote <code>' + balance + '</code>, then released in a <code>finally</code>. Next in.');
+        } else {
+          setExplain("✅ " + t.id + " released",
+            t.id + ' wrote <code>' + balance + '</code>. ' +
+            (tab === "sem" ? 'A permit is free again — any thread may release one.' : 'The key is free again.'));
+        }
+      }
+
+      function finishLine() {
+        if (balance === 104) {
+          setExplain("balance: 104 ✓",
+            'Four increments, <b class="good">none lost</b> — only one thread was ever inside at a time.');
+        } else {
+          setExplain("balance: " + balance + " ✗",
+            'Threads that read the <b class="bad">same</b> value overwrote each other. ' +
+            (tab === "sem" ? 'N permits limit <i>how many</i>, not <i>who</i>.' : 'Updates were lost.'));
+        }
+      }
+
+      function runLabel() { return tab === "sem" ? "▶ Acquire all" : "▶ Run all"; }
+
+      /* ---- ▶ Run all ---- */
+      function runAll() {
+        if (busy) return;
+        if (tab === "mutex" && !locked) { raceDemo(); return; }
+        THREADS.forEach(function (t) { if (st[t.id] === "idle") st[t.id] = "wait"; });
+        var got = admit();
+        render();
+        var waiting = listOf("wait").length;
+        if (!got.length) {
+          setExplain("All blocked",
+            'Everyone is queued. Hit <code>✅ release</code> to let the next one in.');
+          return;
+        }
+        if (tab === "sem") {
+          setExplain("🎟 " + got.length + " in, " + waiting + " waiting",
+            'A semaphore counts permits, not owners: <b class="good">' + got.length + '</b> inside at once.');
+        } else {
+          setExplain("🔑 " + got[0] + " got the key",
+            got[0] + ' read <code>' + readv[got[0]] + '</code> inside. <b class="warn">' + waiting + '</b> queue outside.');
+        }
+      }
+
+      /* ---- 🔓 no lock: everyone walks in, updates get lost ---- */
+      function raceDemo() {
+        resetRun(true);          // clears the board (also bumps the token)
+        busy = true;
+        var my = token;
+        var step = function (fn, ms) {
+          setTimeout(function () { if (my === token) fn(); }, ms);
+        };
+
+        step(function () {
+          st.T1 = "in"; st.T2 = "in"; readv.T1 = balance; readv.T2 = balance;
+          render();
+          setExplain("No door — both walk in",
+            'T1 and T2 are inside together and <b class="bad">both read 100</b>.');
+        }, 60);
+
+        step(function () {
+          balance = 101;
+          st.T1 = "done"; st.T2 = "done"; readv.T1 = null; readv.T2 = null;
+          render(true);
+          setExplain("Both wrote 101",
+            'Two <code>+1</code>s, one result. <b class="bad">One update was lost.</b>');
+        }, 1100);
+
+        step(function () {
+          st.T3 = "in"; st.T4 = "in"; readv.T3 = balance; readv.T4 = balance;
+          render();
+          setExplain("T3 and T4 interleave too",
+            'Same story one step later: <b class="bad">both read 101</b> before either writes.');
+        }, 2100);
+
+        step(function () {
+          balance = 102;
+          st.T3 = "done"; st.T4 = "done"; readv.T3 = null; readv.T4 = null;
+          busy = false;
+          render(true);
+          setExplain("balance: 102 ✗ (should be 104)",
+            'Four <code>+1</code>s, only two landed. <b class="bad">This is a data race.</b>');
+        }, 3100);
+      }
+
+      /* ---- render (idempotent, never grows) ---- */
+      function render(flash) {
+        var lane = document.getElementById("lane");
+        var room = document.getElementById("room-lane");
+        var inside = listOf("in").length;
+        var waiting = listOf("wait").length;
+
+        THREADS.forEach(function (t) {
+          var s = st[t.id];
+          var host = s === "in" ? room : lane;
+          host.appendChild(t.el);
+          var clash = tab === "mutex" && !locked && s !== "idle";
+          t.el.className = "th " + (s === "idle" ? "" : s) + (clash ? " clash" : "");
+          if (s === "in") {
+            t.badge.textContent = (tab === "sem" ? "🎟 read " : "🔑 read ") + readv[t.id];
+          } else if (s === "wait") {
+            t.badge.textContent = "⏳ waiting";
+          } else if (s === "done") {
+            t.badge.textContent = "✓ done";
+          } else {
+            t.badge.textContent = "idle";
+          }
+        });
+        document.getElementById("room-empty").style.display = inside ? "none" : "block";
+
+        /* door */
+        var door = document.getElementById("door");
+        var keys = document.getElementById("keys");
+        var cap = capacity();
+        keys.innerHTML = "";
+        if (tab === "mutex" && !locked) {
+          door.className = "door open";
+          document.getElementById("door-ico").textContent = "🚫";
+          document.getElementById("door-lab").textContent = "no lock · wide open";
+          document.getElementById("holder").textContent = "holder: anyone";
+        } else {
+          door.className = "door " + (tab === "sem" ? "sem" : "shut");
+          document.getElementById("door-ico").textContent = tab === "sem" ? "🎟" : (inside ? "🔒" : "🔓");
+          document.getElementById("door-lab").textContent =
+            tab === "sem" ? "semaphore · " + cap + " permits" : "mutex · 1 key";
+          for (var i = 0; i < cap; i++) {
+            var k = document.createElement("span");
+            k.className = "key " + (i < inside ? "used" : "free");
+            keys.appendChild(k);
+          }
+          document.getElementById("holder").textContent =
+            tab === "sem"
+              ? "permits: " + free() + " / " + cap
+              : "holder: " + (inside ? listOf("in")[0].id : "—");
+        }
+
+        /* resource */
+        var done = listOf("done").length;
+        var bal = document.getElementById("bal");
+        var res = document.getElementById("res");
+        bal.textContent = "balance: " + balance;
+        bal.className = "bal";
+        res.className = "res";
+        if (done === THREADS.length) {
+          var good = balance === 104;
+          bal.className = "bal " + (good ? "ok" : "bad");
+          res.className = "res " + (good ? "ok" : "bad");
+          document.getElementById("bal-sub").textContent = good ? "correct ✓ nothing lost" : "wrong ✗ should be 104";
+        } else {
+          document.getElementById("bal-sub").textContent = "4 threads × +1 → should be 104";
+        }
+        if (flash) {
+          res.className = "res bad";
+          setTimeout(function () { if (listOf("done").length !== THREADS.length) res.className = "res"; }, 420);
+        }
+
+        /* caption */
+        document.getElementById("cap-in").textContent = inside + "/" + cap;
+        document.getElementById("cap-wait").textContent = waiting;
+        var cb = document.getElementById("cap-bal");
+        cb.textContent = String(balance);
+        cb.className = done === THREADS.length ? (balance === 104 ? "ok" : "bad") : "";
+        document.getElementById("cap-left").textContent =
+          tab === "sem" ? "threads → 🎟 barrier → shared resource" : "threads → 🚪 door → shared resource";
+
+        /* controls */
+        document.getElementById("perm-read").textContent =
+          "permits: " + (tab === "sem" ? free() : permits) + " / " + permits;
+        document.getElementById("run-btn").textContent = runLabel();
+        var lt = document.getElementById("lock-toggle");
+        lt.textContent = locked ? "🔒 With lock" : "🔓 No lock";
+        lt.className = "toggle" + (locked ? "" : " nolock");
+        document.getElementById("grp-mutex").className = "grp" + (tab === "mutex" ? "" : " off");
+        document.getElementById("grp-sem").className = "grp" + (tab === "sem" ? "" : " off");
+        document.getElementById("tab-mutex").className = "tab" + (tab === "mutex" ? " on" : "");
+        document.getElementById("tab-sem").className = "tab" + (tab === "sem" ? " on" : "");
+      }
+
+      /* ---- reset the run (keeps tab / mode) ---- */
+      function resetRun(keepBusy) {
+        token++;
+        if (!keepBusy) busy = false;
+        balance = 100;
+        THREADS.forEach(function (t) { st[t.id] = "idle"; readv[t.id] = null; });
+        render();
+      }
+
+      /* ---- wiring ---- */
+      document.getElementById("tab-mutex").addEventListener("click", function () {
+        tab = "mutex";
+        resetRun();
+        setExplain(locked ? "🔒 Mutex — one key" : "🔓 No lock",
+          locked
+            ? 'Hit <code>▶ Run all</code>: four threads ask, <b class="good">one</b> gets in.'
+            : 'Nothing guards the room. Hit <code>▶ Run all</code> and watch the balance break.');
+      });
+
+      document.getElementById("tab-sem").addEventListener("click", function () {
+        tab = "sem";
+        resetRun();
+        setExplain("🎟 Semaphore — " + permits + " permits",
+          'A car park with <b class="good">' + permits + '</b> spaces. Hit <code>▶ Acquire all</code> and count who gets in.');
+      });
+
+      document.getElementById("lock-toggle").addEventListener("click", function () {
+        locked = !locked;
+        resetRun();
+        setExplain(locked ? "🔒 With lock" : "🔓 No lock",
+          locked
+            ? 'One key guards the door: <code>acquire → work → release</code>, one thread at a time.'
+            : 'The door is gone. Every thread may enter the critical section at once.');
+      });
+
+      document.getElementById("perm-minus").addEventListener("click", function () {
+        if (permits <= 1) return;
+        permits--;
+        tab = "sem";
+        resetRun();
+        setExplain("permits: " + permits,
+          permits === 1
+            ? 'One permit = one thread inside. <b class="good">That is exactly a mutex</b>, minus the owner.'
+            : '<b>Mutex = 1 in. Semaphore = N in.</b> Now <b class="good">' + permits + '</b> may share the room.');
+      });
+
+      document.getElementById("perm-plus").addEventListener("click", function () {
+        if (permits >= 4) return;
+        permits++;
+        tab = "sem";
+        resetRun();
+        setExplain("permits: " + permits,
+          '<b>Mutex = 1 in. Semaphore = N in.</b> Now <b class="good">' + permits + '</b> may share the room.');
+      });
+
+      document.getElementById("run-btn").addEventListener("click", runAll);
+      document.getElementById("rel-btn").addEventListener("click", releaseOne);
+      document.getElementById("reset-btn").addEventListener("click", function () {
+        resetRun();
+        setExplain("Reset",
+          'Balance back to <code>100</code>. Click a thread to <code>acquire()</code>, or <code>' + runLabel() + '</code>.');
+      });
+
+      /* ---- boot ---- */
+      buildThreads();
+      render();
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

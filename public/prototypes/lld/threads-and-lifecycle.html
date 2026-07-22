@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Threads &amp; lifecycle — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---- Action row ---- */
+      .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; align-items: center; }
+      .act { font-family: var(--mono); font-size: 11.5px; font-weight: 700; background: var(--elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 9px 12px; cursor: pointer; color: var(--fg); transition: border-color .15s, transform .1s, opacity .15s; }
+      .act.prime { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+      .act:hover { border-color: var(--accent); }
+      .act:active { transform: scale(0.97); }
+      .act:disabled { opacity: .32; cursor: not-allowed; border-color: var(--border); }
+      .act:disabled:hover { border-color: var(--border); }
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 13px; cursor: pointer; transition: border-color .15s, transform .1s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .mlabel { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--subtle); }
+      .modes { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 999px; overflow: hidden; }
+      .mode { font-family: var(--mono); font-size: 11px; font-weight: 700; padding: 8px 12px; background: transparent; border: 0; color: var(--muted); cursor: pointer; transition: background .15s, color .15s; }
+      .mode.on { background: var(--accent-soft); color: var(--accent); }
+      .sep { width: 1px; height: 22px; background: var(--border-strong); margin: 0 2px; }
+
+      /* ---- Stage ---- */
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 14px; margin-bottom: 14px; }
+      .stage-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+      .stage-cap b { color: var(--fg); }
+
+      /* ---- Lifecycle track ---- */
+      .track { display: flex; align-items: stretch; justify-content: center; gap: 3px; margin-bottom: 14px; }
+      .node { flex: 1 1 0; min-width: 0; background: var(--elevated); border: 1.5px solid var(--border-strong); border-radius: var(--r-md); padding: 9px 5px; text-align: center; opacity: .45; transition: opacity .2s, border-color .2s, box-shadow .25s, transform .2s; }
+      .node.lit { opacity: 1; border-color: var(--accent-border); box-shadow: 0 0 0 5px var(--accent-soft); transform: translateY(-2px); }
+      .node.err { opacity: 1; border-color: var(--danger); box-shadow: 0 0 0 5px var(--danger-soft); }
+      .n-ico { font-size: 14px; line-height: 1; }
+      .n-lab { display: block; font-family: var(--mono); font-size: 9.5px; font-weight: 700; letter-spacing: .03em; color: var(--fg); margin-top: 4px; }
+      .n-sub { display: block; font-size: 9.5px; color: var(--subtle); margin-top: 3px; }
+      .arrow { display: flex; align-items: center; justify-content: center; width: 16px; font-family: var(--mono); font-size: 15px; font-weight: 700; color: var(--border-strong); transition: color .2s, transform .2s; }
+      .arrow.pulse { color: var(--accent); transform: scale(1.45); }
+
+      /* ---- Thread cards ---- */
+      .cards { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+      .card { width: 168px; background: var(--elevated); border: 1.5px solid var(--border-strong); border-radius: var(--r-md); padding: 10px; text-align: center; cursor: pointer; opacity: .6; transition: opacity .2s, border-color .2s, box-shadow .2s, transform .1s; }
+      .card.sel { opacity: 1; border-color: var(--accent-border); box-shadow: 0 0 0 3px var(--accent-soft); }
+      .card:active { transform: scale(0.98); }
+      .c-head { display: flex; align-items: center; justify-content: center; gap: 6px; }
+      .c-ico { font-size: 17px; }
+      .c-name { font-size: 12px; font-weight: 700; color: var(--fg); }
+      .stchip { display: inline-block; margin-top: 7px; font-family: var(--mono); font-size: 9.5px; font-weight: 700; letter-spacing: .03em; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); transition: color .2s, border-color .2s, background .2s; }
+      .stchip.s-runnable { color: var(--info); border-color: rgba(94,159,246,.45); background: var(--info-soft); }
+      .stchip.s-running { color: var(--success); border-color: rgba(92,198,111,.45); background: var(--success-soft); }
+      .stchip.s-wait { color: var(--accent); border-color: var(--accent-border); background: var(--accent-soft); }
+      .stchip.s-term { color: var(--danger); border-color: rgba(240,104,104,.4); background: var(--danger-soft); }
+
+      /* ---- CPU lane ---- */
+      .lane { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 11px; }
+      .lane-lab { font-family: var(--mono); font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--subtle); }
+      .slot { font-family: var(--mono); font-size: 11px; font-weight: 700; padding: 6px 12px; border-radius: var(--r-md); border: 1.5px dashed var(--border-strong); color: var(--subtle); min-width: 168px; text-align: center; transition: border-color .2s, background .2s, color .2s; }
+      .slot.busy { border-style: solid; border-color: var(--success); background: var(--success-soft); color: var(--success); }
+      .slot.main { border-style: solid; border-color: var(--info); background: var(--info-soft); color: var(--info); }
+      .queue { display: flex; gap: 6px; flex-wrap: wrap; }
+      .qchip { font-family: var(--mono); font-size: 10px; padding: 4px 9px; border-radius: 999px; background: var(--info-soft); border: 1px solid rgba(94,159,246,.4); color: var(--info); }
+      .qempty { font-family: var(--mono); font-size: 10px; color: var(--subtle); }
+
+      /* ---- Fixed explain panel (replaced, never grows) ---- */
+      .explain { min-height: 72px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .warn { color: var(--accent); font-weight: 700; }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+
+      @media (max-width: 560px) {
+        .track { flex-wrap: wrap; gap: 6px; }
+        .node { flex: 1 1 44%; }
+        .arrow { display: none; }
+        .card { width: calc(50% - 6px); }
+        .slot { min-width: 140px; flex: 1 1 auto; }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ACTIONS -->
+    <div class="actions">
+      <span class="mlabel">call</span>
+      <div class="modes">
+        <button class="mode on" id="m-start" type="button">start()</button>
+        <button class="mode" id="m-run" type="button">run()</button>
+      </div>
+      <span class="sep"></span>
+      <button class="act prime" id="b-start" type="button">▶ start()</button>
+      <button class="act" id="b-sleep" type="button">⏳ sleep(1s)</button>
+      <button class="act" id="b-lock" type="button">🔒 wait for lock</button>
+      <button class="act" id="b-release" type="button">✅ release</button>
+      <button class="act" id="b-finish" type="button">🏁 finish</button>
+      <button class="act" id="b-tick" type="button">⇄ Scheduler tick</button>
+      <button class="btn" id="b-reset" type="button">↺ Reset</button>
+    </div>
+
+    <!-- STAGE -->
+    <div class="stage">
+      <div class="stage-cap">
+        <span>selected: <b id="cap-sel">👩‍🍳 Cook-1</b></span>
+        <span>threads alive: <b id="cap-alive">0</b> · on a core: <b id="cap-core">0</b></span>
+      </div>
+
+      <div class="track" id="track">
+        <div class="node" data-i="0"><span class="n-ico">🧑‍🍳</span><span class="n-lab">NEW</span><span class="n-sub">hired</span></div>
+        <div class="arrow">›</div>
+        <div class="node" data-i="1"><span class="n-ico">🧍</span><span class="n-lab">RUNNABLE</span><span class="n-sub">on shift, queued</span></div>
+        <div class="arrow">›</div>
+        <div class="node" data-i="2"><span class="n-ico">🍳</span><span class="n-lab">RUNNING</span><span class="n-sub">at the stove</span></div>
+        <div class="arrow">›</div>
+        <div class="node" data-i="3"><span class="n-ico">⏸</span><span class="n-lab" id="n3lab">BLOCKED · WAITING</span><span class="n-sub" id="n3sub">stuck at the oven</span></div>
+        <div class="arrow">›</div>
+        <div class="node" data-i="4"><span class="n-ico">🏁</span><span class="n-lab">TERMINATED</span><span class="n-sub">shift over</span></div>
+      </div>
+
+      <div class="cards">
+        <div class="card sel" id="c-t1"><div class="c-head"><span class="c-ico">👩‍🍳</span><span class="c-name">Cook-1</span></div><span class="stchip" id="s-t1">NEW</span></div>
+        <div class="card" id="c-t2"><div class="c-head"><span class="c-ico">🧑‍🍳</span><span class="c-name">Cook-2</span></div><span class="stchip" id="s-t2">NEW</span></div>
+      </div>
+
+      <div class="lane">
+        <span class="lane-lab">🔥 core ×1</span>
+        <div class="slot" id="slot">— idle —</div>
+        <span class="lane-lab">ready queue</span>
+        <div class="queue" id="queue"><span class="qempty">— empty —</span></div>
+      </div>
+    </div>
+
+    <!-- FIXED EXPLAIN PANEL -->
+    <div class="explain">
+      <div class="explain-title" id="ex-title">Two cooks, one stove</div>
+      <div class="explain-body" id="ex-body">Pick a cook, then hit <code>▶ start()</code> to put them on shift.</div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>RUNNABLE means <b style="color:var(--fg)">ready</b>, not running — only one thread per core, and the <b style="color:var(--accent)">scheduler</b> picks who.</span>
+    </div>
+
+    <script>
+      /* ---- one explain panel, REPLACED (never appended) ---- */
+      function ex(title, bodyHtml) {
+        document.getElementById("ex-title").textContent = title;
+        document.getElementById("ex-body").innerHTML = bodyHtml;
+      }
+
+      var T = [
+        { id: "t1", name: "Cook-1", emoji: "👩‍🍳" },
+        { id: "t2", name: "Cook-2", emoji: "🧑‍🍳" }
+      ];
+      var IDX = { NEW: 0, RUNNABLE: 1, RUNNING: 2, BLOCKED: 3, TIMED_WAITING: 3, TERMINATED: 4 };
+
+      var st = { t1: "NEW", t2: "NEW" };   // per-thread lifecycle state
+      var ready = [];                       // FIFO of RUNNABLE thread ids
+      var sel = "t1";                       // which card the buttons drive
+      var mode = "start";                   // "start" | "run"
+      var timers = { t1: null, t2: null };  // sleep timers
+      var mainTimer = null, mainBusy = false, mainFor = "";
+      var errIdx = -1, errTimer = null;
+
+      var nodes = [], arrows = [];
+
+      function th(id) { return T[0].id === id ? T[0] : T[1]; }
+      function label(id) { var t = th(id); return t.emoji + " " + t.name; }
+      function running() {
+        for (var i = 0; i < T.length; i++) if (st[T[i].id] === "RUNNING") return T[i].id;
+        return null;
+      }
+      function contenders() {
+        var out = [];
+        for (var i = 0; i < ready.length; i++) if (st[ready[i]] === "RUNNABLE") out.push(ready[i]);
+        return out;
+      }
+
+      /* ---- state transition: sets state + pulses the arrows traversed ---- */
+      function setSt(id, s) {
+        var from = IDX[st[id]], to = IDX[s];
+        st[id] = s;
+        if (id === sel && from !== to) pulse(from, to);
+      }
+      function pulse(from, to) {
+        var lo = Math.min(from, to), hi = Math.max(from, to);
+        for (var i = lo; i < hi; i++) {
+          (function (a) {
+            if (!a) return;
+            a.className = "arrow pulse";
+            setTimeout(function () { a.className = "arrow"; }, 520);
+          })(arrows[i]);
+        }
+      }
+
+      /* ---- the scheduler: hand the single core to the next RUNNABLE ---- */
+      function fillCore() {
+        if (running() || mainBusy) return;
+        while (ready.length) {
+          var id = ready.shift();
+          if (st[id] === "RUNNABLE") { setSt(id, "RUNNING"); return; }
+        }
+      }
+      function becomeRunnable(id) {
+        setSt(id, "RUNNABLE");
+        if (ready.indexOf(id) < 0) ready.push(id);
+        fillCore();
+      }
+      function flashErr() {
+        errIdx = IDX[st[sel]];
+        clearTimeout(errTimer);
+        errTimer = setTimeout(function () { errIdx = -1; render(); }, 700);
+      }
+      function illegal(what) {
+        ex("✗ not legal right now", "<code>" + what + "</code> can't run while " + label(sel) + " is <b class='warn'>" + st[sel] + "</b>.");
+        render();
+      }
+
+      /* ---- ▶ start()  (or ▶ run() in run-mode) ---- */
+      function doStart() {
+        var id = sel;
+        if (mode === "run") { doRun(id); return; }
+        if (st[id] !== "NEW") {
+          flashErr();
+          ex("start() twice ✗ IllegalThreadStateException", "A thread object starts <b class='bad'>once</b>, ever — a finished cook is not re-hired.");
+          render();
+          return;
+        }
+        setSt(id, "RUNNABLE");
+        ready.push(id);
+        fillCore();
+        if (st[id] === "RUNNING") {
+          ex("▶ start() → RUNNABLE → RUNNING", "A new worker exists and the scheduler gave it the <b class='good'>free core</b>.");
+        } else {
+          ex("▶ start() → RUNNABLE", "Alive and ready, but the core is <b class='warn'>taken</b> — it waits in the queue.");
+        }
+        render();
+      }
+
+      /* ---- run() mode: no new worker, main does the work ---- */
+      function doRun(id) {
+        clearTimeout(mainTimer);
+        mainBusy = true;
+        mainFor = th(id).name;
+        ex("run() is just a method call", "<b class='bad'>No new thread.</b> main does the work itself — one lane, zero concurrency.");
+        render();
+        mainTimer = setTimeout(function () { mainBusy = false; render(); }, 1900);
+      }
+
+      /* ---- ⏳ sleep(1s) → TIMED_WAITING, frees the core ---- */
+      function doSleep() {
+        var id = sel;
+        if (st[id] !== "RUNNING") { illegal("sleep(1s)"); return; }
+        setSt(id, "TIMED_WAITING");
+        fillCore();
+        clearTimeout(timers[id]);
+        timers[id] = setTimeout((function (x) {
+          return function () {
+            if (st[x] !== "TIMED_WAITING") return;
+            becomeRunnable(x);
+            ex("⏰ timer expired", label(x) + " is <b>RUNNABLE</b> again — awake still doesn't mean on a core.");
+            render();
+          };
+        })(id), 1600);
+        ex("⏳ sleep() → TIMED_WAITING", "A timed break: the cook leaves the stove <b class='good'>free</b> and comes back alone.");
+        render();
+      }
+
+      /* ---- 🔒 wait for lock → BLOCKED ---- */
+      function doLock() {
+        var id = sel;
+        if (st[id] !== "RUNNING") { illegal("wait for lock"); return; }
+        setSt(id, "BLOCKED");
+        fillCore();
+        ex("🔒 BLOCKED on a lock", "The oven is busy, so this cook stalls — <b class='warn'>no CPU used</b> while blocked.");
+        render();
+      }
+
+      /* ---- ✅ release → back to RUNNABLE (not straight to RUNNING) ---- */
+      function doRelease() {
+        var id = sel;
+        if (st[id] !== "BLOCKED") { illegal("release"); return; }
+        becomeRunnable(id);
+        ex("✅ lock released → RUNNABLE", "Unblocked goes back to the <b>queue</b>, not straight back to the stove.");
+        render();
+      }
+
+      /* ---- 🏁 finish → TERMINATED ---- */
+      function doFinish() {
+        var id = sel;
+        if (st[id] !== "RUNNING") { illegal("finish"); return; }
+        setSt(id, "TERMINATED");
+        fillCore();
+        ex("🏁 TERMINATED — done for good", "Shift over. Anyone waiting in <code>join()</code> is released <b class='good'>now</b>.");
+        render();
+      }
+
+      /* ---- ⇄ Scheduler tick: the OS reshuffles the core ---- */
+      function doTick() {
+        var r = running();
+        var c = contenders();
+        if (mainBusy) { ex("⇄ nothing to schedule", "In <code>run()</code> mode there is only main — <b class='bad'>no second lane</b> to switch to."); render(); return; }
+        if (!r && c.length === 0) { ex("⇄ nobody is RUNNABLE", "The scheduler has no candidate — <span class='dim'>start a thread first.</span>"); render(); return; }
+        if (r && c.length === 0) { ex("⇄ only one candidate", "One RUNNABLE thread means it keeps the core — <span class='dim'>start the other cook.</span>"); render(); return; }
+        if (r) { setSt(r, "RUNNABLE"); ready.push(r); }
+        fillCore();
+        var now = running();
+        ex("⇄ the scheduler picked " + (now ? th(now).name : "nobody"), "Order is <b class='warn'>not yours to control</b> — the OS swaps threads whenever it likes.");
+        render();
+      }
+
+      /* ---- select which thread the buttons drive ---- */
+      function select(id) {
+        sel = id;
+        ex("selected " + th(id).name, "The buttons now drive this cook — <span class='dim'>the track shows its state.</span>");
+        render();
+      }
+
+      /* ---- mode toggle ---- */
+      function setMode(m) {
+        mode = m;
+        resetThreads();
+        if (m === "run") {
+          ex("run() mode", "Pressing the button calls <code>run()</code> directly: <b class='bad'>no worker is created</b>.");
+        } else {
+          ex("start() mode", "Pressing the button calls <code>start()</code>: a <b class='good'>real second lane</b> appears.");
+        }
+        render();
+      }
+
+      /* ---- render (idempotent, never grows) ---- */
+      function render() {
+        var s = st[sel], li = IDX[s], i;
+
+        for (i = 0; i < nodes.length; i++) {
+          nodes[i].className = "node" + (i === li ? " lit" : "") + (i === errIdx ? " err" : "");
+        }
+        document.getElementById("n3lab").textContent = (s === "TIMED_WAITING") ? "TIMED_WAITING" : "BLOCKED · WAITING";
+        document.getElementById("n3sub").textContent = (s === "TIMED_WAITING") ? "on a timer" : "stuck at the oven";
+
+        for (i = 0; i < T.length; i++) {
+          var t = T[i], ts = st[t.id];
+          if (t.el) t.el.className = "card" + (t.id === sel ? " sel" : "");
+          if (t.chipEl) {
+            t.chipEl.textContent = ts;
+            t.chipEl.className = "stchip " + chipCls(ts);
+          }
+        }
+
+        var r = running();
+        var slot = document.getElementById("slot");
+        if (mainBusy) {
+          slot.className = "slot main";
+          slot.textContent = "🧵 main · doing " + mainFor + "'s work";
+        } else if (r) {
+          slot.className = "slot busy";
+          slot.textContent = label(r) + " · RUNNING";
+        } else {
+          slot.className = "slot";
+          slot.textContent = "— idle —";
+        }
+
+        var q = document.getElementById("queue");
+        q.innerHTML = "";
+        var c = contenders();
+        if (c.length === 0) {
+          var e = document.createElement("span");
+          e.className = "qempty";
+          e.textContent = "— empty —";
+          q.appendChild(e);
+        } else {
+          for (i = 0; i < c.length; i++) {
+            var chip = document.createElement("span");
+            chip.className = "qchip";
+            chip.textContent = label(c[i]);
+            q.appendChild(chip);
+          }
+        }
+
+        var alive = 0;
+        for (i = 0; i < T.length; i++) {
+          var x = st[T[i].id];
+          if (x !== "NEW" && x !== "TERMINATED") alive++;
+        }
+        document.getElementById("cap-alive").textContent = alive;
+        document.getElementById("cap-core").textContent = (r || mainBusy) ? 1 : 0;
+        document.getElementById("cap-sel").textContent = label(sel);
+
+        document.getElementById("b-start").textContent = (mode === "run") ? "▶ run()" : "▶ start()";
+        document.getElementById("b-sleep").disabled = (s !== "RUNNING");
+        document.getElementById("b-lock").disabled = (s !== "RUNNING");
+        document.getElementById("b-release").disabled = (s !== "BLOCKED");
+        document.getElementById("b-finish").disabled = (s !== "RUNNING");
+        document.getElementById("b-tick").disabled = (mode === "run") || (!r && contenders().length === 0);
+        document.getElementById("m-start").className = "mode" + (mode === "start" ? " on" : "");
+        document.getElementById("m-run").className = "mode" + (mode === "run" ? " on" : "");
+      }
+
+      function chipCls(s) {
+        if (s === "RUNNABLE") return "s-runnable";
+        if (s === "RUNNING") return "s-running";
+        if (s === "BLOCKED" || s === "TIMED_WAITING") return "s-wait";
+        if (s === "TERMINATED") return "s-term";
+        return "";
+      }
+
+      /* ---- ↺ Reset ---- */
+      function resetThreads() {
+        for (var i = 0; i < T.length; i++) {
+          st[T[i].id] = "NEW";
+          clearTimeout(timers[T[i].id]);
+          timers[T[i].id] = null;
+        }
+        clearTimeout(mainTimer);
+        clearTimeout(errTimer);
+        mainBusy = false;
+        errIdx = -1;
+        ready = [];
+      }
+      function doReset() {
+        resetThreads();
+        sel = "t1";
+        ex("Two cooks, one stove", "Pick a cook, then hit <code>▶ start()</code> to put them on shift.");
+        render();
+      }
+
+      /* ---- boot ---- */
+      (function boot() {
+        var all = document.getElementById("track").children;
+        for (var i = 0; i < all.length; i++) {
+          if (all[i].className.indexOf("node") === 0) nodes.push(all[i]);
+          else arrows.push(all[i]);
+        }
+        for (i = 0; i < T.length; i++) {
+          T[i].el = document.getElementById("c-" + T[i].id);
+          T[i].chipEl = document.getElementById("s-" + T[i].id);
+          if (T[i].el) {
+            T[i].el.addEventListener("click", (function (id) {
+              return function () { select(id); };
+            })(T[i].id));
+          }
+        }
+        document.getElementById("b-start").addEventListener("click", doStart);
+        document.getElementById("b-sleep").addEventListener("click", doSleep);
+        document.getElementById("b-lock").addEventListener("click", doLock);
+        document.getElementById("b-release").addEventListener("click", doRelease);
+        document.getElementById("b-finish").addEventListener("click", doFinish);
+        document.getElementById("b-tick").addEventListener("click", doTick);
+        document.getElementById("b-reset").addEventListener("click", doReset);
+        document.getElementById("m-start").addEventListener("click", function () { setMode("start"); });
+        document.getElementById("m-run").addEventListener("click", function () { setMode("run"); });
+        render();
+      })();
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

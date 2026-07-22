@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Atomic operations &amp; CAS — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+        --warn: #e0a63c;
+        --warn-soft: rgba(224, 166, 60, 0.12);
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---- Action rows ---- */
+      .actions { display: flex; gap: 9px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; }
+      .actions.tight { margin-bottom: 14px; }
+      .act { font-family: var(--mono); font-size: 12px; font-weight: 700; background: var(--elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 10px 14px; cursor: pointer; color: var(--fg); transition: border-color .15s, transform .1s; }
+      .act.prime { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+      .act:hover { border-color: var(--accent); }
+      .act:active { transform: scale(0.97); }
+      .act:disabled { opacity: .4; cursor: not-allowed; }
+      .btn { background: var(--elevated); color: var(--fg); font: 600 12px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 14px; cursor: pointer; transition: border-color .15s, transform .1s; }
+      .btn:hover { border-color: var(--border-strong); }
+      .btn:active { transform: scale(0.97); }
+      .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+      .mode { font-family: var(--mono); font-size: 11.5px; font-weight: 700; padding: 8px 12px; border-radius: 999px; cursor: pointer; background: var(--surface); border: 1px solid var(--border); color: var(--muted); transition: border-color .15s, color .15s, background .15s, transform .1s; }
+      .mode:hover { border-color: var(--border-strong); color: var(--fg); }
+      .mode:active { transform: scale(0.96); }
+      .mode.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+
+      .score { margin-left: auto; font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+      .score b { color: var(--fg); }
+      .score b.hot { color: var(--warn); }
+      .score b.bad { color: var(--danger); }
+
+      /* ---- Stage ---- */
+      .stage { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 14px; margin-bottom: 14px; }
+      .stage-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; display: flex; justify-content: space-between; gap: 10px; }
+      .stage-cap b { color: var(--fg); }
+
+      /* ---- Shared memory cell ---- */
+      .mem-row { display: flex; justify-content: center; }
+      .mem { width: 300px; max-width: 100%; background: var(--elevated); border: 1.5px solid var(--border-strong); border-radius: var(--r-md); padding: 10px 12px; text-align: center; transition: border-color .25s, box-shadow .25s, transform .2s; }
+      .mem.pulse { transform: scale(1.03); }
+      .mem.good { border-color: var(--success); box-shadow: 0 0 0 5px var(--success-soft); }
+      .mem.bad { border-color: var(--danger); box-shadow: 0 0 0 5px var(--danger-soft); }
+      .mem.warn { border-color: var(--warn); box-shadow: 0 0 0 5px var(--warn-soft); }
+      .mem-label { font-family: var(--mono); font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--subtle); }
+      .mem-val { font-family: var(--mono); font-size: 22px; font-weight: 700; color: var(--fg); margin-top: 3px; }
+      .mem-sub { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 4px; min-height: 13px; }
+
+      .spine { height: 26px; }
+
+      /* ---- Thread lanes ---- */
+      .lanes { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+      .lane { flex: 1 1 230px; max-width: 320px; background: var(--elevated); border: 1.5px solid var(--border); border-radius: var(--r-md); padding: 10px; transition: border-color .2s, box-shadow .2s, opacity .2s; opacity: .62; }
+      .lane.live { opacity: 1; border-color: var(--info); box-shadow: 0 0 0 4px var(--info-soft); }
+      .lane-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+      .lane-name { font-size: 12.5px; font-weight: 700; color: var(--fg); }
+      .local { font-family: var(--mono); font-size: 10px; padding: 2px 7px; border-radius: 4px; background: var(--surface); border: 1px solid var(--border); color: var(--subtle); transition: color .2s, border-color .2s; }
+      .local.has { color: var(--info); border-color: rgba(94,159,246,.42); }
+      .steps { display: flex; gap: 6px; margin-top: 9px; flex-wrap: wrap; }
+      .st { flex: 1 1 auto; font-family: var(--mono); font-size: 10px; font-weight: 700; padding: 6px 5px; border-radius: 999px; text-align: center; background: var(--surface); border: 1px dashed var(--border); color: var(--subtle); transition: all .18s; }
+      .st.done { border-style: solid; border-color: rgba(92,198,111,.4); color: var(--success); }
+      .st.now { border-style: solid; background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); transform: translateY(-2px); }
+      .st.dim { opacity: .45; }
+      .cmp { margin-top: 8px; min-height: 20px; font-family: var(--mono); font-size: 10.5px; color: var(--subtle); display: flex; align-items: center; }
+      .cmp.ok { color: var(--success); }
+      .cmp.fail { color: var(--danger); }
+      .cmp.retry { color: var(--warn); }
+      .cmp.wrong { color: var(--warn); }
+
+      /* ---- Fixed explain panel (replaced, never grows) ---- */
+      .explain { min-height: 72px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .amber { color: var(--warn); font-weight: 700; }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+
+      @media (max-width: 560px) {
+        .lane { flex: 1 1 100%; max-width: 100%; }
+        .score { margin-left: 0; width: 100%; }
+        .mem-val { font-size: 19px; }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- MODE CHIPS -->
+    <div class="actions">
+      <button class="mode on" id="m-inc">❌ count++</button>
+      <button class="mode" id="m-cas">⚛️ CAS retry</button>
+      <button class="mode" id="m-aba">🔁 ABA</button>
+      <button class="mode" id="m-stamp">#️⃣ +version</button>
+    </div>
+
+    <!-- CONTROLS -->
+    <div class="actions tight">
+      <button class="act prime" id="step-btn">▶ Step</button>
+      <button class="btn" id="run-btn">▶ Run all</button>
+      <button class="btn" id="reset-btn">↺ Reset</button>
+      <span class="score" id="score">retries <b id="sc-r">0</b> · lost updates <b id="sc-l">0</b></span>
+    </div>
+
+    <!-- STAGE -->
+    <div class="stage">
+      <div class="stage-cap">
+        <span id="cap-left">count++ · read → add → write</span>
+        <span>step <b id="cap-step">0 / 6</b></span>
+      </div>
+
+      <div class="mem-row">
+        <div class="mem" id="mem">
+          <div class="mem-label">shared memory</div>
+          <div class="mem-val" id="mem-val">count: 0</div>
+          <div class="mem-sub" id="mem-sub"></div>
+        </div>
+      </div>
+
+      <div class="spine"></div>
+
+      <div class="lanes">
+        <div class="lane" id="lane-T1">
+          <div class="lane-head">
+            <span class="lane-name">🧵 T1</span>
+            <span class="local" id="local-T1">local: —</span>
+          </div>
+          <div class="steps" id="chips-T1"></div>
+          <div class="cmp" id="cmp-T1"></div>
+        </div>
+        <div class="lane" id="lane-T2">
+          <div class="lane-head">
+            <span class="lane-name">🧵 T2</span>
+            <span class="local" id="local-T2">local: —</span>
+          </div>
+          <div class="steps" id="chips-T2"></div>
+          <div class="cmp" id="cmp-T2"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FIXED EXPLAIN PANEL -->
+    <div class="explain">
+      <div class="explain-title" id="ex-title">count++ is not one operation</div>
+      <div class="explain-body" id="ex-body">Press <code>▶ Step</code>. Each thread takes its own <b class="good">local</b> copy first.</div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span>CAS in one line: <b style="color:var(--fg)">if it is still what I read, swap it</b> — otherwise <b style="color:var(--success)">re-read and retry</b>.</span>
+    </div>
+
+    <script>
+      /* ---------- one explain panel, REPLACED (never appended) ---------- */
+      function setExplain(title, bodyHtml) {
+        document.getElementById("ex-title").textContent = title;
+        document.getElementById("ex-body").innerHTML = bodyHtml;
+      }
+
+      var LANES = ["T1", "T2"];
+      var S = null;
+      var mode = "inc";
+      var idx = 0;
+      var timers = [];
+      var running = false;
+
+      function clearTimers() {
+        for (var i = 0; i < timers.length; i++) clearTimeout(timers[i]);
+        timers = [];
+      }
+      function later(fn, ms) { var t = setTimeout(fn, ms); timers.push(t); return t; }
+      function flash(el, cls, ms) {
+        if (!el) return;
+        el.classList.add(cls);
+        later(function () { el.classList.remove(cls); }, ms);
+      }
+      function mark(lane, chip) {
+        S.done[lane][chip] = true;
+        S.active = { lane: lane, chip: chip };
+      }
+      function cmp(lane, text, cls) { S.cmp[lane] = { text: text, cls: cls || "" }; }
+
+      /* ---------- CAS chip label shows the real arguments ---------- */
+      function casLabel(l) {
+        if (S.exp[l] === null) return "compareAndSet";
+        return "CAS(" + S.exp[l] + "→" + S.local[l] + ")";
+      }
+
+      /* ---------- the four modes ---------- */
+      var MODES = {
+        inc: {
+          cap: "count++ · read → add → write",
+          t0: "count++ is not one operation",
+          b0: 'Press <code>▶ Step</code>. Each thread takes its own <b class="good">local</b> copy first.',
+          sub: function () { return "two +1 calls → count should end at 2"; },
+          mem: function () { return "count: " + S.count; },
+          chips: function () { return { T1: ["read", "+1", "write"], T2: ["read", "+1", "write"] }; },
+          steps: [
+            { t: "T1 · read", b: 'T1 copies <code>count</code> into its own local: <b class="good">0</b>.',
+              run: function () { S.local.T1 = S.count; mark("T1", 0); } },
+            { t: "T2 · read", b: 'T2 reads too and also sees <b class="amber">0</b> — same stale snapshot.',
+              run: function () { S.local.T2 = S.count; mark("T2", 0); } },
+            { t: "T1 · +1", b: 'The <code>+1</code> happens inside T1&#39;s local copy: 0 → <b class="good">1</b>.',
+              run: function () { S.local.T1 = S.local.T1 + 1; mark("T1", 1); } },
+            { t: "T2 · +1", b: 'T2 adds 1 to its own stale copy: 0 → <b class="amber">1</b>.',
+              run: function () { S.local.T2 = S.local.T2 + 1; mark("T2", 1); } },
+            { t: "T1 · write", b: 'T1 stores its copy back. Shared <code>count</code> is now <b class="good">1</b>.',
+              run: function () { S.count = S.local.T1; mark("T1", 2); S.memClass = ""; } },
+            { t: "Lost update 💥", b: 'T2 overwrites with 1. Two increments, <b class="bad">count = 1</b> — one vanished.',
+              run: function () { S.count = S.local.T2; mark("T2", 2); S.lost = 1; S.memClass = "bad"; } }
+          ]
+        },
+
+        cas: {
+          cap: "compareAndSet · one indivisible instruction",
+          t0: "Same interleaving, atomic write",
+          b0: 'Press <code>▶ Step</code>. Now the write only lands if nothing changed.',
+          sub: function () { return "two +1 calls → count should end at 2"; },
+          mem: function () { return "count: " + S.count; },
+          chips: function () { return { T1: ["read", "+1", casLabel("T1")], T2: ["read", "+1", casLabel("T2")] }; },
+          steps: [
+            { t: "T1 · read", b: 'T1 reads <b class="good">0</b> and remembers it as <code>expected</code>.',
+              run: function () { S.local.T1 = S.count; S.exp.T1 = S.count; mark("T1", 0); } },
+            { t: "T2 · read", b: 'T2 reads <b class="amber">0</b> too — same expected value as T1.',
+              run: function () { S.local.T2 = S.count; S.exp.T2 = S.count; mark("T2", 0); } },
+            { t: "T1 · +1", b: 'T1 computes the new value in its local copy: <b class="good">1</b>.',
+              run: function () { S.local.T1 = S.local.T1 + 1; mark("T1", 1); } },
+            { t: "T2 · +1", b: 'T2 computes its new value from the stale copy: <b class="amber">1</b>.',
+              run: function () { S.local.T2 = S.local.T2 + 1; mark("T2", 1); } },
+            { t: "T1 · CAS ✓", b: 'Compare 0, swap in 1 — <b class="good">one uninterruptible CPU instruction</b>.',
+              run: function () {
+                cmp("T1", "expected 0  =  actual 0  ✓", "ok");
+                S.count = S.local.T1; mark("T1", 2); S.memClass = "";
+              } },
+            { t: "T2 · CAS ✗", b: 'Expected 0 but memory holds 1 — the swap is <b class="bad">rejected</b>, nothing written.',
+              run: function () {
+                cmp("T2", "expected " + S.exp.T2 + "  ≠  actual " + S.count + "  ✗", "fail");
+                mark("T2", 2); S.retries = 1; S.memClass = "";
+              } },
+            { t: "T2 · ↻ retry", b: 'No blocking, no lock — T2 just loops back and re-reads <b class="good">1</b>.',
+              run: function () {
+                S.done.T2 = [false, false, false];
+                S.local.T2 = S.count; S.exp.T2 = S.count; mark("T2", 0);
+                cmp("T2", "↻ retry — fresh read", "retry");
+              } },
+            { t: "T2 · +1", b: 'T2 recomputes from the fresh value: 1 → <b class="good">2</b>.',
+              run: function () { S.local.T2 = S.local.T2 + 1; mark("T2", 1); } },
+            { t: "T2 · CAS ✓", b: 'Expected 1, found 1 — swap lands. <b class="good">count = 2</b>, nothing lost.',
+              run: function () {
+                cmp("T2", "expected 1  =  actual 1  ✓", "ok");
+                S.count = S.local.T2; mark("T2", 2); S.memClass = "good";
+              } }
+          ]
+        },
+
+        aba: {
+          cap: "ABA · value only, no history",
+          t0: "CAS compares values, not history",
+          b0: 'Press <code>▶ Step</code>. T1 reads <code>A</code>, then falls asleep.',
+          sub: function () { return S.trail || "stack top — value only"; },
+          mem: function () { return "top: " + S.val; },
+          chips: function () { return { T1: ["read", "💤 paused", "CAS(A→C)"], T2: ["A → B → A"] }; },
+          steps: [
+            { t: "T1 · read A", b: 'T1 reads <code>A</code>, remembers it, then gets <b class="amber">paused</b>.',
+              run: function () { S.local.T1 = S.val; S.exp.T1 = S.val; mark("T1", 0); } },
+            { t: "T2 · A → B → A", b: 'T2 swaps A out for B, then puts an A back. Looks identical.',
+              run: function () { S.val = "A"; S.trail = "A → B → A"; S.stamp = 3; mark("T2", 0); } },
+            { t: "T1 · CAS ✓ (wrongly)", b: 'Same value, different history — CAS <b class="amber">can&#39;t tell</b> and succeeds.',
+              run: function () {
+                cmp("T1", "expected A  =  actual A  ✓ but changed!", "wrong");
+                S.val = "C"; S.trail = "A → B → A → C"; mark("T1", 2); S.memClass = "warn";
+              } }
+          ]
+        },
+
+        stamp: {
+          cap: "AtomicStampedReference · value + version",
+          t0: "Add a version stamp",
+          b0: 'Press <code>▶ Step</code>. Same story, but every write bumps a counter.',
+          sub: function () { return S.trail || "stack top — value + version stamp"; },
+          mem: function () { return "top: " + S.val + "#" + S.stamp; },
+          chips: function () { return { T1: ["read", "💤 paused", "CAS(A#1→C)"], T2: ["A#1 → B#2 → A#3"] }; },
+          steps: [
+            { t: "T1 · read A#1", b: 'T1 reads <code>A</code> at version <b class="good">#1</b> and remembers both.',
+              run: function () { S.local.T1 = S.val + "#" + S.stamp; S.exp.T1 = S.stamp; mark("T1", 0); } },
+            { t: "T2 · A#1 → B#2 → A#3", b: 'The value returns to A, but the stamp climbs to <b class="amber">#3</b>.',
+              run: function () { S.val = "A"; S.stamp = 3; S.trail = "A#1 → B#2 → A#3"; mark("T2", 0); } },
+            { t: "T1 · CAS ✗ (correctly)", b: 'Stamp moved 1 → 3, so CAS <b class="good">correctly fails</b>. T1 re-reads.',
+              run: function () {
+                cmp("T1", "expected A#1  ≠  actual A#3  ✗", "fail");
+                mark("T1", 2); S.retries = 1; S.memClass = "good";
+              } }
+          ]
+        }
+      };
+
+      /* ---------- state ---------- */
+      function fresh() {
+        return {
+          count: 0,
+          val: "A",
+          stamp: 1,
+          trail: "",
+          local: { T1: null, T2: null },
+          exp: { T1: null, T2: null },
+          cmp: { T1: null, T2: null },
+          done: { T1: [false, false, false], T2: [false, false, false] },
+          active: null,
+          retries: 0,
+          lost: 0,
+          memClass: ""
+        };
+      }
+
+      /* ---------- render (idempotent, never grows) ---------- */
+      function render() {
+        var M = MODES[mode];
+
+        document.getElementById("cap-left").textContent = M.cap;
+        document.getElementById("cap-step").textContent =
+          idx >= M.steps.length ? "done" : idx + " / " + M.steps.length;
+
+        var mem = document.getElementById("mem");
+        mem.className = "mem" + (S.memClass ? " " + S.memClass : "");
+        document.getElementById("mem-val").textContent = M.mem();
+        document.getElementById("mem-sub").textContent = M.sub();
+
+        var labels = M.chips();
+        LANES.forEach(function (l) {
+          var lane = document.getElementById("lane-" + l);
+          var isLive = !!(S.active && S.active.lane === l);
+          lane.className = "lane" + (isLive ? " live" : "");
+
+          var loc = document.getElementById("local-" + l);
+          loc.textContent = "local: " + (S.local[l] === null ? "—" : S.local[l]);
+          loc.className = "local" + (S.local[l] === null ? "" : " has");
+
+          var host = document.getElementById("chips-" + l);
+          host.innerHTML = "";
+          labels[l].forEach(function (txt, i) {
+            var chip = document.createElement("div");
+            var cls = "st";
+            if (S.active && S.active.lane === l && S.active.chip === i) cls += " now";
+            else if (S.done[l][i]) cls += " done";
+            else cls += " dim";
+            chip.className = cls;
+            chip.textContent = txt;
+            host.appendChild(chip);
+          });
+
+          var c = document.getElementById("cmp-" + l);
+          var data = S.cmp[l];
+          c.className = "cmp" + (data && data.cls ? " " + data.cls : "");
+          c.textContent = data ? data.text : "";
+        });
+
+        var r = document.getElementById("sc-r");
+        r.textContent = S.retries;
+        r.className = S.retries > 0 ? "hot" : "";
+        var lo = document.getElementById("sc-l");
+        lo.textContent = S.lost;
+        lo.className = S.lost > 0 ? "bad" : "";
+
+        var atEnd = idx >= MODES[mode].steps.length;
+        document.getElementById("step-btn").disabled = atEnd || running;
+        document.getElementById("run-btn").disabled = atEnd || running;
+      }
+
+      /* ---------- one step ---------- */
+      function step() {
+        var M = MODES[mode];
+        if (idx >= M.steps.length) return false;
+        var s = M.steps[idx];
+        s.run();
+        idx++;
+        render();
+        setExplain(s.t, s.b);
+        flash(document.getElementById("mem"), "pulse", 320);
+        return true;
+      }
+
+      /* ---------- ▶ Run all (bounded, always terminates) ---------- */
+      function runAll() {
+        if (running) return;
+        var M = MODES[mode];
+        var remaining = M.steps.length - idx;
+        if (remaining <= 0) return;
+        running = true;
+        render();
+        for (var k = 0; k < remaining; k++) {
+          (function (n) {
+            later(function () {
+              step();
+              if (n === remaining - 1) { running = false; render(); }
+            }, 260 + n * 850);
+          })(k);
+        }
+      }
+
+      /* ---------- reset / mode switch ---------- */
+      function reset() {
+        clearTimers();
+        running = false;
+        S = fresh();
+        idx = 0;
+        render();
+        setExplain(MODES[mode].t0, MODES[mode].b0);
+      }
+
+      function setMode(m) {
+        mode = m;
+        ["inc", "cas", "aba", "stamp"].forEach(function (k) {
+          document.getElementById("m-" + k).className = "mode" + (k === m ? " on" : "");
+        });
+        reset();
+      }
+
+      /* ---------- boot ---------- */
+      document.getElementById("m-inc").addEventListener("click", function () { setMode("inc"); });
+      document.getElementById("m-cas").addEventListener("click", function () { setMode("cas"); });
+      document.getElementById("m-aba").addEventListener("click", function () { setMode("aba"); });
+      document.getElementById("m-stamp").addEventListener("click", function () { setMode("stamp"); });
+      document.getElementById("step-btn").addEventListener("click", step);
+      document.getElementById("run-btn").addEventListener("click", runAll);
+      document.getElementById("reset-btn").addEventListener("click", reset);
+      setMode("inc");
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

@@ -1,0 +1,644 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Deadlock, race conditions, starvation — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+        --warn: #e8b64c;
+        --warn-soft: rgba(232, 182, 76, 0.12);
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---- Tabs ---- */
+      .tabs { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 12px; }
+      .tab { font-family: var(--mono); font-size: 12px; font-weight: 700; background: var(--elevated); border: 1px solid var(--border); border-radius: 999px; padding: 8px 14px; cursor: pointer; color: var(--muted); transition: border-color .15s, color .15s, background .15s, transform .1s; }
+      .tab:hover { border-color: var(--border-strong); color: var(--fg); }
+      .tab:active { transform: scale(0.97); }
+      .tab.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+
+      /* ---- Action rows ---- */
+      .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+      .actions.hide { display: none; }
+      .act { font-family: var(--mono); font-size: 12px; font-weight: 700; background: var(--elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 9px 13px; cursor: pointer; color: var(--fg); transition: border-color .15s, transform .1s, opacity .15s; }
+      .act.prime { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+      .act:hover { border-color: var(--accent); }
+      .act:active { transform: scale(0.97); }
+      .act.done { opacity: .38; }
+      .act.next { border-color: var(--accent); }
+      .btn { background: var(--elevated); color: var(--muted); font: 700 12px/1 var(--mono); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 13px; cursor: pointer; transition: border-color .15s, color .15s, background .15s, transform .1s; }
+      .btn:hover { border-color: var(--border-strong); color: var(--fg); }
+      .btn:active { transform: scale(0.97); }
+      .btn.on { background: var(--success-soft); border-color: rgba(92,198,111,.45); color: var(--success); }
+
+      /* ---- Stage ---- */
+      .stage { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 14px; margin-bottom: 14px; overflow: hidden; }
+      .stage-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; display: flex; justify-content: space-between; gap: 10px; }
+      .stage-cap b { color: var(--fg); }
+      .stage-cap b.bad { color: var(--danger); }
+      .stage-cap b.good { color: var(--success); }
+      .stage-cap b.wait { color: var(--warn); }
+      .panel { position: relative; min-height: 206px; }
+      .panel.hide { display: none; }
+
+      /* ---- Shared counter box ---- */
+      .shared { display: flex; justify-content: center; margin-bottom: 12px; }
+      .sharedbox { font-family: var(--mono); font-size: 15px; font-weight: 700; background: var(--elevated); border: 1.5px solid var(--border-strong); border-radius: var(--r-md); padding: 10px 20px; text-align: center; transition: border-color .2s, box-shadow .25s, color .2s; }
+      .sharedbox .lbl { display: block; font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--subtle); font-weight: 700; margin-bottom: 4px; }
+      .sharedbox.bad { border-color: var(--danger); color: var(--danger); box-shadow: 0 0 0 5px var(--danger-soft); }
+      .sharedbox.good { border-color: var(--success); color: var(--success); box-shadow: 0 0 0 5px var(--success-soft); }
+
+      /* ---- Thread lanes ---- */
+      .lanes { display: flex; flex-direction: column; gap: 9px; }
+      .lane { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; background: var(--elevated); border: 1.5px solid var(--border-strong); border-radius: var(--r-md); padding: 9px 11px; opacity: .62; transition: border-color .2s, opacity .2s, box-shadow .2s; }
+      .lane.run { opacity: 1; border-color: var(--success); box-shadow: 0 0 0 4px var(--success-soft); }
+      .lane.blocked { opacity: .45; border-color: var(--warn); }
+      .lane-name { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--fg); width: 52px; flex: none; }
+      .mchip { font-family: var(--mono); font-size: 10.5px; font-weight: 700; padding: 4px 9px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); color: var(--subtle); transition: border-color .18s, color .18s, background .18s; }
+      .mchip.done { border-color: rgba(92,198,111,.4); color: var(--success); background: var(--success-soft); }
+      .mchip.active { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+      .reg { margin-left: auto; font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+      .reg b { color: var(--fg); }
+      .lockbadge { font-family: var(--mono); font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: var(--warn-soft); border: 1px solid rgba(232,182,76,.45); color: var(--warn); }
+      .lockbadge.hold { background: var(--success-soft); border-color: rgba(92,198,111,.45); color: var(--success); }
+      .lockbadge.hide { display: none; }
+
+      /* ---- Deadlock graph ---- */
+      .graph { width: 100%; height: 200px; display: block; }
+      .graph .box { fill: #1a1d22; stroke: #2d333d; stroke-width: 1.5; transition: stroke .2s, fill .2s; }
+      .graph .box.hold { stroke: #5cc66f; fill: rgba(92,198,111,0.09); }
+      .graph .box.wait { stroke: #e8b64c; fill: rgba(232,182,76,0.09); }
+      .graph .box.dead { stroke: #f06868; fill: rgba(240,104,104,0.10); }
+      .graph .t { font-family: var(--mono); font-size: 12px; font-weight: 700; fill: #e8e4dc; }
+      .graph .s { font-family: var(--mono); font-size: 9.5px; fill: #6b7280; }
+      .graph .s.hold { fill: #5cc66f; }
+      .graph .s.wait { fill: #e8b64c; }
+      .graph .s.dead { fill: #f06868; }
+      .edge { opacity: 0; transition: opacity .25s; }
+      .edge.show { opacity: 1; }
+      .edge line { stroke: #5cc66f; stroke-width: 2; }
+      .edge polygon { fill: #5cc66f; }
+      .edge text { font-family: var(--mono); font-size: 9px; fill: #5cc66f; }
+      .edge.want line { stroke: #e8b64c; stroke-dasharray: 5 4; }
+      .edge.want polygon { fill: #e8b64c; }
+      .edge.want text { fill: #e8b64c; }
+      .edge.dead line { stroke: #f06868; stroke-dasharray: 5 4; }
+      .edge.dead polygon { fill: #f06868; }
+      .edge.dead text { fill: #f06868; }
+      .arrowhead.hide { display: none; }
+      .overlay { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-family: var(--mono); font-size: 13px; font-weight: 700; padding: 8px 16px; border-radius: 999px; background: rgba(240,104,104,.16); border: 1.5px solid var(--danger); color: var(--danger); pointer-events: none; }
+      .overlay.hide { display: none; }
+      .overlay.ok { background: rgba(92,198,111,.16); border-color: var(--success); color: var(--success); }
+
+      /* ---- Starvation ---- */
+      .res { display: flex; justify-content: center; margin-bottom: 14px; }
+      .resbox { font-family: var(--mono); font-size: 13px; font-weight: 700; background: var(--elevated); border: 1.5px solid var(--accent-border); border-radius: var(--r-md); padding: 10px 18px; text-align: center; color: var(--fg); }
+      .resbox .lbl { display: block; font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--subtle); font-weight: 700; margin-bottom: 4px; }
+      .threads { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+      .th { width: 132px; background: var(--elevated); border: 1.5px solid var(--border-strong); border-radius: var(--r-md); padding: 10px; text-align: center; opacity: .62; transition: border-color .2s, opacity .2s, box-shadow .2s; }
+      .th.run { opacity: 1; border-color: var(--success); box-shadow: 0 0 0 4px var(--success-soft); }
+      .th.starve { opacity: 1; border-color: var(--warn); }
+      .th-head { display: block; font-size: 12px; font-weight: 700; color: var(--fg); }
+      .th-ico { font-size: 17px; display: block; margin-bottom: 3px; }
+      .th-badge { font-family: var(--mono); font-size: 9.5px; padding: 3px 7px; border-radius: 4px; background: var(--surface); border: 1px solid var(--border); color: var(--subtle); margin-top: 7px; display: inline-block; }
+      .th-badge.hot { color: var(--warn); border-color: rgba(232,182,76,.45); }
+      .th-badge.ok { color: var(--success); border-color: rgba(92,198,111,.45); }
+
+      /* ---- Fixed explain panel (replaced, never grows) ---- */
+      .explain { min-height: 72px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 15px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .warn { color: var(--warn); font-weight: 700; }
+
+      .hint { margin-top: 14px; font-size: 12px; color: var(--muted); display: flex; gap: 7px; align-items: flex-start; }
+      .hint .b { color: var(--accent); }
+
+      @media (max-width: 560px) {
+        .lane-name { width: 100%; }
+        .reg { margin-left: 0; }
+        .th { width: calc(50% - 5px); }
+        .graph { height: 184px; }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- TABS -->
+    <div class="tabs">
+      <button class="tab on" id="tab-race">⚡ Race</button>
+      <button class="tab" id="tab-dead">💀 Deadlock</button>
+      <button class="tab" id="tab-starve">🥱 Starvation</button>
+    </div>
+
+    <!-- ACTION ROWS -->
+    <div class="actions" id="acts-race">
+      <button class="act prime" id="race-step">▶ Interleave</button>
+      <button class="btn" id="race-lock">🔒 Add lock</button>
+      <button class="btn" id="race-reset">↺ Reset</button>
+    </div>
+
+    <div class="actions hide" id="acts-dead">
+      <button class="act" id="dl-0">T1 grab A</button>
+      <button class="act" id="dl-1">T2 grab B</button>
+      <button class="act" id="dl-2">T1 wants B</button>
+      <button class="act" id="dl-3">T2 wants A</button>
+      <button class="btn" id="dl-fix">↻ Same order</button>
+      <button class="btn" id="dl-reset">↺ Reset</button>
+    </div>
+
+    <div class="actions hide" id="acts-starve">
+      <button class="act prime" id="st-tick">▶ Tick</button>
+      <button class="btn" id="st-fair">⚖️ Fair queue</button>
+      <button class="btn" id="st-reset">↺ Reset</button>
+    </div>
+
+    <!-- STAGE -->
+    <div class="stage">
+      <div class="stage-cap">
+        <span id="cap-left">Two threads, one counter</span>
+        <span id="cap-right">count: <b>0</b></span>
+      </div>
+
+      <!-- ⚡ RACE -->
+      <div class="panel" id="panel-race">
+        <div class="shared">
+          <div class="sharedbox" id="countbox"><span class="lbl">shared memory</span><span id="countval">count = 0</span></div>
+        </div>
+        <div class="lanes">
+          <div class="lane" id="lane1">
+            <span class="lane-name">🧵 T1</span>
+            <span class="mchip" id="c1-read">read</span>
+            <span class="mchip" id="c1-add">+1</span>
+            <span class="mchip" id="c1-write">write</span>
+            <span class="lockbadge hide" id="lb1">🔒 lock</span>
+            <span class="reg">reg: <b id="r1">—</b></span>
+          </div>
+          <div class="lane" id="lane2">
+            <span class="lane-name">🧵 T2</span>
+            <span class="mchip" id="c2-read">read</span>
+            <span class="mchip" id="c2-add">+1</span>
+            <span class="mchip" id="c2-write">write</span>
+            <span class="lockbadge hide" id="lb2">🔒 lock</span>
+            <span class="reg">reg: <b id="r2">—</b></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 💀 DEADLOCK -->
+      <div class="panel hide" id="panel-dead">
+        <svg class="graph" viewBox="0 0 420 200" preserveAspectRatio="xMidYMid meet" aria-label="resource allocation graph">
+          <rect class="box" id="bx-t1" x="20" y="20" width="120" height="52" rx="8" />
+          <text class="t" x="80" y="42" text-anchor="middle">🧵 T1</text>
+          <text class="s" id="st-t1" x="80" y="59" text-anchor="middle">idle</text>
+
+          <rect class="box" id="bx-a" x="280" y="20" width="120" height="52" rx="8" />
+          <text class="t" x="340" y="42" text-anchor="middle">🔑 A</text>
+          <text class="s" id="st-a" x="340" y="59" text-anchor="middle">free</text>
+
+          <rect class="box" id="bx-b" x="20" y="128" width="120" height="52" rx="8" />
+          <text class="t" x="80" y="150" text-anchor="middle">🔑 B</text>
+          <text class="s" id="st-b" x="80" y="167" text-anchor="middle">free</text>
+
+          <rect class="box" id="bx-t2" x="280" y="128" width="120" height="52" rx="8" />
+          <text class="t" x="340" y="150" text-anchor="middle">🧵 T2</text>
+          <text class="s" id="st-t2" x="340" y="167" text-anchor="middle">idle</text>
+
+          <!-- e1: top edge, A -> T1 -->
+          <g class="edge" id="e1">
+            <line x1="275" y1="46" x2="150" y2="46" />
+            <polygon points="145,46 156,41 156,51" />
+            <text x="212" y="38" text-anchor="middle">holds</text>
+          </g>
+          <!-- e2: left edge, T1 <-> B -->
+          <g class="edge" id="e2">
+            <line x1="80" y1="77" x2="80" y2="123" />
+            <polygon class="arrowhead" id="e2-down" points="80,123 74,112 86,112" />
+            <polygon class="arrowhead hide" id="e2-up" points="80,77 74,88 86,88" />
+            <text x="90" y="104" id="e2-lbl">wants</text>
+          </g>
+          <!-- e3: bottom edge, B -> T2 -->
+          <g class="edge" id="e3">
+            <line x1="145" y1="154" x2="270" y2="154" />
+            <polygon points="275,154 264,149 264,159" />
+            <text x="212" y="146" text-anchor="middle">holds</text>
+          </g>
+          <!-- e4: right edge, T2 <-> A -->
+          <g class="edge" id="e4">
+            <line x1="340" y1="123" x2="340" y2="77" />
+            <polygon class="arrowhead" id="e4-up" points="340,77 334,88 346,88" />
+            <polygon class="arrowhead hide" id="e4-down" points="340,123 334,112 346,112" />
+            <text x="350" y="104" id="e4-lbl">wants</text>
+          </g>
+        </svg>
+        <div class="overlay hide" id="dl-overlay">💀 DEADLOCK</div>
+      </div>
+
+      <!-- 🥱 STARVATION -->
+      <div class="panel hide" id="panel-starve">
+        <div class="res">
+          <div class="resbox"><span class="lbl">shared resource</span><span id="res-holder">🍽 free</span></div>
+        </div>
+        <div class="threads">
+          <div class="th" id="th-a">
+            <span class="th-ico">🐷</span><span class="th-head">Hog A</span>
+            <span class="th-badge" id="bd-a">served: 0</span>
+          </div>
+          <div class="th" id="th-b">
+            <span class="th-ico">🐷</span><span class="th-head">Hog B</span>
+            <span class="th-badge" id="bd-b">served: 0</span>
+          </div>
+          <div class="th" id="th-p">
+            <span class="th-ico">🙂</span><span class="th-head">Polite</span>
+            <span class="th-badge" id="bd-p">waited: 0</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FIXED EXPLAIN PANEL -->
+    <div class="explain">
+      <div class="explain-title" id="ex-title">count++ is three steps, not one</div>
+      <div class="explain-body" id="ex-body">Click <code>▶ Interleave</code> to run two threads one micro-step at a time.</div>
+    </div>
+
+    <div class="hint">
+      <span class="b">▸</span>
+      <span id="hint-text">A race passes 99 test runs and fails in production — the bug is the <b style="color:var(--fg)">timing</b>, not the code you can see.</span>
+    </div>
+
+    <script>
+      /* ================= shared explain panel (REPLACED, never appended) ============= */
+      function setExplain(title, bodyHtml) {
+        document.getElementById("ex-title").textContent = title;
+        document.getElementById("ex-body").innerHTML = bodyHtml;
+      }
+      function cap(left, rightHtml) {
+        document.getElementById("cap-left").textContent = left;
+        document.getElementById("cap-right").innerHTML = rightHtml;
+      }
+      function $(id) { return document.getElementById(id); }
+      function cls(el, c, on) { if (el) { if (on) el.classList.add(c); else el.classList.remove(c); } }
+
+      /* ============================ ⚡ TAB 1 — RACE ================================= */
+      var STEPS_RAW = [
+        { t: 1, op: "read",  ti: "T1 reads",        tx: 'T1 reads <code>count</code> → its private register holds <b>0</b>.' },
+        { t: 2, op: "read",  ti: "T2 reads",        tx: 'T2 reads the <b class="bad">same 0</b> — both now hold a stale copy.' },
+        { t: 1, op: "add",   ti: "T1 adds 1",       tx: 'T1 computes <code>0 + 1 = 1</code> in its own register.' },
+        { t: 2, op: "add",   ti: "T2 adds 1",       tx: 'T2 computes <code>0 + 1 = 1</code> too — it never saw T1.' },
+        { t: 1, op: "write", ti: "T1 writes back",  tx: 'T1 stores 1. <code>count = 1</code>.' },
+        { t: 2, op: "write", ti: "Lost update",     tx: 'T2 stores 1 on top. <b class="bad">Two +1s, one survived.</b>' }
+      ];
+      var STEPS_LOCK = [
+        { t: 1, op: "lock",   ti: "T1 takes the lock", tx: 'T1 holds the lock, so T2 <b class="warn">waits at the door</b>.' },
+        { t: 1, op: "read",   ti: "T1 reads",          tx: 'T1 reads <b>0</b> — nobody else can touch <code>count</code> now.' },
+        { t: 1, op: "add",    ti: "T1 adds 1",         tx: 'T1 computes <code>1</code> inside the critical section.' },
+        { t: 1, op: "write",  ti: "T1 writes back",    tx: 'T1 stores 1. <code>count = 1</code>, still locked.' },
+        { t: 1, op: "unlock", ti: "T1 releases",       tx: 'Lock free → T2 wakes up and takes it.' },
+        { t: 2, op: "read",   ti: "T2 reads",          tx: 'T2 reads <b class="good">1</b> — the fresh value, not a stale 0.' },
+        { t: 2, op: "add",    ti: "T2 adds 1",         tx: 'T2 computes <code>2</code>.' },
+        { t: 2, op: "write",  ti: "Both survived",     tx: 'T2 stores 2. <b class="good">count = 2</b> — read-modify-write was atomic.' }
+      ];
+      var raceLock = false, raceI = 0, count = 0, reg = { 1: null, 2: null }, lockOwner = 0;
+
+      function raceSteps() { return raceLock ? STEPS_LOCK : STEPS_RAW; }
+
+      function raceReset() {
+        raceI = 0; count = 0; reg = { 1: null, 2: null }; lockOwner = 0;
+        raceRender();
+        if (raceLock) {
+          setExplain("Same steps, one lock", 'Click <code>▶ Interleave</code> — T2 now has to wait its turn.');
+        } else {
+          setExplain("count++ is three steps, not one", 'Click <code>▶ Interleave</code> to run two threads one micro-step at a time.');
+        }
+      }
+
+      function raceStep() {
+        var steps = raceSteps();
+        if (raceI >= steps.length) {
+          setExplain(raceLock ? "Fixed" : "Race condition",
+            raceLock
+              ? 'The lock made <code>read→+1→write</code> <b class="good">one indivisible step</b>. Hit ↺ Reset.'
+              : 'Turn on <code>🔒 Add lock</code> and run the exact same steps again.');
+          return;
+        }
+        var s = steps[raceI];
+        if (s.op === "read")   reg[s.t] = count;
+        if (s.op === "add")    reg[s.t] = reg[s.t] + 1;
+        if (s.op === "write")  count = reg[s.t];
+        if (s.op === "lock")   lockOwner = 1;
+        if (s.op === "unlock") lockOwner = 2;
+        raceI++;
+        raceRender();
+        setExplain(s.ti, s.tx);
+      }
+
+      function raceRender() {
+        var steps = raceSteps();
+        var done = { 1: {}, 2: {} };
+        for (var i = 0; i < raceI; i++) { done[steps[i].t][steps[i].op] = true; }
+        var active = raceI > 0 ? steps[raceI - 1] : null;
+
+        $("countval").textContent = "count = " + count;
+        var finished = raceI >= steps.length;
+        $("countbox").className = "sharedbox" + (finished ? (count === 2 ? " good" : " bad") : "");
+
+        ["read", "add", "write"].forEach(function (op) {
+          [1, 2].forEach(function (t) {
+            var el = $("c" + t + "-" + op);
+            if (!el) return;
+            var isActive = active && active.t === t && active.op === op;
+            el.className = "mchip" + (isActive ? " active" : (done[t][op] ? " done" : ""));
+          });
+        });
+
+        [1, 2].forEach(function (t) {
+          var lb = $("lb" + t);
+          var holds = raceLock && lockOwner === t;
+          var over = !!done[t].write;
+          if (!raceLock || lockOwner === 0) {
+            lb.className = "lockbadge hide";
+          } else {
+            lb.className = "lockbadge" + (holds ? " hold" : "");
+            lb.textContent = holds ? "🔒 holds lock" : (over ? "✓ done" : "🔓 waiting");
+          }
+          $("r" + t).textContent = reg[t] === null ? "—" : String(reg[t]);
+          var lane = $("lane" + t);
+          var running = active && active.t === t && !finished;
+          var blocked = raceLock && lockOwner !== 0 && lockOwner !== t && !over;
+          lane.className = "lane" + (running ? " run" : "") + (blocked ? " blocked" : "");
+        });
+
+        var verdict;
+        if (!finished) verdict = "count: <b>" + count + "</b>";
+        else if (count === 2) verdict = 'count: <b class="good">2 ✓</b>';
+        else verdict = 'count: <b class="bad">' + count + " ✗</b> expected 2";
+        cap(raceLock ? "Two threads, one lock" : "Two threads, one counter", verdict);
+      }
+
+      /* ============================ 💀 TAB 2 — DEADLOCK ============================= */
+      var dlFix = false, dlStep = 0;
+      var DL_LABELS = {
+        bad: ["T1 grab A", "T2 grab B", "T1 wants B", "T2 wants A"],
+        fix: ["T1 grab A", "T2 grab A", "T1 grab B", "T1 releases"]
+      };
+      var DL_TEXT = {
+        bad: [
+          { ti: "T1 holds A", tx: 'One thread, one lock — <span class="dim">nothing wrong yet.</span>' },
+          { ti: "T2 holds B", tx: 'Different lock, so still fine. <span class="dim">Both are running.</span>' },
+          { ti: "T1 blocks on B", tx: 'T1 wants <code>B</code>, which T2 holds — T1 <b class="warn">freezes</b>.' },
+          { ti: "💀 Deadlock", tx: 'T2 wants <code>A</code>, which T1 holds. <b class="bad">Circular wait</b> — nobody ever moves.' }
+        ],
+        fix: [
+          { ti: "T1 holds A", tx: 'Rule for everyone: <b class="good">always take A before B</b>.' },
+          { ti: "T2 waits at A", tx: 'T2 wants A first too, so it just <b class="warn">waits</b> — holding nothing.' },
+          { ti: "T1 holds A + B", tx: 'No cycle is possible: the waiting thread holds <b class="good">zero</b> locks.' },
+          { ti: "Both finish", tx: 'T1 releases, T2 takes A then B. <b class="good">Same order = no deadlock.</b>' }
+        ]
+      };
+
+      function dlReset() {
+        dlStep = 0;
+        dlRender();
+        setExplain(dlFix ? "Fix: one global lock order" : "Two threads, two locks",
+          dlFix
+            ? 'Both threads take <code>A</code> then <code>B</code>. Step through it again.'
+            : 'Click the buttons left to right and watch the arrows close a loop.');
+      }
+
+      function dlDo(i) {
+        if (i !== dlStep) return;
+        dlStep = i + 1;
+        dlRender();
+        var d = (dlFix ? DL_TEXT.fix : DL_TEXT.bad)[i];
+        setExplain(d.ti, d.tx);
+      }
+
+      function dlRender() {
+        var s = dlStep, fix = dlFix;
+        var labels = fix ? DL_LABELS.fix : DL_LABELS.bad;
+        for (var i = 0; i < 4; i++) {
+          var b = $("dl-" + i);
+          b.textContent = labels[i];
+          b.className = "act" + (i < s ? " done" : (i === s ? " next prime" : ""));
+        }
+        $("dl-fix").className = "btn" + (fix ? " on" : "");
+
+        var E = { e1: "edge", e2: "edge", e3: "edge", e4: "edge" };
+        var t1 = "idle", t2 = "idle", la = "free", lb = "free";
+        var bxT1 = "", bxT2 = "", bxA = "", bxB = "";
+        var e2d = false, e2u = false, e4u = true, e4d = false;
+        var lbl2 = "wants", lbl4 = "wants";
+        var over = "", overOk = false, verdict = 'blocked: <b>0/2</b>';
+
+        if (!fix) {
+          if (s >= 1) { E.e1 = "edge show"; t1 = "holds A"; la = "held by T1"; bxT1 = "hold"; bxA = "hold"; }
+          if (s >= 2) { E.e3 = "edge show"; t2 = "holds B"; lb = "held by T2"; bxT2 = "hold"; bxB = "hold"; }
+          if (s >= 3) { E.e2 = "edge show want"; e2d = true; t1 = "holds A, wants B"; bxT1 = "wait"; verdict = 'blocked: <b class="wait">1/2</b>'; }
+          if (s >= 4) {
+            E.e1 = "edge show dead"; E.e2 = "edge show dead";
+            E.e3 = "edge show dead"; E.e4 = "edge show dead";
+            t2 = "holds B, wants A"; bxT1 = "dead"; bxT2 = "dead"; bxA = "dead"; bxB = "dead";
+            over = "💀 DEADLOCK";
+            verdict = 'blocked: <b class="bad">2/2 forever</b>';
+          }
+        } else {
+          if (s >= 1) { E.e1 = "edge show"; t1 = "holds A"; la = "held by T1"; bxT1 = "hold"; bxA = "hold"; }
+          if (s >= 2 && s < 4) { E.e4 = "edge show want"; t2 = "waiting for A"; bxT2 = "wait"; verdict = 'blocked: <b class="wait">1/2</b>'; }
+          if (s >= 3 && s < 4) { E.e2 = "edge show"; e2u = true; e2d = false; lbl2 = "holds"; t1 = "holds A + B"; lb = "held by T1"; bxB = "hold"; }
+          if (s >= 4) {
+            E.e1 = "edge"; E.e2 = "edge"; E.e3 = "edge show"; E.e4 = "edge show";
+            e4u = false; e4d = true; lbl4 = "holds";
+            t1 = "done ✓"; t2 = "holds A + B"; la = "held by T2"; lb = "held by T2";
+            bxT1 = "hold"; bxT2 = "hold"; bxA = "hold"; bxB = "hold";
+            over = "✓ BOTH FINISH"; overOk = true;
+            verdict = 'blocked: <b class="good">0/2 ✓</b>';
+          }
+        }
+
+        $("e1").setAttribute("class", E.e1);
+        $("e2").setAttribute("class", E.e2);
+        $("e3").setAttribute("class", E.e3);
+        $("e4").setAttribute("class", E.e4);
+        function head(id, on) { $(id).setAttribute("class", "arrowhead" + (on ? "" : " hide")); }
+        head("e2-down", e2d); head("e2-up", e2u);
+        head("e4-up", e4u); head("e4-down", e4d);
+        $("e2-lbl").textContent = lbl2;
+        $("e4-lbl").textContent = lbl4;
+
+        $("bx-t1").setAttribute("class", "box " + bxT1);
+        $("bx-t2").setAttribute("class", "box " + bxT2);
+        $("bx-a").setAttribute("class", "box " + bxA);
+        $("bx-b").setAttribute("class", "box " + bxB);
+        $("st-t1").setAttribute("class", "s " + bxT1);
+        $("st-t2").setAttribute("class", "s " + bxT2);
+        $("st-a").setAttribute("class", "s " + bxA);
+        $("st-b").setAttribute("class", "s " + bxB);
+        $("st-t1").textContent = t1;
+        $("st-t2").textContent = t2;
+        $("st-a").textContent = la;
+        $("st-b").textContent = lb;
+
+        var ov = $("dl-overlay");
+        ov.textContent = over;
+        ov.className = "overlay" + (over ? "" : " hide") + (overOk ? " ok" : "");
+        cap(fix ? "Both take A then B" : "T1 takes A→B, T2 takes B→A", verdict);
+      }
+
+      /* ============================ 🥱 TAB 3 — STARVATION ========================== */
+      var fair = false, tickN = 0, servedA = 0, servedB = 0, servedP = 0, waited = 0, holder = "";
+
+      function stReset() {
+        tickN = 0; servedA = 0; servedB = 0; servedP = 0; waited = 0; holder = "";
+        stRender();
+        setExplain(fair ? "Fair queue: first in, first served" : "One resource, three threads",
+          fair
+            ? 'Press <code>▶ Tick</code> — whoever waited longest goes next.'
+            : 'Press <code>▶ Tick</code> a few times and watch who never gets a turn.');
+      }
+
+      function stTick() {
+        if (tickN >= 20) return;
+        if (!fair && waited >= 9) {
+          setExplain("Starvation", 'Polite is <b class="warn">runnable</b>, never <b class="bad">running</b>. Try <code>⚖️ Fair queue</code>.');
+          return;
+        }
+        tickN++;
+        if (fair) {
+          // FIFO: longest waiter first
+          if (waited > 0) { holder = "p"; servedP++; waited = 0; }
+          else if (servedA <= servedB) { holder = "a"; servedA++; }
+          else { holder = "b"; servedB++; }
+        } else {
+          // greedy: the hogs always win the scramble
+          if (tickN % 2 === 1) { holder = "a"; servedA++; } else { holder = "b"; servedB++; }
+          waited++;
+        }
+        stRender();
+        if (holder === "p") {
+          setExplain("Polite finally runs", 'FIFO served the <b class="good">longest waiter</b> on the very next tick.');
+        } else if (fair) {
+          setExplain("Hog served, fairly", 'A hog runs, but it must <b class="good">rejoin the queue</b> behind everyone else.');
+        } else {
+          setExplain("Hog wins again", 'Hog ' + (holder === "a" ? "A" : "B") + ' grabbed it. Polite waited <b class="warn">' + waited + '</b> ticks.');
+        }
+      }
+
+      function stRender() {
+        $("res-holder").textContent = holder === "" ? "🍽 free"
+          : holder === "p" ? "🍽 → 🙂 Polite"
+          : "🍽 → 🐷 Hog " + (holder === "a" ? "A" : "B");
+        $("bd-a").textContent = "served: " + servedA;
+        $("bd-b").textContent = "served: " + servedB;
+        $("bd-p").textContent = waited > 0 ? "waited: " + waited : "served: " + servedP;
+        $("bd-a").className = "th-badge";
+        $("bd-b").className = "th-badge";
+        $("bd-p").className = "th-badge" + (waited > 0 ? " hot" : (servedP > 0 ? " ok" : ""));
+        $("th-a").className = "th" + (holder === "a" ? " run" : "");
+        $("th-b").className = "th" + (holder === "b" ? " run" : "");
+        $("th-p").className = "th" + (holder === "p" ? " run" : (waited > 0 ? " starve" : ""));
+        $("st-fair").className = "btn" + (fair ? " on" : "");
+        var verdict = waited > 0
+          ? 'waited: <b class="wait">' + waited + " ticks</b>"
+          : (servedP > 0 ? 'waited: <b class="good">0 ✓</b>' : "waited: <b>0</b>");
+        cap(fair ? "FIFO queue — longest waiter first" : "Greedy scramble — hogs always win", verdict);
+      }
+
+      /* ================================ TABS ======================================= */
+      var HINTS = {
+        race: 'A race passes 99 test runs and fails in production — the bug is the <b style="color:var(--fg)">timing</b>, not the code you can see.',
+        dead: 'Break any one Coffman condition — here, <b style="color:var(--fg)">circular wait</b> — and deadlock becomes impossible.',
+        starve: 'Starvation is not a freeze: the thread <b style="color:var(--fg)">could</b> run, it just never wins the turn.'
+      };
+      function show(which) {
+        cls($("panel-race"), "hide", which !== "race");
+        cls($("panel-dead"), "hide", which !== "dead");
+        cls($("panel-starve"), "hide", which !== "starve");
+        cls($("acts-race"), "hide", which !== "race");
+        cls($("acts-dead"), "hide", which !== "dead");
+        cls($("acts-starve"), "hide", which !== "starve");
+        $("tab-race").className = "tab" + (which === "race" ? " on" : "");
+        $("tab-dead").className = "tab" + (which === "dead" ? " on" : "");
+        $("tab-starve").className = "tab" + (which === "starve" ? " on" : "");
+        $("hint-text").innerHTML = HINTS[which];
+        if (which === "race") { raceRender(); raceReset(); }
+        if (which === "dead") { dlReset(); }
+        if (which === "starve") { stReset(); }
+      }
+
+      /* ================================ BOOT ======================================= */
+      $("tab-race").addEventListener("click", function () { show("race"); });
+      $("tab-dead").addEventListener("click", function () { show("dead"); });
+      $("tab-starve").addEventListener("click", function () { show("starve"); });
+
+      $("race-step").addEventListener("click", raceStep);
+      $("race-reset").addEventListener("click", raceReset);
+      $("race-lock").addEventListener("click", function () {
+        raceLock = !raceLock;
+        $("race-lock").className = "btn" + (raceLock ? " on" : "");
+        $("race-lock").textContent = raceLock ? "🔓 Remove lock" : "🔒 Add lock";
+        raceReset();
+      });
+
+      for (var k = 0; k < 4; k++) {
+        (function (i) { $("dl-" + i).addEventListener("click", function () { dlDo(i); }); })(k);
+      }
+      $("dl-reset").addEventListener("click", dlReset);
+      $("dl-fix").addEventListener("click", function () {
+        dlFix = !dlFix;
+        $("dl-fix").textContent = dlFix ? "↻ Broken order" : "↻ Same order";
+        dlReset();
+      });
+
+      $("st-tick").addEventListener("click", stTick);
+      $("st-reset").addEventListener("click", stReset);
+      $("st-fair").addEventListener("click", function () {
+        fair = !fair;
+        $("st-fair").textContent = fair ? "🏁 Greedy again" : "⚖️ Fair queue";
+        stRender();
+        setExplain(fair ? "Fair queue on" : "Greedy scramble on",
+          fair
+            ? 'Press <code>▶ Tick</code> — the <b class="good">longest waiter</b> is served next.'
+            : 'Back to a free-for-all: whoever grabs first wins.');
+      });
+
+      raceRender();
+      dlRender();
+      stRender();
+      show("race");
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>
