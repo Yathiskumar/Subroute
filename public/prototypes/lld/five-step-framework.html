@@ -1,0 +1,586 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The 5-step framework — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 16px 18px 22px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---- top bar ---- */
+      .prob { font-family: var(--mono); font-size: 11.5px; color: var(--muted); margin-bottom: 10px; }
+      .prob b { color: var(--fg); }
+      .topbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+      .rail { display: flex; gap: 6px; flex-wrap: wrap; }
+      .pill { font-family: var(--mono); font-size: 10.5px; font-weight: 700; padding: 6px 10px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); color: var(--subtle); white-space: nowrap; }
+      .pill.now { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+      .pill.done { background: var(--success-soft); border-color: rgba(92,198,111,.4); color: var(--success); }
+      .pill.fail { background: var(--danger-soft); border-color: rgba(240,104,104,.4); color: var(--danger); }
+      .clock { margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--muted); display: flex; gap: 10px; align-items: center; }
+      .clock b { color: var(--fg); font-size: 13px; }
+      .clock b.over { color: var(--danger); }
+      .clock .rw { color: var(--danger); }
+      .bar { height: 6px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); overflow: hidden; margin-bottom: 12px; }
+      .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .35s ease; }
+      .bar i.over { background: var(--danger); }
+
+      /* ---- columns ---- */
+      .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+      .pane { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 12px; }
+      .pane-cap { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; display: flex; justify-content: space-between; gap: 8px; }
+      .pane-cap b { color: var(--accent); }
+
+      .prompt { font-size: 12.5px; color: var(--fg); margin-bottom: 10px; }
+      .chips { display: flex; flex-direction: column; gap: 6px; }
+      .chip { text-align: left; font-family: var(--mono); font-size: 11.5px; background: var(--elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 8px 10px; cursor: pointer; color: var(--fg); transition: border-color .15s, transform .1s, opacity .2s; }
+      .chip:hover { border-color: var(--accent); }
+      .chip:active { transform: scale(0.98); }
+      .chip.taken { opacity: .45; cursor: default; border-color: var(--success); }
+      .chip.taken:hover { border-color: var(--success); }
+      .chip.rejected { opacity: .45; cursor: default; border-color: var(--danger); }
+      .chip.rejected:hover { border-color: var(--danger); }
+      .chip.shake { animation: shake .32s; border-color: var(--danger); }
+      @keyframes shake { 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+
+      .next { width: 100%; margin-top: 10px; font-family: var(--mono); font-size: 12px; font-weight: 700; padding: 10px; border-radius: var(--r-md); cursor: pointer; background: var(--accent-soft); border: 1px solid var(--accent-border); color: var(--accent); transition: transform .1s; }
+      .next:active { transform: scale(0.98); }
+      .next:disabled { opacity: .35; cursor: not-allowed; background: var(--elevated); border-color: var(--border); color: var(--muted); }
+
+      /* ---- board ---- */
+      .sec { border: 1px solid var(--border); border-radius: var(--r-md); padding: 8px 10px; margin-bottom: 7px; background: var(--elevated); opacity: .45; transition: opacity .25s, border-color .25s; }
+      .sec.now { opacity: 1; border-color: var(--accent-border); }
+      .sec.done { opacity: 1; border-color: rgba(92,198,111,.35); }
+      .sec-h { font-family: var(--mono); font-size: 10.5px; font-weight: 700; color: var(--muted); display: flex; gap: 7px; align-items: center; }
+      .sec.now .sec-h, .sec.done .sec-h { color: var(--fg); }
+      .sec-n { width: 16px; height: 16px; border-radius: 50%; background: var(--surface); border: 1px solid var(--border-strong); display: inline-flex; align-items: center; justify-content: center; font-size: 9px; }
+      .sec.done .sec-n { background: var(--success-soft); border-color: rgba(92,198,111,.5); color: var(--success); }
+      .sec.now .sec-n { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+      .sec-h .tick { margin-left: auto; font-size: 10px; }
+      .sec-b { margin-top: 7px; font-family: var(--mono); font-size: 11px; line-height: 1.75; color: var(--fg); }
+      .sec-b .ph { color: var(--subtle); }
+      .sec-b .line { color: var(--fg); }
+      .sec-b .line::before { content: "· "; color: var(--success); }
+      .sec-b .bad { color: var(--danger); }
+      .ents { display: flex; flex-wrap: wrap; gap: 5px; }
+      .ent { font-family: var(--mono); font-size: 10.5px; padding: 3px 8px; border-radius: var(--r-md); background: var(--surface); border: 1px solid rgba(92,198,111,.4); color: var(--success); }
+
+      /* ---- mini class diagram ---- */
+      .dgm { position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: 26px 42px; padding: 6px 2px; }
+      .dlines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+      .dlines line { stroke: var(--success); stroke-width: 1.5; }
+      .dlines polygon { fill: var(--success); }
+      .dlines text { fill: var(--muted); font-family: var(--mono); font-size: 8.5px; }
+      .box { font-family: var(--mono); font-size: 10.5px; text-align: center; padding: 6px 4px; border-radius: 6px; background: var(--surface); border: 1px dashed var(--border-strong); color: var(--subtle); position: relative; z-index: 1; transition: color .2s, border-color .2s; }
+      .box.on { border-style: solid; border-color: var(--border-strong); color: var(--fg); }
+
+      /* ---- demo output ---- */
+      .demo { margin-top: 7px; }
+      .demo .out { color: var(--success); }
+      .runbtn { margin-top: 8px; font-family: var(--mono); font-size: 11px; font-weight: 700; padding: 7px 12px; border-radius: var(--r-md); cursor: pointer; background: var(--success-soft); border: 1px solid rgba(92,198,111,.45); color: var(--success); }
+      .runbtn:active { transform: scale(0.97); }
+
+      /* ---- explain (fixed height, replaced) ---- */
+      .explain { min-height: 72px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 15px; margin-top: 12px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+
+      .foot { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+      .btn { background: var(--elevated); color: var(--muted); font: 600 11.5px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 8px 12px; cursor: pointer; }
+      .btn:hover { border-color: var(--border-strong); color: var(--fg); }
+      .btn.warn:hover { border-color: var(--danger); color: var(--danger); }
+      .hint { margin-left: auto; font-size: 11.5px; color: var(--muted); }
+      .hint .b { color: var(--accent); }
+
+      @media (max-width: 620px) {
+        .cols { grid-template-columns: 1fr; }
+        .hint { margin-left: 0; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="prob">📝 Machine-coding round · <b>Design a Parking Lot</b> · 60 minutes · working code at the end</div>
+
+    <div class="topbar">
+      <div class="rail" id="rail"></div>
+      <div class="clock">
+        <span>⏱ <b id="clk">0</b> / 60 min</span>
+        <span class="rw" id="rework"></span>
+      </div>
+    </div>
+    <div class="bar"><i id="barfill"></i></div>
+
+    <div class="cols">
+      <!-- LEFT: the step you're on -->
+      <div class="pane">
+        <div class="pane-cap"><span id="cap-step">Step 1 · <b>Clarify</b></span><span id="cap-need">5 min · pick 3</span></div>
+        <div class="prompt" id="prompt"></div>
+        <div class="chips" id="chips"></div>
+        <button class="next" id="next" disabled>Next step →</button>
+      </div>
+
+      <!-- RIGHT: the design, building itself -->
+      <div class="pane">
+        <div class="pane-cap"><span>Your design so far</span><span id="cap-done">0 / 5 done</span></div>
+
+        <div class="sec" id="sec1">
+          <div class="sec-h"><span class="sec-n">1</span> Scope <span class="tick"></span></div>
+          <div class="sec-b" id="out1"><span class="ph">— nothing agreed yet</span></div>
+        </div>
+
+        <div class="sec" id="sec2">
+          <div class="sec-h"><span class="sec-n">2</span> Entities <span class="tick"></span></div>
+          <div class="sec-b" id="out2"><span class="ph">— no classes yet</span></div>
+        </div>
+
+        <div class="sec" id="sec3">
+          <div class="sec-h"><span class="sec-n">3</span> API <span class="tick"></span></div>
+          <div class="sec-b" id="out3"><span class="ph">— no methods yet</span></div>
+        </div>
+
+        <div class="sec" id="sec4">
+          <div class="sec-h"><span class="sec-n">4</span> Class diagram <span class="tick"></span></div>
+          <div class="sec-b">
+            <div class="dgm" id="dgm">
+              <svg class="dlines" id="dlines"></svg>
+              <div class="box" id="b-lot">ParkingLot</div>
+              <div class="box" id="b-ticket">Ticket</div>
+              <div class="box" id="b-spot">ParkingSpot</div>
+              <div class="box" id="b-vehicle">Vehicle</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sec" id="sec5">
+          <div class="sec-h"><span class="sec-n">5</span> Code &amp; demo <span class="tick"></span></div>
+          <div class="sec-b" id="out5"><span class="ph">— no code yet</span></div>
+          <div class="demo" id="demo"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="explain">
+      <div class="explain-title" id="ex-title">60 minutes on the clock</div>
+      <div class="explain-body" id="ex-body">Start at step 1: ask the questions that <b>shrink</b> the problem.</div>
+    </div>
+
+    <div class="foot">
+      <button class="btn" id="reset-btn">↺ Reset</button>
+      <button class="btn warn" id="skip-btn">⏭ Skip the plan, just code</button>
+      <span class="hint"><span class="b">▸</span> Same 5 steps work for every problem — only the nouns change.</span>
+    </div>
+
+    <script>
+      function setExplain(title, bodyHtml) {
+        document.getElementById("ex-title").textContent = title;
+        document.getElementById("ex-body").innerHTML = bodyHtml;
+      }
+
+      var STEPS = [
+        {
+          key: "Clarify", mins: 5, need: 3,
+          prompt: "Ask the questions that shrink the problem.",
+          choices: [
+            { t: "How many floors & spots?", ok: true, out: "1 floor · 30 spots",
+              why: 'Locked. <span class="dim">You now know the size you must handle.</span>' },
+            { t: "Which vehicle types?", ok: true, out: "Bike · Car · Truck",
+              why: 'Locked. <span class="dim">Three types — that shapes the spot sizes.</span>' },
+            { t: "How is the fee charged?", ok: true, out: "₹ per hour, paid at exit",
+              why: 'Locked. <span class="dim">A rule you would otherwise have guessed wrong.</span>' },
+            { t: "Real payment gateway?", ok: true, out: "cash only · no gateway",
+              why: 'Locked — and it <b class="good">removed</b> work. <span class="dim">The best questions cut scope.</span>' },
+            { t: "Which database?", ok: false,
+              why: 'Rabbit hole — <b class="bad">+2 min</b>. <span class="dim">In a 60-min round, storage is in-memory. Assume it.</span>' },
+            { t: "What should the UI look like?", ok: false,
+              why: 'Rabbit hole — <b class="bad">+2 min</b>. <span class="dim">There is no UI. <code>main()</code> is the demo.</span>' }
+          ]
+        },
+        {
+          key: "Entities", mins: 8, need: 4,
+          prompt: "Turn the nouns of the problem into classes.",
+          choices: [
+            { t: "ParkingLot", ok: true, out: "ParkingLot", ent: "b-lot",
+              why: 'A real noun → <b class="good">a class</b>.' },
+            { t: "ParkingSpot", ok: true, out: "ParkingSpot", ent: "b-spot",
+              why: 'A real noun → <b class="good">a class</b>.' },
+            { t: "Vehicle", ok: true, out: "Vehicle", ent: "b-vehicle",
+              why: 'A real noun → <b class="good">a class</b>. <span class="dim">Bike/Car/Truck extend it.</span>' },
+            { t: "Ticket", ok: true, out: "Ticket", ent: "b-ticket",
+              why: 'A real noun → <b class="good">a class</b>.' },
+            { t: "park", ok: false,
+              why: 'A <b class="bad">verb</b>, not a noun — it becomes a <i>method</i> on ParkingLot.' },
+            { t: "ParkingLotManagerFactoryImpl", ok: false,
+              why: 'Invented — <b class="bad">not in the problem</b>. <span class="dim">Name classes after real things.</span>' }
+          ]
+        },
+        {
+          key: "APIs", mins: 10, need: 3,
+          prompt: "Write the methods a caller actually needs.",
+          choices: [
+            { t: "park(vehicle) → Ticket", ok: true, out: "lot.park(vehicle) → Ticket",
+              why: 'The main action. <span class="dim">Fix the signature now, code it later.</span>' },
+            { t: "unpark(ticket) → Fee", ok: true, out: "lot.unpark(ticket) → Fee",
+              why: 'The other half of the story. <span class="dim">In and out.</span>' },
+            { t: "availableSpots(type) → int", ok: true, out: "lot.availableSpots(type) → int",
+              why: 'A question callers will ask. <span class="dim">Three methods is a whole system.</span>' },
+            { t: "getSpotId() / setSpotId()", ok: false,
+              why: 'Getters are <b class="bad">not the API</b>. <span class="dim">Design the actions first.</span>' },
+            { t: "exportReportToCSV()", ok: false,
+              why: 'Nobody asked for it — <b class="bad">YAGNI</b>. <span class="dim">Step 1 already said no.</span>' }
+          ]
+        },
+        {
+          key: "Diagram", mins: 7, need: 3,
+          prompt: "Wire the classes together — who holds whom?",
+          choices: [
+            { t: "ParkingLot ◆— ParkingSpot", ok: true, rel: { a: "b-lot", b: "b-spot", label: "has many", dia: true },
+              why: 'Composition — <b class="good">has-a</b>. <span class="dim">The lot owns its spots.</span>' },
+            { t: "ParkingSpot → Vehicle", ok: true, rel: { a: "b-spot", b: "b-vehicle", label: "holds one" },
+              why: 'A spot <b class="good">holds</b> a vehicle. <span class="dim">Nullable when free.</span>' },
+            { t: "Ticket → ParkingSpot", ok: true, rel: { a: "b-ticket", b: "b-spot", label: "issued for" },
+              why: 'The ticket <b class="good">points</b> at the spot it paid for.' },
+            { t: "ParkingSpot ▷ Vehicle (is-a)", ok: false,
+              why: 'A spot <b class="bad">is not</b> a vehicle. <span class="dim">Has-a, never is-a.</span>' },
+            { t: "Ticket ◆— ParkingLot (owns)", ok: false,
+              why: 'Backwards — a ticket <b class="bad">cannot own</b> the lot. <span class="dim">Direction matters.</span>' }
+          ]
+        },
+        {
+          key: "Code", mins: 30, need: 4,
+          prompt: "Code in this order — demo-able first.",
+          choices: [
+            { t: "1. Entity classes + enums", ok: true, out: "class Vehicle / Spot / Ticket / Lot",
+              why: 'Skeletons only. <span class="dim">Fields, no logic yet.</span>' },
+            { t: "2. park() happy path", ok: true, out: "park(): find free spot → Ticket",
+              why: 'The <b class="good">happy path</b> first — edge cases after it runs.' },
+            { t: "3. unpark() + fee", ok: true, out: "unpark(): free spot → hours × rate",
+              why: 'Now the loop closes. <span class="dim">Money last, it is the easy bit.</span>' },
+            { t: "4. main() demo", ok: true, out: "main(): park 2 · unpark 1 · print",
+              why: 'Something to <b class="good">run</b> in front of the interviewer.' },
+            { t: "Unit tests for every getter", ok: false,
+              why: 'No clock for that. <span class="dim">One runnable <code>main()</code> proves more.</span>' },
+            { t: "MySQL persistence layer", ok: false,
+              why: 'Out of scope — <b class="bad">in-memory</b>, decided in step 1.' }
+          ]
+        }
+      ];
+
+      var DEMO = [
+        "\u{1f17f} park(Car KA-01)   → spot S7 · ticket T1",
+        "\u{1f17f} park(Bike KA-09)  → spot S2 · ticket T2",
+        "\u{1f4b8} unpark(T1)        → 2h × ₹30 = ₹60",
+        "✅ availableSpots(CAR) → 29"
+      ];
+
+      var cur = 0;          // current step index
+      var picked = [];      // per step: array of accepted choice indexes
+      var wrong = [];       // per step: array of rejected choice indexes
+      var rels = [];        // accepted relationships
+      var ents = [];        // accepted entity box ids
+      var mins = 0;         // clock
+      var rework = 0;       // wasted minutes
+      var blown = false;    // "skip the plan" mode
+      var ran = false;      // demo has been run
+
+      function stepDone(i) {
+        return picked[i].length >= STEPS[i].need;
+      }
+      function allDone() {
+        return !blown && stepDone(4) && ran;
+      }
+
+      /* ---- pick a chip ---- */
+      function pick(ci) {
+        if (blown) return;
+        var st = STEPS[cur];
+        var ch = st.choices[ci];
+        if (picked[cur].indexOf(ci) !== -1 || wrong[cur].indexOf(ci) !== -1) return;
+
+        if (!ch.ok) {
+          wrong[cur].push(ci);
+          rework += 2;
+          mins += 2;
+          var el = document.getElementById("chip-" + ci);
+          if (el) {
+            el.classList.add("shake");
+            setTimeout(function () { el.classList.remove("shake"); }, 340);
+          }
+          setExplain("✖ " + ch.t, ch.why);
+          render();
+          return;
+        }
+
+        var first = picked[cur].length < st.need;
+        picked[cur].push(ci);
+        if (first) mins += st.mins / st.need;
+        if (ch.ent && ents.indexOf(ch.ent) === -1) ents.push(ch.ent);
+        if (ch.rel) rels.push(ch.rel);
+
+        var done = stepDone(cur);
+        setExplain("✓ " + ch.t, ch.why + (done ? ' <span class="dim">Step ' + (cur + 1) + " done — next.</span>" : ""));
+        render();
+      }
+
+      /* ---- next step ---- */
+      function next() {
+        if (blown) return;
+        if (cur < 4) {
+          if (!stepDone(cur)) return;
+          cur++;
+          setExplain("Step " + (cur + 1) + " · " + STEPS[cur].key,
+            STEPS[cur].prompt + ' <span class="dim">' + STEPS[cur].mins + " min budget.</span>");
+          render();
+          return;
+        }
+        if (stepDone(4) && !ran) runDemo();
+      }
+
+      /* ---- run the demo ---- */
+      function runDemo() {
+        ran = true;
+        var host = document.getElementById("demo");
+        host.innerHTML = "";
+        render();
+        DEMO.forEach(function (line, i) {
+          setTimeout(function () {
+            var d = document.createElement("div");
+            d.className = "out";
+            d.textContent = line;
+            host.appendChild(d);
+            if (i === DEMO.length - 1) {
+              setExplain("⏱ " + Math.round(mins) + " / 60 min — it runs",
+                'Five steps, <b class="good">zero rewrites</b>. <span class="dim">The plan was the fast path, not the slow one.</span>');
+              render();
+            }
+          }, 180 + i * 220);
+        });
+      }
+
+      /* ---- skip the plan ---- */
+      function skip() {
+        blown = true;
+        ran = false;
+        mins = 60;
+        rework = 34;
+        setExplain("⏱ 60 / 60 min — nothing runs",
+          'Straight to code: scope never agreed, so you built the <b class="bad">wrong thing</b> and rewrote it twice. <span class="dim">The 5 steps cost 22 minutes and save the round.</span>');
+        render();
+      }
+
+      /* ---- render ---- */
+      function render() {
+        // step rail
+        var rail = document.getElementById("rail");
+        rail.innerHTML = "";
+        STEPS.forEach(function (s, i) {
+          var p = document.createElement("span");
+          var cls = "pill";
+          if (blown) cls += " fail";
+          else if (stepDone(i)) cls += " done";
+          else if (i === cur) cls += " now";
+          p.className = cls;
+          p.textContent = (blown ? "✖ " : stepDone(i) ? "✓ " : (i + 1) + " ") + s.key;
+          rail.appendChild(p);
+        });
+
+        // clock
+        var shown = Math.round(mins);
+        var clk = document.getElementById("clk");
+        clk.textContent = shown;
+        clk.className = shown > 60 || blown ? "over" : "";
+        document.getElementById("rework").textContent = rework ? "↺ " + rework + " min rework" : "";
+        var fill = document.getElementById("barfill");
+        fill.style.width = Math.min(100, (mins / 60) * 100) + "%";
+        fill.className = shown >= 60 && !allDone() ? "over" : "";
+
+        // tray
+        var st = STEPS[cur];
+        document.getElementById("cap-step").innerHTML = "Step " + (cur + 1) + " · <b>" + st.key + "</b>";
+        document.getElementById("cap-need").textContent =
+          st.mins + " min · pick " + st.need;
+        document.getElementById("prompt").textContent = blown ? "—" : st.prompt;
+
+        var chips = document.getElementById("chips");
+        chips.innerHTML = "";
+        if (!blown) {
+          st.choices.forEach(function (c, i) {
+            var b = document.createElement("button");
+            b.id = "chip-" + i;
+            var taken = picked[cur].indexOf(i) !== -1;
+            var rej = wrong[cur].indexOf(i) !== -1;
+            b.className = "chip" + (taken ? " taken" : "") + (rej ? " rejected" : "");
+            b.textContent = (taken ? "✓ " : rej ? "✖ " : "") + c.t;
+            b.addEventListener("click", (function (ix) {
+              return function () { pick(ix); };
+            })(i));
+            chips.appendChild(b);
+          });
+        }
+
+        var nx = document.getElementById("next");
+        if (blown) {
+          nx.textContent = "—";
+          nx.disabled = true;
+        } else if (cur < 4) {
+          nx.textContent = "Next step →";
+          nx.disabled = !stepDone(cur);
+        } else {
+          nx.textContent = ran ? "✓ demo passed" : "▶ Run the demo";
+          nx.disabled = !stepDone(4) || ran;
+        }
+
+        // board sections
+        for (var s = 0; s < 5; s++) {
+          var sec = document.getElementById("sec" + (s + 1));
+          var cls = "sec";
+          if (blown) cls += "";
+          else if (stepDone(s)) cls += " done";
+          else if (s === cur) cls += " now";
+          sec.className = cls;
+          var tick = sec.querySelector(".tick");
+          tick.textContent = blown ? "✖" : stepDone(s) ? "✓" : s === cur ? "▸" : "\u{1f512}";
+        }
+        document.getElementById("cap-done").textContent =
+          (blown ? 0 : [0, 1, 2, 3, 4].filter(stepDone).length) + " / 5 done";
+
+        // section 1 · scope
+        var o1 = document.getElementById("out1");
+        if (blown) o1.innerHTML = '<span class="bad">✖ never agreed — built a valet feature nobody asked for</span>';
+        else if (!picked[0].length) o1.innerHTML = '<span class="ph">— nothing agreed yet</span>';
+        else o1.innerHTML = picked[0].map(function (i) {
+          return '<div class="line">' + STEPS[0].choices[i].out + "</div>";
+        }).join("");
+
+        // section 2 · entities
+        var o2 = document.getElementById("out2");
+        if (blown) o2.innerHTML = '<span class="bad">✖ none — 3 rewrites at minute 40</span>';
+        else if (!picked[1].length) o2.innerHTML = '<span class="ph">— no classes yet</span>';
+        else o2.innerHTML = '<div class="ents">' + picked[1].map(function (i) {
+          return '<span class="ent">' + STEPS[1].choices[i].out + "</span>";
+        }).join("") + "</div>";
+
+        // section 3 · api
+        var o3 = document.getElementById("out3");
+        if (blown) o3.innerHTML = '<span class="bad">✖ none — main() does not compile</span>';
+        else if (!picked[2].length) o3.innerHTML = '<span class="ph">— no methods yet</span>';
+        else o3.innerHTML = picked[2].map(function (i) {
+          return '<div class="line">' + STEPS[2].choices[i].out + "</div>";
+        }).join("");
+
+        // section 4 · diagram boxes
+        ["b-lot", "b-ticket", "b-spot", "b-vehicle"].forEach(function (id) {
+          var el = document.getElementById(id);
+          if (el) el.className = "box" + (!blown && ents.indexOf(id) !== -1 ? " on" : "");
+        });
+
+        // section 5 · code
+        var o5 = document.getElementById("out5");
+        if (blown) o5.innerHTML = '<span class="bad">✖ half a ParkingLot class, no demo to show</span>';
+        else if (!picked[4].length) o5.innerHTML = '<span class="ph">— no code yet</span>';
+        else o5.innerHTML = picked[4].map(function (i) {
+          return '<div class="line">' + STEPS[4].choices[i].out + "</div>";
+        }).join("");
+        if (blown || !ran) document.getElementById("demo").innerHTML = "";
+
+        drawRels();
+      }
+
+      /* ---- draw the relationship lines ---- */
+      function drawRels() {
+        var svg = document.getElementById("dlines");
+        var dgm = document.getElementById("dgm");
+        if (!svg || !dgm) return;
+        svg.innerHTML = "";
+        if (blown) return;
+        var base = dgm.getBoundingClientRect();
+        rels.forEach(function (r) {
+          var A = document.getElementById(r.a), B = document.getElementById(r.b);
+          if (!A || !B) return;
+          var ra = A.getBoundingClientRect(), rb = B.getBoundingClientRect();
+          var x1 = ra.left - base.left + ra.width / 2, y1 = ra.top - base.top + ra.height / 2;
+          var x2 = rb.left - base.left + rb.width / 2, y2 = rb.top - base.top + rb.height / 2;
+          var ln = document.createElementNS("http://www.w3.org/2000/svg", "line");
+          ln.setAttribute("x1", x1); ln.setAttribute("y1", y1);
+          ln.setAttribute("x2", x2); ln.setAttribute("y2", y2);
+          svg.appendChild(ln);
+          if (r.dia) {
+            var dx = x2 - x1, dy = y2 - y1;
+            var len = Math.sqrt(dx * dx + dy * dy) || 1;
+            var ux = dx / len, uy = dy / len;
+            var cx = x1 + ux * 16, cy = y1 + uy * 16;
+            var poly = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+            poly.setAttribute("points",
+              [cx - ux * 7 + "," + (cy - uy * 7),
+               cx - uy * 5 + "," + (cy + ux * 5),
+               cx + ux * 7 + "," + (cy + uy * 7),
+               cx + uy * 5 + "," + (cy - ux * 5)].join(" "));
+            svg.appendChild(poly);
+          }
+          var tx = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          tx.setAttribute("x", (x1 + x2) / 2);
+          tx.setAttribute("y", (y1 + y2) / 2 - 4);
+          tx.setAttribute("text-anchor", "middle");
+          tx.textContent = r.label;
+          svg.appendChild(tx);
+        });
+      }
+
+      /* ---- reset ---- */
+      function reset() {
+        cur = 0;
+        picked = [[], [], [], [], []];
+        wrong = [[], [], [], [], []];
+        rels = [];
+        ents = [];
+        mins = 0;
+        rework = 0;
+        blown = false;
+        ran = false;
+        document.getElementById("demo").innerHTML = "";
+        render();
+        setExplain("60 minutes on the clock",
+          'Start at step 1: ask the questions that <b>shrink</b> the problem.');
+      }
+
+      document.getElementById("next").addEventListener("click", next);
+      document.getElementById("reset-btn").addEventListener("click", reset);
+      document.getElementById("skip-btn").addEventListener("click", skip);
+      window.addEventListener("resize", drawRels);
+      reset();
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>
