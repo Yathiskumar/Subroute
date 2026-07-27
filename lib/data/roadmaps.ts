@@ -483,6 +483,7 @@ export const ROADMAPS: Roadmap[] = [
                 title: "A repeatable 5-step framework",
                 note: "Clarify → entities → APIs → class diagram → code → test.",
                 tag: "interview",
+                slug: "five-step-framework",
               },
             ],
           },

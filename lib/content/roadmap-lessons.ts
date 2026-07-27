@@ -81,6 +81,7 @@ import { memoryVisibility } from "./lld/memory-visibility";
 import { threadPoolsAndExecutors } from "./lld/thread-pools-and-executors";
 import { futuresPromisesAsync } from "./lld/futures-promises-async";
 import { immutableObjectsForSafety } from "./lld/immutable-objects-for-safety";
+import { fiveStepFramework } from "./lld/five-step-framework";
 
 /** Indexed by `${roadmapSlug}/${topicSlug}`. */
 const ROADMAP_LESSONS: Record<string, RoadmapLesson> = {
@@ -166,6 +167,7 @@ const ROADMAP_LESSONS: Record<string, RoadmapLesson> = {
   "lld/thread-pools-and-executors": threadPoolsAndExecutors,
   "lld/futures-promises-async": futuresPromisesAsync,
   "lld/immutable-objects-for-safety": immutableObjectsForSafety,
+  "lld/five-step-framework": fiveStepFramework,
 };
 
 export function getRoadmapLesson(
