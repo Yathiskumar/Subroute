@@ -82,6 +82,12 @@ import { threadPoolsAndExecutors } from "./lld/thread-pools-and-executors";
 import { futuresPromisesAsync } from "./lld/futures-promises-async";
 import { immutableObjectsForSafety } from "./lld/immutable-objects-for-safety";
 import { fiveStepFramework } from "./lld/five-step-framework";
+import { parkingLot } from "./lld/parking-lot";
+import { vendingMachine } from "./lld/vending-machine";
+import { atm } from "./lld/atm";
+import { ticTacToe } from "./lld/tic-tac-toe";
+import { snakeAndLadder } from "./lld/snake-and-ladder";
+import { coffeeMachine } from "./lld/coffee-machine";
 
 /** Indexed by `${roadmapSlug}/${topicSlug}`. */
 const ROADMAP_LESSONS: Record<string, RoadmapLesson> = {
@@ -168,6 +174,12 @@ const ROADMAP_LESSONS: Record<string, RoadmapLesson> = {
   "lld/futures-promises-async": futuresPromisesAsync,
   "lld/immutable-objects-for-safety": immutableObjectsForSafety,
   "lld/five-step-framework": fiveStepFramework,
+  "lld/parking-lot": parkingLot,
+  "lld/vending-machine": vendingMachine,
+  "lld/atm": atm,
+  "lld/tic-tac-toe": ticTacToe,
+  "lld/snake-and-ladder": snakeAndLadder,
+  "lld/coffee-machine": coffeeMachine,
 };
 
 export function getRoadmapLesson(
