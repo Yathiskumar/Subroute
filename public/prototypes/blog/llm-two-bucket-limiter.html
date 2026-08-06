@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Two-bucket LLM rate limiter — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --info: #5e9ff6;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0; padding: 0; min-height: 100%;
+        background: var(--bg); color: var(--fg); font-family: var(--sans);
+      }
+      body {
+        padding: 14px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.025) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.025) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      .controls { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 12px; }
+      button {
+        background: var(--elevated); color: var(--fg);
+        font: 500 12px/1 var(--sans);
+        border: 1px solid var(--border); border-radius: 7px;
+        padding: 8px 12px; cursor: pointer;
+        transition: border-color 150ms ease, background 150ms ease;
+      }
+      button:hover { border-color: var(--border-strong); background: var(--surface); }
+      button.primary { background: var(--accent); color: #1a1003; border-color: transparent; }
+      button.primary:hover { filter: brightness(1.06); background: var(--accent); }
+      button.on { border-color: var(--accent); color: var(--accent); }
+      .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
+      .seg button { border: 0; border-radius: 0; padding: 8px 10px; background: transparent; }
+      .seg button + button { border-left: 1px solid var(--border); }
+      .seg button.on { background: rgba(251,134,58,0.14); color: var(--accent); }
+      .lbl {
+        font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.1em;
+        text-transform: uppercase; color: var(--subtle); margin-right: 2px;
+      }
+
+      .panels { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      @media (max-width: 560px) { .panels { grid-template-columns: 1fr; } }
+
+      .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 11px 12px 12px; }
+      .panel.bad { border-color: rgba(240,104,104,0.3); }
+      .panel.good { border-color: rgba(92,198,111,0.28); }
+      .panel h3 { margin: 0 0 2px; font-size: 13px; font-weight: 600; }
+      .panel .sub { font-size: 11px; color: var(--muted); margin-bottom: 10px; min-height: 28px; line-height: 1.35; }
+
+      .gauge { margin-bottom: 8px; }
+      .gauge-top {
+        display: flex; justify-content: space-between; align-items: baseline;
+        font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.08em;
+        text-transform: uppercase; color: var(--subtle); margin-bottom: 4px;
+      }
+      .gauge-val { color: var(--fg); font-size: 10.5px; letter-spacing: 0; text-transform: none; }
+      .track { height: 9px; background: var(--bg); border: 1px solid var(--border); border-radius: 5px; overflow: hidden; position: relative; }
+      .fill { height: 100%; width: 100%; border-radius: 4px; transition: width 90ms linear, background 200ms ease; }
+      .fill.rpm { background: var(--info); }
+      .fill.tpm { background: var(--accent); }
+      .fill.low { background: var(--danger); }
+      .resv { position: absolute; top: 0; height: 100%; background: repeating-linear-gradient(45deg, rgba(255,255,255,0.22) 0 3px, transparent 3px 6px); }
+
+      .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-top: 11px; }
+      .stat { background: var(--elevated); border: 1px solid var(--border); border-radius: 7px; padding: 6px 6px; }
+      .stat-l { font-family: var(--mono); font-size: 8px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--subtle); }
+      .stat-v { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 1px; }
+      .stat-v.err { color: var(--danger); }
+      .stat-v.ok { color: var(--success); }
+
+      .log { margin-top: 9px; height: 46px; overflow: hidden; display: flex; flex-direction: column-reverse; gap: 3px; }
+      .row {
+        font-family: var(--mono); font-size: 10px; padding: 2px 6px; border-radius: 4px;
+        display: flex; justify-content: space-between; gap: 6px; white-space: nowrap;
+      }
+      .row.ok { background: var(--success-soft); color: var(--success); }
+      .row.err { background: var(--danger-soft); color: var(--danger); }
+      .row.wait { background: rgba(94,159,246,0.1); color: var(--info); }
+
+      .explain {
+        margin-top: 11px; font-size: 11.5px; line-height: 1.45; color: var(--muted);
+        background: var(--surface); border: 1px solid var(--border);
+        border-left: 2px solid var(--accent); border-radius: 0 7px 7px 0; padding: 8px 11px;
+      }
+      .explain b { color: var(--fg); font-weight: 600; }
+      .clock { font-family: var(--mono); font-size: 10px; color: var(--subtle); margin-left: auto; }
+    </style>
+  </head>
+  <body>
+    <div class="controls">
+      <button class="primary" id="btn-run">Run</button>
+      <button id="btn-reset">Reset</button>
+      <span class="lbl">Workload</span>
+      <span class="seg" id="seg-load">
+        <button data-w="chat" class="on">Chat</button>
+        <button data-w="rag">RAG</button>
+        <button data-w="burst">Bursty</button>
+      </span>
+      <span class="clock" id="clock">t = 0.0s</span>
+    </div>
+
+    <div class="panels">
+      <div class="panel bad">
+        <h3>Counts requests only</h3>
+        <div class="sub">Admits while requests-per-minute has room. Never looks at tokens.</div>
+        <div class="gauge">
+          <div class="gauge-top"><span>Provider RPM</span><span class="gauge-val" id="a-rpm-v">60 / 60</span></div>
+          <div class="track"><div class="fill rpm" id="a-rpm"></div></div>
+        </div>
+        <div class="gauge">
+          <div class="gauge-top"><span>Provider TPM</span><span class="gauge-val" id="a-tpm-v">40k / 40k</span></div>
+          <div class="track"><div class="fill tpm" id="a-tpm"></div></div>
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="stat-l">Done</div><div class="stat-v ok" id="a-done">0</div></div>
+          <div class="stat"><div class="stat-l">Errors</div><div class="stat-v err" id="a-429">0</div></div>
+          <div class="stat"><div class="stat-l">Queued</div><div class="stat-v" id="a-q">0</div></div>
+          <div class="stat"><div class="stat-l">Goodput</div><div class="stat-v" id="a-gp">—</div></div>
+        </div>
+        <div class="log" id="a-log"></div>
+      </div>
+
+      <div class="panel good">
+        <h3>Two buckets, reserve &amp; reconcile</h3>
+        <div class="sub">Admits only when RPM <em>and</em> TPM both have room. Reserves an estimate, refunds the difference.</div>
+        <div class="gauge">
+          <div class="gauge-top"><span>Provider RPM</span><span class="gauge-val" id="b-rpm-v">60 / 60</span></div>
+          <div class="track"><div class="fill rpm" id="b-rpm"></div></div>
+        </div>
+        <div class="gauge">
+          <div class="gauge-top"><span>Provider TPM</span><span class="gauge-val" id="b-tpm-v">40k / 40k</span></div>
+          <div class="track"><div class="fill tpm" id="b-tpm"></div><div class="resv" id="b-resv"></div></div>
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="stat-l">Done</div><div class="stat-v ok" id="b-done">0</div></div>
+          <div class="stat"><div class="stat-l">Errors</div><div class="stat-v err" id="b-429">0</div></div>
+          <div class="stat"><div class="stat-l">Queued</div><div class="stat-v" id="b-q">0</div></div>
+          <div class="stat"><div class="stat-l">Goodput</div><div class="stat-v" id="b-gp">—</div></div>
+        </div>
+        <div class="log" id="b-log"></div>
+      </div>
+    </div>
+
+    <div class="explain" id="explain">
+      Press <b>Run</b>. Both clients get the identical request stream and both queue what they cannot send yet. The only difference is the admission rule.
+    </div>
+
+    <script>
+      "use strict";
+
+      // --- Provider model ----------------------------------------------------
+      // Mirrors how real LLM APIs meter: two continuously-refilling token
+      // buckets (requests and tokens), and the token cost of a call is not
+      // known until the response has finished streaming.
+      var RPM_CAP = 60;       // requests / minute
+      var TPM_CAP = 40000;    // tokens / minute
+      var RPM_REFILL = RPM_CAP / 60;   // per simulated second
+      var TPM_REFILL = TPM_CAP / 60;
+
+      var WORKLOADS = {
+        // arrivals per second, input token range, output token range
+        chat:  { rate: 0.85, inMin: 300,  inMax: 900,  outMin: 120, outMax: 400,  est: 1200 },
+        rag:   { rate: 0.22, inMin: 3000, inMax: 9000, outMin: 200, outMax: 700,  est: 7000 },
+        burst: { rate: 0.40, inMin: 400,  inMax: 6000, outMin: 150, outMax: 1800, est: 4500, bursty: true }
+      };
+
+      var workload = "chat";
+      var running = false;
+      var simTime = 0;      // virtual seconds — never Date.now()
+      var lastFrame = 0;
+      var seed = 1337;
+      var nextArrival = 0;
+      var reqId = 0;
+
+      function rnd() { // deterministic LCG, so both panels see one identical stream
+        seed = (seed * 1664525 + 1013904223) % 4294967296;
+        return seed / 4294967296;
+      }
+      function between(a, b) { return a + rnd() * (b - a); }
+
+      function makeClient(twoBucket) {
+        return {
+          twoBucket: twoBucket,
+          rpm: RPM_CAP, tpm: TPM_CAP,   // the client's view of provider capacity
+          reserved: 0,                   // tokens held for in-flight calls
+          inflight: [],
+          queue: [],                     // admitted by us, waiting for capacity
+          done: 0, errors: 0, tokens: 0,
+          cooldown: 0                    // set from retry-after after a 429
+        };
+      }
+      var A = makeClient(false);
+      var B = makeClient(true);
+
+      function fmtK(n) {
+        n = Math.max(0, Math.round(n));
+        return n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1) + "k" : String(n);
+      }
+
+      function log(el, cls, left, right) {
+        var d = document.createElement("div");
+        d.className = "row " + cls;
+        d.innerHTML = "<span>" + left + "</span><span>" + right + "</span>";
+        el.appendChild(d);
+        while (el.children.length > 4) el.removeChild(el.firstChild);
+      }
+
+      function say(html) { document.getElementById("explain").innerHTML = html; }
+
+      // --- Admission ---------------------------------------------------------
+      // Both clients queue work they can't send yet, so neither one gets to
+      // look good by quietly dropping load. The ONLY difference between them
+      // is the admission rule below.
+      function trySend(c, req, logEl) {
+        if (c.cooldown > 0) return false;
+
+        if (c.twoBucket) {
+          // Check both dimensions against a pessimistic reservation.
+          var est = Math.max(req.input, WORKLOADS[workload].est);
+          if (c.rpm < 1 || c.tpm - c.reserved < est) return false; // hold
+          c.reserved += est;
+          req.reserve = est;
+        } else {
+          if (c.rpm < 1) return false; // the only gate it knows about
+        }
+
+        c.rpm -= 1;
+
+        // Provider-side verdict: the token bucket is checked on arrival too.
+        if (c.tpm < req.input) {
+          c.errors += 1;
+          c.cooldown = 3 + rnd() * 1.5; // retry-after, honoured with jitter
+          if (req.reserve) { c.reserved -= req.reserve; req.reserve = 0; }
+          log(logEl, "err", "#" + req.id + " 429", "TPM exhausted");
+          return true; // consumed the attempt; the request is lost
+        }
+
+        c.tpm -= req.input;           // input charged at admission
+        req.remaining = req.output;   // output charged as it streams
+        c.inflight.push(req);
+        log(logEl, "ok", "#" + req.id + " sent", fmtK(req.input) + " in");
+        return true;
+      }
+
+      function step(c, dt, logEl) {
+        c.rpm = Math.min(RPM_CAP, c.rpm + RPM_REFILL * dt);
+        c.tpm = Math.min(TPM_CAP, c.tpm + TPM_REFILL * dt);
+        if (c.cooldown > 0) c.cooldown = Math.max(0, c.cooldown - dt);
+
+        // Drain whatever the admission rule will now allow.
+        var guard = 0;
+        while (c.queue.length > 0 && guard < 20) {
+          guard++;
+          if (!trySend(c, c.queue[0], logEl)) break;
+          c.queue.shift();
+        }
+
+        for (var i = c.inflight.length - 1; i >= 0; i--) {
+          var r = c.inflight[i];
+          var burn = Math.min(r.remaining, 420 * dt); // stream ~420 tok/s
+          r.remaining -= burn;
+          c.tpm -= burn;
+          if (r.remaining <= 0.5) {
+            c.inflight.splice(i, 1);
+            c.done += 1;
+            c.tokens += r.input + r.output;
+            if (r.reserve) {
+              // Reconcile: hand back whatever the estimate over-reserved.
+              c.reserved -= r.reserve;
+              r.reserve = 0;
+            }
+          }
+        }
+        if (c.tpm < 0) c.tpm = 0;
+      }
+
+      // --- Render ------------------------------------------------------------
+      function paint(c, p) {
+        var rp = Math.max(0, c.rpm / RPM_CAP), tp = Math.max(0, c.tpm / TPM_CAP);
+        var rf = document.getElementById(p + "-rpm"), tf = document.getElementById(p + "-tpm");
+        rf.style.width = (rp * 100).toFixed(1) + "%";
+        tf.style.width = (tp * 100).toFixed(1) + "%";
+        rf.className = "fill rpm" + (rp < 0.12 ? " low" : "");
+        tf.className = "fill tpm" + (tp < 0.12 ? " low" : "");
+        document.getElementById(p + "-rpm-v").textContent = Math.floor(c.rpm) + " / " + RPM_CAP;
+        document.getElementById(p + "-tpm-v").textContent = fmtK(c.tpm) + " / " + fmtK(TPM_CAP);
+        document.getElementById(p + "-done").textContent = c.done;
+        document.getElementById(p + "-429").textContent = c.errors;
+        document.getElementById(p + "-q").textContent = c.queue.length;
+        var gp = c.done + c.errors > 0 ? Math.round((c.done / (c.done + c.errors)) * 100) + "%" : "—";
+        document.getElementById(p + "-gp").textContent = gp;
+        if (p === "b") {
+          var rw = Math.max(0, Math.min(1, c.reserved / TPM_CAP));
+          var rv = document.getElementById("b-resv");
+          rv.style.width = (rw * 100).toFixed(1) + "%";
+          rv.style.left = Math.max(0, tp * 100 - rw * 100).toFixed(1) + "%";
+        }
+      }
+
+      var narrated = {};
+      function narrate() {
+        if (A.errors >= 1 && !narrated.first) {
+          narrated.first = true;
+          say("The left client just took a <b>429</b> — and its request bucket was nowhere near empty. " +
+              "It was metering the wrong resource. Tokens ran out first.");
+        } else if (A.errors >= 3 && !narrated.gap) {
+          narrated.gap = true;
+          say("Same stream, same limits, and <b>both clients queue</b> what they can't send — neither is dropping work. " +
+              "The whole gap is what each one counted before sending.");
+        } else if (B.done > 6 && !narrated.resv && workload === "rag") {
+          narrated.resv = true;
+          say("The hatched band is the <b>reservation</b> — tokens held for calls still streaming. " +
+              "It shrinks as each response finishes and the estimate is reconciled against the real cost.");
+        }
+      }
+
+      function frame(ts) {
+        if (!running) return;
+        if (!lastFrame) lastFrame = ts;
+        var dt = Math.min((ts - lastFrame) / 1000, 0.05) * 2.5; // virtual clock, capped
+        lastFrame = ts;
+        simTime += dt;
+
+        var w = WORKLOADS[workload];
+        nextArrival -= dt;
+        if (nextArrival <= 0) {
+          var gap = 1 / w.rate;
+          if (w.bursty) gap = rnd() < 0.45 ? 0.12 : gap * 2.2; // clustered arrivals
+          nextArrival = gap * between(0.6, 1.4);
+
+          reqId += 1;
+          var input = Math.round(between(w.inMin, w.inMax));
+          var output = Math.round(between(w.outMin, w.outMax));
+          // One stream, two consumers — the only difference is the admission rule.
+          if (A.queue.length < 60) A.queue.push({ id: reqId, input: input, output: output });
+          if (B.queue.length < 60) B.queue.push({ id: reqId, input: input, output: output });
+        }
+
+        step(A, dt, document.getElementById("a-log"));
+        step(B, dt, document.getElementById("b-log"));
+        paint(A, "a"); paint(B, "b");
+        narrate();
+        document.getElementById("clock").textContent = "t = " + simTime.toFixed(1) + "s";
+        requestAnimationFrame(frame);
+      }
+
+      // --- Controls ----------------------------------------------------------
+      document.getElementById("btn-run").addEventListener("click", function () {
+        running = !running;
+        this.textContent = running ? "Pause" : "Run";
+        if (running) { lastFrame = 0; requestAnimationFrame(frame); }
+      });
+
+      document.getElementById("btn-reset").addEventListener("click", function () {
+        running = false;
+        document.getElementById("btn-run").textContent = "Run";
+        A = makeClient(false); B = makeClient(true);
+        simTime = 0; nextArrival = 0; reqId = 0; seed = 1337; narrated = {};
+        document.getElementById("a-log").innerHTML = "";
+        document.getElementById("b-log").innerHTML = "";
+        paint(A, "a"); paint(B, "b");
+        document.getElementById("clock").textContent = "t = 0.0s";
+        say("Reset. Both clients get the identical request stream and both queue what they cannot send yet. The only difference is the admission rule.");
+      });
+
+      document.getElementById("seg-load").addEventListener("click", function (e) {
+        var b = e.target.closest("button");
+        if (!b) return;
+        Array.prototype.forEach.call(this.children, function (c) { c.classList.remove("on"); });
+        b.classList.add("on");
+        workload = b.dataset.w;
+        document.getElementById("btn-reset").click();
+        say(workload === "rag"
+          ? "<b>RAG</b>: a few thousand input tokens per call. Request count barely moves; the token bucket drains fast. This is where the two strategies separate."
+          : workload === "burst"
+          ? "<b>Bursty</b>: clustered arrivals with wildly uneven cost — the case that breaks a fixed concurrency cap."
+          : "<b>Chat</b>: short prompts, so tokens never become the binding constraint and both strategies cope. Switch to RAG to see them diverge.");
+      });
+
+      paint(A, "a"); paint(B, "b");
+    </script>
+  </body>
+</html>
