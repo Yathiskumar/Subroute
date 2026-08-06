@@ -1,0 +1,561 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Parking Lot — live simulation — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --surface: #14161a;
+        --elevated: #1a1d22;
+        --border: #232830;
+        --border-strong: #2d333d;
+        --fg: #e8e4dc;
+        --muted: #9099a8;
+        --subtle: #6b7280;
+        --accent: #fb863a;
+        --accent-soft: rgba(251, 134, 58, 0.12);
+        --accent-border: rgba(251, 134, 58, 0.45);
+        --success: #5cc66f;
+        --success-soft: rgba(92, 198, 111, 0.12);
+        --info: #5e9ff6;
+        --info-soft: rgba(94, 159, 246, 0.12);
+        --danger: #f06868;
+        --danger-soft: rgba(240, 104, 104, 0.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px;
+        --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 14px 16px 20px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,0.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---------- top ---------- */
+      .stats { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+      .stat { font-family: var(--mono); font-size: 11px; padding: 5px 10px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); color: var(--muted); white-space: nowrap; }
+      .stat b { color: var(--fg); }
+      .stat.money b { color: var(--success); }
+      .stat.clk { margin-left: auto; }
+      .stat.clk b { color: var(--accent); }
+      .callline { font-family: var(--mono); font-size: 11.5px; color: var(--subtle); background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 7px 11px; margin-bottom: 10px; white-space: nowrap; overflow-x: auto; }
+      .callline b { color: var(--accent); font-weight: 700; }
+      .callline i { color: var(--success); font-style: normal; }
+      .callline u { color: var(--danger); text-decoration: none; }
+
+      /* ---------- controls ---------- */
+      .ctrls { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 11px; }
+      .grp { display: flex; flex-direction: column; gap: 5px; }
+      .grp-cap { font-family: var(--mono); font-size: 9.5px; letter-spacing: .09em; text-transform: uppercase; color: var(--subtle); }
+      .row { display: flex; gap: 5px; flex-wrap: wrap; }
+      .chip { font-family: var(--mono); font-size: 11.5px; padding: 7px 11px; border-radius: var(--r-md); background: var(--elevated); border: 1px solid var(--border-strong); color: var(--muted); cursor: pointer; transition: border-color .15s, color .15s, background .15s; }
+      .chip:hover { border-color: var(--border-strong); color: var(--fg); }
+      .chip.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); font-weight: 700; }
+      .go { font-family: var(--mono); font-size: 12px; font-weight: 700; padding: 8px 16px; border-radius: var(--r-md); cursor: pointer; background: var(--success-soft); border: 1px solid rgba(92,198,111,.45); color: var(--success); transition: transform .1s, opacity .2s; }
+      .go:active { transform: scale(0.97); }
+      .go:disabled { opacity: .35; cursor: not-allowed; }
+
+      /* ---------- lot ---------- */
+      .lotwrap { display: grid; grid-template-columns: 104px 1fr; gap: 10px; align-items: stretch; }
+      .gate { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 9px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; }
+      .gate-cap { font-family: var(--mono); font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--subtle); }
+      .gate-car { font-size: 26px; line-height: 1; height: 30px; display: flex; align-items: center; opacity: .22; transition: opacity .25s, transform .25s; }
+      .gate-car.in { opacity: 1; transform: translateX(4px); }
+      .gate-car.no { animation: shake .35s; }
+      @keyframes shake { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+      .gate-plate { font-family: var(--mono); font-size: 9.5px; color: var(--muted); height: 12px; }
+      .barrier { width: 100%; height: 5px; border-radius: 3px; background: repeating-linear-gradient(90deg, var(--danger) 0 8px, var(--surface) 8px 16px); opacity: .7; transition: transform .3s; transform-origin: left center; }
+      .barrier.up { transform: rotate(-38deg); opacity: .35; }
+
+      .floors { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 10px; }
+      .floor { display: grid; grid-template-columns: 54px 1fr; gap: 8px; align-items: center; }
+      .floor + .floor { margin-top: 9px; padding-top: 9px; border-top: 1px dashed var(--border); }
+      .floor-cap { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+      .floor-cap span { display: block; color: var(--subtle); font-size: 9px; margin-top: 2px; }
+      .spots { display: flex; gap: 6px; flex-wrap: wrap; }
+
+      .spot { width: 60px; height: 54px; border-radius: var(--r-md); background: var(--elevated); border: 1px dashed var(--border-strong); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; position: relative; transition: border-color .2s, background .2s, transform .15s; }
+      .spot .sid { position: absolute; top: 3px; left: 5px; font-family: var(--mono); font-size: 8px; color: var(--subtle); }
+      .spot .sz { position: absolute; top: 3px; right: 5px; font-family: var(--mono); font-size: 8px; font-weight: 700; color: var(--subtle); }
+      .spot .veh { font-size: 19px; line-height: 1; margin-top: 5px; }
+      .spot .pl { font-family: var(--mono); font-size: 7.5px; color: var(--muted); }
+      .spot .free { font-family: var(--mono); font-size: 9px; color: var(--subtle); margin-top: 6px; }
+      .spot.taken { border-style: solid; border-color: var(--border-strong); background: var(--surface); }
+      .spot.cand { border-color: var(--info); background: var(--info-soft); }
+      .spot.cand .free { color: var(--info); }
+      .spot.pool { border-color: var(--accent-border); background: var(--accent-soft); }
+      .spot.pool .free { color: var(--accent); }
+      .spot.pick { border-color: var(--accent); background: var(--accent-soft); transform: scale(1.08); }
+      .spot.out { border-color: var(--success); background: var(--success-soft); }
+
+      /* ---------- tickets ---------- */
+      .tix { margin-top: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 10px; }
+      .tix-cap { font-family: var(--mono); font-size: 9.5px; letter-spacing: .09em; text-transform: uppercase; color: var(--subtle); margin-bottom: 8px; }
+      .tix-list { display: flex; gap: 7px; flex-wrap: wrap; }
+      .tix-empty { font-family: var(--mono); font-size: 11px; color: var(--subtle); }
+      .tk { background: var(--elevated); border: 1px solid var(--border-strong); border-left: 3px solid var(--accent); border-radius: var(--r-md); padding: 7px 9px; display: flex; flex-direction: column; gap: 4px; min-width: 132px; }
+      .tk-id { font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--fg); display: flex; gap: 6px; align-items: center; }
+      .tk-meta { font-family: var(--mono); font-size: 9.5px; color: var(--muted); line-height: 1.5; }
+      .tk-out { font-family: var(--mono); font-size: 10px; font-weight: 700; padding: 4px 8px; border-radius: 6px; cursor: pointer; background: var(--surface); border: 1px solid var(--border-strong); color: var(--muted); }
+      .tk-out:hover { border-color: var(--accent); color: var(--accent); }
+      .tk.leaving { border-left-color: var(--success); }
+
+      /* ---------- explain ---------- */
+      .explain { min-height: 72px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 15px; margin-top: 11px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .hi { color: var(--accent); font-weight: 700; }
+      .explain-body .blu { color: var(--info); font-weight: 700; }
+
+      /* ---------- foot ---------- */
+      .foot { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 11px; }
+      .btn { background: var(--elevated); color: var(--muted); font: 600 11.5px/1 var(--sans); border: 1px solid var(--border); border-radius: var(--r-md); padding: 8px 12px; cursor: pointer; }
+      .btn:hover { border-color: var(--border-strong); color: var(--fg); }
+      .hint { margin-left: auto; font-size: 11.5px; color: var(--muted); }
+      .hint .b { color: var(--accent); }
+
+      @media (max-width: 620px) {
+        .lotwrap { grid-template-columns: 1fr; }
+        .floor { grid-template-columns: 1fr; }
+        .hint { margin-left: 0; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="stats">
+      <span class="stat">Free <b id="s-free">16</b> / 16</span>
+      <span class="stat">Parked <b id="s-parked">0</b></span>
+      <span class="stat money">Revenue <b id="s-rev">₹0</b></span>
+      <span class="stat clk">🕘 <b id="s-clock">09:00</b></span>
+    </div>
+
+    <div class="callline" id="callline">// click <b>Park</b> to call <b>lot.park(vehicle)</b></div>
+
+    <div class="ctrls">
+      <div class="grp">
+        <span class="grp-cap">Vehicle</span>
+        <div class="row" id="veh-row"></div>
+      </div>
+      <div class="grp">
+        <span class="grp-cap">&nbsp;</span>
+        <button class="go" id="park-btn">▶ Park</button>
+      </div>
+      <div class="grp">
+        <span class="grp-cap">Spot strategy</span>
+        <div class="row" id="str-row"></div>
+      </div>
+      <div class="grp">
+        <span class="grp-cap">Pricing</span>
+        <div class="row" id="pri-row"></div>
+      </div>
+    </div>
+
+    <div class="lotwrap">
+      <div class="gate">
+        <span class="gate-cap">Entrance</span>
+        <div class="gate-car" id="gate-car">🚗</div>
+        <div class="gate-plate" id="gate-plate"></div>
+        <div class="barrier" id="barrier"></div>
+      </div>
+      <div class="floors" id="floors"></div>
+    </div>
+
+    <div class="tix">
+      <div class="tix-cap">Open tickets</div>
+      <div class="tix-list" id="tix-list"></div>
+    </div>
+
+    <div class="explain">
+      <div class="explain-title" id="ex-title">A 16-spot parking lot</div>
+      <div class="explain-body" id="ex-body">Pick a vehicle and press <b>▶ Park</b>. Watch which spot the lot chooses.</div>
+    </div>
+
+    <div class="foot">
+      <button class="btn" id="hour-btn">⏩ +1 hour</button>
+      <button class="btn" id="fill-btn">⚡ Fill the lot</button>
+      <button class="btn" id="reset-btn">↺ Reset</button>
+      <span class="hint"><span class="b">▸</span> Same <code>park()</code> call — only the strategy object changes.</span>
+    </div>
+
+    <script>
+      /* ---------------- model ---------------- */
+      var VEH = {
+        bike:  { icon: "🏍", label: "Bike",  size: "S", rate: 10, cls: "Bike"  },
+        car:   { icon: "🚗", label: "Car",   size: "M", rate: 20, cls: "Car"   },
+        truck: { icon: "🚚", label: "Truck", size: "L", rate: 30, cls: "Truck" }
+      };
+      var RANK = { S: 0, M: 1, L: 2 };
+      var SIZE_WORD = { S: "SMALL", M: "MEDIUM", L: "LARGE" };
+      var LAYOUT = [
+        ["S", "S", "M", "M", "M", "M", "L", "L"],
+        ["S", "S", "S", "M", "M", "M", "L", "L"]
+      ];
+      var STRATS = [
+        { key: "near",   label: "🎯 Nearest",  note: "lowest floor first" },
+        { key: "spread", label: "📊 Spread",   note: "emptiest floor first" }
+      ];
+      var PRICES = [
+        { key: "flat", label: "⏱ Flat/hr" },
+        { key: "slab", label: "🪜 Slabs" }
+      ];
+
+      var spots = [], tickets = [], clock = 540, seq = 0, plateSeq = 0, revenue = 0;
+      var veh = "car", strat = "near", price = "flat", busy = false;
+
+      function hhmm(m) {
+        var h = Math.floor(m / 60) % 24, x = m % 60;
+        return (h < 10 ? "0" : "") + h + ":" + (x < 10 ? "0" : "") + x;
+      }
+      function nextPlate() {
+        plateSeq++;
+        return "KA-05-" + (1000 + plateSeq * 7);
+      }
+      function freeOnFloor(f) {
+        var n = 0;
+        for (var i = 0; i < spots.length; i++) if (spots[i].floor === f && !spots[i].ticket) n++;
+        return n;
+      }
+      function buildLot() {
+        spots = [];
+        for (var f = 0; f < LAYOUT.length; f++) {
+          for (var i = 0; i < LAYOUT[f].length; i++) {
+            spots.push({
+              id: "F" + (f + 1) + "-" + (i + 1),
+              floor: f, idx: i, size: LAYOUT[f][i], ticket: null
+            });
+          }
+        }
+      }
+
+      /* ---------------- pricing (one interface, two impls) ---------------- */
+      function hoursOf(t) { return Math.max(1, Math.ceil((clock - t.inAt) / 60)); }
+      function feeOf(t) {
+        var h = hoursOf(t);
+        if (price === "flat") {
+          return { amount: h * VEH[t.type].rate, how: h + " h × ₹" + VEH[t.type].rate + "/h" };
+        }
+        if (h <= 2) return { amount: 50, how: "₹50 flat for the first 2 h" };
+        return { amount: 50 + (h - 2) * 15, how: "₹50 (first 2 h) + " + (h - 2) + " × ₹15" };
+      }
+
+      /* ---------------- render ---------------- */
+      function setExplain(title, html) {
+        document.getElementById("ex-title").textContent = title;
+        document.getElementById("ex-body").innerHTML = html;
+      }
+      function setCall(html) { document.getElementById("callline").innerHTML = html; }
+
+      function renderChips() {
+        var vr = document.getElementById("veh-row");
+        vr.innerHTML = "";
+        Object.keys(VEH).forEach(function (k) {
+          var b = document.createElement("button");
+          b.className = "chip" + (veh === k ? " on" : "");
+          b.textContent = VEH[k].icon + " " + VEH[k].label;
+          b.addEventListener("click", function () { pickVeh(k); });
+          vr.appendChild(b);
+        });
+        var sr = document.getElementById("str-row");
+        sr.innerHTML = "";
+        STRATS.forEach(function (s) {
+          var b = document.createElement("button");
+          b.className = "chip" + (strat === s.key ? " on" : "");
+          b.textContent = s.label;
+          b.addEventListener("click", function () { pickStrat(s.key); });
+          sr.appendChild(b);
+        });
+        var pr = document.getElementById("pri-row");
+        pr.innerHTML = "";
+        PRICES.forEach(function (p) {
+          var b = document.createElement("button");
+          b.className = "chip" + (price === p.key ? " on" : "");
+          b.textContent = p.label;
+          b.addEventListener("click", function () { pickPrice(p.key); });
+          pr.appendChild(b);
+        });
+      }
+
+      function renderLot() {
+        var host = document.getElementById("floors");
+        host.innerHTML = "";
+        for (var f = 0; f < LAYOUT.length; f++) {
+          var row = document.createElement("div");
+          row.className = "floor";
+          var cap = document.createElement("div");
+          cap.className = "floor-cap";
+          cap.innerHTML = "Floor " + (f + 1) + "<span>" + freeOnFloor(f) + " free</span>";
+          row.appendChild(cap);
+          var box = document.createElement("div");
+          box.className = "spots";
+          spots.filter(function (s) { return s.floor === f; }).forEach(function (s) {
+            var el = document.createElement("div");
+            el.className = "spot" + (s.ticket ? " taken" : "");
+            el.id = "sp-" + s.id;
+            var inner = "<span class='sid'>" + s.id + "</span><span class='sz'>" + s.size + "</span>";
+            if (s.ticket) {
+              inner += "<span class='veh'>" + VEH[s.ticket.type].icon + "</span>";
+              inner += "<span class='pl'>" + s.ticket.id + "</span>";
+            } else {
+              inner += "<span class='free'>free</span>";
+            }
+            el.innerHTML = inner;
+            box.appendChild(el);
+          });
+          row.appendChild(box);
+          host.appendChild(row);
+        }
+      }
+
+      function renderTickets() {
+        var host = document.getElementById("tix-list");
+        host.innerHTML = "";
+        if (!tickets.length) {
+          host.innerHTML = "<span class='tix-empty'>— no vehicle inside —</span>";
+          return;
+        }
+        tickets.forEach(function (t) {
+          var el = document.createElement("div");
+          el.className = "tk";
+          var f = feeOf(t);
+          el.innerHTML =
+            "<span class='tk-id'>" + VEH[t.type].icon + " " + t.id + "</span>" +
+            "<span class='tk-meta'>" + t.plate + " · " + t.spotId + "<br>in " + hhmm(t.inAt) +
+            " · " + hoursOf(t) + " h · ₹" + f.amount + "</span>";
+          var b = document.createElement("button");
+          b.className = "tk-out";
+          b.textContent = "⏏ Exit";
+          b.addEventListener("click", function () { exit(t.id); });
+          el.appendChild(b);
+          host.appendChild(el);
+        });
+      }
+
+      function renderStats() {
+        var free = spots.filter(function (s) { return !s.ticket; }).length;
+        document.getElementById("s-free").textContent = free;
+        document.getElementById("s-parked").textContent = spots.length - free;
+        document.getElementById("s-rev").textContent = "₹" + revenue;
+        document.getElementById("s-clock").textContent = hhmm(clock);
+      }
+
+      function render() { renderChips(); renderLot(); renderTickets(); renderStats(); }
+
+      function mark(list, cls) {
+        list.forEach(function (s) {
+          var el = document.getElementById("sp-" + s.id);
+          if (el) el.classList.add(cls);
+        });
+      }
+      function clearMarks() {
+        ["cand", "pool", "pick", "out"].forEach(function (c) {
+          var els = document.querySelectorAll(".spot." + c);
+          for (var i = 0; i < els.length; i++) els[i].classList.remove(c);
+        });
+      }
+
+      /* ---------------- controls ---------------- */
+      function pickVeh(k) {
+        veh = k;
+        renderChips();
+        setExplain(VEH[k].label + " selected",
+          "A " + VEH[k].label.toLowerCase() + " needs a <span class='hi'>" + SIZE_WORD[VEH[k].size] +
+          "</span> spot <span class='dim'>— or any bigger one.</span>");
+      }
+      function pickStrat(k) {
+        strat = k;
+        renderChips();
+        setExplain("Strategy → " + (k === "near" ? "Nearest" : "Spread"),
+          k === "near"
+            ? "Fills <span class='hi'>Floor 1</span> first — shortest walk. <span class='dim'>Not one line of <code>park()</code> changed.</span>"
+            : "Sends cars to the <span class='hi'>emptiest floor</span> — spreads the load. <span class='dim'>Not one line of <code>park()</code> changed.</span>");
+        setCall("lot.setStrategy(new <b>" + (k === "near" ? "NearestFirst" : "SpreadOut") + "Strategy</b>())");
+      }
+      function pickPrice(k) {
+        price = k;
+        renderTickets();
+        renderChips();
+        setExplain("Pricing → " + (k === "flat" ? "Flat per hour" : "Slabs"),
+          k === "flat"
+            ? "Bike ₹10 · Car ₹20 · Truck ₹30 <span class='dim'>per started hour.</span>"
+            : "₹50 for the first 2 h, then ₹15/h. <span class='dim'>Same <code>unpark()</code>, different bill.</span>");
+        setCall("lot.setPricing(new <b>" + (k === "flat" ? "HourlyRate" : "SlabRate") + "</b>())");
+      }
+
+      /* ---------------- park ---------------- */
+      function park() {
+        if (busy) return;
+        var v = VEH[veh], need = RANK[v.size], plate = nextPlate();
+        clearMarks();
+        busy = true;
+        document.getElementById("park-btn").disabled = true;
+
+        var gc = document.getElementById("gate-car");
+        gc.textContent = v.icon;
+        gc.classList.remove("no");
+        gc.classList.add("in");
+        document.getElementById("gate-plate").textContent = plate;
+        setCall("lot.<b>park</b>(new " + v.cls + "(“" + plate + "”))");
+        setExplain("1 · A " + v.label.toLowerCase() + " arrives",
+          "It needs a <span class='hi'>" + SIZE_WORD[v.size] + "</span> spot — or anything bigger.");
+
+        var fits = spots.filter(function (s) { return !s.ticket && RANK[s.size] >= need; });
+
+        setTimeout(function () {
+          if (!fits.length) {
+            gc.classList.add("no");
+            document.getElementById("barrier").classList.remove("up");
+            setCall("lot.park(…) → <u>ParkingFullException</u>");
+            setExplain("Turned away",
+              "No free <span class='bad'>" + SIZE_WORD[v.size] + "</span> spot. <span class='dim'>A full lot is a real case — decide the behaviour, don’t crash.</span>");
+            done();
+            return;
+          }
+          mark(fits, "cand");
+          setExplain("2 · Which spots fit?",
+            "<span class='blu'>" + fits.length + "</span> spots are big enough. <span class='dim'>Now pick the <b>smallest</b> that fits, so big spots stay free.</span>");
+
+          setTimeout(function () {
+            var best = Math.min.apply(null, fits.map(function (s) { return RANK[s.size]; }));
+            var pool = fits.filter(function (s) { return RANK[s.size] === best; });
+            clearMarks();
+            mark(pool, "pool");
+            var sorted = pool.slice().sort(function (a, b) {
+              if (strat === "spread") {
+                var d = freeOnFloor(b.floor) - freeOnFloor(a.floor);
+                if (d) return d;
+              }
+              return a.floor - b.floor || a.idx - b.idx;
+            });
+            var chosen = sorted[0];
+            var el = document.getElementById("sp-" + chosen.id);
+            if (el) { el.classList.remove("pool"); el.classList.add("pick"); }
+            setExplain("3 · The strategy chooses",
+              (strat === "near"
+                ? "<span class='hi'>Nearest</span> → lowest floor, first spot: "
+                : "<span class='hi'>Spread</span> → emptiest floor: ") +
+              "<code>" + chosen.id + "</code> <span class='dim'>(" + SIZE_WORD[chosen.size] + ")</span>");
+
+            setTimeout(function () {
+              seq++;
+              var t = { id: "T-" + seq, type: veh, plate: plate, spotId: chosen.id, inAt: clock };
+              chosen.ticket = t;
+              tickets.push(t);
+              document.getElementById("barrier").classList.add("up");
+              gc.classList.remove("in");
+              document.getElementById("gate-plate").textContent = "";
+              render();
+              var e2 = document.getElementById("sp-" + chosen.id);
+              if (e2) e2.classList.add("pick");
+              setCall("lot.park(new " + v.cls + "(“" + plate + "”)) → <i>Ticket " + t.id + "</i>");
+              setExplain("4 · Ticket issued",
+                "<span class='good'>" + t.id + "</span> holds the plate, the spot and the <b>entry time</b> " +
+                "<code>" + hhmm(t.inAt) + "</code>. <span class='dim'>That timestamp is the whole bill later.</span>");
+              done();
+            }, 620);
+          }, 640);
+        }, 660);
+      }
+
+      function done() {
+        busy = false;
+        document.getElementById("park-btn").disabled = false;
+      }
+
+      /* ---------------- exit ---------------- */
+      function exit(tid) {
+        if (busy) return;
+        var t = null, i;
+        for (i = 0; i < tickets.length; i++) if (tickets[i].id === tid) t = tickets[i];
+        if (!t) return;
+        busy = true;
+        clearMarks();
+        var el = document.getElementById("sp-" + t.spotId);
+        if (el) el.classList.add("pick");
+        var h = hoursOf(t), f = feeOf(t);
+        setCall("lot.<b>unpark</b>(" + t.id + ")");
+        setExplain("1 · Ticket goes back in",
+          "The ticket says <code>" + t.spotId + "</code>, in at <code>" + hhmm(t.inAt) +
+          "</code>. Now it is <code>" + hhmm(clock) + "</code> → <span class='hi'>" + h + " h</span>.");
+
+        setTimeout(function () {
+          setCall("unpark(" + t.id + ") → <i>₹" + f.amount + "</i>  <span style='color:#6b7280'>// " + f.how + "</span>");
+          setExplain("2 · The bill",
+            "<span class='dim'>" + f.how + "</span> = <span class='good'>₹" + f.amount +
+            "</span> <span class='dim'>— the price rule is a swappable object, not an <code>if</code> tree.</span>");
+
+          setTimeout(function () {
+            for (var j = 0; j < spots.length; j++) if (spots[j].id === t.spotId) spots[j].ticket = null;
+            tickets = tickets.filter(function (x) { return x.id !== t.id; });
+            revenue += f.amount;
+            render();
+            var e2 = document.getElementById("sp-" + t.spotId);
+            if (e2) e2.classList.add("out");
+            setExplain("3 · Spot released",
+              "<code>" + t.spotId + "</code> is <span class='good'>free</span> again and the ticket is closed. " +
+              "<span class='dim'>Park → hold → pay → release: that is the whole lifecycle.</span>");
+            busy = false;
+          }, 620);
+        }, 620);
+      }
+
+      /* ---------------- foot ---------------- */
+      function addHour() {
+        if (busy) return;
+        clock += 60;
+        clearMarks();
+        render();
+        setExplain("Clock → " + hhmm(clock),
+          tickets.length
+            ? "Every parked vehicle just got <span class='hi'>1 h</span> more expensive. <span class='dim'>Nothing recalculated — the fee is derived at exit.</span>"
+            : "Time moves; an empty lot earns nothing. <span class='dim'>Park something first.</span>");
+      }
+      function fillLot() {
+        if (busy) return;
+        clearMarks();
+        spots.forEach(function (s) {
+          if (s.ticket) return;
+          seq++;
+          var type = s.size === "S" ? "bike" : s.size === "M" ? "car" : "truck";
+          var t = { id: "T-" + seq, type: type, plate: nextPlate(), spotId: s.id, inAt: clock };
+          s.ticket = t;
+          tickets.push(t);
+        });
+        render();
+        setCall("// lot is full — now press <b>▶ Park</b>");
+        setExplain("Lot full",
+          "Press <span class='hi'>▶ Park</span> now and watch the entrance <span class='bad'>refuse</span> the vehicle.");
+      }
+      function reset() {
+        buildLot();
+        tickets = [];
+        clock = 540; seq = 0; plateSeq = 0; revenue = 0; busy = false; veh = "car"; strat = "near"; price = "flat";
+        document.getElementById("park-btn").disabled = false;
+        document.getElementById("gate-car").className = "gate-car";
+        document.getElementById("gate-plate").textContent = "";
+        document.getElementById("barrier").className = "barrier";
+        render();
+        setCall("// click <b>Park</b> to call <b>lot.park(vehicle)</b>");
+        setExplain("A 16-spot parking lot",
+          "Pick a vehicle and press <b>▶ Park</b>. Watch which spot the lot chooses.");
+      }
+
+      document.getElementById("park-btn").addEventListener("click", park);
+      document.getElementById("hour-btn").addEventListener("click", addHour);
+      document.getElementById("fill-btn").addEventListener("click", fillLot);
+      document.getElementById("reset-btn").addEventListener("click", reset);
+      reset();
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

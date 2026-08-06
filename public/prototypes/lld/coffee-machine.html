@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Coffee Machine — live simulation — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a; --accent-soft: rgba(251,134,58,.12); --accent-border: rgba(251,134,58,.45);
+        --success: #5cc66f; --success-soft: rgba(92,198,111,.12);
+        --info: #5e9ff6; --info-soft: rgba(94,159,246,.12);
+        --danger: #f06868; --danger-soft: rgba(240,104,104,.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px; --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 14px 16px 20px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      .top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 9px; }
+      .mode { display: flex; gap: 5px; }
+      .chip { font-family: var(--mono); font-size: 11px; padding: 7px 12px; border-radius: var(--r-md);
+              background: var(--elevated); border: 1px solid var(--border-strong); color: var(--muted); cursor: pointer; }
+      .chip:hover { border-color: var(--accent); color: var(--fg); }
+      .chip.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); font-weight: 700; }
+      .chip.bad { background: var(--danger-soft); border-color: rgba(240,104,104,.45); color: var(--danger); font-weight: 700; }
+      .stat { font-family: var(--mono); font-size: 10.5px; padding: 6px 10px; border-radius: 999px;
+              background: var(--surface); border: 1px solid var(--border); color: var(--muted); white-space: nowrap; }
+      .stat b { color: var(--fg); }
+      .stat.ok b { color: var(--success); }
+      .stat.no b { color: var(--danger); }
+      .stat.spill { margin-left: auto; }
+      .stat.spill b { color: var(--danger); }
+
+      .callline { font-family: var(--mono); font-size: 11.5px; color: var(--subtle); background: #0a0b0e;
+                  border: 1px solid var(--border); border-radius: var(--r-md); padding: 7px 11px; margin-bottom: 10px;
+                  white-space: nowrap; overflow-x: auto; }
+      .callline b { color: var(--accent); }
+      .callline i { color: var(--success); font-style: normal; }
+      .callline u { color: var(--danger); text-decoration: none; }
+
+      .cols { display: grid; grid-template-columns: 1fr 236px; gap: 10px; align-items: start; }
+      .pane { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 11px; }
+      .cap { font-family: var(--mono); font-size: 9.5px; letter-spacing: .09em; text-transform: uppercase;
+             color: var(--subtle); margin-bottom: 9px; display: flex; justify-content: space-between; gap: 10px; }
+
+      /* outlets */
+      .outlets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+      .out { background: var(--elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md);
+             padding: 9px; display: flex; flex-direction: column; gap: 7px; transition: border-color .25s, background .25s; }
+      .out.busy { border-color: var(--accent); background: var(--accent-soft); }
+      .out.done { border-color: var(--success); background: var(--success-soft); }
+      .out.fail { border-color: var(--danger); background: var(--danger-soft); }
+      .out-h { font-family: var(--mono); font-size: 10px; color: var(--muted); display: flex; justify-content: space-between; }
+      .out-h b { color: var(--fg); }
+      .cupwrap { height: 44px; display: flex; align-items: center; justify-content: center; font-size: 26px; }
+      .cupwrap .idle { opacity: .2; }
+      .cupwrap .spin { animation: pour .7s linear infinite; }
+      @keyframes pour { 50% { transform: translateY(-3px); } }
+      .picks { display: flex; gap: 4px; flex-wrap: wrap; }
+      .pick { flex: 1; font-family: var(--mono); font-size: 9.5px; padding: 5px 2px; border-radius: 5px;
+              background: var(--surface); border: 1px solid var(--border); color: var(--muted); cursor: pointer; }
+      .pick:hover { border-color: var(--accent); color: var(--fg); }
+      .pick.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); font-weight: 700; }
+      .out-msg { font-family: var(--mono); font-size: 9px; min-height: 24px; color: var(--subtle); line-height: 1.4; }
+      .out-msg.ok { color: var(--success); }
+      .out-msg.no { color: var(--danger); }
+
+      /* tanks */
+      .tanks { display: flex; flex-direction: column; gap: 8px; }
+      .tank { background: var(--elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 8px 9px; }
+      .tank-h { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 10.5px; color: var(--fg); }
+      .tank-h span.n { color: var(--muted); }
+      .tank-bar { height: 7px; border-radius: 4px; background: var(--surface); border: 1px solid var(--border); margin-top: 5px; overflow: hidden; }
+      .tank-bar i { display: block; height: 100%; background: var(--info); transition: width .45s ease; }
+      .tank.low .tank-bar i { background: var(--accent); }
+      .tank.out .tank-bar i { background: var(--danger); }
+      .tank.taking { border-color: var(--accent); }
+      .tank.neg .tank-h span.n { color: var(--danger); font-weight: 700; }
+
+      .recipes { margin-top: 11px; }
+      .rc { font-family: var(--mono); font-size: 9px; color: var(--subtle); line-height: 1.7; }
+      .rc b { color: var(--muted); }
+
+      .explain { min-height: 72px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md);
+                 padding: 12px 15px; margin-top: 11px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .hi { color: var(--accent); font-weight: 700; }
+
+      .foot { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 11px; }
+      .btn { background: var(--elevated); color: var(--muted); font: 600 11.5px/1 var(--sans);
+             border: 1px solid var(--border); border-radius: var(--r-md); padding: 8px 12px; cursor: pointer; }
+      .btn:hover { border-color: var(--border-strong); color: var(--fg); }
+      .go { font-family: var(--mono); font-size: 12.5px; font-weight: 700; padding: 9px 18px; border-radius: var(--r-md);
+            cursor: pointer; background: var(--success-soft); border: 1px solid rgba(92,198,111,.45); color: var(--success); }
+      .go:active { transform: scale(.98); }
+      .go:disabled { opacity: .35; cursor: not-allowed; }
+      .hint { margin-left: auto; font-size: 11.5px; color: var(--muted); }
+      .hint .b { color: var(--accent); }
+
+      @media (max-width: 640px) { .cols { grid-template-columns: 1fr; } .outlets { grid-template-columns: 1fr; } .hint { margin-left: 0; } }
+    </style>
+  </head>
+  <body>
+    <div class="top">
+      <div class="mode" id="mode"></div>
+      <span class="stat ok">served <b id="s-ok">0</b></span>
+      <span class="stat no">refused <b id="s-no">0</b></span>
+      <span class="stat spill">over-served <b id="s-spill">0</b></span>
+    </div>
+
+    <div class="callline" id="callline">// pick a drink per outlet, then press <b>Serve all</b></div>
+
+    <div class="cols">
+      <div class="pane">
+        <div class="cap"><span>3 outlets · one shared tank set</span><span id="cap-mode">unguarded</span></div>
+        <div class="outlets" id="outlets"></div>
+      </div>
+
+      <div class="pane">
+        <div class="cap"><span>Ingredients</span></div>
+        <div class="tanks" id="tanks"></div>
+        <div class="recipes">
+          <div class="cap" style="margin-bottom:5px"><span>Recipes</span></div>
+          <div class="rc" id="rc"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="explain">
+      <div class="explain-title" id="ex-title">Three outlets, one set of tanks</div>
+      <div class="explain-body" id="ex-body">Pick a drink on each outlet and press <b>▶ Serve all</b>. They brew at the same time — from the <b>same</b> ingredients.</div>
+    </div>
+
+    <div class="foot">
+      <button class="go" id="serve-btn">▶ Serve all</button>
+      <button class="btn" id="preset-btn">☕ All three want Latte</button>
+      <button class="btn" id="refill-btn">🚰 Refill tanks</button>
+      <button class="btn" id="reset-btn">↺ Reset</button>
+      <span class="hint"><span class="b">▸</span> Set all three to Latte — there is only enough milk for two.</span>
+    </div>
+
+    <script>
+      var INGREDIENTS = [
+        { key: "water", label: "Water",  cap: 500 },
+        { key: "milk",  label: "Milk",   cap: 200 },
+        { key: "beans", label: "Beans",  cap: 100 },
+        { key: "sugar", label: "Sugar",  cap: 60 }
+      ];
+      var RECIPES = [
+        { key: "espresso", label: "Espresso", icon: "☕", needs: { water: 50,  beans: 20 } },
+        { key: "latte",    label: "Latte",    icon: "🥛", needs: { water: 60,  milk: 80, beans: 20 } },
+        { key: "tea",      label: "Tea",      icon: "🍵", needs: { water: 120, milk: 30, sugar: 20 } }
+      ];
+
+      var tanks, picks, mode, busy, served, refused, spilled;
+
+      function setExplain(t, h) {
+        document.getElementById("ex-title").textContent = t;
+        document.getElementById("ex-body").innerHTML = h;
+      }
+      function setCall(h) { document.getElementById("callline").innerHTML = h; }
+      function recipe(k) { for (var i = 0; i < RECIPES.length; i++) if (RECIPES[i].key === k) return RECIPES[i]; return null; }
+
+      function renderMode() {
+        var host = document.getElementById("mode");
+        host.innerHTML = "";
+        [{ k: "unguarded", l: "⚠️ Unguarded" }, { k: "guarded", l: "🔒 Guarded" }].forEach(function (o) {
+          var b = document.createElement("button");
+          b.className = "chip" + (mode === o.k ? (o.k === "unguarded" ? " bad" : " on") : "");
+          b.textContent = o.l;
+          b.addEventListener("click", function () { setMode(o.k); });
+          host.appendChild(b);
+        });
+        document.getElementById("cap-mode").textContent = mode;
+      }
+
+      function renderOutlets(states) {
+        states = states || {};
+        var host = document.getElementById("outlets");
+        host.innerHTML = "";
+        for (var i = 0; i < 3; i++) {
+          (function (i) {
+            var s = states[i] || {};
+            var el = document.createElement("div");
+            el.className = "out" + (s.cls ? " " + s.cls : "");
+            el.id = "out-" + i;
+            var r = recipe(picks[i]);
+            var cup = s.cup !== undefined ? s.cup : "<span class='idle'>" + r.icon + "</span>";
+            var h = "<div class='out-h'><span>outlet</span><b>#" + (i + 1) + "</b></div>" +
+                    "<div class='cupwrap'>" + cup + "</div><div class='picks'>";
+            el.innerHTML = h;
+            host.appendChild(el);
+            var picksEl = el.querySelector(".picks");
+            RECIPES.forEach(function (rr) {
+              var b = document.createElement("button");
+              b.className = "pick" + (picks[i] === rr.key ? " on" : "");
+              b.textContent = rr.icon;
+              b.title = rr.label;
+              b.addEventListener("click", function () { setPick(i, rr.key); });
+              picksEl.appendChild(b);
+            });
+            var msg = document.createElement("div");
+            msg.className = "out-msg" + (s.msgCls ? " " + s.msgCls : "");
+            msg.innerHTML = s.msg !== undefined ? s.msg : r.label;
+            el.appendChild(msg);
+          })(i);
+        }
+      }
+
+      function renderTanks(taking) {
+        var host = document.getElementById("tanks");
+        host.innerHTML = "";
+        INGREDIENTS.forEach(function (ing) {
+          var v = tanks[ing.key], pct = Math.max(0, Math.min(100, (v / ing.cap) * 100));
+          var cls = "tank";
+          if (v < 0) cls += " out neg";
+          else if (v === 0) cls += " out";
+          else if (pct < 30) cls += " low";
+          if (taking && taking[ing.key]) cls += " taking";
+          var el = document.createElement("div");
+          el.className = cls;
+          el.id = "tk-" + ing.key;
+          el.innerHTML =
+            "<div class='tank-h'><span>" + ing.label + "</span><span class='n'>" + v + " / " + ing.cap + "</span></div>" +
+            "<div class='tank-bar'><i style='width:" + pct + "%'></i></div>";
+          host.appendChild(el);
+        });
+        var rc = document.getElementById("rc");
+        rc.innerHTML = RECIPES.map(function (r) {
+          var parts = Object.keys(r.needs).map(function (k) { return k + " " + r.needs[k]; });
+          return r.icon + " <b>" + r.label + "</b> — " + parts.join(", ");
+        }).join("<br>");
+      }
+
+      function renderStats() {
+        document.getElementById("s-ok").textContent = served;
+        document.getElementById("s-no").textContent = refused;
+        document.getElementById("s-spill").textContent = spilled;
+      }
+
+      function render(states, taking) { renderMode(); renderOutlets(states); renderTanks(taking); renderStats(); }
+
+      function enough(r) {
+        var keys = Object.keys(r.needs);
+        for (var i = 0; i < keys.length; i++) if (tanks[keys[i]] < r.needs[keys[i]]) return keys[i];
+        return null;
+      }
+      function take(r) {
+        Object.keys(r.needs).forEach(function (k) { tanks[k] -= r.needs[k]; });
+      }
+      function missingText(r) {
+        var short = [];
+        Object.keys(r.needs).forEach(function (k) { if (tanks[k] < r.needs[k]) short.push(k); });
+        return short.join(" + ");
+      }
+
+      /* ---------------- serve ---------------- */
+      function serveAll() {
+        if (busy) return;
+        busy = true;
+        document.getElementById("serve-btn").disabled = true;
+
+        var states = {};
+        for (var i = 0; i < 3; i++) states[i] = { cls: "busy", cup: "<span class='spin'>" + recipe(picks[i]).icon + "</span>", msg: "checking…" };
+        render(states, null);
+        setCall("outlets.forEach(o => o.<b>brew</b>(recipe))  <span style='color:#6b7280'>// all three at once</span>");
+        setExplain("All three outlets start together",
+          mode === "unguarded"
+            ? "Each one checks the tanks <span class='bad'>independently</span>. <span class='dim'>They all see the same “enough milk” at the same moment.</span>"
+            : "The tanks are behind <span class='good'>one lock</span>. <span class='dim'>Check and take happen together, so only one outlet can be inside at a time.</span>");
+
+        setTimeout(function () {
+          if (mode === "unguarded") {
+            // EVERY outlet checks first, against the same snapshot — then all of them take
+            var checks = [];
+            for (var i = 0; i < 3; i++) checks.push({ i: i, r: recipe(picks[i]), missing: enough(recipe(picks[i])) });
+            var st = {};
+            checks.forEach(function (c) {
+              st[c.i] = c.missing
+                ? { cls: "fail", cup: "🚫", msg: "not enough " + c.missing, msgCls: "no" }
+                : { cls: "busy", cup: "<span class='spin'>" + c.r.icon + "</span>", msg: "check ✓ — brewing", msgCls: "ok" };
+            });
+            render(st, null);
+            setExplain("Every outlet checked — and every one said yes",
+              "<span class='dim'>They all read the tanks <b>before</b> any of them took anything. That is the race.</span>");
+
+            setTimeout(function () {
+              var st2 = {}, over = 0;
+              checks.forEach(function (c) {
+                if (c.missing) { refused++; st2[c.i] = { cls: "fail", cup: "🚫", msg: "refused: " + c.missing, msgCls: "no" }; return; }
+                take(c.r);
+                served++;
+                st2[c.i] = { cls: "done", cup: c.r.icon, msg: "served", msgCls: "ok" };
+              });
+              INGREDIENTS.forEach(function (ing) { if (tanks[ing.key] < 0) over++; });
+              if (over) spilled++;
+              render(st2, null);
+              setCall(over
+                ? "3 brews committed → <u>tank went NEGATIVE</u>  <span style='color:#6b7280'>// impossible in the real world</span>"
+                : "brews committed → <i>" + served + " served</i>");
+              setExplain(over ? "A tank went negative" : "All served — this time",
+                over
+                  ? "The machine poured milk it <span class='bad'>did not have</span>. <span class='dim'>Check-then-take, split apart, on a shared resource. Switch to 🔒 Guarded and try the same order.</span>"
+                  : "<span class='dim'>No contention this round. Set all three to <b>Latte</b> — there is only enough milk for two.</span>");
+              done();
+            }, 620);
+            return;
+          }
+
+          // ---- guarded: one outlet at a time, check and take together ----
+          var st = {}, idx = 0;
+          (function next() {
+            if (idx >= 3) {
+              render(st, null);
+              setCall("brew() → <i>" + served + " served, " + refused + " refused</i>  <span style='color:#6b7280'>// no tank below zero</span>");
+              setExplain("Every tank stayed at or above zero",
+                "<span class='dim'>The check and the subtraction happen inside the same lock, so the third outlet sees the milk the first two already took.</span>");
+              done();
+              return;
+            }
+            var i = idx++, r = recipe(picks[i]), missing = enough(r);
+            if (missing) {
+              refused++;
+              st[i] = { cls: "fail", cup: "🚫", msg: "refused: " + missing, msgCls: "no" };
+              render(st, null);
+              setExplain("Outlet #" + (i + 1) + " refused",
+                "Not enough <span class='bad'>" + missing + "</span> <span class='dim'>— because outlets before it already took theirs. It saw the truth, not a stale snapshot.</span>");
+            } else {
+              take(r);
+              served++;
+              st[i] = { cls: "done", cup: r.icon, msg: "served", msgCls: "ok" };
+              render(st, r.needs);
+              setExplain("Outlet #" + (i + 1) + " served " + r.label,
+                "<span class='dim'>Checked and subtracted inside one lock — the next outlet will see these tanks, not the old ones.</span>");
+            }
+            setTimeout(next, 640);
+          })();
+        }, 620);
+      }
+
+      function done() {
+        busy = false;
+        document.getElementById("serve-btn").disabled = false;
+      }
+
+      function setPick(i, k) {
+        if (busy) return;
+        picks[i] = k;
+        render(null, null);
+        var r = recipe(k);
+        var parts = Object.keys(r.needs).map(function (x) { return x + " " + r.needs[x]; });
+        setExplain("Outlet #" + (i + 1) + " → " + r.label,
+          "Needs <code>" + parts.join(", ") + "</code>. <span class='dim'>A recipe is data — adding a drink adds a row, not a class.</span>");
+      }
+
+      function setMode(k) {
+        if (busy) return;
+        mode = k;
+        render(null, null);
+        setCall(k === "guarded"
+          ? "synchronized (tanks) { check(); take(); }"
+          : "// check() and take() are separate — anything can happen between them");
+        setExplain(k === "guarded" ? "Guarded — one lock around the tanks" : "Unguarded — check and take are separate",
+          k === "guarded"
+            ? "Check and subtract are now <span class='good'>one indivisible step</span>. <span class='dim'>Outlets queue instead of colliding.</span>"
+            : "Every outlet reads the tanks, then subtracts. <span class='bad'>Between those two lines, the others read too.</span>");
+      }
+
+      function preset() {
+        if (busy) return;
+        picks = ["latte", "latte", "latte"];
+        render(null, null);
+        setCall("// milk 200, latte needs 80 → only 2 can be served");
+        setExplain("Three lattes, milk for two",
+          "80 × 3 = <span class='hi'>240</span> but the tank holds <span class='hi'>200</span>. <span class='dim'>Press ▶ Serve all — in ⚠️ Unguarded, watch what the milk tank does.</span>");
+      }
+
+      function refill() {
+        if (busy) return;
+        INGREDIENTS.forEach(function (ing) { tanks[ing.key] = ing.cap; });
+        render(null, null);
+        setCall("machine.<b>refill</b>()");
+        setExplain("Tanks refilled",
+          "<span class='dim'>Back to full. Try the same order in the other mode and compare the milk tank.</span>");
+      }
+
+      function reset() {
+        tanks = {};
+        INGREDIENTS.forEach(function (ing) { tanks[ing.key] = ing.cap; });
+        picks = ["espresso", "latte", "tea"];
+        if (mode === undefined) mode = "unguarded";
+        busy = false; served = 0; refused = 0; spilled = 0;
+        document.getElementById("serve-btn").disabled = false;
+        render(null, null);
+        setCall("// pick a drink per outlet, then press <b>Serve all</b>");
+        setExplain("Three outlets, one set of tanks",
+          "Pick a drink on each outlet and press <b>▶ Serve all</b>. They brew at the same time — from the <b>same</b> ingredients.");
+      }
+
+      document.getElementById("serve-btn").addEventListener("click", serveAll);
+      document.getElementById("preset-btn").addEventListener("click", preset);
+      document.getElementById("refill-btn").addEventListener("click", refill);
+      document.getElementById("reset-btn").addEventListener("click", reset);
+      reset();
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

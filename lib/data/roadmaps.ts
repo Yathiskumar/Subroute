@@ -490,12 +490,42 @@ export const ROADMAPS: Roadmap[] = [
           {
             label: "Beginner",
             items: [
-              { title: "Parking Lot", note: "The canonical warm-up problem." },
-              { title: "Vending Machine", note: "State machine over products and coins." },
-              { title: "ATM", note: "Transactions, balances, and a state flow." },
-              { title: "Tic-Tac-Toe", note: "Board, players, and win detection." },
-              { title: "Snake & Ladder", note: "Dice, board, and turn management." },
-              { title: "Coffee Machine", note: "Recipes, ingredients, and inventory." },
+              {
+                title: "Parking Lot",
+                note: "The canonical warm-up problem — built end to end.",
+                tag: "interview",
+                slug: "parking-lot",
+              },
+              {
+                title: "Vending Machine",
+                note: "State machine over products, coins and change.",
+                tag: "interview",
+                slug: "vending-machine",
+              },
+              {
+                title: "ATM",
+                note: "Two resources that must agree — cash and the account.",
+                tag: "interview",
+                slug: "atm",
+              },
+              {
+                title: "Tic-Tac-Toe",
+                note: "n×n board with O(1) win detection.",
+                tag: "interview",
+                slug: "tic-tac-toe",
+              },
+              {
+                title: "Snake & Ladder",
+                note: "Turn loop, jump table, and testable dice.",
+                tag: "interview",
+                slug: "snake-and-ladder",
+              },
+              {
+                title: "Coffee Machine",
+                note: "Shared ingredients under concurrent outlets.",
+                tag: "interview",
+                slug: "coffee-machine",
+              },
             ],
           },
           {

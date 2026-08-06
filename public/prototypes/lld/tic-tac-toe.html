@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tic-Tac-Toe — live simulation — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a; --accent-soft: rgba(251,134,58,.12); --accent-border: rgba(251,134,58,.45);
+        --success: #5cc66f; --success-soft: rgba(92,198,111,.12);
+        --info: #5e9ff6; --info-soft: rgba(94,159,246,.12);
+        --danger: #f06868; --danger-soft: rgba(240,104,104,.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px; --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 14px 16px 20px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      .top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 9px; }
+      .turn { font-family: var(--mono); font-size: 11.5px; font-weight: 700; padding: 6px 12px; border-radius: 999px;
+              background: var(--accent-soft); border: 1px solid var(--accent-border); color: var(--accent); }
+      .turn.o { background: var(--info-soft); border-color: rgba(94,159,246,.45); color: var(--info); }
+      .turn.done { background: var(--success-soft); border-color: rgba(92,198,111,.45); color: var(--success); }
+      .stat { font-family: var(--mono); font-size: 10.5px; padding: 6px 10px; border-radius: 999px;
+              background: var(--surface); border: 1px solid var(--border); color: var(--muted); white-space: nowrap; }
+      .stat b { color: var(--fg); }
+      .sizes { margin-left: auto; display: flex; gap: 5px; }
+      .chip { font-family: var(--mono); font-size: 11px; padding: 6px 11px; border-radius: var(--r-md);
+              background: var(--elevated); border: 1px solid var(--border-strong); color: var(--muted); cursor: pointer; }
+      .chip:hover { border-color: var(--accent); color: var(--fg); }
+      .chip.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); font-weight: 700; }
+
+      .callline { font-family: var(--mono); font-size: 11.5px; color: var(--subtle); background: #0a0b0e;
+                  border: 1px solid var(--border); border-radius: var(--r-md); padding: 7px 11px; margin-bottom: 10px;
+                  white-space: nowrap; overflow-x: auto; }
+      .callline b { color: var(--accent); }
+      .callline i { color: var(--success); font-style: normal; }
+      .callline u { color: var(--danger); text-decoration: none; }
+
+      .cols { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: start; }
+      .pane { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 12px; }
+      .cap { font-family: var(--mono); font-size: 9.5px; letter-spacing: .09em; text-transform: uppercase;
+             color: var(--subtle); margin-bottom: 9px; display: flex; justify-content: space-between; gap: 10px; }
+
+      /* board */
+      .boardwrap { position: relative; }
+      .board { display: grid; gap: 6px; }
+      .cell { background: var(--elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md);
+              display: flex; align-items: center; justify-content: center; cursor: pointer;
+              font-family: var(--mono); font-weight: 700; transition: border-color .15s, background .2s, transform .1s; }
+      .cell:hover { border-color: var(--accent); }
+      .cell:active { transform: scale(.96); }
+      .cell.x { color: var(--accent); }
+      .cell.o { color: var(--info); }
+      .cell.taken { cursor: not-allowed; }
+      .cell.taken:hover { border-color: var(--border-strong); }
+      .cell.win { background: var(--success-soft); border-color: var(--success); color: var(--success) !important; animation: pop .4s ease-out; }
+      .cell.shake { animation: shake .32s; border-color: var(--danger); }
+      @keyframes pop { from { transform: scale(.82); } }
+      @keyframes shake { 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+      .cell.last { border-color: var(--accent); }
+
+      /* counters */
+      .ctrs { display: flex; flex-direction: column; gap: 9px; }
+      .grp-cap { font-family: var(--mono); font-size: 9.5px; color: var(--subtle); letter-spacing: .06em; }
+      .row { display: flex; gap: 5px; flex-wrap: wrap; }
+      .ctr { font-family: var(--mono); font-size: 10px; padding: 5px 8px; border-radius: 5px; min-width: 58px;
+             background: var(--elevated); border: 1px solid var(--border); color: var(--muted); text-align: center;
+             transition: all .25s; }
+      .ctr b { color: var(--fg); }
+      .ctr.pos { border-color: rgba(251,134,58,.4); color: var(--accent); }
+      .ctr.pos b { color: var(--accent); }
+      .ctr.neg { border-color: rgba(94,159,246,.4); color: var(--info); }
+      .ctr.neg b { color: var(--info); }
+      .ctr.hit { border-color: var(--success); background: var(--success-soft); color: var(--success); }
+      .ctr.hit b { color: var(--success); }
+      .ctr.bump { transform: scale(1.13); }
+
+      .cost { margin-top: 11px; display: flex; gap: 7px; flex-wrap: wrap; }
+      .cbox { flex: 1; min-width: 132px; background: var(--elevated); border: 1px solid var(--border-strong);
+              border-radius: var(--r-md); padding: 9px 10px; }
+      .cbox .l { font-family: var(--mono); font-size: 9px; color: var(--subtle); text-transform: uppercase; letter-spacing: .07em; }
+      .cbox .v { font-family: var(--mono); font-size: 17px; font-weight: 700; margin-top: 3px; }
+      .cbox.slow .v { color: var(--danger); }
+      .cbox.fast .v { color: var(--success); }
+      .cbox .s { font-family: var(--mono); font-size: 9px; color: var(--muted); margin-top: 2px; }
+
+      .explain { min-height: 72px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md);
+                 padding: 12px 15px; margin-top: 11px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .hi { color: var(--accent); font-weight: 700; }
+      .explain-body .blu { color: var(--info); font-weight: 700; }
+
+      .foot { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 11px; }
+      .btn { background: var(--elevated); color: var(--muted); font: 600 11.5px/1 var(--sans);
+             border: 1px solid var(--border); border-radius: var(--r-md); padding: 8px 12px; cursor: pointer; }
+      .btn:hover { border-color: var(--border-strong); color: var(--fg); }
+      .hint { margin-left: auto; font-size: 11.5px; color: var(--muted); }
+      .hint .b { color: var(--accent); }
+
+      @media (max-width: 620px) { .cols { grid-template-columns: 1fr; } .hint { margin-left: 0; } .sizes { margin-left: 0; } }
+    </style>
+  </head>
+  <body>
+    <div class="top">
+      <span class="turn" id="turn">X to play</span>
+      <span class="stat">move <b id="s-move">0</b></span>
+      <span class="stat">free <b id="s-free">9</b></span>
+      <div class="sizes" id="sizes"></div>
+    </div>
+
+    <div class="callline" id="callline">// click a cell to call <b>game.play(row, col)</b></div>
+
+    <div class="cols">
+      <div class="pane">
+        <div class="cap"><span>Board</span><span id="cap-n">3 × 3</span></div>
+        <div class="boardwrap"><div class="board" id="board"></div></div>
+      </div>
+
+      <div class="pane">
+        <div class="cap"><span>Win counters</span><span>+1 for X · −1 for O</span></div>
+        <div class="ctrs">
+          <div>
+            <div class="grp-cap">rows</div>
+            <div class="row" id="c-rows"></div>
+          </div>
+          <div>
+            <div class="grp-cap">columns</div>
+            <div class="row" id="c-cols"></div>
+          </div>
+          <div>
+            <div class="grp-cap">diagonals</div>
+            <div class="row" id="c-diag"></div>
+          </div>
+        </div>
+        <div class="cost">
+          <div class="cbox slow">
+            <div class="l">rescan the board</div>
+            <div class="v" id="cost-scan">0</div>
+            <div class="s">cells read · O(n²) per move</div>
+          </div>
+          <div class="cbox fast">
+            <div class="l">counters</div>
+            <div class="v" id="cost-ctr">0</div>
+            <div class="s">reads · O(1) per move</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="explain">
+      <div class="explain-title" id="ex-title">Two players, one board</div>
+      <div class="explain-body" id="ex-body">Play a move. Watch the <b>counters</b> on the right — that is how the game knows who won without ever re-reading the board.</div>
+    </div>
+
+    <div class="foot">
+      <button class="btn" id="undo-btn">⎌ Undo</button>
+      <button class="btn" id="draw-btn">🤝 Force a draw</button>
+      <button class="btn" id="reset-btn">↺ New game</button>
+      <span class="hint"><span class="b">▸</span> A counter hitting <b>±n</b> is a win — no scanning.</span>
+    </div>
+
+    <script>
+      var n = 3;
+      var cells, rows, cols, diag, anti, turn, moves, over, moveHistory, scanCost, ctrCost;
+
+      function setExplain(t, h) {
+        document.getElementById("ex-title").textContent = t;
+        document.getElementById("ex-body").innerHTML = h;
+      }
+      function setCall(h) { document.getElementById("callline").innerHTML = h; }
+
+      function mark(v) { return v === 1 ? "X" : v === -1 ? "O" : ""; }
+
+      function renderSizes() {
+        var host = document.getElementById("sizes");
+        host.innerHTML = "";
+        [3, 4, 5].forEach(function (k) {
+          var b = document.createElement("button");
+          b.className = "chip" + (n === k ? " on" : "");
+          b.textContent = k + "×" + k;
+          b.addEventListener("click", function () { setSize(k); });
+          host.appendChild(b);
+        });
+      }
+
+      function renderBoard(winCells, lastIdx) {
+        var host = document.getElementById("board");
+        var size = n === 3 ? 74 : n === 4 ? 60 : 50;
+        host.style.gridTemplateColumns = "repeat(" + n + ", " + size + "px)";
+        host.innerHTML = "";
+        for (var i = 0; i < n * n; i++) {
+          (function (i) {
+            var el = document.createElement("button");
+            var v = cells[i];
+            var cls = "cell" + (v === 1 ? " x" : v === -1 ? " o" : "") + (v ? " taken" : "");
+            if (winCells && winCells.indexOf(i) >= 0) cls += " win";
+            if (lastIdx === i) cls += " last";
+            el.className = cls;
+            el.id = "cl-" + i;
+            el.style.width = size + "px";
+            el.style.height = size + "px";
+            el.style.fontSize = (size * 0.46) + "px";
+            el.textContent = mark(v);
+            el.addEventListener("click", function () { play(i); });
+            host.appendChild(el);
+          })(i);
+        }
+        document.getElementById("cap-n").textContent = n + " × " + n;
+      }
+
+      function ctrClass(v, bump) {
+        var c = "ctr";
+        if (v === n || v === -n) c += " hit";
+        else if (v > 0) c += " pos";
+        else if (v < 0) c += " neg";
+        if (bump) c += " bump";
+        return c;
+      }
+
+      function renderCounters(bumped) {
+        bumped = bumped || {};
+        var r = document.getElementById("c-rows"); r.innerHTML = "";
+        for (var i = 0; i < n; i++) {
+          var e = document.createElement("span");
+          e.className = ctrClass(rows[i], bumped.row === i);
+          e.innerHTML = "r" + i + " <b>" + (rows[i] > 0 ? "+" : "") + rows[i] + "</b>";
+          r.appendChild(e);
+        }
+        var c = document.getElementById("c-cols"); c.innerHTML = "";
+        for (var j = 0; j < n; j++) {
+          var e2 = document.createElement("span");
+          e2.className = ctrClass(cols[j], bumped.col === j);
+          e2.innerHTML = "c" + j + " <b>" + (cols[j] > 0 ? "+" : "") + cols[j] + "</b>";
+          c.appendChild(e2);
+        }
+        var d = document.getElementById("c-diag"); d.innerHTML = "";
+        var e3 = document.createElement("span");
+        e3.className = ctrClass(diag, bumped.diag);
+        e3.innerHTML = "＼ <b>" + (diag > 0 ? "+" : "") + diag + "</b>";
+        d.appendChild(e3);
+        var e4 = document.createElement("span");
+        e4.className = ctrClass(anti, bumped.anti);
+        e4.innerHTML = "／ <b>" + (anti > 0 ? "+" : "") + anti + "</b>";
+        d.appendChild(e4);
+      }
+
+      function renderTop() {
+        var t = document.getElementById("turn");
+        if (over) { t.className = "turn done"; t.textContent = over; }
+        else { t.className = "turn" + (turn === -1 ? " o" : ""); t.textContent = mark(turn) + " to play"; }
+        document.getElementById("s-move").textContent = moves;
+        document.getElementById("s-free").textContent = n * n - moves;
+        document.getElementById("cost-scan").textContent = scanCost;
+        document.getElementById("cost-ctr").textContent = ctrCost;
+      }
+
+      function render(winCells, lastIdx, bumped) {
+        renderSizes(); renderBoard(winCells, lastIdx); renderCounters(bumped); renderTop();
+      }
+
+      function winningCells(kind, index) {
+        var out = [], i;
+        if (kind === "row") for (i = 0; i < n; i++) out.push(index * n + i);
+        if (kind === "col") for (i = 0; i < n; i++) out.push(i * n + index);
+        if (kind === "diag") for (i = 0; i < n; i++) out.push(i * n + i);
+        if (kind === "anti") for (i = 0; i < n; i++) out.push(i * n + (n - 1 - i));
+        return out;
+      }
+
+      function play(idx) {
+        if (over) {
+          setExplain("Game over",
+            "<span class='dim'>Press <b>↺ New game</b> to play again.</span>");
+          return;
+        }
+        if (cells[idx]) {
+          var el = document.getElementById("cl-" + idx);
+          if (el) { el.classList.add("shake"); setTimeout(function () { el.classList.remove("shake"); }, 340); }
+          setCall("game.play(" + Math.floor(idx / n) + ", " + (idx % n) + ") → <u>InvalidMoveException</u>");
+          setExplain("Cell already taken",
+            "<span class='dim'>Validity is checked <b>before</b> anything is written — the board is never left half-updated.</span>");
+          return;
+        }
+
+        var r = Math.floor(idx / n), c = idx % n, v = turn;
+        cells[idx] = v;
+        moves++;
+        rows[r] += v; cols[c] += v;
+        var onDiag = r === c, onAnti = r + c === n - 1;
+        if (onDiag) diag += v;
+        if (onAnti) anti += v;
+        moveHistory.push({ idx: idx, v: v, onDiag: onDiag, onAnti: onAnti });
+
+        // cost model: a rescan reads every cell; counters read at most 4 numbers
+        scanCost += n * n;
+        ctrCost += 2 + (onDiag ? 1 : 0) + (onAnti ? 1 : 0);
+
+        setCall("game.<b>play</b>(" + r + ", " + c + ")  <span style='color:#6b7280'>// mark " + mark(v) + "</span>");
+
+        var bumped = { row: r, col: c, diag: onDiag, anti: onAnti };
+        var winKind = null, winIndex = 0;
+        if (Math.abs(rows[r]) === n) { winKind = "row"; winIndex = r; }
+        else if (Math.abs(cols[c]) === n) { winKind = "col"; winIndex = c; }
+        else if (onDiag && Math.abs(diag) === n) { winKind = "diag"; }
+        else if (onAnti && Math.abs(anti) === n) { winKind = "anti"; }
+
+        if (winKind) {
+          over = mark(v) + " wins";
+          var wc = winningCells(winKind, winIndex);
+          render(wc, idx, bumped);
+          setCall("game.play(" + r + ", " + c + ") → <i>" + mark(v) + " WINS</i>");
+          var label = winKind === "row" ? "row " + r : winKind === "col" ? "column " + c
+            : winKind === "diag" ? "the ＼ diagonal" : "the ／ diagonal";
+          setExplain(mark(v) + " wins on " + label,
+            "One counter reached <span class='good'>" + (v > 0 ? "+" : "") + (v * n) +
+            "</span>. <span class='dim'>The board was never re-read — the win was known from a single number.</span>");
+          return;
+        }
+
+        if (moves === n * n) {
+          over = "Draw";
+          render(null, idx, bumped);
+          setCall("game.play(" + r + ", " + c + ") → <i>DRAW</i>");
+          setExplain("Draw — the board is full",
+            "<span class='dim'>Counted with a move counter, not by scanning for empty cells. <code>moves === n*n</code>.</span>");
+          return;
+        }
+
+        turn = -turn;
+        render(null, idx, bumped);
+        var touched = ["row " + r, "col " + c];
+        if (onDiag) touched.push("＼");
+        if (onAnti) touched.push("／");
+        setExplain("Move " + moves + " · " + mark(v) + " at (" + r + "," + c + ")",
+          "Updated <span class='hi'>" + touched.length + "</span> counters: <span class='dim'>" + touched.join(", ") +
+          "</span>. <span class='dim'>Need " + (v > 0 ? "+" : "") + (v * n) + " on any one of them to win.</span>");
+      }
+
+      function undo() {
+        if (!moveHistory.length) {
+          setExplain("Nothing to undo", "<span class='dim'>Play a move first.</span>");
+          return;
+        }
+        var m = moveHistory.pop();
+        cells[m.idx] = 0;
+        moves--;
+        var r = Math.floor(m.idx / n), c = m.idx % n;
+        rows[r] -= m.v; cols[c] -= m.v;
+        if (m.onDiag) diag -= m.v;
+        if (m.onAnti) anti -= m.v;
+        turn = m.v;
+        over = null;
+        render(null, null, { row: r, col: c, diag: m.onDiag, anti: m.onAnti });
+        setCall("game.<b>undo</b>() → <i>removed " + mark(m.v) + " at (" + r + "," + c + ")</i>");
+        setExplain("Undone",
+          "Every counter that went up came back down. <span class='dim'>Because a move is a small record, undo is arithmetic — not a board snapshot.</span>");
+      }
+
+      function forceDraw() {
+        reset();
+        // a fixed sequence that fills a 3x3 with no line
+        if (n !== 3) setSize(3);
+        var seq = [0, 1, 2, 4, 3, 5, 7, 6, 8];   // X O X O X O X O X -> draw
+        seq.forEach(function (i) { if (!over) play(i); });
+      }
+
+      function setSize(k) {
+        n = k;
+        reset();
+        setExplain("Board is now " + n + "×" + n,
+          "Same code, same counters — just <span class='hi'>" + n + "</span> rows, <span class='hi'>" + n +
+          "</span> columns and 2 diagonals. <span class='dim'>Hardcoding 3 is the trap this size chip exists to expose.</span>");
+      }
+
+      function reset() {
+        cells = new Array(n * n).fill(0);
+        rows = new Array(n).fill(0);
+        cols = new Array(n).fill(0);
+        diag = 0; anti = 0; turn = 1; moves = 0; over = null; moveHistory = [];
+        scanCost = 0; ctrCost = 0;
+        render(null, null, null);
+        setCall("// click a cell to call <b>game.play(row, col)</b>");
+        setExplain("Two players, one board",
+          "Play a move. Watch the <b>counters</b> on the right — that is how the game knows who won without ever re-reading the board.");
+      }
+
+      document.getElementById("undo-btn").addEventListener("click", undo);
+      document.getElementById("draw-btn").addEventListener("click", forceDraw);
+      document.getElementById("reset-btn").addEventListener("click", reset);
+      reset();
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

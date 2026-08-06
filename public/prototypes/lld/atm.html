@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ATM — live simulation — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a; --accent-soft: rgba(251,134,58,.12); --accent-border: rgba(251,134,58,.45);
+        --success: #5cc66f; --success-soft: rgba(92,198,111,.12);
+        --info: #5e9ff6; --info-soft: rgba(94,159,246,.12);
+        --danger: #f06868; --danger-soft: rgba(240,104,104,.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px; --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 14px 16px 20px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      .states { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; margin-bottom: 9px; }
+      .st { font-family: var(--mono); font-size: 10px; font-weight: 700; padding: 5px 9px; border-radius: 999px;
+            background: var(--surface); border: 1px solid var(--border); color: var(--subtle); white-space: nowrap; transition: all .2s; }
+      .st.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+      .st-arrow { color: var(--subtle); font-family: var(--mono); font-size: 9px; }
+
+      .callline { font-family: var(--mono); font-size: 11.5px; color: var(--subtle); background: #0a0b0e;
+                  border: 1px solid var(--border); border-radius: var(--r-md); padding: 7px 11px; margin-bottom: 10px;
+                  white-space: nowrap; overflow-x: auto; }
+      .callline b { color: var(--accent); }
+      .callline i { color: var(--success); font-style: normal; }
+      .callline u { color: var(--danger); text-decoration: none; }
+
+      .cols { display: grid; grid-template-columns: 1fr 232px; gap: 10px; align-items: start; }
+      .pane { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 11px; }
+      .cap { font-family: var(--mono); font-size: 9.5px; letter-spacing: .09em; text-transform: uppercase;
+             color: var(--subtle); margin-bottom: 9px; display: flex; justify-content: space-between; gap: 8px; }
+
+      /* screen */
+      .screen { background: #0a0b0e; border: 1px solid var(--border-strong); border-radius: var(--r-md);
+                padding: 13px 14px; min-height: 130px; font-family: var(--mono); }
+      .scr-title { font-size: 11px; color: var(--info); letter-spacing: .06em; margin-bottom: 9px; }
+      .scr-body { font-size: 12.5px; color: var(--fg); line-height: 1.7; }
+      .scr-body .big { font-size: 21px; font-weight: 700; letter-spacing: .06em; }
+      .scr-body .ok { color: var(--success); }
+      .scr-body .no { color: var(--danger); }
+      .scr-body .dim { color: var(--muted); font-size: 11px; }
+
+      .opts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 11px; }
+      .opt { font-family: var(--mono); font-size: 11.5px; padding: 8px 13px; border-radius: var(--r-md);
+             background: var(--elevated); border: 1px solid var(--border-strong); color: var(--fg);
+             cursor: pointer; transition: border-color .15s, transform .1s; }
+      .opt:hover { border-color: var(--accent); }
+      .opt:active { transform: scale(.97); }
+      .opt.pri { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); font-weight: 700; }
+      .opt.bad { background: var(--danger-soft); border-color: rgba(240,104,104,.45); color: var(--danger); }
+      .opt.shake { animation: shake .32s; border-color: var(--danger); }
+      @keyframes shake { 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+
+      /* cassettes */
+      .cass { display: flex; flex-direction: column; gap: 7px; }
+      .cs { background: var(--elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 8px 9px; }
+      .cs-h { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 10.5px; color: var(--fg); }
+      .cs-h b { color: var(--accent); font-weight: 700; }
+      .cs-bar { height: 5px; border-radius: 3px; background: var(--surface); border: 1px solid var(--border); margin-top: 5px; overflow: hidden; }
+      .cs-bar i { display: block; height: 100%; background: var(--info); transition: width .4s ease; }
+      .cs.used { border-color: var(--accent-border); }
+      .cs.used .cs-bar i { background: var(--accent); }
+      .cs.empty .cs-bar i { background: var(--danger); }
+
+      .acct { margin-top: 11px; background: var(--elevated); border: 1px solid var(--border-strong);
+              border-radius: var(--r-md); padding: 9px 10px; font-family: var(--mono); }
+      .acct .l { font-size: 9.5px; color: var(--subtle); text-transform: uppercase; letter-spacing: .08em; }
+      .acct .v { font-size: 16px; font-weight: 700; color: var(--fg); margin-top: 3px; }
+      .acct .v.flash { color: var(--accent); }
+      .acct .sub { font-size: 9.5px; color: var(--muted); margin-top: 4px; }
+
+      /* dispense tray */
+      .tray { margin-top: 10px; min-height: 58px; background: #0a0b0e; border: 1px dashed var(--border-strong);
+              border-radius: var(--r-md); padding: 9px 11px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+      .tray .ph { font-family: var(--mono); font-size: 10.5px; color: var(--subtle); }
+      .note { font-family: var(--mono); font-size: 10px; font-weight: 700; padding: 7px 10px; border-radius: 4px;
+              background: var(--success-soft); border: 1px solid rgba(92,198,111,.45); color: var(--success);
+              animation: slide .4s ease-out; }
+      @keyframes slide { from { transform: translateX(-14px); opacity: 0; } }
+
+      .explain { min-height: 72px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md);
+                 padding: 12px 15px; margin-top: 11px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .hi { color: var(--accent); font-weight: 700; }
+
+      .foot { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 11px; }
+      .btn { background: var(--elevated); color: var(--muted); font: 600 11.5px/1 var(--sans);
+             border: 1px solid var(--border); border-radius: var(--r-md); padding: 8px 12px; cursor: pointer; }
+      .btn:hover { border-color: var(--border-strong); color: var(--fg); }
+      .hint { margin-left: auto; font-size: 11.5px; color: var(--muted); }
+      .hint .b { color: var(--accent); }
+
+      @media (max-width: 620px) { .cols { grid-template-columns: 1fr; } .hint { margin-left: 0; } }
+    </style>
+  </head>
+  <body>
+    <div class="states" id="states"></div>
+    <div class="callline" id="callline">// insert the card to begin</div>
+
+    <div class="cols">
+      <div class="pane">
+        <div class="cap"><span>Screen</span><span id="cap-note">tap an option</span></div>
+        <div class="screen">
+          <div class="scr-title" id="scr-title">WELCOME</div>
+          <div class="scr-body" id="scr-body">Insert your card to begin.</div>
+        </div>
+        <div class="opts" id="opts"></div>
+        <div class="tray" id="tray"><span class="ph">— cash tray —</span></div>
+      </div>
+
+      <div class="pane">
+        <div class="cap"><span>Cash cassettes</span></div>
+        <div class="cass" id="cass"></div>
+        <div class="acct">
+          <div class="l">Account balance</div>
+          <div class="v" id="acct-bal">₹—</div>
+          <div class="sub" id="acct-sub">card not inserted</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="explain">
+      <div class="explain-title" id="ex-title">Two things must always agree</div>
+      <div class="explain-body" id="ex-body">The <b>account balance</b> and the <b>cash in the machine</b>. Insert the card and watch both move together.</div>
+    </div>
+
+    <div class="foot">
+      <button class="btn" id="jam-btn">🔧 Jam the dispenser</button>
+      <button class="btn" id="drain-btn">💸 Run out of small notes</button>
+      <button class="btn" id="reset-btn">↺ Reset</button>
+      <span class="hint"><span class="b">▸</span> Try withdrawing <b>₹2,700</b> — the notes must add up exactly.</span>
+    </div>
+
+    <script>
+      var PIN = "1234";
+      var STATES = ["NO_CARD", "PIN", "MENU", "AMOUNT", "DISPENSING", "EJECT"];
+      var DENOMS = [2000, 500, 200, 100];
+      var STOCK0 = { 2000: 2, 500: 6, 200: 3, 100: 5 };
+
+      var state, balance, cassettes, tries, jammed, busy, dailyUsed;
+      var DAILY_LIMIT = 20000;
+
+      function setExplain(t, h) {
+        document.getElementById("ex-title").textContent = t;
+        document.getElementById("ex-body").innerHTML = h;
+      }
+      function setCall(h) { document.getElementById("callline").innerHTML = h; }
+      function showScreen(title, body) {
+        document.getElementById("scr-title").textContent = title;
+        document.getElementById("scr-body").innerHTML = body;
+      }
+      function money(n) { return "₹" + n.toLocaleString("en-IN"); }
+
+      function renderStates() {
+        var host = document.getElementById("states");
+        host.innerHTML = "";
+        STATES.forEach(function (s, i) {
+          if (i) { var a = document.createElement("span"); a.className = "st-arrow"; a.textContent = "→"; host.appendChild(a); }
+          var el = document.createElement("span");
+          el.className = "st" + (state === s ? " on" : "");
+          el.textContent = s;
+          host.appendChild(el);
+        });
+      }
+
+      function renderCassettes(used) {
+        var host = document.getElementById("cass");
+        host.innerHTML = "";
+        DENOMS.forEach(function (d) {
+          var n = cassettes[d], max = STOCK0[d];
+          var el = document.createElement("div");
+          var cls = "cs";
+          if (used && used[d]) cls += " used";
+          if (n === 0) cls += " empty";
+          el.className = cls;
+          el.innerHTML =
+            "<div class='cs-h'><span>" + money(d) + "</span><b>×" + n + "</b></div>" +
+            "<div class='cs-bar'><i style='width:" + (max ? (n / max) * 100 : 0) + "%'></i></div>";
+          host.appendChild(el);
+        });
+      }
+
+      function renderAccount(flash) {
+        var v = document.getElementById("acct-bal");
+        v.textContent = state === "NO_CARD" ? "₹—" : money(balance);
+        v.className = flash ? "v flash" : "v";
+        document.getElementById("acct-sub").textContent =
+          state === "NO_CARD" ? "card not inserted"
+            : "daily used " + money(dailyUsed) + " / " + money(DAILY_LIMIT);
+      }
+
+      function opts(list) {
+        var host = document.getElementById("opts");
+        host.innerHTML = "";
+        list.forEach(function (o) {
+          var b = document.createElement("button");
+          b.className = "opt" + (o.cls ? " " + o.cls : "");
+          b.id = "opt-" + o.id;
+          b.textContent = o.label;
+          b.addEventListener("click", o.run);
+          host.appendChild(b);
+        });
+      }
+
+      function shake(id) {
+        var el = document.getElementById("opt-" + id);
+        if (!el) return;
+        el.classList.add("shake");
+        setTimeout(function () { el.classList.remove("shake"); }, 340);
+      }
+
+      function trayReset() { document.getElementById("tray").innerHTML = "<span class='ph'>— cash tray —</span>"; }
+      function trayAdd(html) {
+        var t = document.getElementById("tray");
+        if (t.querySelector(".ph")) t.innerHTML = "";
+        var s = document.createElement("span");
+        s.innerHTML = html;
+        t.appendChild(s.firstChild);
+      }
+
+      /* ---- can the machine build this amount from the notes it holds? ---- */
+      function planNotes(amount) {
+        var give = {}, left = amount;
+        for (var i = 0; i < DENOMS.length; i++) {
+          var d = DENOMS[i], n = Math.min(Math.floor(left / d), cassettes[d]);
+          if (n > 0) { give[d] = n; left -= n * d; }
+        }
+        return left === 0 ? give : null;
+      }
+      function planText(p) {
+        var out = [];
+        DENOMS.forEach(function (d) { if (p[d]) out.push(money(d) + " × " + p[d]); });
+        return out.join("  +  ");
+      }
+
+      /* ---------------- screens ---------------- */
+      function goNoCard(msg) {
+        state = "NO_CARD";
+        renderStates(); renderCassettes(); renderAccount(false);
+        showScreen("WELCOME", msg || "Insert your card to begin.");
+        opts([{ id: "insert", label: "💳 Insert card", cls: "pri", run: goPin }]);
+      }
+
+      function goPin() {
+        state = "PIN"; tries = 0;
+        renderStates(); renderAccount(false);
+        setCall("atm.<b>insertCard</b>(card)  <span style='color:#6b7280'>// state: PIN</span>");
+        setExplain("Authenticate first",
+          "Nothing about the account is readable yet. <span class='dim'>The card is a claim; the PIN is the proof.</span>");
+        pinScreen();
+      }
+      function pinScreen() {
+        showScreen("ENTER PIN", "<span class='dim'>attempts left: " + (3 - tries) + "</span>");
+        opts([
+          { id: "right", label: "🔢 1234 (correct)", cls: "pri", run: function () { pinEntry(true); } },
+          { id: "wrong", label: "🔢 9999 (wrong)", run: function () { pinEntry(false); } }
+        ]);
+      }
+      function pinEntry(ok) {
+        if (ok) {
+          setCall("atm.<b>enterPin</b>(“1234”) → <i>authenticated</i>");
+          setExplain("PIN accepted",
+            "Now — and only now — the balance is readable. <span class='dim'>Every screen after this assumes an authenticated session.</span>");
+          goMenu();
+          return;
+        }
+        tries++;
+        if (tries >= 3) {
+          setCall("atm.enterPin(“9999”) → <u>CardRetained</u>");
+          showScreen("CARD RETAINED", "<span class='no big'>✗</span><br><span class='dim'>three wrong attempts</span>");
+          setExplain("Card retained",
+            "Three strikes. <span class='bad'>The card is kept.</span> <span class='dim'>The attempt counter lives on the session — reset it per card, never globally.</span>");
+          opts([{ id: "done", label: "↺ Start over", run: reset }]);
+          return;
+        }
+        shake("wrong");
+        setCall("atm.enterPin(“9999”) → <u>WrongPin (" + tries + "/3)</u>");
+        setExplain("Wrong PIN — attempt " + tries + " of 3",
+          "<span class='dim'>Count the attempts, don’t reveal anything. The machine never says which digit was wrong.</span>");
+        pinScreen();
+      }
+
+      function goMenu() {
+        state = "MENU";
+        renderStates(); renderAccount(false);
+        showScreen("MAIN MENU", "Choose a transaction.<br><span class='dim'>account ••••4821</span>");
+        opts([
+          { id: "bal", label: "📄 Balance", run: showBalance },
+          { id: "wd", label: "💵 Withdraw", cls: "pri", run: goAmount },
+          { id: "dep", label: "📥 Deposit ₹5,000", run: deposit },
+          { id: "eject", label: "⏏ Eject card", run: eject }
+        ]);
+      }
+
+      function showBalance() {
+        setCall("atm.<b>balance</b>() → <i>" + money(balance) + "</i>");
+        showScreen("BALANCE", "<span class='big ok'>" + money(balance) + "</span><br><span class='dim'>available</span>");
+        setExplain("A read-only transaction",
+          "No cash moves, so <span class='dim'>nothing can go half-done. This is the easy one.</span>");
+        opts([{ id: "back", label: "← Menu", run: goMenu }]);
+      }
+
+      function deposit() {
+        balance += 5000;
+        setCall("atm.<b>deposit</b>(5000) → <i>" + money(balance) + "</i>");
+        renderAccount(true);
+        showScreen("DEPOSIT", "<span class='big ok'>+ ₹5,000</span><br><span class='dim'>new balance " + money(balance) + "</span>");
+        setExplain("Deposit — one resource only",
+          "The balance goes up; <span class='dim'>the cassettes are untouched, because deposited notes go to a separate bin, not back into circulation.</span>");
+        opts([{ id: "back", label: "← Menu", run: goMenu }]);
+      }
+
+      function goAmount() {
+        state = "AMOUNT";
+        renderStates();
+        setCall("// choose an amount");
+        showScreen("WITHDRAW", "How much?<br><span class='dim'>balance " + money(balance) + " · daily left " + money(DAILY_LIMIT - dailyUsed) + "</span>");
+        setExplain("Three checks before any cash moves",
+          "<span class='dim'>Enough balance? Under the daily limit? And can the cassettes actually <b>build</b> this amount?</span>");
+        opts([
+          { id: "a2700", label: "₹2,700", run: function () { withdraw(2700); } },
+          { id: "a5000", label: "₹5,000", cls: "pri", run: function () { withdraw(5000); } },
+          { id: "a150", label: "₹150", run: function () { withdraw(150); } },
+          { id: "a99000", label: "₹99,000", run: function () { withdraw(99000); } },
+          { id: "back", label: "← Menu", run: goMenu }
+        ]);
+      }
+
+      function withdraw(amount) {
+        if (busy) return;
+        var idFor = { 2700: "a2700", 5000: "a5000", 150: "a150", 99000: "a99000" };
+
+        // ---- check 1: balance ----
+        if (amount > balance) {
+          shake(idFor[amount]);
+          setCall("atm.withdraw(" + amount + ") → <u>InsufficientFunds</u>");
+          showScreen("DECLINED", "<span class='no'>Insufficient funds</span><br><span class='dim'>balance " + money(balance) + "</span>");
+          setExplain("Check 1 failed — balance",
+            "Nothing moved. <span class='dim'>Cheapest check first: it needs no hardware at all.</span>");
+          return;
+        }
+        // ---- check 2: daily limit ----
+        if (dailyUsed + amount > DAILY_LIMIT) {
+          shake(idFor[amount]);
+          setCall("atm.withdraw(" + amount + ") → <u>DailyLimitExceeded</u>");
+          showScreen("DECLINED", "<span class='no'>Daily limit exceeded</span><br><span class='dim'>" + money(DAILY_LIMIT - dailyUsed) + " left today</span>");
+          setExplain("Check 2 failed — daily limit",
+            "A <span class='hi'>policy</span> rule, not a physical one. <span class='dim'>It belongs to the account, not to this machine.</span>");
+          return;
+        }
+        // ---- check 3: can the notes add up? ----
+        var plan = planNotes(amount);
+        if (!plan) {
+          shake(idFor[amount]);
+          setCall("atm.withdraw(" + amount + ") → <u>CannotDispenseAmount</u>");
+          showScreen("DECLINED", "<span class='no'>Cannot dispense that amount</span><br><span class='dim'>no combination of available notes adds up</span>");
+          setExplain("Check 3 failed — the notes don’t fit",
+            "The money exists in the account but not in <span class='hi'>this machine’s cassettes</span>. <span class='dim'>Two different resources, two different failures.</span>");
+          return;
+        }
+
+        busy = true;
+        state = "DISPENSING";
+        renderStates();
+        trayReset();
+        setCall("atm.<b>withdraw</b>(" + amount + ")  <span style='color:#6b7280'>// debit, then dispense</span>");
+        showScreen("PROCESSING", "<span class='dim'>" + planText(plan) + "</span>");
+        setExplain("All three checks passed",
+          "Notes chosen: <span class='hi'>" + planText(plan) + "</span>. <span class='dim'>Now the risky part — two resources must change together.</span>");
+
+        setTimeout(function () {
+          // debit the account first
+          balance -= amount;
+          dailyUsed += amount;
+          renderAccount(true);
+          setExplain("Account debited",
+            "Balance is now <span class='hi'>" + money(balance) + "</span>. <span class='dim'>If the dispenser fails from here, that money is gone from the account but not in your hand.</span>");
+
+          setTimeout(function () {
+            if (jammed) {
+              // ---- rollback ----
+              balance += amount;
+              dailyUsed -= amount;
+              renderAccount(true);
+              renderCassettes();
+              state = "MENU";
+              busy = false;
+              renderStates();
+              setCall("dispense() threw → <u>rollback</u> → <i>balance restored " + money(balance) + "</i>");
+              showScreen("TRANSACTION REVERSED", "<span class='no'>Dispenser fault</span><br><span class='dim'>balance restored to " + money(balance) + "</span>");
+              setExplain("The dispenser failed — so undo the debit",
+                "<span class='bad'>This is the whole reason the ATM problem exists.</span> <span class='dim'>Two resources, one of them physical and unreliable. Either both change or neither does.</span>");
+              opts([{ id: "back", label: "← Menu", run: goMenu }, { id: "unjam", label: "🔧 Clear the jam", run: unjam }]);
+              return;
+            }
+            DENOMS.forEach(function (d) {
+              if (plan[d]) { cassettes[d] -= plan[d]; trayAdd("<span class='note'>" + money(d) + " × " + plan[d] + "</span>"); }
+            });
+            renderCassettes(plan);
+            state = "EJECT";
+            busy = false;
+            renderStates();
+            setCall("atm.withdraw(" + amount + ") → <i>" + money(amount) + " dispensed</i>");
+            showScreen("TAKE YOUR CASH", "<span class='big ok'>" + money(amount) + "</span><br><span class='dim'>" + planText(plan) + "</span>");
+            setExplain("Both resources moved together",
+              "Account <span class='good'>−" + money(amount) + "</span> and the cassettes dropped by exactly those notes. " +
+              "<span class='dim'>Consistent again.</span>");
+            opts([{ id: "back", label: "← Menu", run: goMenu }, { id: "eject", label: "⏏ Eject card", run: eject }]);
+          }, 620);
+        }, 620);
+      }
+
+      function unjam() {
+        jammed = false;
+        setExplain("Dispenser cleared",
+          "Try <span class='hi'>₹5,000</span> again — <span class='dim'>this time both sides commit.</span>");
+        goMenu();
+      }
+
+      function eject() {
+        state = "EJECT";
+        renderStates();
+        setCall("atm.<b>ejectCard</b>()  <span style='color:#6b7280'>// session over</span>");
+        setExplain("Session ends with the card",
+          "PIN attempts, the authenticated flag, the current account — <span class='dim'>all of it dies here. Nothing leaks to the next customer.</span>");
+        setTimeout(function () {
+          goNoCard("Thank you. Insert a card to begin.");
+        }, 500);
+      }
+
+      function jam() {
+        jammed = !jammed;
+        setCall(jammed ? "// dispenser will now FAIL mid-transaction" : "// dispenser healthy");
+        setExplain(jammed ? "Dispenser will fail" : "Dispenser healthy",
+          jammed
+            ? "Now withdraw <span class='hi'>₹5,000</span>. <span class='dim'>The debit happens, the notes don’t — watch what has to happen next.</span>"
+            : "<span class='dim'>Withdrawals will now complete normally.</span>");
+      }
+
+      function drain() {
+        cassettes[100] = 0;
+        cassettes[200] = 0;
+        renderCassettes();
+        setCall("// small notes gone — only ₹2,000 and ₹500 left");
+        setExplain("Small notes exhausted",
+          "Try <span class='hi'>₹2,700</span> now. <span class='dim'>₹2,000 + ₹500 = ₹2,500, and nothing can make the last ₹200.</span>");
+      }
+
+      function reset() {
+        balance = 12000;
+        cassettes = { 2000: STOCK0[2000], 500: STOCK0[500], 200: STOCK0[200], 100: STOCK0[100] };
+        tries = 0; jammed = false; busy = false; dailyUsed = 0;
+        trayReset();
+        goNoCard("Insert your card to begin.");
+        setCall("// insert the card to begin");
+        setExplain("Two things must always agree",
+          "The <b>account balance</b> and the <b>cash in the machine</b>. Insert the card and watch both move together.");
+      }
+
+      document.getElementById("jam-btn").addEventListener("click", jam);
+      document.getElementById("drain-btn").addEventListener("click", drain);
+      document.getElementById("reset-btn").addEventListener("click", reset);
+      reset();
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>
