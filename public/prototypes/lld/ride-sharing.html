@@ -1,0 +1,663 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ride sharing — the matcher — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a; --accent-soft: rgba(251,134,58,.12); --accent-border: rgba(251,134,58,.45);
+        --success: #5cc66f; --success-soft: rgba(92,198,111,.12);
+        --info: #5e9ff6; --info-soft: rgba(94,159,246,.12);
+        --danger: #f06868; --danger-soft: rgba(240,104,104,.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px; --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 14px 16px 20px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      .top { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; margin-bottom: 9px; }
+      .stat { font-family: var(--mono); font-size: 10.5px; padding: 6px 10px; border-radius: 999px;
+              background: var(--surface); border: 1px solid var(--border); color: var(--muted); white-space: nowrap; }
+      .stat b { color: var(--fg); }
+      .stat.ok b { color: var(--success); }
+      .stat.of b { color: var(--accent); }
+      .stat.tr b { color: var(--info); }
+      .stat.hot { border-color: var(--accent-border); color: var(--accent); }
+      .stat.hot b { color: var(--accent); }
+      .dbl { margin-left: auto; font-family: var(--mono); font-size: 11px; padding: 6px 12px; border-radius: 999px;
+             background: var(--surface); border: 1px solid rgba(92,198,111,.4); color: var(--success); white-space: nowrap; }
+      .dbl.bad { color: var(--danger); border-color: var(--danger); background: var(--danger-soft); }
+
+      .callline { font-family: var(--mono); font-size: 11.5px; color: var(--subtle); background: #0a0b0e;
+                  border: 1px solid var(--border); border-radius: var(--r-md); padding: 7px 11px; margin-bottom: 10px;
+                  white-space: nowrap; overflow-x: auto; }
+      .callline b { color: var(--accent); }
+      .callline i { color: var(--success); font-style: normal; }
+      .callline u { color: var(--danger); text-decoration: none; }
+
+      .switches { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+      .lab { font-family: var(--mono); font-size: 9.5px; color: var(--subtle); margin-right: 2px; }
+      .chip { font-family: var(--mono); font-size: 10.5px; padding: 6px 10px; border-radius: var(--r-md);
+              background: var(--elevated); border: 1px solid var(--border-strong); color: var(--muted); cursor: pointer; }
+      .chip:hover { border-color: var(--accent); color: var(--fg); }
+      .chip.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); font-weight: 700; }
+      .chip.on.danger { background: var(--danger-soft); border-color: var(--danger); color: var(--danger); }
+      .sep { width: 1px; height: 20px; background: var(--border-strong); margin: 0 4px; }
+
+      .cols { display: grid; grid-template-columns: 1fr 274px; gap: 10px; align-items: start; }
+      .pane { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 11px; }
+      .cap { font-family: var(--mono); font-size: 9.5px; letter-spacing: .09em; text-transform: uppercase;
+             color: var(--subtle); margin-bottom: 8px; display: flex; justify-content: space-between; gap: 10px; }
+      .cap b { color: var(--accent); font-weight: 700; }
+
+      .rank { font-family: var(--mono); font-size: 10px; }
+      .row { display: flex; align-items: center; gap: 6px; background: var(--elevated); border: 1px solid var(--border);
+             border-radius: 6px; padding: 5px 7px; margin-bottom: 5px; }
+      .row.act { border-color: var(--accent-border); background: var(--accent-soft); }
+      .row.won { border-color: rgba(92,198,111,.5); background: var(--success-soft); }
+      .row.gone { opacity: .5; }
+      .row.gone .who { text-decoration: line-through; }
+      .row .n { color: var(--subtle); width: 16px; flex: none; }
+      .row .who { color: var(--fg); width: 26px; flex: none; }
+      .row .d { color: var(--muted); flex: 1; }
+      .row .tag { font-size: 9px; }
+      .tag.o { color: var(--accent); }
+      .tag.g { color: var(--danger); }
+      .tag.w { color: var(--success); }
+      .bar { height: 3px; background: var(--border); border-radius: 2px; margin-top: 5px; overflow: hidden; }
+      .bar i { display: block; height: 3px; background: var(--accent); width: 100%; }
+      .none { font-family: var(--mono); font-size: 10px; color: var(--subtle); }
+
+      .fare { font-family: var(--mono); font-size: 10px; color: var(--muted); line-height: 1.75; margin-top: 4px; }
+      .fare .k { display: inline-block; width: 92px; color: var(--subtle); }
+      .fare .v { color: var(--fg); }
+      .fare .tot { color: var(--info); font-size: 12px; font-weight: 700; }
+      .fare hr { border: none; border-top: 1px solid var(--border-strong); margin: 5px 0; }
+      .zero { font-family: var(--mono); font-size: 9.5px; color: var(--success); margin-top: 6px; }
+
+      .explain { min-height: 74px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md);
+                 padding: 12px 15px; margin-top: 11px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .hi { color: var(--accent); font-weight: 700; }
+      .explain-body .sub { display: block; margin-top: 5px; font-size: 11.5px; color: var(--subtle); }
+
+      .foot { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; margin-top: 11px; }
+      .btn { background: var(--elevated); color: var(--muted); font: 600 11.5px/1 var(--sans);
+             border: 1px solid var(--border); border-radius: var(--r-md); padding: 8px 11px; cursor: pointer; }
+      .btn:hover { border-color: var(--border-strong); color: var(--fg); }
+      .go { font-family: var(--mono); font-size: 12.5px; font-weight: 700; padding: 9px 16px; border-radius: var(--r-md);
+            cursor: pointer; background: var(--success-soft); border: 1px solid rgba(92,198,111,.45); color: var(--success); }
+      .go:active { transform: scale(.98); }
+      .hint { margin-left: auto; font-size: 11.5px; color: var(--muted); }
+      .hint .b { color: var(--accent); }
+
+      @media (max-width: 680px) {
+        .cols { grid-template-columns: 1fr; }
+        .dbl { margin-left: 0; }
+        .hint { margin-left: 0; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="top">
+      <span class="stat ok">available <b id="s-av">14</b></span>
+      <span class="stat of">offered <b id="s-of">0</b></span>
+      <span class="stat tr">on trip <b id="s-tr">0</b></span>
+      <span class="stat hot">checked this request <b id="s-now">0</b></span>
+      <span class="stat">checked cumulative <b id="s-tot">0</b></span>
+      <span class="dbl" id="dbl">⚠ double-matched: 0</span>
+    </div>
+
+    <div class="callline" id="callline">// 14 cars, a grid of 40 cells. Press <b>🚕 Request ride</b>.</div>
+
+    <div class="switches">
+      <span class="lab">search</span>
+      <button class="chip" id="m-scan">🔍 Scan everyone</button>
+      <button class="chip on" id="m-grid">🧭 Grid lookup</button>
+      <span class="sep"></span>
+      <span class="lab">claim</span>
+      <button class="chip on" id="g-on">🔒 Guarded</button>
+      <button class="chip" id="g-off">🔓 Unguarded</button>
+      <span class="sep"></span>
+      <span class="lab">pricing</span>
+      <button class="chip on" id="p-norm">☀️ Normal ×1.0</button>
+      <button class="chip" id="p-surge">🔥 Surge ×1.8</button>
+    </div>
+
+    <div class="cols">
+      <div class="pane">
+        <div class="cap"><span>The city — <span id="cap-cells">40 cells</span></span><span id="cap-mode">grid lookup</span></div>
+        <div id="map"></div>
+      </div>
+
+      <div class="pane">
+        <div class="cap"><span>Ranked candidates</span><span id="cap-rank">—</span></div>
+        <div class="rank" id="rank"><div class="none">press 🚕 Request ride</div></div>
+        <div class="cap" style="margin-top:12px"><span>Fare</span><span id="cap-surge">×1.0</span></div>
+        <div class="fare" id="farecard"></div>
+      </div>
+    </div>
+
+    <div class="explain">
+      <div class="explain-title" id="ex-title">One rider, fourteen cars, forty cells</div>
+      <div class="explain-body" id="ex-body">Press <b>🚕 Request ride</b> and watch <b>checked this request</b>. Then press <b>🔍 Scan everyone</b> and request again.</div>
+    </div>
+
+    <div class="foot">
+      <button class="go" id="b-req">🚕 Request ride</button>
+      <button class="btn" id="b-timeout">⏱ Let the offer time out</button>
+      <button class="btn" id="b-decline">🙅 Driver declines</button>
+      <button class="btn" id="b-empty">📡 No cars nearby</button>
+      <button class="btn" id="b-race">⚔️ Two riders, one driver</button>
+      <button class="btn" id="b-move">🚗 Drivers move</button>
+      <button class="btn" id="b-reset">↺ Reset</button>
+      <span class="hint"><span class="b">▸</span> 14 is a toy. The real number is 50,000.</span>
+    </div>
+
+    <script>
+      /* ---------------------------------------------------------- the city */
+      var CW = 70, CH = 60, COLS = 8, ROWS = 5, MAXRING = 2;
+      var HOME = [
+        { id: "d1",  x: 185, y: 110, rt: 4.9 },
+        { id: "d2",  x: 300, y:  45, rt: 4.4 },
+        { id: "d3",  x: 225, y: 205, rt: 4.6 },
+        { id: "d4",  x: 110, y:  85, rt: 4.7 },
+        { id: "d5",  x:  95, y: 100, rt: 4.5 },
+        { id: "d6",  x: 420, y:  70, rt: 4.8 },
+        { id: "d7",  x: 300, y: 210, rt: 4.8 },
+        { id: "d8",  x: 470, y: 150, rt: 4.3 },
+        { id: "d9",  x: 500, y: 240, rt: 4.9 },
+        { id: "d10", x:  60, y:  45, rt: 4.2 },
+        { id: "d11", x: 215, y: 285, rt: 4.6 },
+        { id: "d12", x: 380, y: 265, rt: 4.7 },
+        { id: "d13", x: 440, y: 215, rt: 4.5 },
+        { id: "d14", x: 355, y:  40, rt: 4.4 }
+      ];
+      var HOME_A = { x: 245, y: 155 };
+      var RIDER_B = { x: 215, y: 235 };
+      var EMPTY_CORNER = { x: 35, y: 275 };
+
+      var fleet, riderA, showB, phase, searchMode, guarded, surgeBps;
+      var checksNow, checksTotal, doubleMatched, shaded, flashed;
+      var cands, offerIdx, ticksLeft, pending = [], moveStep, raceView, lastRing;
+
+      /* --------------------------------------------------------- utilities */
+      function cellR(y) { return Math.floor(y / CH); }
+      function cellC(x) { return Math.floor(x / CW); }
+      function cellName(p) { return "cell(" + cellR(p.y) + "," + cellC(p.x) + ")"; }
+      function dist(a, b) { var dx = a.x - b.x, dy = a.y - b.y; return Math.sqrt(dx * dx + dy * dy); }
+      function score(d, p) { return dist(d, p) * (1 + (5 - d.rt) * 0.10); }
+      function byId(id) { for (var i = 0; i < fleet.length; i++) if (fleet[i].id === id) return fleet[i]; return null; }
+      function clearPending() { for (var i = 0; i < pending.length; i++) clearTimeout(pending[i]); pending = []; }
+      function beat(fn, ms) { pending.push(setTimeout(fn, ms)); }
+
+      /* -------------------------------------------- the index + the search */
+      function ringCells(p, ring) {
+        var r0 = cellR(p.y), c0 = cellC(p.x), out = [];
+        for (var r = r0 - ring; r <= r0 + ring; r++)
+          for (var c = c0 - ring; c <= c0 + ring; c++)
+            if (r >= 0 && r < ROWS && c >= 0 && c < COLS) out.push({ r: r, c: c });
+        return out;
+      }
+      function inCells(d, cells) {
+        for (var i = 0; i < cells.length; i++)
+          if (cells[i].r === cellR(d.y) && cells[i].c === cellC(d.x)) return true;
+        return false;
+      }
+      /* A driver in OFFERED or ON_TRIP is NOT in the index. That one line does the work. */
+      function indexed(d) { return d.st === "AVAILABLE"; }
+
+      function search(p, ring) {
+        var cells = ringCells(p, ring), looked = [], i;
+        if (searchMode === "scan") {
+          for (i = 0; i < fleet.length; i++) looked.push(fleet[i]);   // O(all drivers), every time
+          cells = [];
+        } else {
+          for (i = 0; i < fleet.length; i++) if (indexed(fleet[i]) && inCells(fleet[i], cells)) looked.push(fleet[i]);
+        }
+        var pool = [];
+        for (i = 0; i < looked.length; i++) if (indexed(looked[i])) pool.push(looked[i]);
+        pool.sort(function (a, b) { return score(a, p) - score(b, p); });
+        return { cells: cells, checked: looked.length, pool: pool, looked: looked };
+      }
+
+      /* ---------------------------------------------------------- the fare */
+      function fareParts() {
+        var base = 5000, km = 6400 * 1200 / 1000, min = 18 * 150;
+        var subtotal = base + km + min;
+        var surged = Math.floor(subtotal * surgeBps / 10000);
+        var total = Math.floor((surged + 50) / 100) * 100;
+        return { base: base, km: km, min: min, sub: subtotal, surged: surged, total: total };
+      }
+      function rupees(p) { return "₹" + Math.floor(p / 100) + "." + ("0" + (p % 100)).slice(-2); }
+
+      /* ---------------------------------------------------------- painting */
+      function setExplain(t, h) {
+        document.getElementById("ex-title").textContent = t;
+        document.getElementById("ex-body").innerHTML = h;
+      }
+      function setCall(h) { document.getElementById("callline").innerHTML = h; }
+
+      function drawMap() {
+        var s = "<svg viewBox='0 0 560 300' width='100%' style=\"max-width:560px;display:block;font-family:ui-monospace,Menlo,monospace\">";
+        var r, c, i;
+
+        for (i = 0; i < shaded.length; i++)
+          s += "<rect x='" + (shaded[i].c * CW) + "' y='" + (shaded[i].r * CH) + "' width='" + CW +
+               "' height='" + CH + "' fill='rgba(251,134,58,0.15)'/>";
+
+        for (c = 0; c <= COLS; c++)
+          s += "<line x1='" + (c * CW) + "' y1='0' x2='" + (c * CW) + "' y2='300' stroke='#232830'/>";
+        for (r = 0; r <= ROWS; r++)
+          s += "<line x1='0' y1='" + (r * CH) + "' x2='560' y2='" + (r * CH) + "' stroke='#232830'/>";
+        for (r = 0; r < ROWS; r++)
+          for (c = 0; c < COLS; c++)
+            s += "<text x='" + (c * CW + 4) + "' y='" + (r * CH + 11) + "' font-size='7' fill='#3a414c'>" + r + "," + c + "</text>";
+
+        for (i = 0; i < shaded.length; i++)
+          s += "<rect x='" + (shaded[i].c * CW) + "' y='" + (shaded[i].r * CH) + "' width='" + CW +
+               "' height='" + CH + "' fill='none' stroke='rgba(251,134,58,0.55)'/>";
+
+        for (i = 0; i < fleet.length; i++) {
+          var d = fleet[i];
+          var col = d.dbl ? "#f06868" : d.st === "AVAILABLE" ? "#5cc66f" : d.st === "OFFERED" ? "#fb863a" : "#5e9ff6";
+          var hit = flashed.indexOf(d.id) >= 0;
+          if (hit) s += "<circle cx='" + d.x + "' cy='" + (d.y - 4) + "' r='13' fill='none' stroke='" +
+                        (searchMode === "scan" ? "#f06868" : "#5cc66f") + "' stroke-width='1.4'/>";
+          s += "<text x='" + (d.x - 9) + "' y='" + d.y + "' font-size='16'>🚗</text>";
+          s += "<text x='" + d.x + "' y='" + (d.y + 12) + "' font-size='7.5' text-anchor='middle' fill='" + col + "'>" + d.id + "</text>";
+          if (d.dbl) s += "<text x='" + (d.x + 10) + "' y='" + (d.y - 8) + "' font-size='10' fill='#f06868'>⚠</text>";
+        }
+
+        s += "<text x='" + (riderA.x - 8) + "' y='" + riderA.y + "' font-size='17'>🧍</text>";
+        s += "<text x='" + riderA.x + "' y='" + (riderA.y + 12) + "' font-size='7.5' text-anchor='middle' fill='#e8e4dc'>Anita</text>";
+        if (showB) {
+          s += "<text x='" + (RIDER_B.x - 8) + "' y='" + RIDER_B.y + "' font-size='17'>🧍</text>";
+          s += "<text x='" + RIDER_B.x + "' y='" + (RIDER_B.y + 12) + "' font-size='7.5' text-anchor='middle' fill='#5e9ff6'>Bala</text>";
+        }
+        s += "</svg>";
+        document.getElementById("map").innerHTML = s;
+      }
+
+      function drawRank() {
+        var host = document.getElementById("rank"), h = "", i;
+        if (raceView) {
+          h += "<div class='none' style='margin-bottom:5px'>🧍 Anita</div>";
+          h += raceRows(raceView.a);
+          h += "<div class='none' style='margin:8px 0 5px'>🧍 Bala</div>";
+          h += raceRows(raceView.b);
+          host.innerHTML = h;
+          document.getElementById("cap-rank").textContent = "2 riders";
+          return;
+        }
+        if (!cands || !cands.length) {
+          host.innerHTML = "<div class='none'>" + (phase === "failed" ? "no candidates — NO_DRIVERS_FOUND" : "press 🚕 Request ride") + "</div>";
+          document.getElementById("cap-rank").textContent = "—";
+          return;
+        }
+        for (i = 0; i < cands.length; i++) {
+          var d = byId(cands[i].id);
+          var cls = "row" + (cands[i].mark === "offer" ? " act" : cands[i].mark === "won" ? " won" :
+                             cands[i].mark ? " gone" : "");
+          var tag = cands[i].mark === "offer" ? "<span class='tag o'>📲 OFFERED ⏱" + ticksLeft + "s</span>"
+                  : cands[i].mark === "timeout" ? "<span class='tag g'>⏱ no answer</span>"
+                  : cands[i].mark === "decline" ? "<span class='tag g'>🙅 declined</span>"
+                  : cands[i].mark === "taken" ? "<span class='tag g'>✗ CAS lost</span>"
+                  : cands[i].mark === "won" ? "<span class='tag w'>✓ accepted</span>" : "";
+          h += "<div class='" + cls + "'><span class='n'>#" + (i + 1) + "</span><span class='who'>" + cands[i].id +
+               "</span><span class='d'>" + Math.round(cands[i].m) + " m · ★" + d.rt + "</span>" + tag + "</div>";
+          if (cands[i].mark === "offer")
+            h += "<div class='bar'><i style='width:" + Math.round(ticksLeft / 15 * 100) + "%'></i></div>";
+        }
+        host.innerHTML = h;
+        document.getElementById("cap-rank").textContent = cands.length + " · ring " + lastRing;
+      }
+
+      function raceRows(list) {
+        var h = "", i;
+        for (i = 0; i < list.length; i++) {
+          var cls = "row" + (list[i].mark === "won" ? " won" : list[i].mark === "dbl" ? " gone" : list[i].mark ? " gone" : "");
+          var tag = list[i].mark === "won" ? "<span class='tag w'>✓ CAS won</span>"
+                  : list[i].mark === "taken" ? "<span class='tag g'>✗ CAS lost</span>"
+                  : list[i].mark === "dbl" ? "<span class='tag g'>⚠ matched anyway</span>" : "";
+          h += "<div class='" + cls + "'><span class='n'>#" + (i + 1) + "</span><span class='who'>" + list[i].id +
+               "</span><span class='d'>" + Math.round(list[i].m) + " m</span>" + tag + "</div>";
+        }
+        return h;
+      }
+
+      function drawFare() {
+        var f = fareParts();
+        var mult = surgeBps === 10000 ? "×1.0" : "×1.8";
+        document.getElementById("cap-surge").textContent = mult;
+        document.getElementById("farecard").innerHTML =
+          "<span class='k'>base</span><span class='v'>" + f.base + "</span><br>" +
+          "<span class='k'>6.4 km</span><span class='v'>" + f.km + "</span><br>" +
+          "<span class='k'>18 min</span><span class='v'>" + f.min + "</span><hr>" +
+          "<span class='k'>subtotal</span><span class='v'>" + f.sub + "</span><br>" +
+          "<span class='k'>surge " + mult + "</span><span class='v'>" + f.surged + "</span><br>" +
+          "<span class='k'>round →</span><span class='tot'>" + f.total + "</span> <span class='v'>= " + rupees(f.total) + "</span>" +
+          "<div class='zero'>integer paise · matching code changed: 0 lines</div>";
+      }
+
+      function drawStats() {
+        var av = 0, of = 0, tr = 0, i;
+        for (i = 0; i < fleet.length; i++) {
+          if (fleet[i].st === "AVAILABLE") av++;
+          else if (fleet[i].st === "OFFERED") of++;
+          else if (fleet[i].st === "ON_TRIP") tr++;
+        }
+        document.getElementById("s-av").textContent = av;
+        document.getElementById("s-of").textContent = of;
+        document.getElementById("s-tr").textContent = tr;
+        document.getElementById("s-now").textContent = checksNow;
+        document.getElementById("s-tot").textContent = checksTotal;
+        var z = document.getElementById("dbl");
+        z.textContent = "⚠ double-matched: " + doubleMatched;
+        z.className = "dbl" + (doubleMatched > 0 ? " bad" : "");
+        document.getElementById("cap-cells").textContent = ROWS * COLS + " cells";
+        document.getElementById("cap-mode").textContent = searchMode === "scan" ? "scan everyone" : "grid lookup";
+      }
+
+      function render() { drawMap(); drawRank(); drawFare(); drawStats(); }
+
+      /* ------------------------------------------------------ the dispatch */
+      function releaseAll() {
+        for (var i = 0; i < fleet.length; i++) { fleet[i].st = "AVAILABLE"; fleet[i].dbl = false; }
+      }
+
+      function startRequest(force) {
+        clearPending();
+        releaseAll();
+        riderA = { x: HOME_A.x, y: HOME_A.y };
+        showB = false; raceView = null; shaded = []; flashed = []; cands = null;
+        phase = "searching"; offerIdx = -1; lastRing = 1;
+        var res = search(riderA, 1);
+        checksNow = res.checked; checksTotal += res.checked;
+        shaded = res.cells;
+        for (var i = 0; i < res.looked.length; i++) flashed.push(res.looked[i].id);
+        cands = [];
+        for (i = 0; i < res.pool.length; i++)
+          cands.push({ id: res.pool[i].id, m: dist(res.pool[i], riderA), mark: null });
+        render();
+
+        setCall("geoIndex.<b>near</b>(pickup, ring=<i>1</i>) → " + (searchMode === "scan"
+          ? "<u>looked at all " + fleet.length + " drivers</u>"
+          : "<i>" + res.checked + "</i> drivers from " + res.cells.length + " cells"));
+        setExplain(searchMode === "scan" ? "Scanned every car in the city" : "Nine cells, " + res.checked + " cars",
+          searchMode === "scan"
+            ? "<span class='bad'>checked " + res.checked + "</span> <span class='dim'>— every pin flashed red. This is O(all drivers), and it happens again on the next request. In a real city that is <b>50,000</b>.</span>"
+            : "Only <span class='hi'>" + cellName(riderA) + "</span> and its 8 neighbours are searched. <span class='dim'>checked <b>" + res.checked + "</b> instead of " + fleet.length + " — and the shaded box is the whole reason.</span>");
+
+        beat(function () { flashed = []; makeOffer(0, force); }, 620);
+      }
+
+      function makeOffer(i, force) {
+        if (!cands || i >= cands.length) { failRequest(); return; }
+        var d = byId(cands[i].id);
+        /* the compare-and-set: AVAILABLE -> OFFERED, or nothing at all */
+        if (guarded && d.st !== "AVAILABLE") { cands[i].mark = "taken"; render(); makeOffer(i + 1, force); return; }
+        d.st = "OFFERED";                      // and now it is out of the index entirely
+        offerIdx = i; ticksLeft = 15; cands[i].mark = "offer"; phase = "offering";
+        render();
+        setCall("d = <b>" + d.id + "</b>.<b>tryOffer</b>(ride7, expiresAt = now + <i>15000</i>) ✓ &nbsp; geoIndex.<b>remove</b>(" + d.id + ")");
+        setExplain("Offered to #" + (i + 1) + " — " + d.id + ", alone",
+          "One phone buzzes, not " + fleet.length + ". <span class='dim'>The CAS moved " + d.id +
+          " from <code>AVAILABLE</code> to <code>OFFERED</code>, and an offered driver leaves the index — so no other rider can even see it.</span>" +
+          "<span class='sub'>Press <b>⏱ Let the offer time out</b> or <b>🙅 Driver declines</b> before the countdown ends.</span>");
+        if (force === "skip") { beat(function () { skipOffer("timeout"); }, 520); return; }
+        tickOffer();
+      }
+
+      function tickOffer() {
+        beat(function () {
+          if (phase !== "offering") return;
+          ticksLeft--;
+          if (ticksLeft === 9) { acceptOffer(); return; }      // the driver taps Accept
+          if (ticksLeft <= 0) { skipOffer("timeout"); return; }
+          drawRank();
+          tickOffer();
+        }, 240);
+      }
+
+      function acceptOffer() {
+        var c = cands[offerIdx], d = byId(c.id);
+        d.st = "ON_TRIP"; c.mark = "won"; phase = "matched";
+        clearPending(); render();
+        var f = fareParts();
+        setCall(d.id + ".<b>confirm</b>(ride7) → <i>ON_TRIP</i> &nbsp; ride.state = <i>MATCHED</i> &nbsp; quote = <i>" + f.total + "</i> paise");
+        setExplain(d.id + " accepted — matched",
+          "<span class='good'>Exactly one driver could accept, because exactly one was asked.</span> " +
+          "<span class='dim'>" + d.id + " is now <code>ON_TRIP</code> and still out of the index. Fare quoted at <b>" + rupees(f.total) + "</b>.</span>");
+      }
+
+      function skipOffer(why) {
+        if (offerIdx < 0 || !cands || !cands[offerIdx]) { startRequest("skip"); return; }
+        var c = cands[offerIdx], d = byId(c.id);
+        d.st = "AVAILABLE";                    // release() — straight back into the index
+        c.mark = why; clearPending();
+        var next = offerIdx + 1;
+        phase = "searching"; render();
+        setCall(d.id + ".<b>release</b>(ride7) → <i>AVAILABLE</i> &nbsp; geoIndex.<b>put</b>(" + d.id + ", " + cellName(d) + ")" +
+                " &nbsp; <span style='color:#6b7280'>// " + (why === "timeout" ? "15s expired" : "declined") + "</span>");
+        setExplain(why === "timeout" ? "Nobody answered — offer expired" : d.id + " declined",
+          d.id + " goes <span class='good'>straight back into the index</span>, no penalty. " +
+          "<span class='dim'>The offer walks down the ranked list to #" + (next + 1) + ". Nothing was ever sent to two drivers at once.</span>");
+        beat(function () { makeOffer(next, null); }, 640);
+      }
+
+      function failRequest() {
+        phase = "failed"; offerIdx = -1; clearPending(); render();
+        setCall("ride.state = <u>NO_DRIVERS_FOUND</u> <span style='color:#6b7280'>// after ring " + lastRing + " — an honest failure</span>");
+        setExplain("No cars available",
+          "<span class='bad'>NO_DRIVERS_FOUND</span> <span class='dim'>after " + MAXRING +
+          " rings. Reaching further would find a car 20 minutes away, which is a worse answer than saying no.</span>");
+      }
+
+      /* ------------------------------------------------------- the buttons */
+      function requestRide() { startRequest(null); }
+
+      function letTimeout() {
+        if (phase === "offering") skipOffer("timeout"); else startRequest("skip");
+      }
+
+      function driverDeclines() {
+        if (phase === "offering") { skipOffer("decline"); return; }
+        clearPending();
+        startRequest(null);
+        beat(function () { if (phase === "offering") skipOffer("decline"); }, 780);
+      }
+
+      function noCarsNearby() {
+        clearPending(); releaseAll();
+        riderA = { x: EMPTY_CORNER.x, y: EMPTY_CORNER.y };
+        showB = false; raceView = null; cands = []; flashed = []; phase = "searching";
+        checksNow = 0; lastRing = 1;
+        shaded = ringCells(riderA, 1);
+        render();
+        setCall("geoIndex.<b>near</b>(pickup, ring=<i>1</i>) → <u>0 drivers</u> in " + shaded.length + " cells");
+        setExplain("Ring 1 — " + shaded.length + " cells, nobody home",
+          "Anita is in <span class='hi'>" + cellName(riderA) + "</span>, the empty corner. <span class='dim'>Do not give up, and do not widen to the whole city. Expand one ring.</span>");
+
+        beat(function () {
+          var was = shaded.length;
+          lastRing = 2;
+          shaded = ringCells(riderA, 2);
+          render();
+          setCall("geoIndex.<b>near</b>(pickup, ring=<i>2</i>) → <u>0 drivers</u> in " + shaded.length + " cells");
+          setExplain("Ring 2 — " + shaded.length + " cells, still nobody",
+            "<span class='dim'>The neighbourhood grew from " + was + " cells to " + shaded.length +
+            " and the candidate list is still empty. This ring is the cap.</span>");
+          beat(failRequest, 900);
+        }, 900);
+      }
+
+      function twoRiders() {
+        clearPending(); releaseAll();
+        riderA = { x: HOME_A.x, y: HOME_A.y };
+        showB = true; cands = null; flashed = []; shaded = []; phase = "race"; lastRing = 1;
+
+        var ra = search(riderA, 1), rb = search(RIDER_B, 1);
+        checksNow = ra.checked + rb.checked; checksTotal += checksNow;
+        shaded = ra.cells.concat(rb.cells);
+
+        var la = [], lb = [], i;
+        for (i = 0; i < ra.pool.length; i++) la.push({ id: ra.pool[i].id, m: dist(ra.pool[i], riderA), mark: null });
+        for (i = 0; i < rb.pool.length; i++) lb.push({ id: rb.pool[i].id, m: dist(rb.pool[i], RIDER_B), mark: null });
+        raceView = { a: la, b: lb };
+        render();
+        setCall("two requests, same tick → both rank <b>" + la[0].id + "</b> first");
+        setExplain("Two riders, one nearest car",
+          "Anita and Bala tapped in the same millisecond. <span class='dim'>Both searched their own 9 cells, both ranked <b>" +
+          la[0].id + "</b> #1. Now the claim.</span>");
+
+        beat(function () {
+          var target = byId(la[0].id);
+          if (guarded) {
+            target.st = "OFFERED"; la[0].mark = "won";       // A's CAS wins
+            lb[0].mark = "taken";                             // B's CAS fails: state is no longer AVAILABLE
+            var alt = null;
+            for (i = 1; i < lb.length; i++) if (byId(lb[i].id).st === "AVAILABLE") { alt = lb[i]; break; }
+            if (alt) { byId(alt.id).st = "OFFERED"; alt.mark = "won"; }
+            render();
+            setCall("A: <b>CAS</b> " + target.id + " AVAILABLE→OFFERED <i>✓</i> &nbsp; B: <b>CAS</b> " + target.id + " <u>✗</u> → next candidate " +
+                    (alt ? "<i>" + alt.id + "</i>" : "<u>none</u>"));
+            setExplain("🔒 Guarded — exactly one claim won",
+              "<span class='good'>Anita's compare-and-set won " + target.id + ".</span> <span class='dim'>Bala's failed, so Bala did not fail — Bala just walked one step down his own ranked list and took <b>" +
+              (alt ? alt.id : "nothing") + "</b>.</span><span class='sub'>double-matched stays 0. Now press <b>🔓 Unguarded</b> and run this again.</span>");
+          } else {
+            target.st = "OFFERED"; target.dbl = true;         // no CAS: both writes "succeed"
+            la[0].mark = "dbl"; lb[0].mark = "dbl";
+            doubleMatched++;
+            render();
+            setCall("A: <u>read AVAILABLE, write OFFERED</u> &nbsp; B: <u>read AVAILABLE, write OFFERED</u> → <u>same car</u>");
+            setExplain("🔓 Unguarded — one car, two riders",
+              "<span class='bad'>Both riders were told " + target.id + " is on the way.</span> <span class='dim'>The gap between reading <code>AVAILABLE</code> and writing <code>OFFERED</code> is where the second rider got stolen.</span>" +
+              "<span class='sub'>The car will arrive once. Somebody is standing on a pavement.</span>");
+          }
+        }, 900);
+      }
+
+      function driversMove() {
+        clearPending();
+        var moves = moveStep % 2 === 0
+          ? [["d7", 360, 210], ["d1", 185, 130], ["d6", 420, 130]]
+          : [["d7", 300, 210], ["d1", 185, 110], ["d6", 420,  70]];
+        var before = cellName(byId("d7")), i;
+        for (i = 0; i < moves.length; i++) {
+          var d = byId(moves[i][0]);
+          d.x = moves[i][1]; d.y = moves[i][2];               // geoIndex.put: one remove, one add
+        }
+        moveStep++;
+        var after = cellName(byId("d7"));
+        shaded = []; flashed = ["d7", "d1", "d6"]; raceView = null;
+        render();
+        setCall("geoIndex.<b>update</b>(d7, " + before + " <i>→</i> " + after + ") &nbsp; <span style='color:#6b7280'>// one remove, one add — O(1)</span>");
+        setExplain("Three cars re-bucketed",
+          "<code>oldCell.remove(d7)</code> then <code>newCell.add(d7)</code>. <span class='dim'>No sort, no rebuild. This runs a thousand times more often than a ride request, which is exactly why it has to be two hash-set operations.</span>");
+        beat(function () { flashed = []; drawMap(); }, 900);
+      }
+
+      function setMode(m) {
+        searchMode = m;
+        document.getElementById("m-scan").className = "chip" + (m === "scan" ? " on danger" : "");
+        document.getElementById("m-grid").className = "chip" + (m === "grid" ? " on" : "");
+        clearPending(); shaded = []; flashed = []; render();
+        setCall("search mode = <b>" + (m === "scan" ? "for (Driver d : allDrivers)" : "geoIndex.near(pickup, ring)") + "</b>");
+        setExplain(m === "scan" ? "Scan everyone" : "Grid lookup",
+          m === "scan"
+            ? "<span class='dim'>Every request will now measure the distance to <b>all " + fleet.length +
+              "</b> cars. Press <b>🚕 Request ride</b> and watch the counter.</span>"
+            : "<span class='dim'>Only the rider's cell and its 8 neighbours are searched. Press <b>🚕 Request ride</b> and compare <b>checked this request</b>.</span>");
+      }
+
+      function setGuard(g) {
+        guarded = g;
+        document.getElementById("g-on").className = "chip" + (g ? " on" : "");
+        document.getElementById("g-off").className = "chip" + (g ? "" : " on danger");
+        setCall(g ? "claim = <b>driver.tryOffer()</b> <i>// compare-and-set</i>"
+                  : "claim = <u>if (state == AVAILABLE) state = OFFERED;</u> <span style='color:#6b7280'>// check-then-act</span>");
+        setExplain(g ? "🔒 Guarded — one atomic flip" : "🔓 Unguarded — check, then act",
+          g ? "<span class='dim'>Reading the state and writing it is one indivisible step, so exactly one of two concurrent requests can win a driver.</span>"
+            : "<span class='bad'>There is now a gap between the read and the write.</span> <span class='dim'>Press <b>⚔️ Two riders, one driver</b> to stand in it.</span>");
+        render();
+      }
+
+      function setSurge(bps) {
+        surgeBps = bps;
+        document.getElementById("p-norm").className = "chip" + (bps === 10000 ? " on" : "");
+        document.getElementById("p-surge").className = "chip" + (bps === 18000 ? " on danger" : "");
+        var f = fareParts();
+        render();
+        setCall("pricing = <b>StandardPricing</b>(5000, 1200, 150, surgeBps=<i>" + bps + "</i>) → <i>" + f.total + "</i> paise");
+        setExplain(bps === 10000 ? "☀️ Normal ×1.0 — " + rupees(f.total) : "🔥 Surge ×1.8 — " + rupees(f.total),
+          "<code>" + f.sub + " × " + bps + " / 10000 = " + f.surged + "</code>, rounded to the nearest rupee → <span class='hi'>" + f.total + "</span> paise. " +
+          "<span class='dim'>All integers, and the multiply happens before the divide.</span>" +
+          "<span class='sub'>Surge lives in <b>PricingStrategy</b>. Matching code changed: <b>0 lines</b>.</span>");
+      }
+
+      /* ------------------------------------------------------------- setup */
+      function resetState() {
+        clearPending();
+        fleet = [];
+        for (var i = 0; i < HOME.length; i++)
+          fleet.push({ id: HOME[i].id, x: HOME[i].x, y: HOME[i].y, rt: HOME[i].rt, st: "AVAILABLE", dbl: false });
+        riderA = { x: HOME_A.x, y: HOME_A.y };
+        showB = false; phase = "idle"; searchMode = "grid"; guarded = true; surgeBps = 10000;
+        checksNow = 0; checksTotal = 0; doubleMatched = 0;
+        shaded = []; flashed = []; cands = null; raceView = null;
+        offerIdx = -1; ticksLeft = 15; pending = []; moveStep = 0; lastRing = 1;
+        document.getElementById("m-scan").className = "chip";
+        document.getElementById("m-grid").className = "chip on";
+        document.getElementById("g-on").className = "chip on";
+        document.getElementById("g-off").className = "chip";
+        document.getElementById("p-norm").className = "chip on";
+        document.getElementById("p-surge").className = "chip";
+        render();
+      }
+
+      function reset() {
+        resetState();
+        setCall("// reset — 14 cars, 40 cells, everyone AVAILABLE. Press <b>🚕 Request ride</b>.");
+        setExplain("Back to fourteen available cars",
+          "<span class='dim'>Every counter is zero again. The interesting number is <b>checked this request</b> — compare it in <b>🧭 Grid lookup</b> and <b>🔍 Scan everyone</b>.</span>");
+      }
+
+      document.getElementById("b-req").addEventListener("click", requestRide);
+      document.getElementById("b-timeout").addEventListener("click", letTimeout);
+      document.getElementById("b-decline").addEventListener("click", driverDeclines);
+      document.getElementById("b-empty").addEventListener("click", noCarsNearby);
+      document.getElementById("b-race").addEventListener("click", twoRiders);
+      document.getElementById("b-move").addEventListener("click", driversMove);
+      document.getElementById("b-reset").addEventListener("click", reset);
+      document.getElementById("m-scan").addEventListener("click", function () { setMode("scan"); });
+      document.getElementById("m-grid").addEventListener("click", function () { setMode("grid"); });
+      document.getElementById("g-on").addEventListener("click", function () { setGuard(true); });
+      document.getElementById("g-off").addEventListener("click", function () { setGuard(false); });
+      document.getElementById("p-norm").addEventListener("click", function () { setSurge(10000); });
+      document.getElementById("p-surge").addEventListener("click", function () { setSurge(18000); });
+
+      resetState();
+      setExplain("One rider, fourteen cars, forty cells",
+        "Press <b>🚕 Request ride</b> and watch <b>checked this request</b>. Then press <b>🔍 Scan everyone</b> and request again.");
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

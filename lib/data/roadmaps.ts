@@ -590,10 +590,30 @@ export const ROADMAPS: Roadmap[] = [
           {
             label: "Advanced",
             items: [
-              { title: "BookMyShow", note: "Seats, shows, and concurrent booking." },
-              { title: "Food delivery (Swiggy / Zomato)", note: "Restaurants, carts, and dispatch." },
-              { title: "Ride sharing (Uber / Ola)", note: "Matching, pricing, and trips." },
-              { title: "Hotel booking", note: "Inventory, availability, and rates." },
+              {
+                title: "BookMyShow",
+                note: "Seats, shows, and concurrent booking.",
+                tag: "interview",
+                slug: "bookmyshow",
+              },
+              {
+                title: "Food delivery (Swiggy / Zomato)",
+                note: "Restaurants, carts, and dispatch.",
+                tag: "interview",
+                slug: "food-delivery",
+              },
+              {
+                title: "Ride sharing (Uber / Ola)",
+                note: "Matching, pricing, and trips.",
+                tag: "interview",
+                slug: "ride-sharing",
+              },
+              {
+                title: "Hotel booking",
+                note: "Inventory, availability, and rates.",
+                tag: "interview",
+                slug: "hotel-booking",
+              },
               { title: "Chess", note: "Pieces, moves, and rule validation." },
               { title: "Stock exchange / Order matching", note: "Order book and a matching engine." },
               { title: "Online IDE / Code editor", note: "Files, sessions, and execution." },

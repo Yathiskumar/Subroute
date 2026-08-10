@@ -97,6 +97,10 @@ import { lruLfuCache } from "./lld/lru-lfu-cache";
 import { splitwise } from "./lld/splitwise";
 import { meetingRoomScheduler } from "./lld/meeting-room-scheduler";
 import { keyValueStore } from "./lld/key-value-store";
+import { bookmyshow } from "./lld/bookmyshow";
+import { foodDelivery } from "./lld/food-delivery";
+import { rideSharing } from "./lld/ride-sharing";
+import { hotelBooking } from "./lld/hotel-booking";
 
 /** Indexed by `${roadmapSlug}/${topicSlug}`. */
 const ROADMAP_LESSONS: Record<string, RoadmapLesson> = {
@@ -198,6 +202,10 @@ const ROADMAP_LESSONS: Record<string, RoadmapLesson> = {
   "lld/splitwise": splitwise,
   "lld/meeting-room-scheduler": meetingRoomScheduler,
   "lld/key-value-store": keyValueStore,
+  "lld/bookmyshow": bookmyshow,
+  "lld/food-delivery": foodDelivery,
+  "lld/ride-sharing": rideSharing,
+  "lld/hotel-booking": hotelBooking,
 };
 
 export function getRoadmapLesson(
