@@ -1,0 +1,730 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Notification system — live delivery pipeline — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a; --accent-soft: rgba(251,134,58,.12); --accent-border: rgba(251,134,58,.45);
+        --success: #5cc66f; --success-soft: rgba(92,198,111,.12);
+        --info: #5e9ff6; --info-soft: rgba(94,159,246,.12);
+        --danger: #f06868; --danger-soft: rgba(240,104,104,.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px; --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 14px 16px 20px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      .top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 9px; }
+      .chip { font-family: var(--mono); font-size: 11px; padding: 7px 11px; border-radius: var(--r-md);
+              background: var(--elevated); border: 1px solid var(--border-strong); color: var(--muted); cursor: pointer; }
+      .chip:hover { border-color: var(--accent); color: var(--fg); }
+      .chip.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); font-weight: 700; }
+      .chip.bad { background: var(--danger-soft); border-color: rgba(240,104,104,.45); color: var(--danger); font-weight: 700; }
+      .stat { font-family: var(--mono); font-size: 10.5px; padding: 6px 10px; border-radius: 999px;
+              background: var(--surface); border: 1px solid var(--border); color: var(--muted); white-space: nowrap; }
+      .stat b { color: var(--fg); }
+      .stat.ok b { color: var(--success); }
+      .stat.warn b { color: var(--accent); }
+      .stat.no b { color: var(--danger); }
+      .stat.first { margin-left: auto; }
+
+      .callline { font-family: var(--mono); font-size: 11.5px; color: var(--subtle); background: #0a0b0e;
+                  border: 1px solid var(--border); border-radius: var(--r-md); padding: 7px 11px; margin-bottom: 10px;
+                  white-space: nowrap; overflow-x: auto; }
+      .callline b { color: var(--accent); }
+      .callline i { color: var(--success); font-style: normal; }
+      .callline u { color: var(--danger); text-decoration: none; }
+
+      .cols { display: grid; grid-template-columns: 1fr 268px; gap: 10px; align-items: start; }
+      .pane { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 11px; }
+      .pane + .pane { margin-top: 10px; }
+      .cap { font-family: var(--mono); font-size: 9.5px; letter-spacing: .09em; text-transform: uppercase;
+             color: var(--subtle); margin-bottom: 9px; display: flex; justify-content: space-between; gap: 10px; }
+      .cap b { color: var(--muted); font-weight: 600; }
+
+      /* channel boxes */
+      .chans { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+      .ch { background: var(--elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md);
+            padding: 9px; display: flex; flex-direction: column; gap: 6px; min-height: 108px; transition: border-color .25s, background .25s; }
+      .ch.hit { border-color: var(--success); background: var(--success-soft); }
+      .ch.retry { border-color: var(--accent); background: var(--accent-soft); }
+      .ch.dead { border-color: var(--danger); background: var(--danger-soft); }
+      .ch-h { font-family: var(--mono); font-size: 10px; color: var(--muted); display: flex; justify-content: space-between; gap: 6px; }
+      .ch-h b { color: var(--fg); }
+      .ch-body { font-family: var(--mono); font-size: 9.5px; line-height: 1.5; color: var(--fg); flex: 1;
+                 background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 7px; word-break: break-word; }
+      .ch-body.idle { color: var(--subtle); }
+      .ch-meta { font-family: var(--mono); font-size: 9px; color: var(--subtle); display: flex; justify-content: space-between; }
+      .ch-meta .ok { color: var(--success); }
+      .ch-meta .no { color: var(--danger); }
+      .ch-meta .wa { color: var(--accent); }
+
+      /* timeline */
+      .tl { position: relative; height: 108px; background: #0a0b0e; border: 1px solid var(--border);
+            border-radius: var(--r-md); overflow: hidden; }
+      .tl .lane { position: absolute; left: 46px; right: 8px; height: 1px; background: var(--border-strong); }
+      .tl .lab { position: absolute; left: 6px; font-family: var(--mono); font-size: 8.5px; color: var(--subtle); }
+      .tl .band { position: absolute; height: 14px; background: rgba(251,134,58,.16); border: 1px solid rgba(251,134,58,.4);
+                  border-radius: 3px; }
+      .tl .dot { position: absolute; width: 6px; height: 14px; border-radius: 2px; }
+      .tl .dot.r { background: var(--danger); }
+      .tl .dot.s { background: var(--success); }
+      .tl .axis { position: absolute; bottom: 2px; left: 46px; right: 8px; font-family: var(--mono); font-size: 8px; color: var(--subtle); }
+      .tl .axis span { position: absolute; transform: translateX(-50%); }
+      .tl .empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+                   font-family: var(--mono); font-size: 10px; color: var(--subtle); }
+
+      /* matrix */
+      .mtabs { display: flex; gap: 4px; margin-bottom: 7px; }
+      .mtab { flex: 1; font-family: var(--mono); font-size: 9.5px; padding: 5px 2px; border-radius: 5px;
+              background: var(--elevated); border: 1px solid var(--border); color: var(--muted); cursor: pointer; }
+      .mtab.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); font-weight: 700; }
+      .mrow { display: flex; align-items: center; gap: 5px; margin-bottom: 5px; }
+      .uid { font-family: var(--mono); font-size: 9.5px; padding: 5px 6px; border-radius: 5px; width: 42px;
+             background: var(--elevated); border: 1px solid var(--border); color: var(--muted); cursor: pointer; }
+      .uid.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); font-weight: 700; }
+      .cell { flex: 1; font-family: var(--mono); font-size: 10px; padding: 5px 2px; border-radius: 5px;
+              background: var(--elevated); border: 1px solid var(--border); color: var(--subtle); cursor: pointer; opacity: .45; }
+      .cell.on { background: var(--success-soft); border-color: rgba(92,198,111,.5); color: var(--success); opacity: 1; }
+      .cell:hover { border-color: var(--accent); }
+
+      /* queue + dlq */
+      .strip { display: flex; flex-wrap: wrap; gap: 4px; min-height: 26px; }
+      .msg { font-family: var(--mono); font-size: 9px; padding: 4px 6px; border-radius: 5px;
+             background: var(--elevated); border: 1px solid var(--border-strong); color: var(--muted); }
+      .msg.hi { border-color: rgba(240,104,104,.5); color: var(--danger); }
+      .msg.lo { opacity: .6; }
+      .msg.rt { border-color: var(--accent-border); color: var(--accent); }
+      .dead { font-family: var(--mono); font-size: 9px; padding: 4px 6px; border-radius: 5px;
+              background: var(--danger-soft); border: 1px solid rgba(240,104,104,.45); color: var(--danger); }
+      .none { font-family: var(--mono); font-size: 9.5px; color: var(--subtle); }
+
+      .explain { min-height: 72px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md);
+                 padding: 12px 15px; margin-top: 11px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .hi { color: var(--accent); font-weight: 700; }
+
+      .foot { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; margin-top: 11px; }
+      .btn { background: var(--elevated); color: var(--muted); font: 600 11.5px/1 var(--sans);
+             border: 1px solid var(--border); border-radius: var(--r-md); padding: 8px 11px; cursor: pointer; }
+      .btn:hover { border-color: var(--border-strong); color: var(--fg); }
+      .btn:disabled { opacity: .35; cursor: not-allowed; }
+      .go { font-family: var(--mono); font-size: 12px; font-weight: 700; padding: 9px 14px; border-radius: var(--r-md);
+            cursor: pointer; background: var(--success-soft); border: 1px solid rgba(92,198,111,.45); color: var(--success); }
+      .go:active { transform: scale(.98); }
+      .go:disabled { opacity: .35; cursor: not-allowed; }
+
+      @media (max-width: 640px) {
+        .cols { grid-template-columns: 1fr; }
+        .chans { grid-template-columns: 1fr; }
+        .stat.first { margin-left: 0; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="top">
+      <div id="flags" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+      <span class="stat ok first">sent <b id="s-sent">0</b></span>
+      <span class="stat warn">retrying <b id="s-retry">0</b></span>
+      <span class="stat no">dead-lettered <b id="s-dead">0</b></span>
+      <span class="stat">deduped <b id="s-dedup">0</b></span>
+      <button class="btn" id="b-reset">↺ Reset</button>
+    </div>
+
+    <div class="callline" id="callline">// press <b>📦 OrderShipped</b> — the publisher names no channel</div>
+
+    <div class="cols">
+      <div>
+        <div class="pane">
+          <div class="cap"><span>Channels — last rendered body</span><span id="cap-user">publishing as U-2</span></div>
+          <div class="chans" id="chans"></div>
+        </div>
+        <div class="pane">
+          <div class="cap"><span>Retry timeline — attempt × time</span><span id="cap-jit">jitter on</span></div>
+          <div class="tl" id="tl"></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="pane">
+          <div class="cap"><span>Preferences</span><b id="cap-ev">OrderShipped</b></div>
+          <div class="mtabs" id="mtabs"></div>
+          <div id="matrix"></div>
+        </div>
+        <div class="pane">
+          <div class="cap"><span>Queue</span><b id="cap-q">0</b></div>
+          <div class="strip" id="queue"></div>
+        </div>
+        <div class="pane">
+          <div class="cap"><span>💀 Dead letter</span><b id="cap-d">0</b></div>
+          <div class="strip" id="dlq"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="explain">
+      <div class="explain-title" id="ex-title">One event, zero or more notifications</div>
+      <div class="explain-body" id="ex-body">Press <b>📦 OrderShipped</b>. The publisher sends a <b>fact</b>; preferences decide the channels and templates decide the words.</div>
+    </div>
+
+    <div class="foot">
+      <button class="go" id="b-ship">📦 OrderShipped</button>
+      <button class="go" id="b-otp">🔐 OTP</button>
+      <button class="go" id="b-promo">📣 Promo</button>
+      <button class="btn" id="b-dup">♻️ Duplicate publish</button>
+      <button class="btn" id="b-burst">🔥 Burst 12</button>
+      <button class="btn" id="b-prio">⚡ Promo blast + OTP</button>
+    </div>
+
+    <script>
+      var CHANS = [
+        { key: "email", icon: "📧", label: "Email", limit: 400 },
+        { key: "sms",   icon: "💬", label: "SMS",   limit: 160 },
+        { key: "push",  icon: "🔔", label: "Push",  limit: 90 }
+      ];
+      var EVENTS = [
+        { key: "ship",  icon: "📦", label: "OrderShipped", cls: "OrderShipped", entity: "ORD-91",  prio: 1 },
+        { key: "otp",   icon: "🔐", label: "OtpRequested", cls: "OtpRequested", entity: "LOGIN-5", prio: 0 },
+        { key: "promo", icon: "📣", label: "PromoBlast",   cls: "PromoBlast",   entity: "CAMP-3",  prio: 2 }
+      ];
+      var TEMPLATES = {
+        "ship|email": "Hi {user}, your order ORD-91 has shipped and is on its way. Track it any time at sub.rt/ORD-91 — delivery is expected within two working days.",
+        "ship|sms":   "ORD-91 shipped. Track: sub.rt/ORD-91",
+        "ship|push":  "On its way 📦 — order ORD-91 has shipped",
+        "otp|email":  "Your verification code is 402913. It expires in five minutes. If you did not request this code, you can safely ignore this email.",
+        "otp|sms":    "402913 is your code. Expires in 5 min.",
+        "otp|push":   "Login code ready 🔐",
+        "promo|email":"Two days only: 20% off everything in the store, plus free delivery on orders over 40. Use code SPRING20 at checkout. Unsubscribe any time from your account settings page.",
+        "promo|sms":  "20% off EVERYTHING for two days only, plus free delivery over 40. Use SPRING20 at checkout before Sunday night — this is the last reminder we will send you about this offer, promise.",
+        "promo|push": "20% off today 🎉"
+      };
+      var USERS = ["U-1", "U-2", "U-3"];
+      var BASE_MS = 1000, MAX_MS = 8000, MAX_ATTEMPTS = 4, TL_SPAN = 16000, STEP_CAP = 420;
+
+      var prefs, queueMsgs, dlqItems, timelineDots, seenKeys, chanState;
+      var stats, flagFlaky, flagInvalid, flagJitter, flagQuiet;
+      var activeUser, activeEvent, simClock, msgSeq, stepCount, pumping, pumpTimer, rngSeed;
+
+      function rnd() { rngSeed = (rngSeed * 1103515245 + 12345) % 2147483648; return rngSeed / 2147483648; }
+      function evByKey(k) { for (var i = 0; i < EVENTS.length; i++) if (EVENTS[i].key === k) return EVENTS[i]; return EVENTS[0]; }
+      function chByKey(k) { for (var i = 0; i < CHANS.length; i++) if (CHANS[i].key === k) return CHANS[i]; return CHANS[0]; }
+      function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+      function setExplain(t, h) {
+        document.getElementById("ex-title").textContent = t;
+        document.getElementById("ex-body").innerHTML = h;
+      }
+      function setCall(h) { document.getElementById("callline").innerHTML = h; }
+
+      /* ---------------- render ---------------- */
+      function renderFlags() {
+        var host = document.getElementById("flags");
+        host.innerHTML = "";
+        [
+          { id: "flaky",   label: "⚠️ Flaky SMS",      on: flagFlaky,   bad: true },
+          { id: "invalid", label: "💀 Invalid number", on: flagInvalid, bad: true },
+          { id: "jitter",  label: "🎲 Jitter",         on: flagJitter,  bad: false },
+          { id: "quiet",   label: "🌙 Quiet hours",    on: flagQuiet,   bad: false }
+        ].forEach(function (f) {
+          var b = document.createElement("button");
+          b.className = "chip" + (f.on ? (f.bad ? " bad" : " on") : "");
+          b.textContent = f.label + (f.on ? " ✓" : "");
+          b.addEventListener("click", function () { toggleFlag(f.id); });
+          host.appendChild(b);
+        });
+        document.getElementById("cap-jit").textContent = flagJitter ? "jitter on" : "jitter OFF";
+      }
+
+      function renderChans() {
+        var host = document.getElementById("chans");
+        host.innerHTML = "";
+        CHANS.forEach(function (c) {
+          var st = chanState[c.key];
+          var el = document.createElement("div");
+          el.className = "ch" + (st.cls ? " " + st.cls : "");
+          var body = st.body
+            ? "<div class='ch-body'>" + esc(st.body) + "</div>"
+            : "<div class='ch-body idle'>nothing delivered yet</div>";
+          var meta = st.meta || "<span>—</span><span>limit " + c.limit + "</span>";
+          el.innerHTML =
+            "<div class='ch-h'><b>" + c.icon + " " + c.label + "</b><span>" + (st.tag || "idle") + "</span></div>" +
+            body + "<div class='ch-meta'>" + meta + "</div>";
+          host.appendChild(el);
+        });
+        document.getElementById("cap-user").textContent = "publishing as " + activeUser;
+      }
+
+      function renderMatrix() {
+        var tabs = document.getElementById("mtabs");
+        tabs.innerHTML = "";
+        EVENTS.forEach(function (e) {
+          var b = document.createElement("button");
+          b.className = "mtab" + (activeEvent === e.key ? " on" : "");
+          b.textContent = e.icon;
+          b.title = e.cls;
+          b.addEventListener("click", function () { activeEvent = e.key; render(); });
+          tabs.appendChild(b);
+        });
+        document.getElementById("cap-ev").textContent = evByKey(activeEvent).cls;
+
+        var host = document.getElementById("matrix");
+        host.innerHTML = "";
+        USERS.forEach(function (u) {
+          var row = document.createElement("div");
+          row.className = "mrow";
+          var idb = document.createElement("button");
+          idb.className = "uid" + (activeUser === u ? " on" : "");
+          idb.textContent = u;
+          idb.addEventListener("click", function () { pickUser(u); });
+          row.appendChild(idb);
+          CHANS.forEach(function (c) {
+            var b = document.createElement("button");
+            var on = prefs[u][activeEvent][c.key];
+            b.className = "cell" + (on ? " on" : "");
+            b.textContent = c.icon;
+            b.title = u + " · " + evByKey(activeEvent).cls + " · " + c.label;
+            b.addEventListener("click", function () { toggleCell(u, activeEvent, c.key); });
+            row.appendChild(b);
+          });
+          host.appendChild(row);
+        });
+      }
+
+      function renderQueue() {
+        var host = document.getElementById("queue");
+        host.innerHTML = "";
+        document.getElementById("cap-q").textContent = queueMsgs.length;
+        if (!queueMsgs.length) { host.innerHTML = "<span class='none'>empty</span>"; return; }
+        sortQueue();
+        queueMsgs.slice(0, 14).forEach(function (m) {
+          var el = document.createElement("span");
+          el.className = "msg" + (m.prio === 0 ? " hi" : m.prio === 2 ? " lo" : "") + (m.attempt > 1 ? " rt" : "");
+          el.textContent = chByKey(m.chan).icon + " " + m.tag + " " + m.attempt + "/" + MAX_ATTEMPTS;
+          host.appendChild(el);
+        });
+        if (queueMsgs.length > 14) {
+          var more = document.createElement("span");
+          more.className = "none";
+          more.textContent = "+" + (queueMsgs.length - 14) + " more";
+          host.appendChild(more);
+        }
+      }
+
+      function renderDlq() {
+        var host = document.getElementById("dlq");
+        host.innerHTML = "";
+        document.getElementById("cap-d").textContent = dlqItems.length;
+        if (!dlqItems.length) { host.innerHTML = "<span class='none'>empty</span>"; return; }
+        dlqItems.slice(0, 10).forEach(function (d) {
+          var el = document.createElement("span");
+          el.className = "dead";
+          el.textContent = d;
+          host.appendChild(el);
+        });
+        if (dlqItems.length > 10) {
+          var more = document.createElement("span");
+          more.className = "none";
+          more.textContent = "+" + (dlqItems.length - 10) + " more";
+          host.appendChild(more);
+        }
+      }
+
+      function renderTimeline() {
+        var host = document.getElementById("tl");
+        host.innerHTML = "";
+        if (!timelineDots.length) {
+          host.innerHTML = "<div class='empty'>turn on ⚠️ Flaky SMS and publish — retries land here</div>";
+          return;
+        }
+        for (var a = 1; a <= MAX_ATTEMPTS; a++) {
+          var lab = document.createElement("div");
+          lab.className = "lab";
+          lab.style.top = (10 + (a - 1) * 22) + "px";
+          lab.textContent = "att " + a;
+          host.appendChild(lab);
+          var lane = document.createElement("div");
+          lane.className = "lane";
+          lane.style.top = (17 + (a - 1) * 22) + "px";
+          host.appendChild(lane);
+        }
+        timelineDots.forEach(function (d) {
+          var pct = Math.min(100, (d.at / TL_SPAN) * 100);
+          if (d.bandHi > d.bandLo) {
+            var band = document.createElement("div");
+            band.className = "band";
+            band.style.top = (10 + (d.attempt - 1) * 22) + "px";
+            band.style.left = "calc(46px + (100% - 54px) * " + (Math.min(100, (d.bandLo / TL_SPAN) * 100) / 100) + ")";
+            band.style.width = "calc((100% - 54px) * " + (Math.min(1, (d.bandHi - d.bandLo) / TL_SPAN)) + ")";
+            host.appendChild(band);
+          }
+          var dot = document.createElement("div");
+          dot.className = "dot " + (d.ok ? "s" : "r");
+          dot.style.top = (10 + (d.attempt - 1) * 22) + "px";
+          dot.style.left = "calc(46px + (100% - 54px) * " + (pct / 100) + ")";
+          dot.title = d.at + "ms";
+          host.appendChild(dot);
+        });
+        var axis = document.createElement("div");
+        axis.className = "axis";
+        [0, 4000, 8000, 12000, 16000].forEach(function (t) {
+          var s = document.createElement("span");
+          s.style.left = ((t / TL_SPAN) * 100) + "%";
+          s.textContent = (t / 1000) + "s";
+          axis.appendChild(s);
+        });
+        host.appendChild(axis);
+      }
+
+      function renderStats() {
+        document.getElementById("s-sent").textContent = stats.sent;
+        document.getElementById("s-retry").textContent = stats.retry;
+        document.getElementById("s-dead").textContent = stats.dead;
+        document.getElementById("s-dedup").textContent = stats.dedup;
+      }
+
+      function render() { renderFlags(); renderChans(); renderMatrix(); renderQueue(); renderDlq(); renderTimeline(); renderStats(); }
+
+      /* ---------------- model ---------------- */
+      function sortQueue() {
+        queueMsgs.sort(function (a, b) { return a.prio - b.prio || a.readyAt - b.readyAt || a.seq - b.seq; });
+      }
+      function channelsFor(user, evKey) {
+        var out = [];
+        CHANS.forEach(function (c) { if (prefs[user][evKey][c.key]) out.push(c.key); });
+        return out;
+      }
+      function renderBody(evKey, chanKey, user) {
+        var t = TEMPLATES[evKey + "|" + chanKey] || "";
+        return t.split("{user}").join(user);
+      }
+      function clip(text, limit) { return text.length <= limit ? text : text.slice(0, limit - 1) + "…"; }
+
+      function makeMsg(key, evKey, chanKey, user, tag) {
+        return {
+          seq: msgSeq++, key: key, ev: evKey, chan: chanKey, user: user, tag: tag,
+          body: renderBody(evKey, chanKey, user), prio: evByKey(evKey).prio,
+          attempt: 1, readyAt: simClock
+        };
+      }
+
+      function publish(evKey, opts) {
+        opts = opts || {};
+        var ev = evByKey(evKey);
+        activeEvent = evKey;
+        var wanted = channelsFor(activeUser, evKey);
+        var quietBlocked = flagQuiet && ev.prio === 2;
+        var made = 0, dupes = 0, lastKey = "";
+
+        if (!quietBlocked) {
+          wanted.forEach(function (c) {
+            var key = activeUser + ":" + ev.cls + ":" + ev.entity + ":" + c;
+            lastKey = key;
+            if (seenKeys[key]) { dupes++; stats.dedup++; return; }
+            seenKeys[key] = true;
+            queueMsgs.push(makeMsg(key, evKey, c, activeUser, ev.entity));
+            made++;
+          });
+        }
+
+        setCall("notifier.<b>publish</b>(new " + ev.cls + "(&quot;" + ev.entity + "&quot;, &quot;" + activeUser +
+                "&quot;))  <span style='color:#6b7280'>// no channel named</span>");
+
+        if (opts.silent) return { made: made, dupes: dupes, lastKey: lastKey, quiet: quietBlocked };
+
+        if (quietBlocked) {
+          setExplain("Quiet hours held it back",
+            "<span class='dim'>Promotional traffic is suppressed 22:00–07:00. </span><span class='good'>An OTP would still go</span><span class='dim'> — the bypass is on the event's category, not an <code>if</code> in the service.</span>");
+        } else if (made === 0 && dupes > 0) {
+          setExplain("Stopped at the dedup check",
+            "Key <code>" + esc(lastKey) + "</code> was already seen. <span class='bad'>0 notifications</span> <span class='dim'>— no channel was called. At-least-once delivery plus idempotency.</span>");
+        } else if (made === 0) {
+          setExplain(activeUser + " has every channel off for " + ev.cls,
+            "<span class='dim'>Zero notifications. One event does not mean one message — it means </span><span class='hi'>zero or more</span><span class='dim'>, decided by rows in a table.</span>");
+        } else {
+          var offs = [];
+          CHANS.forEach(function (c) { if (!prefs[activeUser][evKey][c.key]) offs.push(c.label.toLowerCase()); });
+          setExplain(made + " notification" + (made === 1 ? "" : "s") + ", not " + CHANS.length,
+            "<span class='hi'>" + activeUser + "</span> <span class='dim'>has </span>" +
+            wanted.map(function (c) { return "<span class='good'>" + chByKey(c).label + "</span>"; }).join(" + ") +
+            "<span class='dim'> on for " + ev.cls + (offs.length ? ", " + offs.join(" and ") + " off" : "") +
+            ". The publish call above named none of them.</span>");
+        }
+        render();
+        startPump();
+        return { made: made, dupes: dupes, lastKey: lastKey, quiet: quietBlocked };
+      }
+
+      /* channels: the only place that classifies a provider failure */
+      function sendOn(msg) {
+        if (msg.chan === "sms") {
+          if (flagInvalid) return { kind: "PERMANENT", why: "invalid number" };
+          if (flagFlaky) return { kind: "RETRYABLE", why: "503 from provider" };
+        }
+        return { kind: "SUCCESS", why: "" };
+      }
+
+      function delayFor(attempt) {
+        var base = Math.min(MAX_MS, BASE_MS * Math.pow(2, attempt - 1));
+        return flagJitter ? Math.round(base / 2 + rnd() * (base / 2)) : base;
+      }
+      function bandFor(attempt) {
+        var base = Math.min(MAX_MS, BASE_MS * Math.pow(2, attempt - 1));
+        return flagJitter ? [base / 2, base] : [base, base];
+      }
+
+      function startPump() {
+        if (pumping) return;
+        pumping = true;
+        stepCount = 0;                 // bounded per run — this loop always terminates
+        setButtons(true);
+        pumpTimer = setTimeout(step, 260);
+      }
+      function haltPump() {
+        pumping = false;
+        if (pumpTimer) { clearTimeout(pumpTimer); pumpTimer = null; }
+        setButtons(false);
+      }
+      function setButtons(busy) {
+        ["b-ship", "b-otp", "b-promo", "b-dup", "b-burst", "b-prio"].forEach(function (id) {
+          document.getElementById(id).disabled = busy;
+        });
+      }
+
+      function step() {
+        if (!queueMsgs.length || stepCount++ > STEP_CAP) { haltPump(); render(); return; }
+        sortQueue();
+        var msg = queueMsgs.shift();
+        if (msg.readyAt > simClock) simClock = msg.readyAt;
+
+        var c = chByKey(msg.chan);
+        var result = sendOn(msg);
+        var shown = clip(msg.body, c.limit);
+
+        if (result.kind === "SUCCESS") {
+          stats.sent++;
+          chanState[msg.chan] = {
+            cls: "hit", tag: "SENT", body: shown,
+            meta: "<span class='ok'>✓ attempt " + msg.attempt + "</span><span>" + shown.length + "/" + c.limit + "</span>"
+          };
+          if (msg.attempt > 1) timelineDots.push({ attempt: msg.attempt, at: simClock, ok: true, bandLo: 0, bandHi: 0 });
+          setCall("channel.<b>send</b>(n) → <i>Success</i>  <span style='color:#6b7280'>// status PENDING → SENT</span>");
+          setExplain(c.icon + " " + c.label + " delivered",
+            "<span class='dim'>Rendered from the </span><code>" + msg.ev + "|" + msg.chan + "</code><span class='dim'> template row — </span>" +
+            "<span class='hi'>" + shown.length + "/" + c.limit + " chars</span><span class='dim'>, written short for this channel rather than clipped in code.</span>");
+        } else if (result.kind === "PERMANENT") {
+          stats.dead++;
+          dlqItems.push(c.icon + " " + msg.tag + " · " + result.why + " · 1 attempt");
+          chanState[msg.chan] = {
+            cls: "dead", tag: "DEAD", body: shown,
+            meta: "<span class='no'>✗ " + result.why + "</span><span>0 retries</span>"
+          };
+          timelineDots.push({ attempt: 1, at: simClock, ok: false, bandLo: 0, bandHi: 0 });
+          setCall("channel.send(n) → <u>Permanent(&quot;" + result.why + "&quot;)</u> → deadLetters.add(n)");
+          setExplain("Straight to the dead-letter queue — zero retries",
+            "<span class='bad'>" + result.why + "</span> <span class='dim'>will still be invalid in eight seconds. Compare with ⚠️ Flaky SMS, which retries four times: that is the whole reason </span><code>DeliveryResult</code><span class='dim'> has three variants, not two.</span>");
+        } else {
+          if (msg.attempt >= MAX_ATTEMPTS) {
+            stats.dead++;
+            dlqItems.push(c.icon + " " + msg.tag + " · exhausted · " + msg.attempt + " attempts");
+            chanState[msg.chan] = {
+              cls: "dead", tag: "DEAD", body: shown,
+              meta: "<span class='no'>✗ exhausted</span><span>" + msg.attempt + " attempts</span>"
+            };
+            timelineDots.push({ attempt: msg.attempt, at: simClock, ok: false, bandLo: 0, bandHi: 0 });
+            setCall("attempt " + msg.attempt + " of " + MAX_ATTEMPTS + " → <u>deadLetters.add(n, &quot;exhausted&quot;)</u>");
+            setExplain("Attempts capped — it lands in the dead-letter tray",
+              "<span class='dim'>Four tries over roughly eight seconds, then it stops. </span><span class='hi'>Bounded</span><span class='dim'> retries plus a place for the failures is what stops a stuck message retrying forever.</span>");
+          } else {
+            var band = bandFor(msg.attempt);
+            var d = delayFor(msg.attempt);
+            timelineDots.push({ attempt: msg.attempt, at: simClock, ok: false, bandLo: simClock + band[0], bandHi: simClock + band[1] });
+            msg.attempt++;
+            msg.readyAt = simClock + d;
+            stats.retry++;
+            queueMsgs.push(msg);
+            chanState[msg.chan] = {
+              cls: "retry", tag: "RETRYING", body: shown,
+              meta: "<span class='wa'>" + result.why + "</span><span>attempt " + msg.attempt + "/" + MAX_ATTEMPTS + "</span>"
+            };
+            setCall("→ <b>Retryable</b>(&quot;" + result.why + "&quot;) → retry in <b>" + d + "ms</b>  <span style='color:#6b7280'>// " +
+                    (flagJitter ? "2^n with jitter" : "2^n, NO jitter") + "</span>");
+            setExplain("Retryable — back on the queue, later",
+              "<span class='dim'>Waiting </span><span class='hi'>" + d + "ms</span><span class='dim'>" +
+              (flagJitter
+                ? " — picked inside the shaded band, so a thousand messages that failed together do not all retry on the same tick."
+                : " — the exact power of two. <span class='bad'>Every message that failed together retries together.</span>") +
+              "</span>");
+          }
+        }
+        render();
+        pumpTimer = setTimeout(step, queueMsgs.length > 6 ? 130 : 380);
+      }
+
+      /* ---------------- actions ---------------- */
+      function toggleFlag(id) {
+        if (pumping) return;
+        if (id === "flaky") { flagFlaky = !flagFlaky; if (flagFlaky) flagInvalid = false; }
+        if (id === "invalid") { flagInvalid = !flagInvalid; if (flagInvalid) flagFlaky = false; }
+        if (id === "jitter") flagJitter = !flagJitter;
+        if (id === "quiet") flagQuiet = !flagQuiet;
+        render();
+        if (id === "flaky") {
+          setCall(flagFlaky ? "smsProvider.mode = <u>FLAKY</u>  // returns Retryable(&quot;503&quot;)" : "smsProvider.mode = <i>OK</i>");
+          setExplain(flagFlaky ? "SMS now fails with a temporary error" : "SMS provider healthy again",
+            flagFlaky
+              ? "<span class='dim'>Publish an event and watch the </span><span class='hi'>backoff ladder</span><span class='dim'> — 4 attempts at widening gaps, then the dead-letter tray.</span>"
+              : "<span class='dim'>Sends succeed on the first attempt again.</span>");
+        } else if (id === "invalid") {
+          setCall(flagInvalid ? "smsProvider.mode = <u>INVALID_NUMBER</u>  // returns Permanent" : "smsProvider.mode = <i>OK</i>");
+          setExplain(flagInvalid ? "SMS now fails permanently" : "SMS provider healthy again",
+            flagInvalid
+              ? "<span class='dim'>Publish now: </span><span class='bad'>no timeline at all</span><span class='dim'>. A permanent failure is dead-lettered on attempt 1 — retrying it could never work.</span>"
+              : "<span class='dim'>Sends succeed on the first attempt again.</span>");
+        } else if (id === "jitter") {
+          setCall(flagJitter ? "delay = base/2 + <b>random</b>(base/2)" : "delay = base  <u>// no jitter</u>");
+          setExplain(flagJitter ? "Jitter on — delays are randomised inside a band" : "Jitter off — every delay is the exact power of two",
+            flagJitter
+              ? "<span class='dim'>Press </span><b>🔥 Burst 12</b><span class='dim'> with flaky SMS on: the retries </span><span class='good'>spread across the band</span><span class='dim'> instead of stacking.</span>"
+              : "<span class='dim'>Press </span><b>🔥 Burst 12</b><span class='dim'> now: all twelve retries land on </span><span class='bad'>the same tick</span><span class='dim'> — a synchronised spike at a provider that is already struggling.</span>");
+        } else {
+          setCall("prefs.quietHours = " + (flagQuiet ? "<b>22:00–07:00</b>" : "<i>off</i>"));
+          setExplain(flagQuiet ? "Quiet hours on" : "Quiet hours off",
+            flagQuiet
+              ? "<span class='dim'>Promotional traffic is held. </span><span class='good'>Transactional (OTP) still goes</span><span class='dim'> — try both buttons.</span>"
+              : "<span class='dim'>Everything is deliverable again.</span>");
+        }
+      }
+
+      function toggleCell(user, evKey, chanKey) {
+        if (pumping) return;
+        prefs[user][evKey][chanKey] = !prefs[user][evKey][chanKey];
+        var on = prefs[user][evKey][chanKey];
+        var ev = evByKey(evKey);
+        render();
+        setCall("UPDATE user_preference SET enabled=" + (on ? "true" : "false") +
+                " WHERE user='" + user + "' AND event='" + ev.cls + "' AND channel='" + chanKey.toUpperCase() + "'");
+        setExplain(chByKey(chanKey).label + " " + (on ? "on" : "off") + " for " + user + " · " + ev.cls,
+          "<span class='dim'>Fire the same event again: a different set of channel boxes lights up and </span><span class='good'>0 lines of code changed</span><span class='dim'> — the publish call is byte-for-byte identical.</span>");
+      }
+
+      function pickUser(u) {
+        if (pumping) return;
+        activeUser = u;
+        render();
+        setCall("// publishing as <b>" + u + "</b> — same event, different preference rows");
+        setExplain("Now publishing as " + u,
+          "<span class='dim'>The event does not change. </span><span class='hi'>Who hears about it does</span><span class='dim'>, because that lives in the matrix, not in the publisher.</span>");
+      }
+
+      function duplicatePublish() {
+        if (pumping) return;
+        var ev = evByKey(activeEvent);
+        CHANS.forEach(function (c) { delete seenKeys[activeUser + ":" + ev.cls + ":" + ev.entity + ":" + c.key]; });
+        var first = publish(activeEvent, { silent: true });
+        var second = publish(activeEvent, { silent: true });
+        render();
+        setCall("publish(" + ev.cls + ") ×2 → <i>" + first.made + " enqueued</i>, <u>" + second.dupes + " deduped</u>");
+        setExplain("The second copy never reached a channel",
+          "Same key <code>" + esc(second.lastKey || (activeUser + ":" + ev.cls + ":" + ev.entity)) +
+          "</code><span class='dim'> — stopped at the dedup check. Derived from the event, so restating the same fact always produces the same key.</span>");
+        startPump();
+      }
+
+      function burst() {
+        if (pumping) return;
+        for (var i = 1; i <= 12; i++) {
+          var key = "BURST-" + i;
+          seenKeys[key] = true;
+          queueMsgs.push(makeMsg(key, "ship", "sms", activeUser, "B" + i));
+        }
+        render();
+        setCall("for (i in 1..12) queue.<b>offer</b>(sms notification)");
+        setExplain("Twelve SMS messages, all failing at the same instant",
+          flagJitter
+            ? "<span class='dim'>Watch the </span><span class='good'>attempt-2 lane spread out</span><span class='dim'> across the shaded band. Now turn 🎲 Jitter off, reset, and burst again.</span>"
+            : "<span class='dim'>Jitter is off, so all twelve retries land on </span><span class='bad'>exactly the same tick</span><span class='dim'> — one stacked column. Turn 🎲 Jitter on and compare.</span>");
+        startPump();
+      }
+
+      function priorityDemo() {
+        if (pumping) return;
+        for (var i = 1; i <= 6; i++) {
+          var pk = "PROMO-" + i;
+          seenKeys[pk] = true;
+          queueMsgs.push(makeMsg(pk, "promo", "push", activeUser, "P" + i));
+        }
+        var ok = "OTP-NOW";
+        seenKeys[ok] = true;
+        queueMsgs.push(makeMsg(ok, "otp", "push", activeUser, "OTP"));
+        activeEvent = "otp";
+        render();
+        setCall("queue.offer(promo × 6); queue.offer(<b>otp</b>)  <span style='color:#6b7280'>// ordered by (priority, readyAt)</span>");
+        setExplain("The OTP jumped six promos it arrived after",
+          "<span class='dim'>Look at the queue: </span><span class='bad'>🔔 OTP</span><span class='dim'> is first even though it was enqueued last. Transactional never shares a lane with promotional — otherwise a login code arrives after lunch.</span>");
+        startPump();
+      }
+
+      /* ---------------- reset ---------------- */
+      function reset() {
+        haltPump();
+        prefs = {};
+        USERS.forEach(function (u) {
+          prefs[u] = {};
+          EVENTS.forEach(function (e) {
+            prefs[u][e.key] = { email: true, sms: true, push: true };
+          });
+        });
+        prefs["U-1"]["ship"].sms = false;
+        prefs["U-1"]["promo"].sms = false;
+        prefs["U-1"]["promo"].push = false;
+        prefs["U-2"]["ship"].email = false;
+        prefs["U-2"]["otp"].email = false;
+        prefs["U-2"]["promo"] = { email: false, sms: false, push: true };
+        prefs["U-3"]["promo"].sms = false;
+
+        queueMsgs = [];
+        dlqItems = [];
+        timelineDots = [];
+        seenKeys = {};
+        chanState = { email: {}, sms: {}, push: {} };
+        stats = { sent: 0, retry: 0, dead: 0, dedup: 0 };
+        flagFlaky = false; flagInvalid = false; flagJitter = true; flagQuiet = false;
+        activeUser = "U-2"; activeEvent = "ship";
+        simClock = 0; msgSeq = 1; stepCount = 0; rngSeed = 20260809;
+        setButtons(false);
+        render();
+        setCall("// press <b>📦 OrderShipped</b> — the publisher names no channel");
+        setExplain("One event, zero or more notifications",
+          "Press <b>📦 OrderShipped</b>. The publisher sends a <b>fact</b>; preferences decide the channels and templates decide the words.");
+      }
+
+      document.getElementById("b-ship").addEventListener("click", function () { publish("ship"); });
+      document.getElementById("b-otp").addEventListener("click", function () { publish("otp"); });
+      document.getElementById("b-promo").addEventListener("click", function () { publish("promo"); });
+      document.getElementById("b-dup").addEventListener("click", duplicatePublish);
+      document.getElementById("b-burst").addEventListener("click", burst);
+      document.getElementById("b-prio").addEventListener("click", priorityDemo);
+      document.getElementById("b-reset").addEventListener("click", reset);
+      reset();
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

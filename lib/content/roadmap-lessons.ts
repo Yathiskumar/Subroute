@@ -88,6 +88,15 @@ import { atm } from "./lld/atm";
 import { ticTacToe } from "./lld/tic-tac-toe";
 import { snakeAndLadder } from "./lld/snake-and-ladder";
 import { coffeeMachine } from "./lld/coffee-machine";
+import { elevatorSystem } from "./lld/elevator-system";
+import { libraryManagement } from "./lld/library-management";
+import { loggingFramework } from "./lld/logging-framework";
+import { rateLimiter } from "./lld/rate-limiter";
+import { notificationSystem } from "./lld/notification-system";
+import { lruLfuCache } from "./lld/lru-lfu-cache";
+import { splitwise } from "./lld/splitwise";
+import { meetingRoomScheduler } from "./lld/meeting-room-scheduler";
+import { keyValueStore } from "./lld/key-value-store";
 
 /** Indexed by `${roadmapSlug}/${topicSlug}`. */
 const ROADMAP_LESSONS: Record<string, RoadmapLesson> = {
@@ -180,6 +189,15 @@ const ROADMAP_LESSONS: Record<string, RoadmapLesson> = {
   "lld/tic-tac-toe": ticTacToe,
   "lld/snake-and-ladder": snakeAndLadder,
   "lld/coffee-machine": coffeeMachine,
+  "lld/elevator-system": elevatorSystem,
+  "lld/library-management": libraryManagement,
+  "lld/logging-framework": loggingFramework,
+  "lld/rate-limiter": rateLimiter,
+  "lld/notification-system": notificationSystem,
+  "lld/lru-lfu-cache": lruLfuCache,
+  "lld/splitwise": splitwise,
+  "lld/meeting-room-scheduler": meetingRoomScheduler,
+  "lld/key-value-store": keyValueStore,
 };
 
 export function getRoadmapLesson(

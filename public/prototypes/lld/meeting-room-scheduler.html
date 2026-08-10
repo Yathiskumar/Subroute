@@ -1,0 +1,836 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Meeting room scheduler — live simulation — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a; --accent-soft: rgba(251,134,58,.12); --accent-border: rgba(251,134,58,.45);
+        --success: #5cc66f; --success-soft: rgba(92,198,111,.12);
+        --info: #5e9ff6; --info-soft: rgba(94,159,246,.12);
+        --danger: #f06868; --danger-soft: rgba(240,104,104,.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px; --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 14px 16px 20px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      .top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 9px; }
+      .mode { display: flex; gap: 5px; }
+      .chip { font-family: var(--mono); font-size: 11px; padding: 7px 12px; border-radius: var(--r-md);
+              background: var(--elevated); border: 1px solid var(--border-strong); color: var(--muted); cursor: pointer; }
+      .chip:hover { border-color: var(--accent); color: var(--fg); }
+      .chip.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); font-weight: 700; }
+      .chip.bad { background: var(--danger-soft); border-color: rgba(240,104,104,.45); color: var(--danger); font-weight: 700; }
+      .stat { font-family: var(--mono); font-size: 10.5px; padding: 6px 10px; border-radius: 999px;
+              background: var(--surface); border: 1px solid var(--border); color: var(--muted); white-space: nowrap; }
+      .stat b { color: var(--fg); }
+      .stat.ok b { color: var(--success); }
+      .stat.no b { color: var(--danger); }
+      .stat.dbl { margin-left: auto; }
+      .stat.dbl b { color: var(--danger); }
+
+      .callline { font-family: var(--mono); font-size: 11.5px; color: var(--subtle); background: #0a0b0e;
+                  border: 1px solid var(--border); border-radius: var(--r-md); padding: 7px 11px; margin-bottom: 10px;
+                  white-space: nowrap; overflow-x: auto; }
+      .callline b { color: var(--accent); }
+      .callline i { color: var(--success); font-style: normal; }
+      .callline u { color: var(--danger); text-decoration: none; }
+
+      .cols { display: grid; grid-template-columns: 1fr 258px; gap: 10px; align-items: start; }
+      .pane { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 11px; }
+      .cap { font-family: var(--mono); font-size: 9.5px; letter-spacing: .09em; text-transform: uppercase;
+             color: var(--subtle); margin-bottom: 9px; display: flex; justify-content: space-between; gap: 10px; }
+      .cap b { color: var(--accent); font-weight: 700; }
+
+      .days { display: flex; gap: 4px; margin-bottom: 9px; }
+      .day { flex: 1; font-family: var(--mono); font-size: 10px; padding: 5px 2px; border-radius: 5px; text-align: center;
+             background: var(--elevated); border: 1px solid var(--border); color: var(--muted); cursor: pointer; }
+      .day:hover { border-color: var(--accent); color: var(--fg); }
+      .day.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); font-weight: 700; }
+      .day.hit { border-color: var(--danger); color: var(--danger); }
+
+      /* ---- day grid ---- */
+      .row { display: grid; grid-template-columns: 104px 1fr; gap: 7px; align-items: center; margin-bottom: 6px; }
+      .rlabel { font-family: var(--mono); font-size: 10px; color: var(--fg); line-height: 1.35; }
+      .rlabel span { display: block; font-size: 8.5px; color: var(--subtle); }
+      .track { position: relative; height: 42px; background: var(--elevated); border: 1px solid var(--border-strong);
+               border-radius: 6px; overflow: hidden; }
+      .track .tick { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--border); }
+      .axis { position: relative; height: 15px; }
+      .axis span { position: absolute; top: 0; font-family: var(--mono); font-size: 8.5px; color: var(--subtle);
+                   transform: translateX(-50%); }
+      .blk { position: absolute; border-radius: 4px; padding: 3px 4px; font-family: var(--mono); font-size: 8.5px;
+             overflow: hidden; white-space: nowrap; background: var(--info-soft); border: 1px solid var(--info); color: var(--info); }
+      .blk.mine { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+      .blk.dbl { background: var(--danger-soft); border-color: rgba(240,104,104,.6); color: var(--danger); }
+      .blk.ghost { background: rgba(240,104,104,.18); border: 1px dashed var(--danger); color: var(--danger);
+                   animation: flash .35s linear 3; }
+      @keyframes flash { 50% { opacity: .25; } }
+
+      /* ---- rooms-needed view ---- */
+      .hview { display: none; }
+      .hview.on { display: block; }
+      .gview.off { display: none; }
+      .hbar { position: relative; height: 20px; margin-bottom: 5px; }
+      .hbar i { position: absolute; top: 0; height: 20px; border-radius: 4px; background: var(--surface);
+                border: 1px solid var(--border-strong); font-family: var(--mono); font-size: 8.5px; color: var(--subtle);
+                font-style: normal; padding: 3px 5px; overflow: hidden; white-space: nowrap; }
+      .hbar i.live { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+      .hbar i.past { background: var(--success-soft); border-color: rgba(92,198,111,.4); color: var(--success); }
+      .heaprow { display: flex; gap: 5px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+      .heaprow b { font-family: var(--mono); font-size: 9.5px; color: var(--subtle); font-weight: 400; }
+      .hchip { font-family: var(--mono); font-size: 10px; padding: 5px 9px; border-radius: 5px;
+               background: var(--elevated); border: 1px solid var(--border-strong); color: var(--fg); }
+      .hchip.peak { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); font-weight: 700; }
+      .answer { margin-top: 12px; display: inline-block; font-family: var(--mono); font-size: 12.5px; font-weight: 700;
+                padding: 8px 18px; border-radius: 999px; background: var(--accent-soft);
+                border: 1px solid var(--accent-border); color: var(--accent); }
+
+      /* ---- form ---- */
+      .form { margin-top: 10px; border-top: 1px dashed var(--border-strong); padding-top: 10px; }
+      .frow { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
+      .flab { font-family: var(--mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase;
+              color: var(--subtle); width: 62px; flex: none; }
+      .pick { font-family: var(--mono); font-size: 9.5px; padding: 5px 8px; border-radius: 5px;
+              background: var(--elevated); border: 1px solid var(--border); color: var(--muted); cursor: pointer; }
+      .pick:hover { border-color: var(--accent); color: var(--fg); }
+      .pick.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); font-weight: 700; }
+
+      /* ---- eval panel ---- */
+      .evhead { font-family: var(--mono); font-size: 10px; color: var(--fg); background: #0a0b0e;
+                border: 1px solid var(--border); border-radius: 6px; padding: 7px 8px; margin-bottom: 8px; }
+      .evhead u { text-decoration: none; color: var(--accent); font-weight: 700; }
+      .evs { min-height: 168px; }
+      .ev { border: 1px solid var(--border); border-left: 2px solid var(--border-strong); border-radius: 5px;
+            padding: 5px 7px; margin-bottom: 5px; background: var(--elevated); }
+      .ev.no { border-left-color: var(--danger); background: var(--danger-soft); }
+      .ev.ok { border-left-color: var(--success); }
+      .ev .t { font-family: var(--mono); font-size: 8.5px; color: var(--subtle); }
+      .ev .x { font-family: var(--mono); font-size: 9.5px; color: var(--fg); margin-top: 2px; }
+      .ev.no .x { color: var(--danger); }
+      .ev.ok .x { color: var(--success); }
+      .evnote { font-family: var(--mono); font-size: 9px; color: var(--subtle); line-height: 1.6; }
+
+      .explain { min-height: 74px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md);
+                 padding: 12px 15px; margin-top: 11px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .hi { color: var(--accent); font-weight: 700; }
+
+      .foot { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 11px; }
+      .btn { background: var(--elevated); color: var(--muted); font: 600 11.5px/1 var(--sans);
+             border: 1px solid var(--border); border-radius: var(--r-md); padding: 8px 12px; cursor: pointer; }
+      .btn:hover { border-color: var(--border-strong); color: var(--fg); }
+      .btn:disabled { opacity: .35; cursor: not-allowed; }
+      .go { font-family: var(--mono); font-size: 12.5px; font-weight: 700; padding: 9px 18px; border-radius: var(--r-md);
+            cursor: pointer; background: var(--success-soft); border: 1px solid rgba(92,198,111,.45); color: var(--success); }
+      .go:active { transform: scale(.98); }
+      .go:disabled { opacity: .35; cursor: not-allowed; }
+      .hint { margin-left: auto; font-size: 11.5px; color: var(--muted); }
+      .hint .b { color: var(--accent); }
+
+      @media (max-width: 640px) {
+        .cols { grid-template-columns: 1fr; }
+        .row { grid-template-columns: 78px 1fr; }
+        .hint { margin-left: 0; }
+        .stat.dbl { margin-left: 0; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="top">
+      <div class="mode" id="mode"></div>
+      <div class="mode" id="strictbox"></div>
+      <span class="stat ok">booked <b id="s-ok">0</b></span>
+      <span class="stat no">refused <b id="s-no">0</b></span>
+      <span class="stat dbl">double-booked <b id="s-dbl">0</b></span>
+    </div>
+
+    <div class="callline" id="callline">// pick a room, a start hour and a duration, then press <b>📅 Book</b></div>
+
+    <div class="cols">
+      <div class="pane">
+        <div class="cap"><span>day board · 9:00 → 18:00</span><span id="cap-mode">unguarded</span></div>
+        <div class="days" id="days"></div>
+
+        <div class="gview" id="gview">
+          <div id="grid"></div>
+          <div class="form">
+            <div class="frow"><span class="flab">room</span><span id="f-room"></span></div>
+            <div class="frow"><span class="flab">start</span><span id="f-start"></span></div>
+            <div class="frow"><span class="flab">length</span><span id="f-dur"></span></div>
+            <div class="frow"><span class="flab">needs</span><span id="f-need"></span></div>
+          </div>
+        </div>
+
+        <div class="hview" id="hview"></div>
+      </div>
+
+      <div class="pane">
+        <div class="cap"><span>overlap test</span></div>
+        <div class="evhead" id="evhead">aStart <u>&lt;</u> bEnd &amp;&amp; bStart <u>&lt;</u> aEnd</div>
+        <div class="evs" id="evs"></div>
+      </div>
+    </div>
+
+    <div class="explain">
+      <div class="explain-title" id="ex-title">Three rooms, one day</div>
+      <div class="explain-body" id="ex-body">Pick a room, a start hour and a length, then press <b>📅 Book</b>. The panel on the right shows the overlap test run against every booking already in that room.</div>
+    </div>
+
+    <div class="foot">
+      <button class="go" id="book-btn">📅 Book</button>
+      <button class="btn" id="race-btn">⚔️ Two users book at once</button>
+      <button class="btn" id="rec-btn">🔁 Recurring</button>
+      <button class="btn" id="heap-btn">📊 Rooms needed</button>
+      <button class="btn" id="reset-btn">↺ Reset</button>
+      <span class="hint"><span class="b">▸</span> Book 10–11, then 11–12 — then flip the <b>≤</b> chip and try again.</span>
+    </div>
+
+    <script>
+      var ROOMS = [
+        { id: "R1", label: "Huddle",    seats: 4,  projector: false },
+        { id: "R2", label: "Sync",      seats: 8,  projector: true },
+        { id: "R3", label: "Boardroom", seats: 12, projector: true }
+      ];
+      var DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+      var H0 = 9, H1 = 18;
+      var SEED = [
+        { d: 0, r: "R1", s: 9,  e: 10, t: "Standup" },
+        { d: 0, r: "R2", s: 10, e: 12, t: "Design review" },
+        { d: 0, r: "R3", s: 14, e: 16, t: "Interview" },
+        { d: 1, r: "R2", s: 13, e: 14, t: "1:1" },
+        { d: 2, r: "R1", s: 9,  e: 11, t: "Workshop" },
+        { d: 3, r: "R3", s: 11, e: 12, t: "All-hands" },
+        { d: 4, r: "R2", s: 15, e: 16, t: "Retro" }
+      ];
+      var HEAP_MEETINGS = [
+        { n: "A", s: 9,  e: 12 },
+        { n: "B", s: 9,  e: 11 },
+        { n: "C", s: 10, e: 13 },
+        { n: "D", s: 11, e: 12 },
+        { n: "E", s: 13, e: 15 }
+      ];
+
+      var bookings, dayIdx, guardMode, strictMode, selRoom, selStart, selDur,
+          needSeats, needProj, busy, statOk, statNo, statDbl, bookSeq, ghost, hitDays, timers;
+
+      /* ---------------- tiny helpers ---------------- */
+      function setExplain(t, h) {
+        document.getElementById("ex-title").textContent = t;
+        document.getElementById("ex-body").innerHTML = h;
+      }
+      function setCall(h) { document.getElementById("callline").innerHTML = h; }
+      function roomOf(id) { for (var i = 0; i < ROOMS.length; i++) if (ROOMS[i].id === id) return ROOMS[i]; return null; }
+      function hh(h) { return (h < 10 ? "0" : "") + h + ":00"; }
+      function span(s, e) { return "[" + s + "," + e + ")"; }
+      function later(fn, ms) { timers.push(setTimeout(fn, ms)); }
+      function clearTimers() { timers.forEach(function (t) { clearTimeout(t); }); timers = []; }
+
+      /* THE predicate — strictMode is the whole point of the toggle. */
+      function overlaps(aS, aE, bS, bE) {
+        return strictMode ? (aS < bE && bS < aE) : (aS <= bE && bS <= aE);
+      }
+      function op() { return strictMode ? "&lt;" : "≤"; }
+
+      function dayBookings(d, roomId) {
+        return bookings.filter(function (b) { return b.d === d && b.r === roomId; });
+      }
+
+      /* Returns { clash, evals } for a proposed slot in one room on one day. */
+      function checkRoom(d, roomId, s, e) {
+        var list = dayBookings(d, roomId), evals = [], clash = null;
+        list.forEach(function (b) {
+          var hit = overlaps(s, e, b.s, b.e);
+          if (hit && !clash) clash = b;
+          evals.push({
+            hit: hit,
+            title: "vs " + b.t + " " + span(b.s, b.e),
+            expr: s + " " + op() + " " + b.e + " &amp;&amp; " + b.s + " " + op() + " " + e + " → " + hit
+          });
+        });
+        return { clash: clash, evals: evals };
+      }
+
+      /* ---------------- rendering ---------------- */
+      function renderTop() {
+        var host = document.getElementById("mode");
+        host.innerHTML = "";
+        [{ k: "unguarded", l: "⚠️ Unguarded" }, { k: "locked", l: "🔒 Per-room lock" }].forEach(function (o) {
+          var b = document.createElement("button");
+          b.className = "chip" + (guardMode === o.k ? (o.k === "unguarded" ? " bad" : " on") : "");
+          b.textContent = o.l;
+          b.addEventListener("click", function () { setGuard(o.k); });
+          host.appendChild(b);
+        });
+        var sb = document.getElementById("strictbox");
+        sb.innerHTML = "";
+        [{ k: true, l: "&lt; strict" }, { k: false, l: "≤ inclusive" }].forEach(function (o) {
+          var b = document.createElement("button");
+          b.className = "chip" + (strictMode === o.k ? (o.k ? " on" : " bad") : "");
+          b.innerHTML = o.l;
+          b.addEventListener("click", function () { setStrict(o.k); });
+          sb.appendChild(b);
+        });
+        document.getElementById("cap-mode").textContent = guardMode === "locked" ? "per-room lock" : "unguarded";
+        document.getElementById("evhead").innerHTML =
+          "aStart <u>" + op() + "</u> bEnd &amp;&amp; bStart <u>" + op() + "</u> aEnd";
+      }
+
+      function renderDays() {
+        var host = document.getElementById("days");
+        host.innerHTML = "";
+        DAY_NAMES.forEach(function (nm, i) {
+          var b = document.createElement("button");
+          b.className = "day" + (dayIdx === i ? " on" : "") + (hitDays.indexOf(i) >= 0 ? " hit" : "");
+          b.textContent = nm;
+          b.addEventListener("click", function () { setDay(i); });
+          host.appendChild(b);
+        });
+      }
+
+      function laneCount(list) {
+        var lanes = [];
+        list.forEach(function (b) {
+          var placed = false;
+          for (var i = 0; i < lanes.length; i++) {
+            var clash = lanes[i].some(function (x) { return x.s < b.e && b.s < x.e; });
+            if (!clash) { lanes[i].push(b); b.lane = i; placed = true; break; }
+          }
+          if (!placed) { lanes.push([b]); b.lane = lanes.length - 1; }
+        });
+        return Math.max(1, lanes.length);
+      }
+
+      function renderGrid() {
+        var host = document.getElementById("grid");
+        host.innerHTML = "";
+
+        var axisRow = document.createElement("div");
+        axisRow.className = "row";
+        var spacer = document.createElement("div");
+        var axis = document.createElement("div");
+        axis.className = "axis";
+        for (var h = H0; h <= H1; h++) {
+          var s = document.createElement("span");
+          s.style.left = ((h - H0) / (H1 - H0)) * 100 + "%";
+          s.textContent = h;
+          axis.appendChild(s);
+        }
+        axisRow.appendChild(spacer);
+        axisRow.appendChild(axis);
+        host.appendChild(axisRow);
+
+        ROOMS.forEach(function (rm) {
+          var row = document.createElement("div");
+          row.className = "row";
+          var lab = document.createElement("div");
+          lab.className = "rlabel";
+          lab.innerHTML = rm.id + " · " + rm.label + "<span>seats " + rm.seats + (rm.projector ? " · 📽️" : "") + "</span>";
+          var track = document.createElement("div");
+          track.className = "track";
+          for (var h = H0 + 1; h < H1; h++) {
+            var tk = document.createElement("div");
+            tk.className = "tick";
+            tk.style.left = ((h - H0) / (H1 - H0)) * 100 + "%";
+            track.appendChild(tk);
+          }
+
+          var list = dayBookings(dayIdx, rm.id);
+          var nl = laneCount(list);
+          var doubled = nl > 1;
+          list.forEach(function (b) {
+            var el = document.createElement("div");
+            el.className = "blk" + (doubled ? " dbl" : (b.mine ? " mine" : ""));
+            el.style.left = ((b.s - H0) / (H1 - H0)) * 100 + "%";
+            el.style.width = ((b.e - b.s) / (H1 - H0)) * 100 + "%";
+            el.style.top = (b.lane / nl) * 100 + "%";
+            el.style.height = (100 / nl) + "%";
+            el.textContent = b.t;
+            el.title = b.t + " " + hh(b.s) + "–" + hh(b.e);
+            track.appendChild(el);
+          });
+
+          if (ghost && ghost.d === dayIdx && ghost.r === rm.id) {
+            var g = document.createElement("div");
+            g.className = "blk ghost";
+            g.style.left = ((ghost.s - H0) / (H1 - H0)) * 100 + "%";
+            g.style.width = ((ghost.e - ghost.s) / (H1 - H0)) * 100 + "%";
+            g.style.top = "0%";
+            g.style.height = "100%";
+            g.textContent = "refused";
+            track.appendChild(g);
+          }
+
+          row.appendChild(lab);
+          row.appendChild(track);
+          host.appendChild(row);
+        });
+      }
+
+      function renderForm() {
+        var host = document.getElementById("f-room");
+        host.innerHTML = "";
+        ROOMS.forEach(function (rm) {
+          var b = document.createElement("button");
+          b.className = "pick" + (selRoom === rm.id ? " on" : "");
+          b.textContent = rm.id;
+          b.addEventListener("click", function () { setRoom(rm.id); });
+          host.appendChild(b);
+        });
+        var anyBtn = document.createElement("button");
+        anyBtn.className = "pick" + (selRoom === "any" ? " on" : "");
+        anyBtn.textContent = "✨ Any room";
+        anyBtn.addEventListener("click", function () { setRoom("any"); });
+        host.appendChild(anyBtn);
+
+        var sh = document.getElementById("f-start");
+        sh.innerHTML = "";
+        for (var h = H0; h <= H1 - 1; h++) {
+          (function (h) {
+            var b = document.createElement("button");
+            b.className = "pick" + (selStart === h ? " on" : "");
+            b.textContent = h;
+            b.addEventListener("click", function () { setStart(h); });
+            sh.appendChild(b);
+          })(h);
+        }
+
+        var du = document.getElementById("f-dur");
+        du.innerHTML = "";
+        [1, 2, 3].forEach(function (d) {
+          var b = document.createElement("button");
+          b.className = "pick" + (selDur === d ? " on" : "");
+          b.textContent = d + "h";
+          b.addEventListener("click", function () { setDur(d); });
+          du.appendChild(b);
+        });
+
+        var nd = document.getElementById("f-need");
+        nd.innerHTML = "";
+        [2, 8, 12].forEach(function (n) {
+          var b = document.createElement("button");
+          b.className = "pick" + (needSeats === n ? " on" : "");
+          b.textContent = "seats ≥ " + n;
+          b.addEventListener("click", function () { setSeats(n); });
+          nd.appendChild(b);
+        });
+        var pj = document.createElement("button");
+        pj.className = "pick" + (needProj ? " on" : "");
+        pj.textContent = "📽️ projector";
+        pj.addEventListener("click", function () { setProj(!needProj); });
+        nd.appendChild(pj);
+      }
+
+      function renderEvals(evals, note) {
+        var host = document.getElementById("evs");
+        host.innerHTML = "";
+        if (!evals || !evals.length) {
+          var n = document.createElement("div");
+          n.className = "evnote";
+          n.innerHTML = note || "No bookings in this room today — nothing to compare against, so the slot is free.";
+          host.appendChild(n);
+          return;
+        }
+        evals.slice(0, 5).forEach(function (ev) {
+          var el = document.createElement("div");
+          el.className = "ev " + (ev.hit ? "no" : "ok");
+          el.innerHTML = "<div class='t'>" + ev.title + "</div><div class='x'>" + ev.expr + "</div>";
+          host.appendChild(el);
+        });
+        if (note) {
+          var nn = document.createElement("div");
+          nn.className = "evnote";
+          nn.innerHTML = note;
+          host.appendChild(nn);
+        }
+      }
+
+      function renderStats() {
+        document.getElementById("s-ok").textContent = statOk;
+        document.getElementById("s-no").textContent = statNo;
+        document.getElementById("s-dbl").textContent = statDbl;
+      }
+
+      function render() { renderTop(); renderDays(); renderGrid(); renderForm(); renderStats(); }
+
+      function showGrid() {
+        document.getElementById("gview").classList.remove("off");
+        document.getElementById("hview").classList.remove("on");
+      }
+
+      /* ---------------- booking ---------------- */
+      function add(d, roomId, s, e, label, mine) {
+        bookSeq += 1;
+        var b = { id: "B" + bookSeq, d: d, r: roomId, s: s, e: e, t: label || ("B" + bookSeq), mine: mine !== false };
+        bookings.push(b);
+        return b;
+      }
+
+      function suits(rm) { return rm.seats >= needSeats && (!needProj || rm.projector); }
+      function whyNot(rm) {
+        var why = [];
+        if (rm.seats < needSeats) why.push("seats " + rm.seats + " &lt; " + needSeats);
+        if (needProj && !rm.projector) why.push("no projector");
+        return why.join(", ");
+      }
+
+      function doBook() {
+        if (busy) return;
+        showGrid();
+        ghost = null;
+        hitDays = [];
+        var s = selStart, e = selStart + selDur;
+        if (e > H1) { e = H1; s = Math.max(H0, e - selDur); }
+
+        if (selRoom !== "any") {
+          setCall("scheduler.<b>book</b>(\"" + selRoom + "\", new TimeSlot(" + s + ", " + e + "))");
+          var rm = roomOf(selRoom);
+          if (!suits(rm)) {
+            statNo += 1; ghost = { d: dayIdx, r: selRoom, s: s, e: e }; render();
+            renderEvals(null, "Filtered out before the time check even ran — <b>" + rm.id + "</b>: " + whyNot(rm) + ".");
+            setExplain("Refused — the room does not fit",
+              "<span class='dim'>Capacity and features are checked <b>before</b> availability. They are fields on</span> <code>Room</code><span class='dim'>, not subclasses of it.</span>");
+            return;
+          }
+          var res = checkRoom(dayIdx, selRoom, s, e);
+          if (res.clash) {
+            statNo += 1; ghost = { d: dayIdx, r: selRoom, s: s, e: e }; render();
+            renderEvals(res.evals, "One comparison returned <b>true</b> — that is the clash.");
+            setExplain("Refused — clashes with " + res.clash.t,
+              span(s, e) + " overlaps " + span(res.clash.s, res.clash.e) + ": <span class='bad'>" +
+              s + " " + op() + " " + res.clash.e + " and " + res.clash.s + " " + op() + " " + e + "</span>. <span class='dim'>A good error names the booking it hit.</span>");
+            return;
+          }
+          var b = add(dayIdx, selRoom, s, e, "yours " + s + "–" + e);
+          statOk += 1; render();
+          renderEvals(res.evals, "Every comparison returned <b>false</b> → the slot is free, so the booking is written.");
+          setExplain("Booked " + selRoom + " " + hh(s) + "–" + hh(e),
+            res.evals.length
+              ? "<span class='dim'>Checked against " + res.evals.length + " booking" + (res.evals.length > 1 ? "s" : "") +
+                " in this room — all <span class='good'>false</span>. </span><code>" + b.id + "</code>"
+              : "<span class='dim'>Nothing else in this room today, so there was nothing to compare against.</span> <code>" + b.id + "</code>");
+          return;
+        }
+
+        /* ✨ Any room */
+        setCall("scheduler.<b>findRoom</b>(new TimeSlot(" + s + ", " + e + "), " + needSeats + ", " + needProj + ")");
+        var skipped = [], chosen = null, lastEvals = null;
+        for (var i = 0; i < ROOMS.length; i++) {
+          var rmx = ROOMS[i];
+          if (!suits(rmx)) { skipped.push(rmx.id + " (" + whyNot(rmx) + ")"); continue; }
+          var r2 = checkRoom(dayIdx, rmx.id, s, e);
+          lastEvals = r2.evals;
+          if (r2.clash) { skipped.push(rmx.id + " (busy: " + r2.clash.t + ")"); continue; }
+          chosen = rmx; lastEvals = r2.evals; break;
+        }
+        if (!chosen) {
+          statNo += 1; render();
+          renderEvals(null, "Every room was filtered out or busy.");
+          setExplain("No room free", "<span class='dim'>Skipped " + skipped.join(", ") + ".</span>");
+          return;
+        }
+        var nb = add(dayIdx, chosen.id, s, e, "yours " + s + "–" + e);
+        statOk += 1; render();
+        renderEvals(lastEvals, "Filter first (seats, features), then the overlap test — in that order.");
+        setExplain("Booked " + chosen.id + " " + hh(s) + "–" + hh(e),
+          skipped.length
+            ? "<span class='dim'>Skipped " + skipped.join(", ") + " — then " + chosen.id + " passed both the filter and the overlap test.</span>"
+            : "<span class='dim'>" + chosen.id + " was the first room that fitted and was free.</span>");
+      }
+
+      /* ---------------- the race ---------------- */
+      function firstFreeHour(roomId) {
+        for (var h = H0; h <= H1 - 1; h++) if (!checkRoom(dayIdx, roomId, h, h + 1).clash) return h;
+        return H0;
+      }
+
+      function race() {
+        if (busy) return;
+        busy = true;
+        showGrid();
+        ghost = null; hitDays = [];
+        document.getElementById("book-btn").disabled = true;
+        var roomId = selRoom === "any" ? "R2" : selRoom;
+        var s = firstFreeHour(roomId), e = s + 1;
+
+        setCall("Promise.all([ ana.<b>book</b>(\"" + roomId + "\", " + span(s, e) + "), bo.<b>book</b>(\"" + roomId + "\", " + span(s, e) + ") ])");
+        var before = checkRoom(dayIdx, roomId, s, e);
+        renderEvals(before.evals, "Both requests are about to run <b>this same check</b>.");
+        setExplain("Ana and Bo both want " + roomId + " at " + hh(s),
+          guardMode === "locked"
+            ? "<span class='dim'>The room's lock means only one of them can be inside</span> <code>check + write</code> <span class='dim'>at a time.</span>"
+            : "<span class='bad'>Nothing is holding them apart.</span> <span class='dim'>Both will check, and both will find the slot free.</span>");
+
+        later(function () {
+          if (guardMode === "locked") {
+            var r1 = checkRoom(dayIdx, roomId, s, e);
+            if (!r1.clash) { add(dayIdx, roomId, s, e, "ana " + s + "–" + e); statOk += 1; }
+            render();
+            setExplain("Ana holds the lock — checked, then wrote",
+              "<span class='dim'>Bo is still waiting. He has not read anything yet, so he cannot read a stale answer.</span>");
+            later(function () {
+              var r2 = checkRoom(dayIdx, roomId, s, e);
+              if (r2.clash) {
+                statNo += 1;
+                ghost = { d: dayIdx, r: roomId, s: s, e: e };
+                render();
+                renderEvals(r2.evals, "Bo's check ran <b>after</b> Ana's write, so it saw the truth.");
+                setExplain("Bo is refused",
+                  "<span class='good'>1 booked, 1 refused, 0 double-booked.</span> <span class='dim'>Check and write were one indivisible step, per room.</span>");
+              }
+              finish();
+            }, 900);
+            return;
+          }
+
+          /* unguarded: both check against the same pre-state, then both write */
+          renderEvals(before.evals, "Ana: free ✓ &nbsp;·&nbsp; Bo: free ✓ — <b>both</b> read the same state.");
+          setExplain("Both checked, both saw a free slot",
+            "<span class='bad'>Neither write has happened yet.</span> <span class='dim'>That gap between the check and the write is the entire bug.</span>");
+          later(function () {
+            add(dayIdx, roomId, s, e, "ana " + s + "–" + e);
+            add(dayIdx, roomId, s, e, "bo " + s + "–" + e);
+            statOk += 2; statDbl += 1;
+            render();
+            setCall("<u>two bookings written into one slot</u>  <span style='color:#6b7280'>// " + roomId + " " + hh(s) + "</span>");
+            setExplain("One slot, two bookings",
+              "<span class='bad'>" + roomId + " at " + hh(s) + " now holds two meetings</span> <span class='dim'>— two teams will walk into the same room. Switch to 🔒 Per-room lock and run it again.</span>");
+            finish();
+          }, 900);
+        }, 900);
+      }
+
+      /* ---------------- recurring ---------------- */
+      function recurring() {
+        if (busy) return;
+        showGrid();
+        ghost = null; hitDays = [];
+        var roomId = selRoom === "any" ? "R2" : selRoom;
+        var s = selStart, e = Math.min(H1, selStart + selDur);
+        setCall("scheduler.<b>bookRecurring</b>(\"" + roomId + "\", DAILY, until=Fri, " + span(s, e) + ")");
+
+        var offender = null, offenderDay = -1, evals = null;
+        for (var d = 0; d < DAY_NAMES.length; d++) {
+          var r = checkRoom(d, roomId, s, e);
+          if (r.clash) { offender = r.clash; offenderDay = d; evals = r.evals; break; }
+        }
+        if (offender) {
+          statNo += 1;
+          hitDays = [offenderDay];
+          dayIdx = offenderDay;
+          ghost = { d: offenderDay, r: roomId, s: s, e: e };
+          render();
+          renderEvals(evals, "Checked every occurrence <b>before</b> writing any of them.");
+          setExplain("The whole series is refused — " + DAY_NAMES[offenderDay] + " clashes",
+            "<span class='bad'>" + DAY_NAMES[offenderDay] + " " + span(s, e) + " hits " + offender.t + "</span>. <span class='dim'>A series conflicts if <b>any</b> occurrence conflicts — check all, then write all, or you leave half a series behind.</span>");
+          return;
+        }
+        for (var d2 = 0; d2 < DAY_NAMES.length; d2++) add(d2, roomId, s, e, "series " + s + "–" + e);
+        statOk += DAY_NAMES.length;
+        render();
+        renderEvals(null, "Five occurrences generated from one rule — no rows were stored per day.");
+        setExplain("Booked all five days",
+          "<span class='dim'>One</span> <code>RecurrenceRule</code> <span class='dim'>generated Mon→Fri, every occurrence was checked, then all five were written. Click the day chips to see them.</span>");
+      }
+
+      /* ---------------- rooms needed (min-heap) ---------------- */
+      function heapDemo() {
+        if (busy) return;
+        busy = true;
+        document.getElementById("book-btn").disabled = true;
+        ghost = null; hitDays = [];
+        document.getElementById("gview").classList.add("off");
+        document.getElementById("hview").classList.add("on");
+        setCall("Scheduler.<b>roomsNeeded</b>([A,B,C,D,E])  <span style='color:#6b7280'>// sort by start · min-heap of end times</span>");
+
+        var heap = [], peak = 0, steps = [];
+        HEAP_MEETINGS.forEach(function (m) {
+          var reused = heap.length > 0 && heap[0] <= m.s;
+          if (reused) heap.shift();
+          heap.push(m.e); heap.sort(function (a, b) { return a - b; });
+          peak = Math.max(peak, heap.length);
+          steps.push({ m: m, reused: reused, heap: heap.slice(), size: heap.length, peakSoFar: peak });
+        });
+
+        renderHeap(-1, steps, peak, false);
+        setExplain("Five meetings, sorted by start time",
+          "<span class='dim'>Walk them left to right. Keep one end time per room in use — the heap.</span>");
+
+        steps.forEach(function (st, i) {
+          later(function () {
+            renderHeap(i, steps, peak, false);
+            setExplain("Step " + (i + 1) + " · " + st.m.n + " starts at " + hh(st.m.s),
+              st.reused
+                ? "<span class='dim'>Smallest end time is</span> <span class='hi'>" + steps[i - 1].heap[0] + "</span> <span class='dim'>and</span> " + steps[i - 1].heap[0] + " ≤ " + st.m.s + " <span class='dim'>→</span> <span class='good'>reuse that room</span>."
+                : "<span class='dim'>Nothing has freed up →</span> <span class='hi'>open a new room</span>. <span class='dim'>Rooms in use: " + st.size + ".</span>");
+          }, 850 * (i + 1));
+        });
+
+        later(function () {
+          renderHeap(steps.length - 1, steps, peak, true);
+          setExplain("rooms needed: " + peak,
+            "<span class='dim'>The answer is the <b>peak</b> heap size, not the final one — the heap shrinks as the day empties out.</span>");
+          finish();
+        }, 850 * (steps.length + 1));
+      }
+
+      function renderHeap(idx, steps, peak, showAnswer) {
+        var host = document.getElementById("hview");
+        host.innerHTML = "";
+        var lo = 9, hi = 15;
+        HEAP_MEETINGS.forEach(function (m, i) {
+          var bar = document.createElement("div");
+          bar.className = "hbar";
+          var seg = document.createElement("i");
+          seg.className = i === idx ? "live" : (i < idx ? "past" : "");
+          seg.style.left = ((m.s - lo) / (hi - lo)) * 100 + "%";
+          seg.style.width = ((m.e - m.s) / (hi - lo)) * 100 + "%";
+          seg.textContent = m.n + " " + span(m.s, m.e);
+          bar.appendChild(seg);
+          host.appendChild(bar);
+        });
+
+        var row = document.createElement("div");
+        row.className = "heaprow";
+        var lbl = document.createElement("b");
+        lbl.textContent = "min-heap of end times";
+        row.appendChild(lbl);
+        var heapNow = idx >= 0 ? steps[idx].heap : [];
+        if (!heapNow.length) {
+          var empty = document.createElement("span");
+          empty.className = "hchip";
+          empty.textContent = "empty";
+          row.appendChild(empty);
+        }
+        heapNow.forEach(function (v) {
+          var c = document.createElement("span");
+          c.className = "hchip" + (heapNow.length === peak ? " peak" : "");
+          c.textContent = v;
+          row.appendChild(c);
+        });
+        host.appendChild(row);
+
+        if (showAnswer) {
+          var ans = document.createElement("div");
+          ans.className = "answer";
+          ans.textContent = "rooms needed: " + peak;
+          host.appendChild(ans);
+        }
+      }
+
+      /* ---------------- state setters ---------------- */
+      function finish() {
+        busy = false;
+        document.getElementById("book-btn").disabled = false;
+      }
+
+      function setGuard(k) {
+        if (busy) return;
+        guardMode = k; ghost = null; render();
+        setCall(k === "locked"
+          ? "room.lock.lock(); try { check(); write(); } finally { room.lock.unlock(); }"
+          : "// check() and write() are separate — anything can slip between them");
+        setExplain(k === "locked" ? "Per-room lock" : "Unguarded",
+          k === "locked"
+            ? "<span class='dim'>Check and write are now one indivisible step —</span> <span class='good'>per room</span><span class='dim'>, so R1 and R3 never wait on each other.</span>"
+            : "<span class='dim'>Every request checks, then writes.</span> <span class='bad'>Between those two lines, another request checks too.</span>");
+      }
+
+      function setStrict(k) {
+        if (busy) return;
+        strictMode = k; ghost = null; render();
+        setCall(k ? "aStart &lt; bEnd &amp;&amp; bStart &lt; aEnd" : "aStart &lt;= bEnd &amp;&amp; bStart &lt;= aEnd");
+        renderEvals(null, k
+          ? "Half-open <b>[start, end)</b> — 10–11 and 11–12 do not conflict."
+          : "Closed <b>[start, end]</b> — touching now counts as overlapping.");
+        setExplain(k ? "Strict — half-open intervals" : "Inclusive — the classic off-by-one",
+          k
+            ? "<span class='dim'>A meeting occupies its start and not its end, so back-to-back bookings are</span> <span class='good'>legal</span><span class='dim'>. Book 10–11 then 11–12 to see it.</span>"
+            : "<span class='dim'>One character changed.</span> <span class='bad'>Every back-to-back booking in the building is now refused</span> <span class='dim'>— try 10–11 then 11–12.</span>");
+      }
+
+      function setDay(i) { if (busy) return; dayIdx = i; ghost = null; showGrid(); render(); setExplain(DAY_NAMES[i], "<span class='dim'>Each day has its own bookings. A recurring series has to be free on <b>every</b> one of them.</span>"); }
+      function setRoom(id) {
+        if (busy) return;
+        selRoom = id; ghost = null; showGrid(); render();
+        if (id === "any") setExplain("✨ Any room",
+          "<span class='dim'>The scheduler filters by seats and features first, then takes the first room whose day has no conflict.</span>");
+        else {
+          var rm = roomOf(id);
+          setExplain(id + " · " + rm.label,
+            "<span class='dim'>Seats " + rm.seats + (rm.projector ? ", has a projector" : ", no projector") + ". Those are <b>fields</b>, not subclasses.</span>");
+        }
+      }
+      function setStart(h) {
+        if (busy) return;
+        selStart = h; ghost = null; showGrid(); render();
+        setExplain("Start " + hh(h),
+          "<span class='dim'>Proposed slot</span> <code>" + span(h, Math.min(H1, h + selDur)) + "</code><span class='dim'>. Press 📅 Book to run the overlap test.</span>");
+      }
+      function setDur(d) {
+        if (busy) return;
+        selDur = d; ghost = null; showGrid(); render();
+        setExplain("Length " + d + "h",
+          "<span class='dim'>Proposed slot</span> <code>" + span(selStart, Math.min(H1, selStart + d)) + "</code><span class='dim'>. The end is exclusive.</span>");
+      }
+      function setSeats(n) {
+        if (busy) return;
+        needSeats = n; ghost = null; showGrid(); render();
+        setExplain("Needs " + n + " seats",
+          "<span class='dim'>Rooms smaller than this are filtered out <b>before</b> any time comparison runs.</span>");
+      }
+      function setProj(v) {
+        if (busy) return;
+        needProj = v; ghost = null; showGrid(); render();
+        setExplain(v ? "Needs a projector" : "Projector not required",
+          "<span class='dim'>A feature is a value in a set on</span> <code>Room</code><span class='dim'> — adding “whiteboard” costs one entry, not one class.</span>");
+      }
+
+      function reset() {
+        clearTimers();
+        bookings = SEED.map(function (b, i) { return { id: "S" + i, d: b.d, r: b.r, s: b.s, e: b.e, t: b.t, mine: false }; });
+        dayIdx = 0;
+        if (guardMode === undefined) guardMode = "unguarded";
+        if (strictMode === undefined) strictMode = true;
+        selRoom = "R2"; selStart = 13; selDur = 1;
+        needSeats = 2; needProj = false;
+        busy = false; statOk = 0; statNo = 0; statDbl = 0; bookSeq = 100;
+        ghost = null; hitDays = [];
+        document.getElementById("book-btn").disabled = false;
+        showGrid();
+        render();
+        setCall("// pick a room, a start hour and a duration, then press <b>📅 Book</b>");
+        renderEvals(null, "Press <b>📅 Book</b> and the overlap test for every existing booking in that room appears here.");
+        setExplain("Three rooms, one day",
+          "Pick a room, a start hour and a length, then press <b>📅 Book</b>. <span class='dim'>The panel on the right shows the overlap test run against every booking already in that room.</span>");
+      }
+
+      timers = [];
+      document.getElementById("book-btn").addEventListener("click", doBook);
+      document.getElementById("race-btn").addEventListener("click", race);
+      document.getElementById("rec-btn").addEventListener("click", recurring);
+      document.getElementById("heap-btn").addEventListener("click", heapDemo);
+      document.getElementById("reset-btn").addEventListener("click", reset);
+      reset();
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>
