@@ -54,7 +54,20 @@ if (updateId && !/^\d+$/.test(updateId)) fail(`--update expects a numeric articl
 
 // --- read the post ---------------------------------------------------------
 
-const file = path.join(ROOT, "content", "blog", `${slug}.mdx`);
+// The slug names a file whose contents get POSTed to a public website, so it
+// is constrained to the kebab-case shape every post already uses. Without this
+// a slug of "../../../../secrets" walks straight out of the repo and publishes
+// whatever it lands on. Harmless while a human types the slug; not harmless the
+// moment this runs from CI with the slug coming from a workflow input.
+if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+  fail(`Invalid slug "${slug}" — expected kebab-case, e.g. my-post-title`);
+}
+
+const BLOG_DIR = path.join(ROOT, "content", "blog");
+const file = path.join(BLOG_DIR, `${slug}.mdx`);
+// Belt and braces: the pattern above already forbids separators and dots, so
+// this can only fire if that regex is ever loosened.
+if (path.dirname(file) !== BLOG_DIR) fail("Refusing to read outside content/blog");
 if (!existsSync(file)) fail(`No such post: content/blog/${slug}.mdx`);
 const raw = readFileSync(file, "utf8");
 
