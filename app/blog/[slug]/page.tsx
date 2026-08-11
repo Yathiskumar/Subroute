@@ -13,7 +13,8 @@ import { Button } from "@/components/ui/button";
 import { PostAside, type TocHeading } from "@/components/blog/PostAside";
 import { getAllPostsMeta, getPostBySlug, postUrl, formatDate } from "@/lib/blog";
 import { slugify } from "@/lib/utils/slug";
-import { SITE_URL, SITE_NAME } from "@/lib/site";
+import { JsonLd } from "@/components/shared/JsonLd";
+import { SITE_URL, SITE_NAME, RSS_ALTERNATE_TYPES, ORG_ID } from "@/lib/site";
 
 // Syntax highlighting runs at build time through Shiki (already a dependency).
 // Dual themes emit CSS variables that we toggle by `.dark` in globals.css.
@@ -89,7 +90,10 @@ export async function generateMetadata({
     description: frontmatter.excerpt,
     authors: [{ name: frontmatter.author }],
     keywords: frontmatter.tags,
-    alternates: { canonical: `/blog/${frontmatter.slug}` },
+    alternates: {
+      canonical: `/blog/${frontmatter.slug}`,
+      types: RSS_ALTERNATE_TYPES,
+    },
     openGraph: {
       type: "article",
       url,
@@ -147,7 +151,7 @@ export default async function BlogPostPage({
     datePublished: frontmatter.publishedAt,
     dateModified: frontmatter.publishedAt,
     author: { "@type": "Person", name: frontmatter.author },
-    publisher: { "@type": "Organization", name: SITE_NAME, url: SITE_URL },
+    publisher: { "@id": ORG_ID, "@type": "Organization", name: SITE_NAME, url: SITE_URL },
     image: socialImage,
     keywords: frontmatter.tags.join(", "),
     mainEntityOfPage: { "@type": "WebPage", "@id": url },
@@ -156,14 +160,7 @@ export default async function BlogPostPage({
 
   return (
     <>
-      <script
-        type="application/ld+json"
-        // JSON-LD is build-time content, but escape "<" anyway so a stray
-        // "</script>" in any field can't break out of the tag.
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c"),
-        }}
-      />
+      <JsonLd data={jsonLd} />
 
       <div className="container py-12 md:py-16">
         <Breadcrumb
