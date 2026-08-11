@@ -23,12 +23,12 @@ export default function PrivacyPage() {
       kicker="Legal"
       title="Privacy"
       updated="May 2026"
-      intro="Subroute is a personal, educational project. It is built to teach — not to harvest data. There are no accounts, no logins, and nothing for you to sign up for. This page explains the little that is collected and why."
+      intro="Subroute is a personal, educational project. It is built to teach — not to harvest data. You can read and use everything without an account; signing in is optional and only saves your progress. This page explains the little that is collected and why."
     >
       <LegalSection heading="What is not collected">
         <LegalList
           items={[
-            "No accounts or profiles — you never create one, so there is nothing personal to store.",
+            "No required account — you can read everything signed out. If you do sign in, all that is stored is your email and which lessons and quizzes you finished.",
             "No tracking cookies and no advertising or marketing pixels.",
             "No selling, renting, or sharing of data with advertisers. Ever.",
           ]}
@@ -37,12 +37,18 @@ export default function PrivacyPage() {
 
       <LegalSection heading="Anonymous, aggregated analytics">
         <p>
-          The site uses privacy-friendly analytics (Vercel Web Analytics) to
-          understand which topics people actually read — for example, that a
-          page was viewed, roughly from where, and on what kind of device. This
-          data is aggregated and is not tied to your identity. It carries no
-          names, emails, or persistent cross-site identifiers, and it is used
-          only to decide what to build and improve next.
+          The site records that a page was viewed — the page path, the site that
+          linked you here, a rough country, and the kind of device and browser —
+          using Vercel Web Analytics and a small first-party counter of our own.
+          It is used only to decide what to build and improve next.
+        </p>
+        <p>
+          Visitors are counted with a one-way hash of your IP address and
+          browser, mixed with a secret and the current date. Your IP address is
+          never stored, the hash cannot be turned back into it, and because the
+          date is part of it the value changes every midnight — so it can count
+          how many people visited today, but it cannot follow you from one day
+          to the next. No cookie is set for this.
         </p>
       </LegalSection>
 
