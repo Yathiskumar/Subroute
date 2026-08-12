@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>In-memory key-value store — live simulation — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a; --accent-soft: rgba(251,134,58,.12); --accent-border: rgba(251,134,58,.45);
+        --success: #5cc66f; --success-soft: rgba(92,198,111,.12);
+        --info: #5e9ff6; --info-soft: rgba(94,159,246,.12);
+        --danger: #f06868; --danger-soft: rgba(240,104,104,.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px; --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 14px 16px 20px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      .top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 9px; }
+      .chip { font-family: var(--mono); font-size: 11px; padding: 7px 12px; border-radius: var(--r-md);
+              background: var(--elevated); border: 1px solid var(--border-strong); color: var(--muted); cursor: pointer; }
+      .chip:hover { border-color: var(--accent); color: var(--fg); }
+      .stat { font-family: var(--mono); font-size: 10.5px; padding: 6px 10px; border-radius: 999px;
+              background: var(--surface); border: 1px solid var(--border); color: var(--muted); white-space: nowrap; }
+      .stat b { color: var(--fg); }
+      .stat.ok b { color: var(--success); }
+      .stat.no b { color: var(--danger); }
+      .stat.hi { border-color: var(--accent-border); }
+      .stat.hi b { color: var(--accent); }
+      .stat.leak { margin-left: auto; }
+      .stat.leak b { color: var(--danger); }
+
+      .callline { font-family: var(--mono); font-size: 11.5px; color: var(--subtle); background: #0a0b0e;
+                  border: 1px solid var(--border); border-radius: var(--r-md); padding: 7px 11px; margin-bottom: 10px;
+                  white-space: nowrap; overflow-x: auto; }
+      .callline b { color: var(--accent); }
+      .callline i { color: var(--success); font-style: normal; }
+      .callline u { color: var(--danger); text-decoration: none; }
+
+      .cols { display: grid; grid-template-columns: 1fr 214px; gap: 10px; align-items: start; }
+      .pane { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 11px; }
+      .cap { font-family: var(--mono); font-size: 9.5px; letter-spacing: .09em; text-transform: uppercase;
+             color: var(--subtle); margin-bottom: 9px; display: flex; justify-content: space-between; gap: 10px; }
+
+      /* key table */
+      .kh, .kr { display: grid; grid-template-columns: 1.15fr .85fr 74px 56px 104px; gap: 6px; align-items: center; }
+      .kh { font-family: var(--mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase;
+            color: var(--subtle); padding: 0 9px 5px; }
+      .kt { display: flex; flex-direction: column; gap: 5px; min-height: 168px; }
+      .kr { background: var(--elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md);
+            padding: 8px 9px; cursor: pointer; font-family: var(--mono); font-size: 10.5px; color: var(--fg);
+            transition: border-color .2s, background .2s, opacity .2s; }
+      .kr:hover { border-color: var(--accent); }
+      .kr .n { color: var(--muted); }
+      .kr.dead { background: #0c0d10; opacity: .62; }
+      .kr.dead .k, .kr.dead .v { text-decoration: line-through; color: var(--subtle); }
+      .kr.sampled { border-color: var(--info); background: var(--info-soft); }
+      .kr.leaky { border-color: rgba(240,104,104,.5); }
+      .pill { font-size: 8.5px; font-family: var(--mono); padding: 3px 5px; border-radius: 999px;
+              text-align: center; border: 1px solid; }
+      .pill.live { color: var(--success); border-color: rgba(92,198,111,.45); background: var(--success-soft); }
+      .pill.exp { color: var(--danger); border-color: rgba(240,104,104,.45); background: var(--danger-soft); }
+      .empty { font-family: var(--mono); font-size: 10.5px; color: var(--subtle); padding: 26px 10px; text-align: center; }
+
+      /* right pane */
+      .clockbox { font-family: var(--mono); font-size: 21px; font-weight: 700; color: var(--accent);
+                  text-align: center; padding: 2px 0 8px; }
+      .clockbox span { font-size: 10px; color: var(--subtle); font-weight: 400; }
+      .membar { height: 9px; border-radius: 5px; background: var(--elevated); border: 1px solid var(--border);
+                overflow: hidden; margin: 4px 0 3px; }
+      .membar i { display: block; height: 100%; background: var(--info); transition: width .35s ease; }
+      .membar.full i { background: var(--danger); }
+      .kvline { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 10px;
+                color: var(--muted); padding: 3px 0; }
+      .kvline b { color: var(--fg); }
+      .kvline.g b { color: var(--success); }
+      .kvline.r b { color: var(--danger); }
+      .sep { height: 1px; background: var(--border); margin: 9px 0; }
+
+      .explain { min-height: 74px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md);
+                 padding: 12px 15px; margin-top: 11px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .hi { color: var(--accent); font-weight: 700; }
+
+      .foot { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 11px; }
+      .btn { background: var(--elevated); color: var(--muted); font: 600 11.5px/1 var(--sans);
+             border: 1px solid var(--border); border-radius: var(--r-md); padding: 8px 12px; cursor: pointer; }
+      .btn:hover { border-color: var(--border-strong); color: var(--fg); }
+      .btn:disabled { opacity: .35; cursor: not-allowed; }
+      .go { font-family: var(--mono); font-size: 12.5px; font-weight: 700; padding: 9px 16px; border-radius: var(--r-md);
+            cursor: pointer; background: var(--success-soft); border: 1px solid rgba(92,198,111,.45); color: var(--success); }
+      .go:active { transform: scale(.98); }
+      .go:disabled { opacity: .35; cursor: not-allowed; }
+      .tick { font-family: var(--mono); font-size: 12.5px; font-weight: 700; padding: 9px 16px; border-radius: var(--r-md);
+              cursor: pointer; background: var(--accent-soft); border: 1px solid var(--accent-border); color: var(--accent); }
+      .tick:disabled { opacity: .35; cursor: not-allowed; }
+      .foot .ord-last { order: 9; }
+      .hint { order: 10; margin-left: auto; font-size: 11.5px; color: var(--muted); }
+      .hint .b { color: var(--accent); }
+
+      @media (max-width: 640px) {
+        .cols { grid-template-columns: 1fr; }
+        .kh, .kr { grid-template-columns: 1.2fr 64px 52px 92px; }
+        .kh .vcol, .kr .vcol { display: none; }
+        .hint { margin-left: 0; }
+        .stat.leak { margin-left: 0; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="top">
+      <span class="stat hi">size() <b id="s-size">0</b></span>
+      <span class="stat ok">live <b id="s-live">0</b></span>
+      <span class="stat no">expired-but-present <b id="s-exp">0</b></span>
+      <span class="stat leak">leaked <b id="s-leak">0</b></span>
+    </div>
+
+    <div class="callline" id="callline">// press <b>➕ SET</b> to write a key, then <b>⏩ +2s</b> to move the clock</div>
+
+    <div class="cols">
+      <div class="pane">
+        <div class="cap"><span>the map · click a row to GET it</span><span id="cap-note">expiresAt is an instant, ttl is derived</span></div>
+        <div class="kh">
+          <span>key</span><span class="vcol">value</span><span>expiresAt</span><span>ttl</span><span>status</span>
+        </div>
+        <div class="kt" id="ktable"></div>
+      </div>
+
+      <div class="pane">
+        <div class="cap"><span>virtual clock</span></div>
+        <div class="clockbox" id="clock">t = 0s</div>
+        <div class="cap" style="margin-bottom:3px"><span>memory</span><span id="mem-txt">0 / 96</span></div>
+        <div class="membar" id="membar"><i style="width:0%"></i></div>
+        <div class="kvline"><span>maxMemory</span><b id="m-cap">8 keys</b></div>
+        <div class="sep"></div>
+        <div class="kvline g"><span>hits</span><b id="c-hit">0</b></div>
+        <div class="kvline r"><span>misses</span><b id="c-miss">0</b></div>
+        <div class="kvline"><span>gone · lazy</span><b id="c-lazy">0</b></div>
+        <div class="kvline"><span>gone · sweeper</span><b id="c-sweep">0</b></div>
+        <div class="kvline r"><span>evicted (space)</span><b id="c-evict">0</b></div>
+      </div>
+    </div>
+
+    <div class="explain">
+      <div class="explain-title" id="ex-title">A store, and a clock you control</div>
+      <div class="explain-body" id="ex-body">Press <b>➕ SET</b> a few times, then <b>⏩ +2s</b> until a key's ttl reaches zero — and watch what <code>size()</code> does <span class="dim">(nothing)</span>.</div>
+    </div>
+
+    <div class="foot">
+      <button class="go" id="set-btn">➕ SET</button>
+      <button class="btn ord-last" id="reset-btn">↺ Reset</button>
+      <button class="tick" id="tick-btn">⏩ +2s</button>
+      <button class="btn" id="sweep-btn">🧹 Sweep</button>
+      <button class="btn" id="cold-btn">😴 Cold key</button>
+      <button class="btn" id="nottl-btn">🔒 SET no-TTL</button>
+      <button class="btn" id="fill-btn">📉 Fill memory</button>
+      <span class="hint"><span class="b">▸</span> A struck-through row is still in the map. Click it.</span>
+    </div>
+
+    <script>
+      var PRESETS = [
+        { k: "session:1",  v: "abc",     ttl: 6 },
+        { k: "cart:42",    v: "[a,b]",   ttl: 10 },
+        { k: "user:7",     v: "nina",    ttl: 0 },
+        { k: "otp:9",      v: "418293",  ttl: 4 },
+        { k: "flag:beta",  v: "on",      ttl: 0 },
+        { k: "lock:job",   v: "held",    ttl: 8 }
+      ];
+      var CAP = 8;            // maxMemory, expressed in entries
+      var COST = 12;          // "bytes" per entry, for the bar
+      var SAMPLE = 20;
+      var MAX_ROUNDS = 4;     // bounded: the sweep animation always terminates
+      var LEAK_AGE = 4;       // expired for this many virtual seconds = counted as leaked
+
+      var rows, clockS, presetIdx, coldIdx, bulkIdx, busy, sampled;
+      var hits, misses, goneLazy, goneSweep, evictedCt;
+
+      var BUTTONS = ["set-btn", "tick-btn", "sweep-btn", "cold-btn", "nottl-btn", "fill-btn", "reset-btn"];
+
+      function setExplain(t, h) {
+        document.getElementById("ex-title").textContent = t;
+        document.getElementById("ex-body").innerHTML = h;
+      }
+      function setCall(h) { document.getElementById("callline").innerHTML = h; }
+      function lock(on) {
+        BUTTONS.forEach(function (id) { document.getElementById(id).disabled = on; });
+      }
+
+      function isDead(r) { return r.exp !== null && clockS >= r.exp; }
+      function indexOf(k) { for (var i = 0; i < rows.length; i++) if (rows[i].k === k) return i; return -1; }
+      function deadCount() { var n = 0; rows.forEach(function (r) { if (isDead(r)) n++; }); return n; }
+      function leakCount() {
+        var n = 0;
+        rows.forEach(function (r) { if (isDead(r) && clockS - r.exp >= LEAK_AGE) n++; });
+        return n;
+      }
+
+      /* ------------------------------------------------------------ render */
+      function render() {
+        var host = document.getElementById("ktable");
+        host.innerHTML = "";
+
+        if (!rows.length) {
+          var e = document.createElement("div");
+          e.className = "empty";
+          e.textContent = "store is empty — press ➕ SET";
+          host.appendChild(e);
+        } else {
+          rows.forEach(function (r) {
+            (function (r) {
+              var dead = isDead(r);
+              var el = document.createElement("div");
+              var cls = "kr";
+              if (dead) cls += " dead";
+              if (sampled && sampled[r.k]) cls += " sampled";
+              if (dead && clockS - r.exp >= LEAK_AGE) cls += " leaky";
+              el.className = cls;
+              var expTxt = r.exp === null ? "∞" : r.exp + "s";
+              var ttlTxt = r.exp === null ? "—" : (dead ? "0s" : (r.exp - clockS) + "s");
+              el.innerHTML =
+                "<span class='k'>" + r.k + "</span>" +
+                "<span class='v vcol'>" + r.v + "</span>" +
+                "<span class='n'>" + expTxt + "</span>" +
+                "<span class='n'>" + ttlTxt + "</span>" +
+                "<span class='pill " + (dead ? "exp" : "live") + "'>" +
+                  (dead ? "expired-but-present" : "live") + "</span>";
+              el.addEventListener("click", function () { doGet(r.k); });
+              host.appendChild(el);
+            })(r);
+          });
+        }
+
+        document.getElementById("s-size").textContent = rows.length;
+        document.getElementById("s-live").textContent = rows.length - deadCount();
+        document.getElementById("s-exp").textContent = deadCount();
+        document.getElementById("s-leak").textContent = leakCount();
+        document.getElementById("clock").innerHTML = "t = " + clockS + "s <span>virtual</span>";
+
+        var used = rows.length * COST, max = CAP * COST;
+        var pct = Math.min(100, Math.round((used / max) * 100));
+        var bar = document.getElementById("membar");
+        bar.className = "membar" + (rows.length >= CAP ? " full" : "");
+        bar.firstChild.style.width = pct + "%";
+        document.getElementById("mem-txt").textContent = used + " / " + max;
+        document.getElementById("m-cap").textContent = CAP + " keys";
+
+        document.getElementById("c-hit").textContent = hits;
+        document.getElementById("c-miss").textContent = misses;
+        document.getElementById("c-lazy").textContent = goneLazy;
+        document.getElementById("c-sweep").textContent = goneSweep;
+        document.getElementById("c-evict").textContent = evictedCt;
+      }
+
+      /* --------------------------------------------------------- eviction */
+      // volatile-ttl: among keys that still have a deadline, drop the one expiring soonest.
+      function pickVictim() {
+        var best = -1, soonest = Infinity, i;
+        for (i = 0; i < rows.length; i++)
+          if (rows[i].exp !== null && !isDead(rows[i]) && rows[i].exp < soonest) { soonest = rows[i].exp; best = i; }
+        if (best < 0) for (i = 0; i < rows.length; i++) if (rows[i].exp !== null) { best = i; break; }
+        if (best < 0) best = 0;
+        return best;
+      }
+      function enforceMemory() {
+        var out = [];
+        while (rows.length > CAP) {
+          var i = pickVictim();
+          out.push(rows[i]);
+          rows.splice(i, 1);
+          evictedCt++;
+        }
+        return out;
+      }
+
+      /* -------------------------------------------------------------- get */
+      function doGet(k) {
+        if (busy) return;
+        var i = indexOf(k);
+        if (i < 0) return;
+        var r = rows[i];
+        setCall("store.<b>get</b>(\"" + k + "\", now=" + clockS + "s)");
+
+        if (isDead(r)) {
+          rows.splice(i, 1);
+          misses++; goneLazy++;
+          render();
+          setExplain("(nil) — and only NOW is it gone",
+            "The read compared <code>expiresAt " + r.exp + "s</code> with <code>now " + clockS + "s</code>, found it past, " +
+            "<span class='bad'>deleted the key on the spot</span> and returned a miss. " +
+            "<span class='dim'>That is lazy expiry — <code>size()</code> dropped only because you looked.</span>");
+        } else {
+          hits++;
+          render();
+          setExplain("hit → \"" + r.v + "\"",
+            "<code>now " + clockS + "s &lt; expiresAt " + (r.exp === null ? "∞" : r.exp + "s") + "</code> — alive. " +
+            "<span class='dim'>One integer comparison. Nothing moved, nothing was rewritten.</span>");
+        }
+      }
+
+      /* ------------------------------------------------------------- set */
+      function doSet() {
+        if (busy) return;
+        var p;
+        if (presetIdx < PRESETS.length) { p = PRESETS[presetIdx]; presetIdx++; }
+        else { p = { k: "tmp:" + presetIdx, v: "x", ttl: 4 + (presetIdx % 5) * 2 }; presetIdx++; }
+
+        var exp = p.ttl > 0 ? clockS + p.ttl : null;
+        var i = indexOf(p.k);
+        if (i >= 0) rows.splice(i, 1);
+        rows.push({ k: p.k, v: p.v, exp: exp });
+        var killed = enforceMemory();
+        render();
+
+        setCall(p.ttl > 0
+          ? "store.<b>setWithTtl</b>(\"" + p.k + "\", \"" + p.v + "\", ttl=" + p.ttl + "s, now=" + clockS + "s)"
+          : "store.<b>set</b>(\"" + p.k + "\", \"" + p.v + "\")  <span style='color:#6b7280'>// no deadline</span>");
+
+        if (killed.length) {
+          setExplain("Wrote " + p.k + " — and evicted " + killed[0].k,
+            "The store was full, so something had to go. <span class='bad'>That key was still alive.</span> " +
+            "<span class='dim'>Evicted for space, not expired by time.</span>");
+        } else if (p.ttl > 0) {
+          setExplain("expiresAt = now + ttl = " + exp + "s",
+            "One addition, <span class='hi'>once</span>, at write time. <span class='dim'>No timer was created and nothing will tick — " +
+            "the <code>ttl</code> column is computed, not stored.</span>");
+        } else {
+          setExplain("A key with no deadline",
+            "<code>expiresAt = ∞</code>. <span class='dim'>A permanent key is not a special case — it is just a very large number that <code>now</code> never reaches.</span>");
+        }
+      }
+
+      /* ----------------------------------------------------------- clock */
+      function advance() {
+        if (busy) return;
+        var before = deadCount();
+        clockS += 2;
+        var after = deadCount();
+        render();
+        setCall("clock.<b>advance</b>(2s)  <span style='color:#6b7280'>// no callback, no timer, no thread</span>");
+        if (after > before) {
+          setExplain((after - before) + " key(s) just expired — and nothing ran",
+            "They are <span class='bad'>still in the table</span> and <code>size()</code> <span class='bad'>still counts them</span>. " +
+            "<span class='dim'>Click a struck-through row to watch it finally leave.</span>");
+        } else if (leakCount()) {
+          setExplain("t = " + clockS + "s · " + leakCount() + " leaked",
+            "Those keys have been unreadable for a while and are <span class='bad'>still holding memory</span>. " +
+            "<span class='dim'>Nobody is going to read them. Only 🧹 Sweep can reclaim them.</span>");
+        } else {
+          setExplain("t = " + clockS + "s",
+            "<span class='dim'>The clock moved. A TTL is just a number waiting to be compared against this one.</span>");
+        }
+      }
+
+      /* ---------------------------------------------------------- sweeper */
+      function sweep() {
+        if (busy) return;
+        var pool = rows.filter(function (r) { return r.exp !== null; });
+        if (!pool.length) {
+          setCall("sweeper.<b>sampleVolatile</b>(20) → <u>0 keys have a TTL</u>");
+          setExplain("Nothing to sample",
+            "The sweeper only ever draws from keys that <span class='hi'>have a deadline</span>. " +
+            "<span class='dim'>Sampling permanent keys would waste every draw.</span>");
+          return;
+        }
+
+        busy = true; lock(true);
+        var round = 0, removedTotal = 0;
+
+        function finish(note) {
+          busy = false; lock(false); sampled = null; render();
+          setExplain("Sweep finished · " + removedTotal + " reclaimed",
+            "<span class='dim'>" + note + " The sweeper's cost tracked the garbage it found, not the size of the store.</span>");
+        }
+
+        function nextRound() {
+          if (round >= MAX_ROUNDS) { finish("Stopped after " + MAX_ROUNDS + " rounds — every pass is bounded."); return; }
+          round++;
+
+          var live = rows.filter(function (r) { return r.exp !== null; });
+          if (!live.length) { finish("No keys with a deadline are left."); return; }
+
+          var n = Math.min(SAMPLE, live.length);
+          var pick = [];
+          sampled = {};
+          for (var i = 0; i < n; i++) {
+            var r = live[Math.floor(Math.random() * live.length)];
+            pick.push(r);
+            sampled[r.k] = 1;
+          }
+          render();
+          setCall("sweeper.<b>sampleVolatile</b>(" + SAMPLE + ") → drew <i>" + n + "</i> key(s) with a TTL");
+          setExplain("Round " + round + " — sampled " + n + " key(s)",
+            "Highlighted in blue. <span class='dim'>Only keys with a deadline are ever drawn — checking the rest would be wasted work.</span>");
+
+          setTimeout(function () {
+            var seen = {}, expiredN = 0;
+            pick.forEach(function (r) {
+              if (seen[r.k]) return;
+              seen[r.k] = 1;
+              if (isDead(r)) {
+                var j = indexOf(r.k);
+                if (j >= 0) { rows.splice(j, 1); expiredN++; }
+              }
+            });
+            removedTotal += expiredN;
+            goneSweep += expiredN;
+            sampled = null;
+            render();
+
+            var pct = Math.round((expiredN * 100) / n);
+            var again = expiredN * 4 > n;
+            setCall(expiredN + "/" + n + " expired → " + pct + "% " +
+                    (again ? "<i>&gt; 25% → sample again</i>" : "<u>≤ 25% → sleep</u>"));
+            setExplain(expiredN + " / " + n + " expired  =  " + pct + "%",
+              again
+                ? "More than <span class='hi'>25%</span> of the sample was dead, so there is probably more nearby — <span class='good'>go again, right now.</span>"
+                : "At or under <span class='hi'>25%</span> — the sample is sparse. <span class='dim'>Stop, sleep, try again later.</span>");
+
+            if (again) setTimeout(nextRound, 720);
+            else finish("The sample went sparse, so it stopped.");
+          }, 720);
+        }
+
+        nextRound();
+      }
+
+      /* --------------------------------------------------------- cold key */
+      function coldKey() {
+        if (busy) return;
+        var k = "report:" + (2019 + coldIdx);
+        coldIdx++;
+        var i = indexOf(k);
+        if (i >= 0) rows.splice(i, 1);
+        rows.push({ k: k, v: "…", exp: clockS + 3 });
+        enforceMemory();
+        clockS += 8;
+        render();
+        setCall("store.<b>setWithTtl</b>(\"" + k + "\", …, 3s)  ·  clock.<b>advance</b>(8s)");
+        setExplain("A key nobody will ever read",
+          "It expired <span class='bad'>5 seconds ago</span> and it is still here, because lazy expiry only fires when somebody looks — " +
+          "<span class='dim'>and nobody will. Watch <b>leaked</b> climb. Only 🧹 Sweep reclaims this one.</span>");
+      }
+
+      /* --------------------------------------------------- ttl semantics */
+      function setNoTtl() {
+        if (busy) return;
+        var target = null;
+        for (var i = 0; i < rows.length; i++) {
+          if (rows[i].exp !== null && !isDead(rows[i])) { target = rows[i]; break; }
+        }
+        if (!target) {
+          setCall("// no key with a live deadline");
+          setExplain("Nothing with a live TTL",
+            "<span class='dim'>Press ➕ SET first — this demo needs a key that still has a deadline to take away.</span>");
+          return;
+        }
+        var was = target.exp;
+        target.v = target.v + "!";
+        target.exp = null;
+        render();
+        setCall("store.<b>set</b>(\"" + target.k + "\", \"" + target.v + "\")  <u>// no ttl argument</u>");
+        setExplain("The deadline just vanished",
+          "<code>expiresAt " + was + "s → ∞</code>. A plain <code>set</code> replaces the whole entry, and the entry is what carried the TTL. " +
+          "<span class='bad'>This key is now permanent.</span> <span class='dim'>Real bug: a session refreshed this way never logs out.</span>");
+      }
+
+      /* ----------------------------------------------------- memory bound */
+      function fillMemory() {
+        if (busy) return;
+        for (var i = 0; i < 2; i++) {
+          rows.push({ k: "bulk:" + bulkIdx, v: "x", exp: clockS + 60 });
+          bulkIdx++;
+        }
+        var killed = enforceMemory();
+        render();
+        setCall(killed.length
+          ? "store.<b>set</b>(bulk…) → over maxMemory → <u>evict(\"" + killed[0].k + "\")</u>"
+          : "store.<b>set</b>(bulk…)  <span style='color:#6b7280'>// still under maxMemory</span>");
+        if (killed.length) {
+          var wasLive = killed[0].exp === null || clockS < killed[0].exp;
+          setExplain("Evicted " + killed[0].k + " — for space, not for time",
+            wasLive
+              ? "That key was <span class='good'>alive</span>. It had time left and was thrown out anyway, because the store ran out of room. " +
+                "<span class='dim'>Expiry kills by <b>time</b>; eviction kills by <b>space</b>. Two mechanisms, two counters.</span>"
+              : "<span class='dim'>This one happened to be expired already, so the eviction was free. Press again — the next victim will be a live key.</span>");
+        } else {
+          setExplain("Memory " + rows.length * COST + " / " + CAP * COST,
+            "<span class='dim'>Still under the limit. Keep pressing until the bar turns red and something has to go.</span>");
+        }
+      }
+
+      /* ------------------------------------------------------------ reset */
+      function reset() {
+        rows = [];
+        clockS = 0;
+        presetIdx = 0; coldIdx = 0; bulkIdx = 1;
+        busy = false; sampled = null;
+        hits = 0; misses = 0; goneLazy = 0; goneSweep = 0; evictedCt = 0;
+        lock(false);
+        render();
+        setCall("// press <b>➕ SET</b> to write a key, then <b>⏩ +2s</b> to move the clock");
+        setExplain("A store, and a clock you control",
+          "Press <b>➕ SET</b> a few times, then <b>⏩ +2s</b> until a key's ttl reaches zero — and watch what <code>size()</code> does <span class='dim'>(nothing)</span>.");
+      }
+
+      document.getElementById("set-btn").addEventListener("click", doSet);
+      document.getElementById("tick-btn").addEventListener("click", advance);
+      document.getElementById("sweep-btn").addEventListener("click", sweep);
+      document.getElementById("cold-btn").addEventListener("click", coldKey);
+      document.getElementById("nottl-btn").addEventListener("click", setNoTtl);
+      document.getElementById("fill-btn").addEventListener("click", fillMemory);
+      document.getElementById("reset-btn").addEventListener("click", reset);
+      reset();
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>
