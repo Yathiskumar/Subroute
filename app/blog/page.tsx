@@ -5,7 +5,7 @@ import { Breadcrumb } from "@/components/shared/Breadcrumb";
 import { TagChip } from "@/components/shared/TagChip";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { getAllPostsMeta, formatDate } from "@/lib/blog";
-import { SITE_URL } from "@/lib/site";
+import { SITE_URL, RSS_ALTERNATE_TYPES } from "@/lib/site";
 
 const TITLE = "Blog";
 const DESCRIPTION =
@@ -14,7 +14,7 @@ const DESCRIPTION =
 export const metadata: Metadata = {
   title: TITLE,
   description: DESCRIPTION,
-  alternates: { canonical: "/blog" },
+  alternates: { canonical: "/blog", types: RSS_ALTERNATE_TYPES },
   openGraph: {
     type: "website",
     url: `${SITE_URL}/blog`,

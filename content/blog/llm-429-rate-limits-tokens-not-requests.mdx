@@ -1,0 +1,269 @@
+---
+title: "Why your LLM app gets 429s even when you're under the rate limit"
+slug: "llm-429-rate-limits-tokens-not-requests"
+publishedAt: "2026-08-06"
+excerpt: "Your dashboard says 40% of capacity. The provider says 429. The gap is that LLM APIs meter a resource whose size you don't know until after you've spent it — and the token bucket you learned in system design prep assumes the opposite."
+readingTime: 11
+tags: ["rate-limiting", "llm", "system-design", "distributed-systems", "api-design"]
+---
+
+You ship a feature that calls an LLM. Traffic is modest — nowhere near the requests-per-minute ceiling on your plan. Then the 429s start.
+
+You check the dashboard. Request count is comfortable. You add a concurrency cap. The 429s get *less frequent* but never stop. You add exponential backoff. Throughput drops and the 429s still don't stop. Somewhere around the third hour you start wondering whether the provider's limits are just wrong.
+
+They aren't. You're metering the wrong resource.
+
+## You're not behind one rate limiter. You're behind three
+
+Every classic rate limiting tutorial — including, until recently, [ours](/topics/rate-limiting) — teaches you to think in one dimension: requests per unit time. One bucket, one refill rate, one verdict.
+
+LLM APIs don't work that way. A request is not the unit of cost, because two requests can differ in cost by three orders of magnitude. A "hi" costs a few tokens. A RAG call stuffing forty retrieved chunks into context costs tens of thousands. Charging both one unit from the same bucket would be like a warehouse counting trucks and ignoring what's inside them.
+
+So providers meter several dimensions at once. Anthropic's Messages API enforces **requests per minute (RPM)**, **input tokens per minute (ITPM)**, and **output tokens per minute (OTPM)**, each as a separate bucket. OpenAI enforces **RPM**, **TPM**, and daily variants **RPD** and **TPD**, plus images per minute for image models.
+
+The verdict is the *tightest* bucket. Not the average, not the one you're watching.
+
+<figure className="diagram">
+  <svg viewBox="0 0 680 250" role="img" aria-labelledby="fig1-title">
+    <title id="fig1-title">Three parallel rate limit buckets; the output token bucket is empty and produces a 429 while the other two have headroom</title>
+
+    <text x="0" y="16" fontFamily="ui-monospace, monospace" fontSize="10" letterSpacing="1.2" fill="hsl(var(--subtle))">ONE REQUEST, THREE INDEPENDENT BUCKETS</text>
+
+    {/* RPM bucket — plenty of room */}
+    <rect x="0" y="46" width="94" height="150" rx="6" fill="hsl(var(--surface-sunken))" stroke="hsl(var(--border))" strokeWidth="1" />
+    <rect x="0" y="88" width="94" height="108" rx="6" fill="hsl(var(--info))" opacity="0.75" />
+    <text x="47" y="38" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" letterSpacing="1" fill="hsl(var(--muted))">RPM</text>
+    <text x="47" y="216" textAnchor="middle" fontSize="12" fontWeight="600" fill="hsl(var(--foreground))">43 / 60</text>
+    <text x="47" y="234" textAnchor="middle" fontSize="11" fill="hsl(var(--muted))">fine</text>
+
+    {/* ITPM bucket — over half left */}
+    <rect x="124" y="46" width="94" height="150" rx="6" fill="hsl(var(--surface-sunken))" stroke="hsl(var(--border))" strokeWidth="1" />
+    <rect x="124" y="118" width="94" height="78" rx="6" fill="hsl(var(--accent))" opacity="0.75" />
+    <text x="171" y="38" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" letterSpacing="1" fill="hsl(var(--muted))">ITPM</text>
+    <text x="171" y="216" textAnchor="middle" fontSize="12" fontWeight="600" fill="hsl(var(--foreground))">22k / 40k</text>
+    <text x="171" y="234" textAnchor="middle" fontSize="11" fill="hsl(var(--muted))">fine</text>
+
+    {/* OTPM bucket — empty, this is the one that fails */}
+    <rect x="248" y="46" width="94" height="150" rx="6" fill="hsl(var(--surface-sunken))" stroke="hsl(var(--danger))" strokeWidth="1.5" />
+    <rect x="248" y="188" width="94" height="8" rx="4" fill="hsl(var(--danger))" />
+    <text x="295" y="38" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" letterSpacing="1" fill="hsl(var(--danger))">OTPM</text>
+    <text x="295" y="216" textAnchor="middle" fontSize="12" fontWeight="600" fill="hsl(var(--danger))">0.3k / 8k</text>
+    <text x="295" y="234" textAnchor="middle" fontSize="11" fill="hsl(var(--danger))">empty</text>
+
+    {/* Arrow to the verdict */}
+    <line x1="368" y1="120" x2="446" y2="120" stroke="hsl(var(--border-strong))" strokeWidth="1.5" strokeDasharray="4 4" />
+    <path d="M446 114 L456 120 L446 126" fill="none" stroke="hsl(var(--border-strong))" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+
+    {/* Verdict card */}
+    <rect x="472" y="76" width="208" height="88" rx="10" fill="hsl(var(--surface-sunken))" stroke="hsl(var(--danger))" strokeWidth="1.5" />
+    <text x="576" y="108" textAnchor="middle" fontSize="24" fontWeight="700" fill="hsl(var(--danger))">429</text>
+    <text x="576" y="132" textAnchor="middle" fontSize="12" fill="hsl(var(--muted))">the tightest bucket decides</text>
+    <text x="576" y="150" textAnchor="middle" fontSize="11" fill="hsl(var(--subtle))">two out of three is a rejection</text>
+  </svg>
+  <figcaption>Two dimensions with headroom and one without still returns a 429. If your dashboard graphs request count, this failure is invisible to you.</figcaption>
+</figure>
+
+This alone explains a lot of mystery 429s. But it isn't the interesting part.
+
+## The interesting part: you're billed for a number you don't know yet
+
+Here's what makes LLM rate limiting genuinely different from every rate limiter in the textbook.
+
+A token bucket assumes cost is **known at admission time**. A request arrives, it costs one token, you check the bucket, you decide. The entire algorithm rests on knowing the price before you commit.
+
+With an LLM call you don't. You know your input size — you can count that locally before sending. But the *output* size is decided by the model, one token at a time, over the next several seconds. The true cost of the call is only knowable after it has finished streaming.
+
+So the provider has to guess, and how it guesses is a real, load-bearing implementation detail that differs by vendor:
+
+| | OpenAI | Anthropic |
+| --- | --- | --- |
+| Input accounting | Estimated from character count | Estimated at request start, adjusted during the request |
+| Output accounting | `max_tokens` is charged up front | Metered in real time as tokens are produced |
+| Does `max_tokens` cost you? | **Yes** — the limit is calculated as the *maximum* of `max_tokens` and the estimated request size | **No** — `max_tokens` does not factor into OTPM |
+| Cached input | Counts | `cache_read_input_tokens` do **not** count toward ITPM on most models |
+
+Read that third row twice, because it is the single most expensive line of config in most LLM codebases.
+
+On OpenAI, setting `max_tokens: 4096` "just to be safe" on a call that reliably returns 200 tokens means you are charged 4096 against your TPM every single time. Twenty times over. Your dashboard shows real token consumption — small — while your rate limiter is being drained by reservations you never used. You will get 429s at roughly 5% of your apparent capacity, and nothing in your own metrics will explain why.
+
+On Anthropic the same parameter is free, and the lever that matters instead is prompt caching: with an 80% cache hit rate against a 2M ITPM limit, you can push about 10M input tokens per minute, because cache reads don't count against the bucket.
+
+Same two-line diff. Opposite outcomes. This is why "best practices for LLM rate limiting" articles that don't name a provider are close to useless.
+
+<figure className="diagram">
+  <svg viewBox="0 0 680 270" role="img" aria-labelledby="fig2-title">
+    <title id="fig2-title">Timeline showing tokens reserved at admission versus the smaller actual cost known only when the response finishes streaming</title>
+
+    <text x="0" y="16" fontFamily="ui-monospace, monospace" fontSize="10" letterSpacing="1.2" fill="hsl(var(--subtle))">THE COST IS UNKNOWN UNTIL THE RESPONSE ENDS</text>
+
+    {/* Reserved band */}
+    <text x="0" y="48" fontSize="11" fill="hsl(var(--muted))">Reserved at admission</text>
+    <rect x="0" y="58" width="536" height="30" rx="5" fill="hsl(var(--accent))" opacity="0.28" stroke="hsl(var(--accent))" strokeWidth="1" strokeDasharray="5 4" />
+    <text x="268" y="78" textAnchor="middle" fontSize="12" fill="hsl(var(--foreground))">input estimate + max_tokens</text>
+
+    {/* Actual band */}
+    <text x="0" y="118" fontSize="11" fill="hsl(var(--muted))">Actually consumed</text>
+    <rect x="0" y="128" width="196" height="30" rx="5" fill="hsl(var(--info))" opacity="0.7" />
+    <text x="98" y="148" textAnchor="middle" fontSize="12" fontWeight="600" fill="hsl(var(--background))">input</text>
+    <rect x="200" y="128" width="132" height="30" rx="5" fill="hsl(var(--success))" opacity="0.7" />
+    <text x="266" y="148" textAnchor="middle" fontSize="12" fontWeight="600" fill="hsl(var(--background))">output</text>
+
+    {/* Over-reservation gap */}
+    <rect x="336" y="128" width="200" height="30" rx="5" fill="none" stroke="hsl(var(--border-strong))" strokeWidth="1" strokeDasharray="3 3" />
+    <text x="436" y="148" textAnchor="middle" fontSize="11" fill="hsl(var(--subtle))">never used — refund this</text>
+
+    {/* Timeline axis */}
+    <line x1="0" y1="196" x2="680" y2="196" stroke="hsl(var(--border))" strokeWidth="1" />
+    <line x1="0" y1="190" x2="0" y2="202" stroke="hsl(var(--border-strong))" strokeWidth="1.5" />
+    <line x1="200" y1="190" x2="200" y2="202" stroke="hsl(var(--border-strong))" strokeWidth="1.5" />
+    <line x1="332" y1="190" x2="332" y2="202" stroke="hsl(var(--border-strong))" strokeWidth="1.5" />
+
+    {/* Dotted risers linking bands to the axis */}
+    <line x1="200" y1="158" x2="200" y2="190" stroke="hsl(var(--border))" strokeWidth="1" strokeDasharray="2 3" />
+    <line x1="332" y1="158" x2="332" y2="190" stroke="hsl(var(--border))" strokeWidth="1" strokeDasharray="2 3" />
+
+    <text x="0" y="220" fontSize="11" fill="hsl(var(--muted))">admitted</text>
+    <text x="200" y="220" textAnchor="middle" fontSize="11" fill="hsl(var(--muted))">first token</text>
+    <text x="332" y="220" textAnchor="middle" fontSize="11" fill="hsl(var(--muted))">stream ends</text>
+
+    <text x="332" y="244" textAnchor="middle" fontSize="11" fontWeight="600" fill="hsl(var(--accent))">← true cost knowable only here</text>
+  </svg>
+  <figcaption>Admission has to commit capacity before the price is known. Everything hard about LLM rate limiting follows from this one gap.</figcaption>
+</figure>
+
+## The pattern that fixes it: reserve pessimistically, reconcile on completion
+
+Once you see the problem as "commit before you know the price," the solution is the one databases have used for decades. Reserve, then settle.
+
+1. **Estimate the cost before sending.** Count input tokens locally — `tiktoken` for OpenAI, the token counting endpoint for Anthropic. Add a pessimistic output estimate, ideally a high percentile of your observed history for that prompt type rather than a constant.
+2. **Admit only if every bucket has room.** Check RPM *and* the token buckets against the reservation. If any is short, don't send. A request you send into an exhausted bucket doesn't just fail — on many providers it still consumes quota on the way down, so blind retrying digs the hole deeper.
+3. **Hold the reservation while the call is in flight.** This is the step people skip. Ten concurrent calls of unknown size are ten unpriced liabilities against a shared budget.
+4. **Reconcile when the response completes.** Read the real usage off the response and release the difference back into the bucket.
+5. **Correct from the provider's own headers.** Your local model will drift. Every response carries the truth: `x-ratelimit-remaining-tokens` on OpenAI, `anthropic-ratelimit-input-tokens-remaining` and `anthropic-ratelimit-output-tokens-remaining` on Anthropic. Snap your local bucket to the server's number when they disagree.
+
+```python
+async def call(self, prompt: str, max_out: int) -> Response:
+    est_in = count_tokens(prompt)
+    est_out = self.p95_output_for(prompt_kind(prompt))  # not a constant
+
+    # Admission: every dimension, or we wait. `reserve` blocks until the
+    # continuously-refilling buckets can cover the whole estimate at once.
+    async with self.limiter.reserve(requests=1, inp=est_in, out=est_out) as lease:
+        resp = await self.client.messages.create(...)
+
+        # Settle against reality — the estimate was always a guess.
+        lease.settle(inp=resp.usage.input_tokens, out=resp.usage.output_tokens)
+
+        # And trust the provider over ourselves.
+        self.limiter.sync(resp.headers)
+        return resp
+```
+
+The `async with` matters. If the call throws halfway through a stream, the lease has to release or you leak capacity until restart — a slow strangle that looks exactly like a memory leak on a throughput graph.
+
+## Watch the difference
+
+Two clients, one identical request stream — same arrivals, same token costs, same seed. Both queue work they can't send yet, so neither gets to look good by quietly dropping load. The only difference is what each one checks before it sends.
+
+The left client does what most codebases do on the first pass: it caps requests per minute and sends. The right one runs the two-bucket reserve-and-reconcile loop above. Hit **Run**, then switch the workload to **RAG** and watch the request buckets stay almost full on both sides while only one of them stays clean.
+
+<div className="embed">
+  <iframe src="/prototypes/blog/llm-two-bucket-limiter.html" title="Interactive comparison of a requests-only rate limiter against a two-bucket reserve-and-reconcile limiter" loading="lazy" />
+</div>
+
+The hatched band on the right panel is live reserved capacity — tokens held for calls that are still streaming. Watch it expand as calls go out and collapse as each response settles. That band is the thing a requests-only limiter has no representation for, and it is where all the 429s come from.
+
+One result there is worth sitting with, because it's the opposite of what people expect. The two clients finish **roughly the same number of calls**. Token capacity is the binding constraint, and no admission policy invents more of it. What changes is that the left client converts part of that same workload into errors — failures that still burn a request slot, still cost latency, still surface to a user, and still trigger retries that make the next minute worse. The two-bucket client does the same amount of real work and simply *waits* instead of failing.
+
+That's the honest pitch for admission control generally: it rarely makes a saturated system faster. It makes it degrade in a way you can reason about.
+
+## Why your backoff is making it worse
+
+Now the second failure, the one that turns a bad minute into a bad afternoon.
+
+You add exponential backoff: on 429, wait 1s, then 2s, then 4s. Every instance does this. Which means every instance that failed at roughly the same moment *retries* at roughly the same moment. The bucket refills, the entire fleet slams it simultaneously, most of them 429 again, and now they're synchronized even harder for the next round.
+
+You've built a retry storm. Load arrives in coordinated spikes instead of a smooth stream, so peak demand massively overshoots capacity even when *average* demand is comfortably under it.
+
+<figure className="diagram">
+  <svg viewBox="0 0 680 230" role="img" aria-labelledby="fig3-title">
+    <title id="fig3-title">Synchronized retries produce spikes far above capacity, while jittered retries stay flat beneath it</title>
+
+    {/* Left panel: synchronized */}
+    <text x="0" y="14" fontFamily="ui-monospace, monospace" fontSize="10" letterSpacing="1" fill="hsl(var(--danger))">NAIVE EXPONENTIAL — SYNCHRONIZED</text>
+    <line x1="0" y1="170" x2="310" y2="170" stroke="hsl(var(--border))" strokeWidth="1" />
+    <line x1="0" y1="104" x2="310" y2="104" stroke="hsl(var(--border-strong))" strokeWidth="1" strokeDasharray="4 4" />
+    <text x="310" y="100" textAnchor="end" fontSize="10" fill="hsl(var(--subtle))">capacity</text>
+    <rect x="26" y="38" width="20" height="132" rx="3" fill="hsl(var(--danger))" opacity="0.85" />
+    <rect x="112" y="52" width="20" height="118" rx="3" fill="hsl(var(--danger))" opacity="0.85" />
+    <rect x="226" y="64" width="20" height="106" rx="3" fill="hsl(var(--danger))" opacity="0.85" />
+    <rect x="6" y="164" width="12" height="6" rx="2" fill="hsl(var(--muted))" opacity="0.5" />
+    <rect x="60" y="166" width="12" height="4" rx="2" fill="hsl(var(--muted))" opacity="0.5" />
+    <rect x="160" y="166" width="12" height="4" rx="2" fill="hsl(var(--muted))" opacity="0.5" />
+    <rect x="276" y="166" width="12" height="4" rx="2" fill="hsl(var(--muted))" opacity="0.5" />
+    <text x="155" y="196" textAnchor="middle" fontSize="11" fill="hsl(var(--muted))">every client retries at 1s, 2s, 4s</text>
+    <text x="155" y="216" textAnchor="middle" fontSize="11" fontWeight="600" fill="hsl(var(--danger))">peak is 3× capacity</text>
+
+    {/* Right panel: jittered */}
+    <text x="370" y="14" fontFamily="ui-monospace, monospace" fontSize="10" letterSpacing="1" fill="hsl(var(--success))">RETRY-AFTER + FULL JITTER</text>
+    <line x1="370" y1="170" x2="680" y2="170" stroke="hsl(var(--border))" strokeWidth="1" />
+    <line x1="370" y1="104" x2="680" y2="104" stroke="hsl(var(--border-strong))" strokeWidth="1" strokeDasharray="4 4" />
+    <text x="680" y="100" textAnchor="end" fontSize="10" fill="hsl(var(--subtle))">capacity</text>
+    <rect x="378" y="128" width="14" height="42" rx="3" fill="hsl(var(--success))" opacity="0.8" />
+    <rect x="404" y="122" width="14" height="48" rx="3" fill="hsl(var(--success))" opacity="0.8" />
+    <rect x="430" y="132" width="14" height="38" rx="3" fill="hsl(var(--success))" opacity="0.8" />
+    <rect x="456" y="118" width="14" height="52" rx="3" fill="hsl(var(--success))" opacity="0.8" />
+    <rect x="482" y="126" width="14" height="44" rx="3" fill="hsl(var(--success))" opacity="0.8" />
+    <rect x="508" y="120" width="14" height="50" rx="3" fill="hsl(var(--success))" opacity="0.8" />
+    <rect x="534" y="130" width="14" height="40" rx="3" fill="hsl(var(--success))" opacity="0.8" />
+    <rect x="560" y="124" width="14" height="46" rx="3" fill="hsl(var(--success))" opacity="0.8" />
+    <rect x="586" y="118" width="14" height="52" rx="3" fill="hsl(var(--success))" opacity="0.8" />
+    <rect x="612" y="128" width="14" height="42" rx="3" fill="hsl(var(--success))" opacity="0.8" />
+    <rect x="638" y="122" width="14" height="48" rx="3" fill="hsl(var(--success))" opacity="0.8" />
+    <text x="525" y="196" textAnchor="middle" fontSize="11" fill="hsl(var(--muted))">wake-ups spread across the window</text>
+    <text x="525" y="216" textAnchor="middle" fontSize="11" fontWeight="600" fill="hsl(var(--success))">same work, no spike</text>
+  </svg>
+  <figcaption>Identical retry volume in both panels. The only change is when each client wakes up — which is the whole difference between recovering and staying down.</figcaption>
+</figure>
+
+Three corrections, in order of how much they buy you:
+
+**Honour `retry-after`.** Both providers send it on a 429. It is not a hint; it is the provider telling you exactly when capacity returns. Retrying earlier is guaranteed to fail and, on a token-bucket provider, spends quota confirming that. Your own exponential curve is a guess about a number you were just handed.
+
+**Add full jitter.** Not `delay ± 10%`. Full jitter — `sleep(random(0, delay))` — which is what actually decorrelates a fleet. This is the single cheapest fix in the whole post and it's usually a one-line change.
+
+**Cap the backoff at one refill period.** A token bucket that refills continuously over a minute is fully replenished within a minute, no matter how long you sit there. Backing off to 64 seconds is pointless; backing off to 512 seconds means you've taken a five-minute outage over a five-second problem. Cap at roughly one bucket-refill and stop.
+
+There's a fourth situation worth naming because it looks like a bug in the provider: Anthropic also applies **acceleration limits**, so a sharp jump in usage can return 429s even when you're inside your posted per-minute limits. If you're launching a backfill, ramp into it rather than opening the throttle at once.
+
+## The part that gets harder with more than one worker
+
+Everything above assumes one process holds the bucket. Scale to twenty workers and the limit is still org-wide, so a local bucket per worker means you're running twenty limiters against one budget — each one correct, all of them collectively wrong.
+
+The options, roughly in order of how much they cost you:
+
+- **Static partitioning.** Each worker gets 1/N of the quota. Trivially correct, and wasteful exactly when it hurts: idle workers hoard capacity while busy ones throttle.
+- **A shared bucket in Redis.** One atomic Lua script does check-reserve-and-settle across the fleet. Correct, and adds a round trip to every call — usually fine next to a multi-second LLM call.
+- **A gateway.** Route everything through one proxy that owns the buckets. Best behaviour, and it becomes a component you have to run.
+
+The trade-off is the classic one, and it's the same shape as the [sliding window versus fixed window](/topics/rate-limiting/sliding-window) decision: precision costs coordination. What's specific to LLMs is that the reservation is *held* across a multi-second call, so a shared bucket carries state that a request-counting limiter never has to.
+
+## Why this shows up in interviews now
+
+"Design a rate limiter" has been a standard system design question for a decade, and the expected answer has been the same for a decade: token bucket, maybe sliding window, discuss the trade-off, done.
+
+That answer is now incomplete, and the follow-up is starting to appear in loops at companies building on model APIs: *what if the cost of a request isn't known until after you serve it?*
+
+It's a genuinely good question because it's not solvable by recalling an algorithm. It forces you to reason about admission control under uncertainty, reservation and settlement, local estimates converging on authoritative state, and how retry policy interacts with a shared budget. The token bucket is still the right primitive. It just doesn't survive contact with the problem unmodified — and being able to say *precisely which assumption breaks and how you'd patch it* is what separates a memorised answer from an engineering one.
+
+If you want the underlying primitives with the same treatment, the [rate limiting topic](/topics/rate-limiting) runs [token bucket](/topics/rate-limiting/token-bucket), [leaky bucket](/topics/rate-limiting/leaky-bucket), [fixed window](/topics/rate-limiting/fixed-window), [sliding window](/topics/rate-limiting/sliding-window), and [sliding log](/topics/rate-limiting/sliding-log) side by side against one shared workload — the same "identical stream, different policy" setup as the simulation above.
+
+## The short version
+
+- You are behind several limiters at once, and the tightest one decides. Graph tokens, not requests.
+- Cost is unknown at admission. Reserve pessimistically, reconcile against real usage, and trust the provider's headers over your local model.
+- `max_tokens` is charged against your TPM on OpenAI and is free against OTPM on Anthropic. Check which one you're on before you tune anything.
+- Honour `retry-after`, add full jitter, cap the backoff at one refill period.
+- Prompt caching raises effective throughput on Anthropic, because cache reads mostly don't count toward ITPM.
+
+The general lesson is older than any of this. A rate limiter is only as good as its cost model, and when the cost model is a guess, the interesting engineering is in how you correct the guess — not in which algorithm you picked.

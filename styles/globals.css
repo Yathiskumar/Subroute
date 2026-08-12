@@ -230,6 +230,43 @@
     @apply my-6 rounded-lg border border-border-subtle;
   }
 
+  /* Inline SVG figures authored directly in MDX. They read theme tokens, so
+     they flip with .dark like the rest of the prose. */
+  .prose-blog figure.diagram {
+    @apply my-8;
+  }
+  .prose-blog figure.diagram svg {
+    @apply block h-auto w-full;
+  }
+  .prose-blog figure.diagram figcaption {
+    @apply mt-3 text-sm text-muted;
+  }
+
+  /* Embedded prototypes. These are the same self-contained dark-theme pages
+     the topic pages iframe, so the frame keeps a dark surface in both themes
+     rather than pretending to match the light palette. */
+  .prose-blog .embed {
+    @apply my-8 overflow-hidden rounded-xl border border-border;
+    background: #0c0d10;
+  }
+  .prose-blog .embed iframe {
+    @apply block w-full;
+    height: 400px;
+    border: 0;
+  }
+  /* The prototype stacks its two panels once the *iframe* is 560px or less.
+     The iframe spans the prose column, which is the viewport minus the
+     container's 1.5rem gutters — so that happens at a 608px viewport. Key the
+     taller height off 610px to stay just ahead of the stack. */
+  @media (max-width: 610px) {
+    .prose-blog .embed iframe {
+      height: 700px;
+    }
+  }
+  .prose-blog .embed + .embed-caption {
+    @apply -mt-6 mb-8 text-sm text-muted;
+  }
+
   /* GFM tables */
   .prose-blog table {
     @apply my-6 block w-full overflow-x-auto border-collapse text-sm;
