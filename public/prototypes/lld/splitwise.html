@@ -1,0 +1,674 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Splitwise — live group ledger — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a; --accent-soft: rgba(251,134,58,.12); --accent-border: rgba(251,134,58,.45);
+        --success: #5cc66f; --success-soft: rgba(92,198,111,.12);
+        --info: #5e9ff6; --info-soft: rgba(94,159,246,.12);
+        --danger: #f06868; --danger-soft: rgba(240,104,104,.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px; --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 14px 16px 20px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      .top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 9px; }
+      .stat { font-family: var(--mono); font-size: 10.5px; padding: 6px 10px; border-radius: 999px;
+              background: var(--surface); border: 1px solid var(--border); color: var(--muted); white-space: nowrap; }
+      .stat b { color: var(--fg); }
+      .zero { margin-left: auto; font-family: var(--mono); font-size: 11px; padding: 6px 12px; border-radius: 999px;
+              background: var(--surface); border: 1px solid rgba(92,198,111,.4); color: var(--success);
+              white-space: nowrap; transition: background .3s, border-color .3s; }
+      .zero.flash { background: var(--success-soft); border-color: var(--success); }
+      .zero.broken { color: var(--danger); border-color: var(--danger); }
+
+      .callline { font-family: var(--mono); font-size: 11.5px; color: var(--subtle); background: #0a0b0e;
+                  border: 1px solid var(--border); border-radius: var(--r-md); padding: 7px 11px; margin-bottom: 10px;
+                  white-space: nowrap; overflow-x: auto; }
+      .callline b { color: var(--accent); }
+      .callline i { color: var(--success); font-style: normal; }
+      .callline u { color: var(--danger); text-decoration: none; }
+
+      .strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px; }
+      .mem { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
+             padding: 9px; display: flex; align-items: center; gap: 8px; transition: border-color .25s; }
+      .mem.up { border-color: rgba(92,198,111,.5); }
+      .mem.down { border-color: rgba(240,104,104,.45); }
+      .mem .av { font-size: 21px; }
+      .mem .nm { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+      .mem .amt { font-family: var(--mono); font-size: 12.5px; font-weight: 700; color: var(--subtle); }
+      .mem.up .amt { color: var(--success); }
+      .mem.down .amt { color: var(--danger); }
+
+      .cols { display: grid; grid-template-columns: 1fr 348px; gap: 10px; align-items: start; }
+      .pane { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 11px; }
+      .cap { font-family: var(--mono); font-size: 9.5px; letter-spacing: .09em; text-transform: uppercase;
+             color: var(--subtle); margin-bottom: 9px; display: flex; justify-content: space-between; gap: 10px; }
+
+      .frow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+      .lab { font-family: var(--mono); font-size: 9.5px; color: var(--subtle); width: 66px; flex: none; }
+      .chip { font-family: var(--mono); font-size: 10.5px; padding: 6px 10px; border-radius: var(--r-md);
+              background: var(--elevated); border: 1px solid var(--border-strong); color: var(--muted); cursor: pointer; }
+      .chip:hover { border-color: var(--accent); color: var(--fg); }
+      .chip.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); font-weight: 700; }
+      .chip.off { opacity: .45; }
+      .amtin { font-family: var(--mono); font-size: 12px; width: 104px; padding: 6px 8px; border-radius: var(--r-md);
+               background: var(--elevated); border: 1px solid var(--border-strong); color: var(--fg); }
+
+      .srows { margin-top: 4px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+      .srow { display: flex; align-items: center; gap: 6px; background: var(--elevated);
+              border: 1px solid var(--border); border-radius: 6px; padding: 5px 7px; }
+      .srow .who { font-family: var(--mono); font-size: 10px; color: var(--muted); flex: 1; }
+      .srow .out { font-family: var(--mono); font-size: 11px; color: var(--fg); }
+      .num { font-family: var(--mono); font-size: 10.5px; width: 62px; padding: 3px 5px; border-radius: 5px;
+             background: var(--surface); border: 1px solid var(--border-strong); color: var(--fg); }
+      .valid { font-family: var(--mono); font-size: 11px; margin-top: 9px; color: var(--success); }
+      .valid.no { color: var(--danger); }
+
+      .graph { display: block; }
+      .edges { font-family: var(--mono); font-size: 9.5px; color: var(--subtle); line-height: 1.7; margin-top: 6px; }
+      .edges b { color: var(--muted); }
+
+      .explain { min-height: 76px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md);
+                 padding: 12px 15px; margin-top: 11px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .hi { color: var(--accent); font-weight: 700; }
+      .explain-body .sub { display: block; margin-top: 5px; font-size: 11.5px; color: var(--subtle); }
+
+      .foot { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 11px; }
+      .btn { background: var(--elevated); color: var(--muted); font: 600 11.5px/1 var(--sans);
+             border: 1px solid var(--border); border-radius: var(--r-md); padding: 8px 12px; cursor: pointer; }
+      .btn:hover { border-color: var(--border-strong); color: var(--fg); }
+      .go { font-family: var(--mono); font-size: 12.5px; font-weight: 700; padding: 9px 18px; border-radius: var(--r-md);
+            cursor: pointer; background: var(--success-soft); border: 1px solid rgba(92,198,111,.45); color: var(--success); }
+      .go.bad { background: var(--danger-soft); border-color: rgba(240,104,104,.55); color: var(--danger); }
+      .go:active { transform: scale(.98); }
+      .go:disabled { opacity: .4; cursor: not-allowed; }
+      .hint { margin-left: auto; font-size: 11.5px; color: var(--muted); }
+      .hint .b { color: var(--accent); }
+
+      @media (max-width: 640px) {
+        .cols { grid-template-columns: 1fr; }
+        .strip { grid-template-columns: repeat(2, 1fr); }
+        .srows { grid-template-columns: 1fr; }
+        .hint { margin-left: 0; }
+        .zero { margin-left: 0; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="top">
+      <span class="stat">expenses <b id="s-exp">0</b></span>
+      <span class="stat">open edges <b id="s-edges">0</b></span>
+      <span class="stat">payments needed <b id="s-pay">0</b></span>
+      <span class="stat">settled <b id="s-settled">0</b></span>
+      <span class="zero" id="zero">total: ₹0.00</span>
+    </div>
+
+    <div class="callline" id="callline">// fill the form, then press <b>➕ Add expense</b></div>
+
+    <div class="strip" id="strip"></div>
+
+    <div class="cols">
+      <div class="pane">
+        <div class="cap"><span>Add an expense</span><span id="cap-strat">equal</span></div>
+
+        <div class="frow"><span class="lab">payer</span><span id="payers"></span></div>
+        <div class="frow"><span class="lab">amount ₹</span><input class="amtin" id="amt" type="number" step="1" min="1" value="1000" /></div>
+        <div class="frow"><span class="lab">split by</span><span id="strats"></span></div>
+        <div class="frow"><span class="lab">who ate</span><span id="partsrow"></span></div>
+
+        <div class="srows" id="srows"></div>
+        <div class="valid" id="valid">sum: ₹0.00 ✓</div>
+      </div>
+
+      <div class="pane">
+        <div class="cap"><span>Balance graph</span><span id="cap-edges">0 edges</span></div>
+        <div id="graph"></div>
+        <div class="edges" id="edgelist"></div>
+      </div>
+    </div>
+
+    <div class="explain">
+      <div class="explain-title" id="ex-title">Four friends, one ledger</div>
+      <div class="explain-body" id="ex-body">Press <b>➕ Add expense</b>. Watch the <b>total: ₹0.00</b> chip — it must never move.</div>
+    </div>
+
+    <div class="foot">
+      <button class="go" id="add-btn">➕ Add expense</button>
+      <button class="btn" id="odd-btn">🪙 Odd split</button>
+      <button class="btn" id="messy-btn">🎲 Messy weekend</button>
+      <button class="btn" id="simp-btn">⚡ Simplify debts</button>
+      <button class="btn" id="settle-btn">💸 Settle up</button>
+      <button class="btn" id="reset-btn">↺ Reset</button>
+      <span class="hint"><span class="b">▸</span> Pick 🔢 Exact, then drop a participant — the button refuses.</span>
+    </div>
+
+    <script>
+      var MEMBERS = [
+        { av: "🧑", nm: "Ravi" },
+        { av: "👩", nm: "Priya" },
+        { av: "🧔", nm: "Arjun" },
+        { av: "👧", nm: "Meera" }
+      ];
+      var STRATS = [
+        { k: "equal",   l: "⚖️ Equal" },
+        { k: "exact",   l: "🔢 Exact" },
+        { k: "percent", l: "% Percent" },
+        { k: "shares",  l: "🧮 Shares" }
+      ];
+      var NODE = [{ x: 74, y: 60 }, { x: 266, y: 60 }, { x: 266, y: 184 }, { x: 74, y: 184 }];
+      var PAIRS = [
+        { a: 0, b: 1, t: 0.50 }, { a: 1, b: 2, t: 0.50 },
+        { a: 2, b: 3, t: 0.50 }, { a: 3, b: 0, t: 0.50 },
+        { a: 0, b: 2, t: 0.32 }, { a: 1, b: 3, t: 0.68 }
+      ];
+
+      var owes, expenseCount, payCount, payerIdx, amtPaise, parts, strat;
+      var exactRs, pctVals, shareVals, busy, simplified, prevEdgeCount;
+
+      /* ------------------------------------------------------- money helpers */
+      function fmtP(p) {
+        var sign = p < 0 ? "−" : "";
+        var a = Math.abs(p);
+        return sign + "₹" + Math.floor(a / 100) + "." + ("0" + (a % 100)).slice(-2);
+      }
+      function spread(total, weights) {
+        var sum = 0, i;
+        for (i = 0; i < weights.length; i++) sum += weights[i];
+        if (sum <= 0) return null;
+        var out = [], assigned = 0;
+        for (i = 0; i < weights.length; i++) {
+          out.push(Math.floor((total * weights[i]) / sum));
+          assigned += out[i];
+        }
+        var leftover = total - assigned;
+        for (i = 0; leftover > 0; i = (i + 1) % out.length, leftover--) out[i]++;
+        return out;
+      }
+
+      /* ------------------------------------------------------- balance sheet */
+      function move(a, b, p) {
+        if (a === b || p === 0) return;
+        owes[a][b] += p;
+        owes[b][a] -= p;          // antisymmetry — both lines, or neither
+      }
+      function netOf(i) {
+        var s = 0;
+        for (var j = 0; j < 4; j++) s -= owes[i][j];
+        return s;
+      }
+      function totalNet() {
+        var s = 0;
+        for (var i = 0; i < 4; i++) s += netOf(i);
+        return s;
+      }
+      function openEdges() {
+        var out = [];
+        for (var i = 0; i < 4; i++)
+          for (var j = 0; j < 4; j++)
+            if (owes[i][j] > 0) out.push({ from: i, to: j, p: owes[i][j] });
+        return out;
+      }
+      function greedy() {
+        var cred = [], deb = [], i;
+        for (i = 0; i < 4; i++) {
+          var n = netOf(i);
+          if (n > 0) cred.push([i, n]);
+          else if (n < 0) deb.push([i, -n]);
+        }
+        var out = [], guard = 0;
+        while (cred.length && deb.length && guard++ < 24) {
+          cred.sort(function (x, y) { return y[1] - x[1]; });
+          deb.sort(function (x, y) { return y[1] - x[1]; });
+          var c = cred[0], d = deb[0], amt = Math.min(c[1], d[1]);
+          out.push({ from: d[0], to: c[0], p: amt });
+          c[1] -= amt; d[1] -= amt;
+          if (c[1] === 0) cred.shift();
+          if (d[1] === 0) deb.shift();
+        }
+        return out;
+      }
+
+      /* ------------------------------------------------------------- the form */
+      function participants() {
+        var out = [];
+        for (var i = 0; i < 4; i++) if (parts[i]) out.push(i);
+        return out;
+      }
+      function computeSplit() {
+        var idx = participants(), i, amounts = {}, sum = 0, vals = [];
+        if (idx.length === 0) return { ok: false, msg: "pick at least one participant", amounts: amounts };
+
+        if (strat === "exact") {
+          for (i = 0; i < idx.length; i++) {
+            var v = Math.round(exactRs[idx[i]] * 100);
+            amounts[idx[i]] = v; sum += v;
+          }
+          if (sum !== amtPaise)
+            return { ok: false, amounts: amounts,
+                     msg: "splits must sum to " + fmtP(amtPaise) + " — got " + fmtP(sum) };
+          return { ok: true, amounts: amounts, msg: "sum: " + fmtP(sum) + " ✓" };
+        }
+
+        if (strat === "percent") {
+          for (i = 0; i < idx.length; i++) { vals.push(pctVals[idx[i]]); sum += pctVals[idx[i]]; }
+          if (sum !== 100)
+            return { ok: false, amounts: amounts, msg: "percentages must sum to 100 — got " + sum };
+        } else if (strat === "shares") {
+          for (i = 0; i < idx.length; i++) vals.push(shareVals[idx[i]]);
+        } else {
+          for (i = 0; i < idx.length; i++) vals.push(1);
+        }
+
+        var out = spread(amtPaise, vals);
+        if (!out) return { ok: false, amounts: amounts, msg: "weights must not all be zero" };
+        sum = 0;
+        for (i = 0; i < idx.length; i++) { amounts[idx[i]] = out[i]; sum += out[i]; }
+        if (sum !== amtPaise)
+          return { ok: false, amounts: amounts,
+                   msg: "splits must sum to " + fmtP(amtPaise) + " — got " + fmtP(sum) };
+        return { ok: true, amounts: amounts, msg: "sum: " + fmtP(sum) + " ✓" };
+      }
+
+      /* ---------------------------------------------------------------- render */
+      function setExplain(t, h) {
+        document.getElementById("ex-title").textContent = t;
+        document.getElementById("ex-body").innerHTML = h;
+      }
+      function setCall(h) { document.getElementById("callline").innerHTML = h; }
+
+      function renderStrip() {
+        var host = document.getElementById("strip");
+        host.innerHTML = "";
+        for (var i = 0; i < 4; i++) {
+          var n = netOf(i);
+          var el = document.createElement("div");
+          el.className = "mem" + (n > 0 ? " up" : n < 0 ? " down" : "");
+          el.innerHTML = "<span class='av'>" + MEMBERS[i].av + "</span><span><span class='nm'>" +
+            MEMBERS[i].nm + "</span><br><span class='amt'>" + fmtP(n) + "</span></span>";
+          host.appendChild(el);
+        }
+      }
+
+      function renderForm() {
+        var host = document.getElementById("payers");
+        host.innerHTML = "";
+        MEMBERS.forEach(function (m, i) {
+          var b = document.createElement("button");
+          b.className = "chip" + (payerIdx === i ? " on" : "");
+          b.textContent = m.av + " " + m.nm;
+          b.addEventListener("click", function () { setPayer(i); });
+          host.appendChild(b);
+        });
+
+        host = document.getElementById("strats");
+        host.innerHTML = "";
+        STRATS.forEach(function (s) {
+          var b = document.createElement("button");
+          b.className = "chip" + (strat === s.k ? " on" : "");
+          b.textContent = s.l;
+          b.addEventListener("click", function () { setStrat(s.k); });
+          host.appendChild(b);
+        });
+
+        host = document.getElementById("partsrow");
+        host.innerHTML = "";
+        MEMBERS.forEach(function (m, i) {
+          var b = document.createElement("button");
+          b.className = "chip" + (parts[i] ? " on" : " off");
+          b.textContent = m.av;
+          b.title = m.nm;
+          b.addEventListener("click", function () { togglePart(i); });
+          host.appendChild(b);
+        });
+
+        document.getElementById("cap-strat").textContent = strat;
+      }
+
+      function renderSplitRows(res) {
+        var host = document.getElementById("srows");
+        var idx = participants(), html = "";
+        idx.forEach(function (i) {
+          var box = "";
+          if (strat === "exact") box = "<input class='num' data-i='" + i + "' type='number' value='" + exactRs[i] + "'>";
+          else if (strat === "percent") box = "<input class='num' data-i='" + i + "' type='number' value='" + pctVals[i] + "'>";
+          else if (strat === "shares") box = "<input class='num' data-i='" + i + "' type='number' value='" + shareVals[i] + "'>";
+          var amt = res.amounts[i] === undefined ? 0 : res.amounts[i];
+          html += "<div class='srow'><span class='who'>" + MEMBERS[i].av + " " + MEMBERS[i].nm + "</span>" +
+                  box + "<span class='out'>" + fmtP(amt) + "</span></div>";
+        });
+        host.innerHTML = html;
+        var boxes = host.querySelectorAll("input");
+        for (var k = 0; k < boxes.length; k++) bindBox(boxes[k]);
+
+        var v = document.getElementById("valid");
+        v.className = "valid" + (res.ok ? "" : " no");
+        v.textContent = res.ok ? res.msg : "✗ " + res.msg;
+        var btn = document.getElementById("add-btn");
+        btn.className = "go" + (res.ok ? "" : " bad");
+      }
+
+      function bindBox(el) {
+        el.addEventListener("input", function () {
+          var i = parseInt(el.getAttribute("data-i"), 10);
+          var v = parseFloat(el.value);
+          if (!isFinite(v) || isNaN(i)) return;          // empty box: keep the old value
+          if (strat === "exact") exactRs[i] = v;
+          else if (strat === "percent") pctVals[i] = Math.round(v);
+          else if (strat === "shares") shareVals[i] = Math.max(0, Math.round(v));
+          render();
+        });
+      }
+
+      function renderGraph() {
+        var edges = openEdges();
+        var col = simplified ? "#5cc66f" : "#fb863a";
+        var s = "<svg class='graph' viewBox='0 0 340 244' width='100%' style=\"max-width:340px;font-family:ui-monospace,Menlo,monospace\">";
+        s += "<defs><marker id='sw-p-arrow' markerUnits='userSpaceOnUse' markerWidth='10' markerHeight='8' refX='8' refY='3' orient='auto'>" +
+             "<path d='M0,0 L8,3 L0,6 z' fill='" + col + "'/></marker></defs>";
+
+        PAIRS.forEach(function (pr) {
+          var a = pr.a, b = pr.b, amt = owes[a][b], from = a, to = b;
+          if (amt < 0) { amt = -amt; from = b; to = a; }
+          if (amt === 0) return;
+          var p1 = NODE[from], p2 = NODE[to];
+          var dx = p2.x - p1.x, dy = p2.y - p1.y, len = Math.sqrt(dx * dx + dy * dy) || 1;
+          var ux = dx / len, uy = dy / len;
+          var x1 = p1.x + ux * 22, y1 = p1.y + uy * 22;
+          var x2 = p2.x - ux * 24, y2 = p2.y - uy * 24;
+          s += "<line x1='" + x1.toFixed(1) + "' y1='" + y1.toFixed(1) + "' x2='" + x2.toFixed(1) +
+               "' y2='" + y2.toFixed(1) + "' stroke='" + col + "' stroke-width='1.3' marker-end='url(#sw-p-arrow)'/>";
+          var lx = x1 + (x2 - x1) * pr.t, ly = y1 + (y2 - y1) * pr.t;
+          var label = fmtP(amt);
+          var w = label.length * 5.4 + 8;
+          s += "<rect x='" + (lx - w / 2).toFixed(1) + "' y='" + (ly - 8).toFixed(1) + "' width='" + w.toFixed(1) +
+               "' height='14' rx='3' fill='#14161a' stroke='#232830'/>";
+          s += "<text x='" + lx.toFixed(1) + "' y='" + (ly + 2.5).toFixed(1) + "' font-size='8.5' text-anchor='middle' fill='" + col + "'>" + label + "</text>";
+        });
+
+        for (var i = 0; i < 4; i++) {
+          var n = netOf(i), ring = n > 0 ? "#5cc66f" : n < 0 ? "#f06868" : "#3a414c";
+          s += "<circle cx='" + NODE[i].x + "' cy='" + NODE[i].y + "' r='20' fill='#14161a' stroke='" + ring + "' stroke-width='1.4'/>";
+          s += "<text x='" + (NODE[i].x - 10) + "' y='" + (NODE[i].y + 6) + "' font-size='16'>" + MEMBERS[i].av + "</text>";
+          var ty = NODE[i].y < 120 ? NODE[i].y - 26 : NODE[i].y + 36;
+          s += "<text x='" + NODE[i].x + "' y='" + ty + "' font-size='8.5' text-anchor='middle' fill='#9099a8'>" + MEMBERS[i].nm + "</text>";
+        }
+        s += "</svg>";
+        document.getElementById("graph").innerHTML = s;
+        document.getElementById("cap-edges").textContent = edges.length + " edges";
+
+        var list = "";
+        edges.forEach(function (e) {
+          list += MEMBERS[e.from].av + " <b>" + MEMBERS[e.from].nm + "</b> → " +
+                  MEMBERS[e.to].av + " <b>" + MEMBERS[e.to].nm + "</b>  " + fmtP(e.p) + "<br>";
+        });
+        document.getElementById("edgelist").innerHTML = list || "no open edges — everyone is square";
+      }
+
+      function renderStats() {
+        var edges = openEdges();
+        document.getElementById("s-exp").textContent = expenseCount;
+        document.getElementById("s-edges").textContent = edges.length;
+        document.getElementById("s-pay").textContent = greedy().length;
+        document.getElementById("s-settled").textContent = payCount;
+        var z = document.getElementById("zero"), t = totalNet();
+        z.textContent = "total: " + fmtP(t);
+        z.className = "zero" + (t === 0 ? "" : " broken");
+      }
+
+      function flashZero() {
+        var z = document.getElementById("zero");
+        z.className = z.className + " flash";
+        setTimeout(function () { z.className = z.className.replace(" flash", ""); }, 520);
+      }
+
+      function render() {
+        var res = computeSplit();
+        renderStrip(); renderForm(); renderSplitRows(res); renderGraph(); renderStats();
+        return res;
+      }
+
+      /* ---------------------------------------------------------- interactions */
+      function applySplit(payer, amounts) {
+        for (var k in amounts) {
+          var i = parseInt(k, 10);
+          if (i !== payer) move(i, payer, amounts[k]);
+        }
+      }
+
+      function addExpense() {
+        if (busy) return;
+        var res = computeSplit();
+        if (!res.ok) {
+          render();
+          setCall("group.<b>addExpense</b>(...) → <u>REFUSED</u>  <span style='color:#6b7280'>// the strategy validated its own output</span>");
+          setExplain("Refused before it touched the sheet",
+            "<span class='bad'>" + res.msg + "</span> <span class='dim'>— the gate lives inside the strategy, so no caller can record a split that does not add up.</span>" +
+            "<span class='sub'>Nothing moved. The balance graph is exactly as it was.</span>");
+          return;
+        }
+        applySplit(payerIdx, res.amounts);
+        expenseCount++;
+        simplified = false;
+        var idx = participants();
+        setCall("group.<b>addExpense</b>(\"" + MEMBERS[payerIdx].nm + "\", <i>" + amtPaise +
+                "</i>, [" + idx.map(function (i) { return MEMBERS[i].nm.charAt(0); }).join(",") +
+                "], " + strat + "Split)  <span style='color:#6b7280'>// paise, not rupees</span>");
+        render();
+        flashZero();
+        setExplain(MEMBERS[payerIdx].nm + " paid " + fmtP(amtPaise) + " for " + idx.length + " people",
+          "One edge moved per participant who is not the payer. <span class='good'>total stays ₹0.00</span> " +
+          "<span class='dim'>— checked after every single operation, which is the whole invariant.</span>");
+      }
+
+      function setPayer(i) {
+        if (busy) return;
+        payerIdx = i;
+        render();
+        setCall("expense.payer = <b>" + MEMBERS[i].nm + "</b>");
+        setExplain(MEMBERS[i].nm + " is paying",
+          "<span class='dim'>The payer and the participants are two different lists — you can pay for people who are not splitting it.</span>");
+      }
+
+      function setStrat(k) {
+        if (busy) return;
+        strat = k;
+        var idx = participants(), i;
+        if (k === "exact") {
+          var per = Math.floor(amtPaise / Math.max(1, idx.length) / 100);
+          for (i = 0; i < idx.length; i++) exactRs[idx[i]] = per;
+        } else if (k === "percent") {
+          var pc = Math.floor(100 / Math.max(1, idx.length));
+          for (i = 0; i < idx.length; i++) pctVals[idx[i]] = pc;
+        }
+        var res = render();
+        setCall("strategy = <b>" + k + "Split</b>  <span style='color:#6b7280'>// addExpense() never changes</span>");
+        setExplain("Split by " + k,
+          k === "equal" ? "<span class='dim'>base = total ÷ n, and the leftover paise go to the first people — one at a time.</span>"
+          : k === "exact" ? "Type the amounts. <span class='dim'>Now switch a participant off and watch the ➕ button refuse.</span>"
+          : k === "percent" ? "<span class='dim'>Percentages must sum to 100 before any rupees are computed.</span>"
+          : "<span class='dim'>2 shares for the couple, 1 each for the singles — weights, not amounts.</span>");
+        if (!res.ok) { /* validity line already shows why */ }
+      }
+
+      function togglePart(i) {
+        if (busy) return;
+        parts[i] = !parts[i];
+        var res = render();
+        setCall("participants = [" + participants().map(function (j) { return MEMBERS[j].nm; }).join(", ") + "]");
+        if (!res.ok)
+          setExplain("The sum just broke",
+            "<span class='bad'>" + res.msg + "</span> <span class='dim'>— the boxes did not change, the participant list did. This is the real-world version of the bug.</span>");
+        else
+          setExplain(parts[i] ? MEMBERS[i].nm + " is in" : MEMBERS[i].nm + " is out",
+            "<span class='dim'>" + participants().length + " people splitting " + fmtP(amtPaise) + ".</span>");
+      }
+
+      function oddSplit() {
+        if (busy) return;
+        payerIdx = 0; amtPaise = 10000; strat = "equal";
+        parts = [true, true, true, false];
+        document.getElementById("amt").value = "100";
+        var res = render();
+        setCall("EqualSplit.split(<i>10000</i>, [Ravi, Priya, Arjun])  <span style='color:#6b7280'>// 10000 % 3 = 1</span>");
+        setExplain("₹100 among three — where does the last paisa go?",
+          "<span class='hi'>₹33.34 / ₹33.33 / ₹33.33</span> and <span class='good'>" + res.msg + "</span>. " +
+          "<span class='dim'>The leftover paisa is handed to the first person, deterministically — with doubles it would be 33.33 three times and ₹0.01 would simply vanish.</span>");
+      }
+
+      function messyWeekend() {
+        if (busy) return;
+        clearLedger();
+        var all = [0, 1, 2, 3];
+        book(0, 100000, all, spread(100000, [1, 1, 1, 1]));
+        book(1, 90000, [1, 2, 3], spread(90000, [1, 1, 1]));
+        book(2, 120000, all, spread(120000, [1, 1, 2, 2]));
+        book(3, 80000, [1, 3], [50000, 30000]);
+        book(0, 10000, [0, 1, 2], spread(10000, [1, 1, 1]));
+        simplified = false;
+        render();
+        flashZero();
+        setCall("5 expenses booked → <i>" + openEdges().length + " open edges</i>  <span style='color:#6b7280'>// nets still sum to 0</span>");
+        setExplain("Five expenses, four payers, six open edges",
+          "Equal, shares and exact splits, all through the same interface. <span class='dim'>Six IOUs between four people — and only <b>" +
+          greedy().length + "</b> payments are actually needed. Press ⚡ Simplify debts.</span>");
+      }
+
+      function book(payer, total, idx, amounts) {
+        for (var i = 0; i < idx.length; i++) if (idx[i] !== payer) move(idx[i], payer, amounts[i]);
+        expenseCount++;
+      }
+
+      function simplifyDebts() {
+        if (busy) return;
+        var before = openEdges().length;
+        var transfers = greedy();
+        if (!transfers.length) {
+          setCall("group.<b>simplifyDebts</b>() → <i>nothing to do</i>");
+          setExplain("Nothing to simplify", "<span class='dim'>Everyone is square. Press 🎲 Messy weekend first.</span>");
+          return;
+        }
+        busy = true;
+        document.getElementById("add-btn").disabled = true;
+        for (var i = 0; i < 4; i++) for (var j = 0; j < 4; j++) owes[i][j] = 0;
+        simplified = true;
+        render();
+        setCall("nets computed → matching biggest creditor with biggest debtor…");
+        setExplain("Edges cleared — only the net positions matter now",
+          "<span class='dim'>Nobody is better or worse off. The nets are untouched; only the routing is about to change.</span>");
+
+        var step = 0;
+        (function next() {
+          if (step >= transfers.length) {
+            busy = false;
+            document.getElementById("add-btn").disabled = false;
+            render(); flashZero();
+            setCall("group.<b>simplifyDebts</b>() → <i>" + before + " payments → " + transfers.length + " payments</i>  <span style='color:#6b7280'>// bound: n−1 = 3</span>");
+            setExplain(before + " payments → " + transfers.length + " payments",
+              "At least one person zeroes out every round, so it stops in at most <span class='hi'>n−1</span>. " +
+              "<span class='dim'>It is greedy, not provably minimal — the true minimum is NP-hard.</span>" +
+              "<span class='sub'>Look at the graph: before this, <b>Arjun owed Priya ₹100.00</b>. Now <b>Priya pays Arjun</b>. The totals are right and the direction flipped — which is why real apps make this opt-in.</span>");
+            return;
+          }
+          var t = transfers[step++];
+          move(t.from, t.to, t.p);
+          render();
+          setExplain("Round " + step + " — " + MEMBERS[t.from].nm + " → " + MEMBERS[t.to].nm + " " + fmtP(t.p),
+            "<span class='dim'>Biggest debtor meets biggest creditor, settle min(|debt|, credit) — and one of them lands on exactly zero.</span>");
+          setTimeout(next, 760);
+        })();
+      }
+
+      function settleUp() {
+        if (busy) return;
+        var edges = openEdges(), best = null;
+        edges.forEach(function (e) { if (!best || e.p > best.p) best = e; });
+        if (!best) {
+          setCall("group.<b>settleUp</b>() → <i>nothing owed</i>");
+          setExplain("Nobody owes anybody", "<span class='dim'>Add an expense first.</span>");
+          return;
+        }
+        move(best.to, best.from, best.p);      // cancels the edge
+        payCount++;
+        render(); flashZero();
+        setCall("group.<b>settleUp</b>(\"" + MEMBERS[best.from].nm + "\", \"" + MEMBERS[best.to].nm + "\", <i>" + best.p + "</i>)");
+        setExplain(MEMBERS[best.from].nm + " paid " + MEMBERS[best.to].nm + " " + fmtP(best.p),
+          "That edge is now zero <span class='dim'>— and the payment is <b>recorded</b> as a Settlement row, not silently deleted. The audit trail is the only proof the money moved.</span>");
+      }
+
+      function clearLedger() {
+        owes = [];
+        for (var i = 0; i < 4; i++) { owes.push([]); for (var j = 0; j < 4; j++) owes[i].push(0); }
+        expenseCount = 0; payCount = 0; simplified = false;
+      }
+
+      function reset() {
+        resetState();
+        setCall("// ledger cleared — fill the form and press <b>➕ Add expense</b>");
+        setExplain("Ledger cleared",
+          "Back to four friends and no expenses. <span class='dim'>Every balance is zero, so <b>total: ₹0.00</b> is trivially true — the interesting part is that it stays true once you start adding.</span>");
+      }
+
+      function resetState() {
+        clearLedger();
+        payerIdx = 0; amtPaise = 100000; strat = "equal";
+        parts = [true, true, true, true];
+        exactRs = [250, 250, 250, 250];
+        pctVals = [25, 25, 25, 25];
+        shareVals = [1, 1, 2, 2];
+        busy = false; prevEdgeCount = 0;
+        document.getElementById("amt").value = "1000";
+        document.getElementById("add-btn").disabled = false;
+        render();
+      }
+
+      function boot() {
+        resetState();
+        setCall("// fill the form, then press <b>➕ Add expense</b>");
+        setExplain("Four friends, one ledger",
+          "Press <b>➕ Add expense</b>. Watch the <b>total: ₹0.00</b> chip — it must never move.");
+      }
+
+      document.getElementById("amt").addEventListener("input", function () {
+        var v = parseFloat(this.value);
+        if (!isFinite(v) || v <= 0) return;              // empty box: keep the old amount
+        amtPaise = Math.round(v * 100);
+        var res = render();
+        setCall("expense.totalPaise = <b>" + amtPaise + "</b>  <span style='color:#6b7280'>// " + fmtP(amtPaise) + " as an integer</span>");
+        setExplain("Amount is " + fmtP(amtPaise),
+          res.ok ? "<span class='dim'>Stored as <code>" + amtPaise + "</code> paise — a whole number, so nothing can round away.</span>"
+                 : "<span class='bad'>" + res.msg + "</span>");
+      });
+
+      document.getElementById("add-btn").addEventListener("click", addExpense);
+      document.getElementById("odd-btn").addEventListener("click", oddSplit);
+      document.getElementById("messy-btn").addEventListener("click", messyWeekend);
+      document.getElementById("simp-btn").addEventListener("click", simplifyDebts);
+      document.getElementById("settle-btn").addEventListener("click", settleUp);
+      document.getElementById("reset-btn").addEventListener("click", reset);
+      boot();
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

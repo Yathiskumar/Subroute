@@ -1,0 +1,613 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rate Limiter — live simulation — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a; --accent-soft: rgba(251,134,58,.12); --accent-border: rgba(251,134,58,.45);
+        --success: #5cc66f; --success-soft: rgba(92,198,111,.12);
+        --info: #5e9ff6; --info-soft: rgba(94,159,246,.12);
+        --danger: #f06868; --danger-soft: rgba(240,104,104,.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px; --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 14px 16px 20px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      .top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 9px; }
+      .mode { display: flex; gap: 5px; flex-wrap: wrap; }
+      .chip { font-family: var(--mono); font-size: 11px; padding: 7px 11px; border-radius: var(--r-md);
+              background: var(--elevated); border: 1px solid var(--border-strong); color: var(--muted); cursor: pointer; }
+      .chip:hover { border-color: var(--accent); color: var(--fg); }
+      .chip.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); font-weight: 700; }
+      .chip.sm { font-size: 10px; padding: 5px 8px; }
+      .stat { font-family: var(--mono); font-size: 10.5px; padding: 6px 10px; border-radius: 999px;
+              background: var(--surface); border: 1px solid var(--border); color: var(--muted); white-space: nowrap; }
+      .stat b { color: var(--fg); }
+      .stat.ok b { color: var(--success); }
+      .stat.no b { color: var(--danger); }
+      .stat.over { margin-left: auto; }
+      .stat.over b { color: var(--subtle); }
+      .stat.over.hot { border-color: rgba(240,104,104,.55); background: var(--danger-soft); }
+      .stat.over.hot b { color: var(--danger); font-weight: 700; }
+
+      .callline { font-family: var(--mono); font-size: 11.5px; color: var(--subtle); background: #0a0b0e;
+                  border: 1px solid var(--border); border-radius: var(--r-md); padding: 7px 11px; margin-bottom: 10px;
+                  white-space: nowrap; overflow-x: auto; }
+      .callline b { color: var(--accent); }
+      .callline i { color: var(--success); font-style: normal; }
+      .callline u { color: var(--danger); text-decoration: none; }
+
+      .cols { display: grid; grid-template-columns: 1fr 210px; gap: 10px; align-items: start; }
+      .pane { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 11px; }
+      .cap { font-family: var(--mono); font-size: 9.5px; letter-spacing: .09em; text-transform: uppercase;
+             color: var(--subtle); margin-bottom: 9px; display: flex; justify-content: space-between; gap: 10px; }
+
+      /* ---- time ruler ---- */
+      .ruler { position: relative; height: 104px; margin-bottom: 4px; }
+      .band { position: absolute; top: 20px; height: 46px; background: rgba(255,255,255,.025); border-radius: 3px; }
+      .band.cur { background: rgba(94,159,246,.09); }
+      .bline { position: absolute; top: 12px; height: 62px; width: 1px; background: var(--border-strong); }
+      .bline.edge { background: rgba(240,104,104,.6); }
+      .axis { position: absolute; top: 70px; left: 0; right: 0; height: 1px; background: #d8d3c9; opacity: .6; }
+      .tick { position: absolute; top: 76px; font-family: var(--mono); font-size: 9px; color: var(--subtle);
+              transform: translateX(-50%); white-space: nowrap; }
+      .dot { position: absolute; width: 8px; height: 8px; border-radius: 50%; margin-left: -4px; }
+      .dot.ok { background: var(--success); }
+      .dot.no { background: var(--danger); }
+      .nowline { position: absolute; top: 8px; height: 62px; width: 2px; margin-left: -1px; background: var(--accent); }
+      .nowlab { position: absolute; top: 0; font-family: var(--mono); font-size: 9.5px; color: var(--accent);
+                transform: translateX(-50%); white-space: nowrap; }
+
+      /* ---- algorithm state panel ---- */
+      .state { background: var(--elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md);
+               padding: 10px 11px; min-height: 96px; font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+      .state b { color: var(--fg); }
+      .state .hi { color: var(--accent); }
+      .state .good { color: var(--success); }
+      .state .bad { color: var(--danger); }
+      .state .r { margin-bottom: 7px; line-height: 1.5; }
+      .slots { display: flex; gap: 4px; margin: 2px 0 7px; flex-wrap: wrap; }
+      .sl { width: 20px; height: 20px; border-radius: 4px; border: 1px solid var(--border-strong); background: var(--surface); }
+      .sl.on { background: var(--accent-soft); border-color: var(--accent-border); }
+      .sl.part { background: var(--accent-soft); border-color: var(--accent-border); opacity: .45; }
+      .sl.q { background: rgba(94,159,246,.22); border-color: rgba(94,159,246,.5); }
+      .stamps { display: flex; gap: 4px; flex-wrap: wrap; }
+      .st { padding: 2px 6px; border-radius: 4px; background: rgba(92,198,111,.12);
+            border: 1px solid rgba(92,198,111,.4); color: var(--success); font-size: 9.5px; }
+      .st.gone { background: none; border-color: var(--border); color: var(--subtle); text-decoration: line-through; }
+
+      .rowlab { font-family: var(--mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase;
+                color: var(--subtle); margin: 10px 0 5px; }
+      .chips { display: flex; gap: 4px; flex-wrap: wrap; }
+      .kc { font-family: var(--mono); font-size: 10px; color: var(--muted); line-height: 1.8; }
+      .kc b { color: var(--fg); }
+      .kc i { color: var(--success); font-style: normal; }
+      .kc u { color: var(--danger); text-decoration: none; }
+      .kc .sel { color: var(--accent); }
+
+      .explain { min-height: 74px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md);
+                 padding: 12px 15px; margin-top: 11px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .hi { color: var(--accent); font-weight: 700; }
+
+      .foot { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 11px; }
+      .btn { background: var(--elevated); color: var(--muted); font: 600 11.5px/1 var(--sans);
+             border: 1px solid var(--border); border-radius: var(--r-md); padding: 8px 12px; cursor: pointer; }
+      .btn:hover { border-color: var(--border-strong); color: var(--fg); }
+      .btn:disabled { opacity: .35; cursor: not-allowed; }
+      .go { font-family: var(--mono); font-size: 12.5px; font-weight: 700; padding: 9px 18px; border-radius: var(--r-md);
+            cursor: pointer; background: var(--success-soft); border: 1px solid rgba(92,198,111,.45); color: var(--success); }
+      .go:active { transform: scale(.98); }
+      .go:disabled { opacity: .35; cursor: not-allowed; }
+      .hint { margin-left: auto; font-size: 11.5px; color: var(--muted); }
+      .hint .b { color: var(--accent); }
+
+      @media (max-width: 640px) { .cols { grid-template-columns: 1fr; } .hint { margin-left: 0; } }
+    </style>
+  </head>
+  <body>
+    <div class="top">
+      <div class="mode" id="mode"></div>
+      <span class="stat ok">allowed <b id="s-ok">0</b></span>
+      <span class="stat no">rejected <b id="s-no">0</b></span>
+      <span class="stat over" id="s-over-wrap">over-limit <b id="s-over">0</b></span>
+    </div>
+
+    <div class="callline" id="callline">// press <b>▶ Send request</b>, then <b>💥 Boundary burst</b></div>
+
+    <div class="cols">
+      <div class="pane">
+        <div class="cap"><span>virtual clock · one tick = 1s</span><span id="cap-algo">fixed window</span></div>
+        <div class="ruler" id="ruler"></div>
+        <div class="state" id="state"></div>
+      </div>
+
+      <div class="pane">
+        <div class="cap"><span>Config</span></div>
+        <div class="rowlab">limit / window</div>
+        <div class="chips" id="limits"></div>
+        <div class="rowlab">key</div>
+        <div class="chips" id="keys"></div>
+        <div class="rowlab">per key</div>
+        <div class="kc" id="kcounts"></div>
+      </div>
+    </div>
+
+    <div class="explain">
+      <div class="explain-title" id="ex-title">One interface, five algorithms</div>
+      <div class="explain-body" id="ex-body">The call is always <code>limiter.allow(key)</code>. Press <b>▶ Send request</b> a few times, then <b>💥 Boundary burst</b> — first under <b>🪟 Fixed</b>, then under <b>⚖️ Sliding counter</b>.</div>
+    </div>
+
+    <div class="foot">
+      <button class="go" id="send-btn">▶ Send request</button>
+      <button class="btn" id="adv-btn">⏩ +5s</button>
+      <button class="btn" id="edge-btn">💥 Boundary burst</button>
+      <button class="btn" id="burst-btn">🔥 Burst of 10</button>
+      <button class="btn" id="reset-btn">↺ Reset</button>
+      <span class="hint"><span class="b">▸</span> Same 10 requests, five algorithms — only one of them lets all ten through.</span>
+    </div>
+
+    <script>
+      var ALGOS = [
+        { k: "fixed",   l: "🪟 Fixed",           n: "fixed window" },
+        { k: "log",     l: "📜 Sliding log",     n: "sliding window log" },
+        { k: "counter", l: "⚖️ Sliding counter", n: "sliding window counter" },
+        { k: "token",   l: "🪣 Token bucket",    n: "token bucket" },
+        { k: "leaky",   l: "💧 Leaky bucket",    n: "leaky bucket" }
+      ];
+      var LIMITS = [
+        { l: "5 / 10s",  n: 5,  w: 10 },
+        { l: "10 / 10s", n: 10, w: 10 },
+        { l: "5 / 20s",  n: 5,  w: 20 }
+      ];
+      var KEYS = ["user-42", "user-7", "user-99"];
+      var SPAN = 60;
+
+      var algo, limitN, windowSec, curKey, tNow, viewStart, evts, lim, busy;
+      var nAllowed, nRejected, nOver;
+
+      function setExplain(t, h) {
+        document.getElementById("ex-title").textContent = t;
+        document.getElementById("ex-body").innerHTML = h;
+      }
+      function setCall(h) { document.getElementById("callline").innerHTML = h; }
+      function algoName() {
+        for (var i = 0; i < ALGOS.length; i++) if (ALGOS[i].k === algo) return ALGOS[i].n;
+        return algo;
+      }
+      function fmt(x, d) { return (Math.round(x * Math.pow(10, d)) / Math.pow(10, d)).toFixed(d); }
+
+      /* ---------------- the five algorithms ---------------- */
+      function newState() {
+        if (algo === "fixed")   return { start: null, count: 0 };
+        if (algo === "log")     return { stamps: [] };
+        if (algo === "counter") return { start: null, curr: 0, prev: 0 };
+        if (algo === "token")   return { tokens: null, last: 0 };
+        return { level: 0, last: null };
+      }
+      function stateFor(k) {
+        if (!lim[k]) lim[k] = newState();
+        return lim[k];
+      }
+      function take(s, t) {
+        var ws, elapsed, est, cap, rate, cutoff;
+        if (algo === "fixed") {
+          ws = Math.floor(t / windowSec) * windowSec;
+          if (s.start !== ws) { s.start = ws; s.count = 0; }        // derived from the clock, no timer
+          if (s.count < limitN) { s.count++; return true; }
+          return false;
+        }
+        if (algo === "log") {
+          cutoff = t - windowSec;
+          while (s.stamps.length && s.stamps[0] <= cutoff) s.stamps.shift();
+          if (s.stamps.length < limitN) { s.stamps.push(t); return true; }
+          return false;
+        }
+        if (algo === "counter") {
+          ws = Math.floor(t / windowSec) * windowSec;
+          if (s.start !== ws) {
+            s.prev = (s.start !== null && Math.abs(ws - s.start - windowSec) < 1e-9) ? s.curr : 0;
+            s.curr = 0;
+            s.start = ws;
+          }
+          elapsed = (t - ws) / windowSec;
+          est = s.prev * (1 - elapsed) + s.curr;
+          if (est < limitN - 1e-9) { s.curr++; return true; }
+          return false;
+        }
+        cap = limitN;
+        rate = limitN / windowSec;
+        if (algo === "token") {
+          if (s.tokens === null) { s.tokens = cap; s.last = t; }     // a new key starts full
+          s.tokens = Math.min(cap, s.tokens + (t - s.last) * rate);  // LAZY refill
+          s.last = t;
+          if (s.tokens >= 1 - 1e-9) { s.tokens -= 1; return true; }
+          return false;
+        }
+        if (s.last === null) s.last = t;
+        s.level = Math.max(0, s.level - (t - s.last) * rate);        // drains at a constant rate
+        s.last = t;
+        if (s.level + 1 <= cap + 1e-9) { s.level += 1; return true; }
+        return false;
+      }
+
+      /* ---------------- requests ---------------- */
+      function allowReq(k, t) {
+        var ok = take(stateFor(k), t);
+        evts.push({ key: k, t: t, ok: ok });
+        if (ok) {
+          nAllowed++;
+          var c = 0;
+          for (var i = 0; i < evts.length; i++) {
+            var e = evts[i];
+            if (e.key === k && e.ok && e.t > t - windowSec + 1e-9 && e.t <= t + 1e-9) c++;
+          }
+          if (c > limitN) nOver++;
+        } else nRejected++;
+        return ok;
+      }
+
+      function syncView() {
+        var guard = 0;
+        while (tNow >= viewStart + SPAN - 2 && guard++ < 500) viewStart += windowSec;
+        if (viewStart < 0) viewStart = 0;
+      }
+      function pct(t) { return ((t - viewStart) / SPAN) * 100; }
+
+      /* ---------------- render ---------------- */
+      function renderChips() {
+        var host = document.getElementById("mode");
+        host.innerHTML = "";
+        ALGOS.forEach(function (a) {
+          var b = document.createElement("button");
+          b.className = "chip" + (algo === a.k ? " on" : "");
+          b.textContent = a.l;
+          b.addEventListener("click", function () { setAlgo(a.k); });
+          host.appendChild(b);
+        });
+        document.getElementById("cap-algo").textContent = algoName();
+
+        var lh = document.getElementById("limits");
+        lh.innerHTML = "";
+        LIMITS.forEach(function (o) {
+          var b = document.createElement("button");
+          b.className = "chip sm" + (limitN === o.n && windowSec === o.w ? " on" : "");
+          b.textContent = o.l;
+          b.addEventListener("click", function () { setLimit(o); });
+          lh.appendChild(b);
+        });
+
+        var kh = document.getElementById("keys");
+        kh.innerHTML = "";
+        KEYS.forEach(function (k) {
+          var b = document.createElement("button");
+          b.className = "chip sm" + (curKey === k ? " on" : "");
+          b.textContent = k;
+          b.addEventListener("click", function () { setKey(k); });
+          kh.appendChild(b);
+        });
+      }
+
+      function renderRuler() {
+        var host = document.getElementById("ruler");
+        host.innerHTML = "";
+        var w0 = Math.floor(viewStart / windowSec) * windowSec;
+        for (var ws = w0; ws < viewStart + SPAN; ws += windowSec) {
+          var a = Math.max(ws, viewStart), b = Math.min(ws + windowSec, viewStart + SPAN);
+          var band = document.createElement("div");
+          band.className = "band" + (tNow >= ws && tNow < ws + windowSec ? " cur" : "");
+          band.style.left = pct(a) + "%";
+          band.style.width = (pct(b) - pct(a)) + "%";
+          host.appendChild(band);
+          if (ws >= viewStart) {
+            var bl = document.createElement("div");
+            bl.className = "bline" + (ws > viewStart ? " edge" : "");
+            bl.style.left = pct(ws) + "%";
+            host.appendChild(bl);
+            var tk = document.createElement("div");
+            tk.className = "tick";
+            tk.style.left = pct(ws) + "%";
+            tk.textContent = ws + "s";
+            host.appendChild(tk);
+          }
+        }
+        var ax = document.createElement("div");
+        ax.className = "axis";
+        host.appendChild(ax);
+
+        var shown = [];
+        evts.forEach(function (e) {
+          if (e.key !== curKey) return;
+          if (e.t < viewStart || e.t > viewStart + SPAN) return;
+          var row = 0;
+          for (var i = 0; i < shown.length; i++) if (Math.abs(shown[i] - e.t) < 0.9) row++;
+          shown.push(e.t);
+          if (row > 5) row = 5;
+          var d = document.createElement("div");
+          d.className = "dot " + (e.ok ? "ok" : "no");
+          d.style.left = pct(e.t) + "%";
+          d.style.top = (52 - row * 9) + "px";
+          host.appendChild(d);
+        });
+
+        var nl = document.createElement("div");
+        nl.className = "nowline";
+        nl.style.left = pct(tNow) + "%";
+        host.appendChild(nl);
+        var nb = document.createElement("div");
+        nb.className = "nowlab";
+        nb.style.left = pct(tNow) + "%";
+        nb.textContent = "now " + fmt(tNow, 1) + "s";
+        host.appendChild(nb);
+      }
+
+      function slots(n, cap, cls, partial) {
+        var h = "<div class='slots'>";
+        for (var i = 0; i < cap; i++) {
+          if (i < n) h += "<div class='sl " + cls + "'></div>";
+          else if (partial && i === n) h += "<div class='sl part'></div>";
+          else h += "<div class='sl'></div>";
+        }
+        return h + "</div>";
+      }
+
+      function renderState() {
+        var host = document.getElementById("state");
+        var s = stateFor(curKey), h = "";
+        if (algo === "fixed") {
+          var ws = Math.floor(tNow / windowSec) * windowSec;
+          var live = (s.start === ws) ? s.count : 0;
+          h += "<div class='r'>window <b>[" + ws + "s – " + (ws + windowSec) + "s]</b> · count <b>" + live + " / " + limitN + "</b></div>";
+          h += slots(live, limitN, "on", false);
+          h += "<div class='r'>at <span class='hi'>" + (ws + windowSec) + "s</span> the count drops to <b>0</b> — it keeps <span class='bad'>no memory</span> of this window</div>";
+        } else if (algo === "log") {
+          var cutoff = tNow - windowSec;
+          h += "<div class='r'>cut-off = now − window = <b>" + fmt(Math.max(0, cutoff), 1) + "s</b> · stored stamps <b>" + s.stamps.length + " / " + limitN + "</b></div>";
+          var all = [];
+          for (var i = 0; i < evts.length; i++) if (evts[i].key === curKey && evts[i].ok) all.push(evts[i].t);
+          all = all.slice(-12);
+          h += "<div class='stamps'>";
+          if (!all.length) h += "<span class='st gone'>empty</span>";
+          all.forEach(function (t) {
+            h += "<span class='st" + (t <= cutoff ? " gone" : "") + "'>" + fmt(t, 1) + "s</span>";
+          });
+          h += "</div>";
+          h += "<div class='r' style='margin-top:7px'>struck-through stamps were <span class='hi'>evicted on the way in</span> — one long per request is the cost</div>";
+        } else if (algo === "counter") {
+          var wsc = Math.floor(tNow / windowSec) * windowSec;
+          var prev = s.prev, curr = s.curr;
+          if (s.start !== wsc) {
+            prev = (s.start !== null && Math.abs(wsc - s.start - windowSec) < 1e-9) ? s.curr : 0;
+            curr = 0;
+          }
+          var el = (tNow - wsc) / windowSec;
+          var est = prev * (1 - el) + curr;
+          h += "<div class='r'>prev <b>[" + (wsc - windowSec) + "s]</b> = <b>" + prev + "</b> &nbsp; curr <b>[" + wsc + "s]</b> = <b>" + curr + "</b> &nbsp; elapsed = <b>" + fmt(el, 2) + "</b></div>";
+          h += "<div class='r'>estimate = " + prev + " × (1 − " + fmt(el, 2) + ") + " + curr + " = <b>" + fmt(est, 2) + "</b></div>";
+          h += "<div class='r'>" + (est < limitN - 1e-9
+            ? "<span class='good'>" + fmt(est, 2) + " &lt; " + limitN + " → the next request is allowed</span>"
+            : "<span class='bad'>" + fmt(est, 2) + " ≥ " + limitN + " → the next request is refused</span>") + "</div>";
+        } else if (algo === "token") {
+          var tk = s.tokens === null ? limitN : Math.min(limitN, s.tokens + (tNow - s.last) * (limitN / windowSec));
+          var full = Math.floor(tk + 1e-9);
+          h += "<div class='r'>tokens <b>" + fmt(tk, 2) + " / " + limitN + "</b> · refill <b>" + fmt(limitN / windowSec, 2) + " /s</b> · lastRefill <b>" + fmt(s.tokens === null ? 0 : s.last, 1) + "s</b></div>";
+          h += slots(full, limitN, "on", tk - full > 0.02);
+          h += "<div class='r'>nothing is running — press <span class='hi'>⏩ +5s</span> and the tokens are simply <span class='good'>recomputed</span> from elapsed time</div>";
+        } else {
+          var rate = limitN / windowSec;
+          var lv = s.last === null ? 0 : Math.max(0, s.level - (tNow - s.last) * rate);
+          var qn = Math.ceil(lv - 1e-9);
+          h += "<div class='r'>queue <b>" + fmt(lv, 2) + " / " + limitN + "</b> · drains <b>" + fmt(rate, 2) + " /s</b> (one every " + fmt(1 / rate, 1) + "s)</div>";
+          h += slots(qn, limitN, "q", false);
+          var sched = [];
+          for (var j = 1; j <= qn && j <= 6; j++) sched.push(fmt(tNow + j / rate, 1) + "s");
+          h += "<div class='r'>" + (sched.length
+            ? "leaves at t = <b>" + sched.join(", ") + "</b> — <span class='good'>evenly spaced, whatever the arrivals looked like</span>"
+            : "empty — a burst would go straight in and then trickle out one at a time") + "</div>";
+        }
+        host.innerHTML = h;
+      }
+
+      function renderCounts() {
+        var host = document.getElementById("kcounts");
+        var h = "";
+        KEYS.forEach(function (k) {
+          var ok = 0, no = 0;
+          for (var i = 0; i < evts.length; i++) if (evts[i].key === k) { if (evts[i].ok) ok++; else no++; }
+          h += "<div" + (k === curKey ? " class='sel'" : "") + ">" + k + " &nbsp;<i>" + ok + "✓</i> <u>" + no + "✗</u></div>";
+        });
+        host.innerHTML = h;
+      }
+
+      function renderStats() {
+        document.getElementById("s-ok").textContent = nAllowed;
+        document.getElementById("s-no").textContent = nRejected;
+        document.getElementById("s-over").textContent = nOver;
+        document.getElementById("s-over-wrap").className = "stat over" + (nOver > 0 ? " hot" : "");
+      }
+
+      function render() { syncView(); renderChips(); renderRuler(); renderState(); renderCounts(); renderStats(); }
+
+      /* ---------------- actions ---------------- */
+      function clearRun() {
+        evts = [];
+        lim = {};
+        tNow = 0; viewStart = 0;
+        nAllowed = 0; nRejected = 0; nOver = 0;
+      }
+
+      function setAlgo(k) {
+        if (busy) return;
+        algo = k;
+        clearRun();
+        render();
+        setCall("limiter = new <b>" + algoName().replace(/ /g, "") + "</b>(clock, " + limitN + ", " + windowSec + "s)");
+        setExplain("Swapped the algorithm — the call did not change",
+          "Every one of the five answers <code>limiter.allow(\"" + curKey + "\")</code>, byte for byte. <span class='dim'>Only the few numbers in the panel below are different. That is the strategy seam.</span>");
+      }
+
+      function setLimit(o) {
+        if (busy) return;
+        limitN = o.n; windowSec = o.w;
+        clearRun();
+        render();
+        setCall("// limit = " + limitN + " requests per " + windowSec + "s");
+        setExplain("Limit " + limitN + " per " + windowSec + "s",
+          "<span class='dim'>Limit and window are configuration, not code — the same class serves a free tier and a paid tier.</span>");
+      }
+
+      function setKey(k) {
+        if (busy) return;
+        curKey = k;
+        render();
+        setCall("limiter.<b>allow</b>(\"" + curKey + "\")");
+        setExplain("Now looking at " + curKey,
+          "Each key gets its own bucket from <code>computeIfAbsent</code>. <span class='dim'>Hammer one key and the others are untouched — and nothing ever removes them from that map.</span>");
+      }
+
+      function verdict(ok, t) {
+        var s = stateFor(curKey);
+        if (ok) return "allowed";
+        if (algo === "fixed") return "count is already " + limitN + " in this window";
+        if (algo === "log") return "5 stamps still inside the last " + windowSec + "s";
+        if (algo === "counter") return "the weighted estimate is at the limit";
+        if (algo === "token") return "the bucket is empty — " + fmt(s.tokens, 2) + " tokens";
+        return "the queue is full — nothing has drained yet";
+      }
+
+      function send() {
+        if (busy) return;
+        var t = tNow;
+        var ok = allowReq(curKey, t);
+        tNow = t + 0.4;
+        render();
+        setCall("limiter.<b>allow</b>(\"" + curKey + "\", t=" + fmt(t, 1) + "s) → " +
+          (ok ? "<i>true</i>" : "<u>false</u>  <span style='color:#6b7280'>// 429</span>"));
+        setExplain(ok ? "Allowed" : "Refused — " + verdict(false, t),
+          ok
+            ? "<span class='good'>200 OK</span> <span class='dim'>— the state below moved by exactly one. Keep pressing until it turns red.</span>"
+            : "<span class='bad'>429 Too Many Requests</span> <span class='dim'>— " + verdict(false, t) + ". Press ⏩ +5s and try again.</span>");
+      }
+
+      function adv5() {
+        if (busy) return;
+        tNow += 5;
+        render();
+        setCall("clock.<b>advance</b>(5000)  <span style='color:#6b7280'>// nothing else ran</span>");
+        var note = algo === "token"
+          ? "Tokens reappeared the moment the clock moved. <span class='dim'>No timer, no scheduler — the refill is computed from elapsed time on the way in.</span>"
+          : algo === "leaky"
+            ? "The queue drained by <span class='hi'>" + fmt(5 * limitN / windowSec, 1) + "</span>. <span class='dim'>Constant rate out, whatever went in.</span>"
+            : algo === "log"
+              ? "Old stamps just fell outside the cut-off. <span class='dim'>Eviction is lazy too — it happens on the next call, not on a timer.</span>"
+              : "The window moved. <span class='dim'>Nothing reset it — the window is derived from the clock by integer division.</span>";
+        setExplain("Clock → " + fmt(tNow, 1) + "s", note);
+      }
+
+      function setBusy(v) {
+        busy = v;
+        ["send-btn", "adv-btn", "edge-btn", "burst-btn", "reset-btn"].forEach(function (id) {
+          document.getElementById(id).disabled = v;
+        });
+      }
+
+      function boundaryBurst() {
+        if (busy) return;
+        setBusy(true);
+        limitN = 5; windowSec = 10;
+        clearRun();
+        tNow = windowSec - 1;                      // the last second of the window
+        for (var i = 0; i < 5; i++) allowReq(curKey, tNow + i * 0.15);
+        tNow = tNow + 0.6;
+        render();
+        setCall("5 × limiter.<b>allow</b>(\"" + curKey + "\", t≈" + (windowSec - 1) + "s)  <span style='color:#6b7280'>// last second of the window</span>");
+        setExplain("5 requests, right at the edge of the window",
+          "All five are legal — that is exactly the limit. <span class='dim'>Now the clock steps 2 seconds forward, into the next window…</span>");
+
+        setTimeout(function () {
+          var before = nAllowed;
+          tNow = windowSec + 1;                    // 2 seconds later, next window
+          for (var j = 0; j < 5; j++) allowReq(curKey, tNow + j * 0.15);
+          tNow = tNow + 0.6;
+          var got = nAllowed - before;
+          render();
+          setCall(got === 5
+            ? "5 more <b>allowed</b> → <u>10 requests in 2 seconds</u>  <span style='color:#6b7280'>// limit is 5 per " + windowSec + "s</span>"
+            : "5 more attempted → <i>" + got + " allowed</i>, <u>" + (5 - got) + " refused</u>");
+          if (algo === "fixed") {
+            setExplain("The counter reset — and forgot",
+              "Both windows hold exactly 5, both are legal, and the client still got <span class='bad'>10 requests in 2 seconds</span>. <span class='dim'>Now press 📜 Sliding log or ⚖️ Sliding counter and press 💥 again.</span>");
+          } else if (algo === "log") {
+            setExplain("No boundary to exploit",
+              "The second batch is <span class='bad'>entirely refused</span> — the log still holds five stamps from two seconds ago. <span class='dim'>Exactly correct, and it paid for it with one stored timestamp per request.</span>");
+          } else if (algo === "counter") {
+            setExplain("Almost — " + got + " slipped through",
+              "That one extra is the <span class='hi'>approximation</span>: the previous window is weighted, not replayed. <span class='dim'>" + got + " over instead of 5, for three numbers instead of a list.</span>");
+          } else {
+            setExplain(got + " through — and it is not a boundary bug",
+              "There is no window here to roll over. <span class='dim'>The bucket simply earned " + got + " unit back over those two seconds at " + fmt(limitN / windowSec, 2) + "/s. That is the average rate working exactly as configured.</span>");
+          }
+          setBusy(false);
+        }, 950);
+      }
+
+      function burst10() {
+        if (busy) return;
+        var before = nAllowed;
+        for (var i = 0; i < 10; i++) allowReq(curKey, tNow + i * 0.06);
+        tNow = tNow + 0.8;
+        var got = nAllowed - before;
+        render();
+        setCall("10 × limiter.<b>allow</b>(\"" + curKey + "\", t≈" + fmt(tNow, 1) + "s) → <i>" + got + " true</i>, <u>" + (10 - got) + " false</u>");
+        var note = algo === "token"
+          ? "The bucket had <span class='hi'>" + got + "</span> saved tokens, so all " + got + " went through <span class='good'>at once</span>. <span class='dim'>That burst is the feature. Press ⏩ +5s to watch them trickle back.</span>"
+          : algo === "leaky"
+            ? "<span class='hi'>" + got + "</span> joined the queue — but read the schedule below: they leave <span class='good'>one every " + fmt(windowSec / limitN, 1) + "s</span>. <span class='dim'>Spike in, metronome out.</span>"
+            : "<span class='hi'>" + got + "</span> allowed, " + (10 - got) + " refused. <span class='dim'>Counting algorithms cap the spike but do nothing to smooth it. Try 🪣 and 💧 with the same button.</span>";
+        setExplain("Burst of 10 at t=" + fmt(tNow - 0.8, 1) + "s", note);
+      }
+
+      function reset(pressed) {
+        algo = "fixed"; limitN = 5; windowSec = 10; curKey = KEYS[0];
+        clearRun();
+        setBusy(false);
+        render();
+        setCall("// press <b>▶ Send request</b>, then <b>💥 Boundary burst</b>");
+        if (pressed) {
+          setExplain("Reset — clock back to 0s, every bucket empty",
+            "Algorithm <span class='hi'>🪟 Fixed</span>, limit <span class='hi'>5 / 10s</span>, key <span class='hi'>" + KEYS[0] + "</span>. <span class='dim'>Press 💥 Boundary burst to see the bug this problem exists to ask about.</span>");
+        } else {
+          setExplain("One interface, five algorithms",
+            "The call is always <code>limiter.allow(key)</code>. Press <b>▶ Send request</b> a few times, then <b>💥 Boundary burst</b> — first under <b>🪟 Fixed</b>, then under <b>⚖️ Sliding counter</b>.");
+        }
+      }
+
+      document.getElementById("send-btn").addEventListener("click", send);
+      document.getElementById("adv-btn").addEventListener("click", adv5);
+      document.getElementById("edge-btn").addEventListener("click", boundaryBurst);
+      document.getElementById("burst-btn").addEventListener("click", burst10);
+      document.getElementById("reset-btn").addEventListener("click", function () { reset(true); });
+      reset(false);
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

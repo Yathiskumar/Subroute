@@ -1,0 +1,641 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Food delivery — one order, three actors — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a; --accent-soft: rgba(251,134,58,.12); --accent-border: rgba(251,134,58,.45);
+        --success: #5cc66f; --success-soft: rgba(92,198,111,.12);
+        --info: #5e9ff6; --info-soft: rgba(94,159,246,.12);
+        --danger: #f06868; --danger-soft: rgba(240,104,104,.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px; --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 14px 16px 20px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      /* ---------------------------------------------------- state pill strip */
+      .states { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+      .st { font-family: var(--mono); font-size: 10px; font-weight: 700; padding: 6px 10px; border-radius: 999px;
+            background: var(--surface); border: 1px solid var(--border); color: var(--subtle);
+            white-space: nowrap; transition: all .2s; }
+      .st.done { color: var(--muted); border-color: var(--border-strong); opacity: .55; }
+      .st.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent);
+               box-shadow: 0 0 0 3px rgba(251,134,58,.08); }
+      .st-arrow { color: #3a414c; font-family: var(--mono); font-size: 10px; }
+      .exit { margin-left: 10px; display: flex; gap: 5px; align-items: center; }
+      .exit .lbl { font-family: var(--mono); font-size: 9px; color: var(--subtle); }
+      .xt { font-family: var(--mono); font-size: 10px; font-weight: 700; padding: 6px 10px; border-radius: 999px;
+            background: var(--surface); border: 1px dashed var(--border-strong); color: var(--subtle); transition: all .2s; }
+      .xt.on { background: var(--danger-soft); border-style: solid; border-color: var(--danger); color: var(--danger); }
+
+      /* -------------------------------------------------------------- counters */
+      .top { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; margin-bottom: 9px; }
+      .stat { font-family: var(--mono); font-size: 10.5px; padding: 6px 10px; border-radius: 999px;
+              background: var(--surface); border: 1px solid var(--border); color: var(--muted); white-space: nowrap; }
+      .stat b { color: var(--fg); }
+      .stat.hot b { color: var(--accent); }
+      .stat.ok b { color: var(--success); }
+
+      .callline { font-family: var(--mono); font-size: 11.5px; color: var(--subtle); background: #0a0b0e;
+                  border: 1px solid var(--border); border-radius: var(--r-md); padding: 7px 11px; margin-bottom: 10px;
+                  white-space: nowrap; overflow-x: auto; }
+      .callline b { color: var(--accent); }
+      .callline i { color: var(--success); font-style: normal; }
+      .callline u { color: var(--danger); text-decoration: none; }
+
+      /* ----------------------------------------------------------------- panes */
+      .cols { display: grid; grid-template-columns: 1fr 306px; gap: 10px; align-items: start; }
+      .pane { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 11px; }
+      .cap { font-family: var(--mono); font-size: 9.5px; letter-spacing: .09em; text-transform: uppercase;
+             color: var(--subtle); margin-bottom: 9px; display: flex; justify-content: space-between; gap: 8px; }
+      .cap .hi { color: var(--accent); }
+
+      .actors { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; }
+      .actor { background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px; }
+      .actor .who { font-family: var(--mono); font-size: 10.5px; color: var(--fg); margin-bottom: 8px; }
+      .actor .who span { color: var(--subtle); font-size: 9px; }
+      .act { display: block; width: 100%; text-align: left; margin-bottom: 5px; cursor: pointer;
+             font: 600 11px/1.25 var(--sans); padding: 7px 9px; border-radius: 6px;
+             background: var(--surface); border: 1px solid var(--border); color: var(--muted); transition: all .15s; }
+      .act:hover { border-color: var(--border-strong); color: var(--fg); }
+      .act.legal { border-color: var(--accent-border); color: var(--fg); background: var(--accent-soft); }
+      .act.bad { border-color: var(--danger); color: var(--danger); background: var(--danger-soft); }
+      .act.shake { animation: fdshake .42s ease; }
+      @keyframes fdshake { 0%,100% { transform: translateX(0); } 20% { transform: translateX(-5px); }
+                           40% { transform: translateX(5px); } 60% { transform: translateX(-3px); }
+                           80% { transform: translateX(3px); } }
+      .quote { margin-top: 7px; font-family: var(--mono); font-size: 9.5px; color: var(--muted);
+               border-top: 1px dashed var(--border-strong); padding-top: 6px; }
+      .quote b { color: var(--accent); }
+      .quote.no b { color: var(--danger); }
+
+      /* ------------------------------------------------------------ bill pane */
+      .mrow { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 10.5px;
+              padding: 4px 0; color: var(--muted); }
+      .mrow b { color: var(--fg); font-weight: 700; }
+      .mrow.bump b { color: var(--accent); }
+      .sep { border-top: 1px solid var(--border-strong); margin: 7px 0; }
+      .brow { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 10.5px;
+              padding: 3px 0; color: var(--subtle); }
+      .brow span:last-child { color: var(--fg); }
+      .brow.tot { font-size: 12.5px; color: var(--fg); padding-top: 6px; }
+      .brow.tot span:last-child { color: var(--success); font-weight: 700; }
+      .brow.frz span:last-child { color: var(--accent); font-weight: 700; }
+      .old { color: var(--subtle); text-decoration: line-through; margin-right: 6px; }
+      .pin { font-family: var(--mono); font-size: 9px; padding: 2px 6px; border-radius: 999px;
+             background: var(--accent-soft); border: 1px solid var(--accent-border); color: var(--accent); margin-left: 6px; }
+
+      /* ------------------------------------------------------------- explain */
+      .explain { min-height: 74px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md);
+                 padding: 12px 15px; margin-top: 11px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .hi { color: var(--accent); font-weight: 700; }
+      .explain-body .sub { display: block; margin-top: 5px; font-size: 11.5px; color: var(--subtle); }
+
+      /* ---------------------------------------------------------------- foot */
+      .foot { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; margin-top: 11px; }
+      .lab { font-family: var(--mono); font-size: 9.5px; color: var(--subtle); }
+      .chip { font-family: var(--mono); font-size: 10.5px; padding: 7px 10px; border-radius: var(--r-md);
+              background: var(--elevated); border: 1px solid var(--border-strong); color: var(--muted); cursor: pointer; }
+      .chip:hover { border-color: var(--accent); color: var(--fg); }
+      .chip.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); font-weight: 700; }
+      .btn { background: var(--elevated); color: var(--muted); font: 600 11.5px/1 var(--sans);
+             border: 1px solid var(--border); border-radius: var(--r-md); padding: 8px 12px; cursor: pointer; }
+      .btn:hover { border-color: var(--border-strong); color: var(--fg); }
+      .chans { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+      .chans b { color: var(--info); }
+      .hint { margin-left: auto; font-size: 11.5px; color: var(--muted); }
+      .hint .b { color: var(--accent); }
+
+      @media (max-width: 700px) {
+        .cols { grid-template-columns: 1fr; }
+        .actors { grid-template-columns: 1fr; }
+        .hint { margin-left: 0; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="states" id="pills"></div>
+
+    <div class="top">
+      <span class="stat hot">state <b id="s-state">no order</b></span>
+      <span class="stat">elapsed <b id="s-min">0 min</b></span>
+      <span class="stat">refund paid <b id="s-refund">₹0.00</b></span>
+      <span class="stat ok">🔔 notifications <b id="s-notif">0</b></span>
+      <span class="stat">assignment <b id="s-assign">—</b></span>
+    </div>
+
+    <div class="callline" id="callline">// press <b>🙍 Place order</b> — the bill is built from the current menu, then frozen</div>
+
+    <div class="cols stage">
+      <div class="pane">
+        <div class="cap"><span>Three actors, one order</span><span class="hi" id="cap-legal">nothing is legal yet</span></div>
+        <div class="actors">
+          <div class="actor">
+            <div class="who">🙍 Customer<br /><span>places · cancels</span></div>
+            <button class="act" id="b-place">🙍 Place order</button>
+            <button class="act" id="b-cancel">🚫 Try to cancel</button>
+            <button class="act" id="b-cust-deliver">🙍 Deliver</button>
+            <div class="quote" id="quote">no order yet</div>
+          </div>
+          <div class="actor">
+            <div class="who">🍳 Restaurant<br /><span>accepts · cooks</span></div>
+            <button class="act" id="b-accept">🍳 Accept</button>
+            <button class="act" id="b-reject">🍳 Reject</button>
+            <button class="act" id="b-prep">🍳 Start preparing</button>
+            <button class="act" id="b-ready">🍳 Mark ready</button>
+          </div>
+          <div class="actor">
+            <div class="who">🛵 Partner<br /><span>collects · delivers</span></div>
+            <button class="act" id="b-pick">🛵 Pick up</button>
+            <button class="act" id="b-deliver">🛵 Deliver</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="pane">
+        <div class="cap"><span>Menu · cart · bill</span><span id="cap-frozen">live</span></div>
+        <div id="menu"></div>
+        <div class="sep"></div>
+        <div id="bill"></div>
+        <div class="foot" style="margin-top:9px">
+          <button class="btn" id="b-price">💸 Menu price changed</button>
+          <button class="btn" id="b-checkout">🧾 Checkout</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="explain">
+      <div class="explain-title" id="ex-title">One order, three actors</div>
+      <div class="explain-body" id="ex-body">
+        Press <b>🙍 Place order</b>, then hand the order to the kitchen and the rider.
+        <span class="sub">Every button calls the same <code>order.transition(event, actor)</code> — nothing sets the state directly.</span>
+      </div>
+    </div>
+
+    <div class="foot">
+      <span class="lab">assignment</span>
+      <button class="chip on" id="c-near">📍 Nearest free</button>
+      <button class="chip" id="c-batch">📦 Batch two orders</button>
+      <span class="lab">observers</span>
+      <button class="chip" id="c-sms">＋ Add SMS channel</button>
+      <span class="chans" id="chans"></span>
+      <button class="btn" id="b-reset">↺ Reset</button>
+      <span class="hint"><span class="b">▸</span> Try 🛵 Pick up while it is still PREPARING.</span>
+    </div>
+
+    <script>
+      /* ------------------------------------------------------------ the model */
+      var FLOW = ["PLACED", "ACCEPTED", "PREPARING", "READY", "PICKED_UP", "DELIVERED"];
+
+      /* (from, event, actor, to) — the whole rulebook, exactly as in the lesson */
+      var TABLE = [
+        ["PLACED",    "ACCEPT",     "RESTAURANT", "ACCEPTED"],
+        ["PLACED",    "REJECT",     "RESTAURANT", "REJECTED"],
+        ["PLACED",    "CANCEL",     "CUSTOMER",   "CANCELLED"],
+        ["ACCEPTED",  "START_PREP", "RESTAURANT", "PREPARING"],
+        ["ACCEPTED",  "CANCEL",     "CUSTOMER",   "CANCELLED"],
+        ["PREPARING", "MARK_READY", "RESTAURANT", "READY"],
+        ["PREPARING", "CANCEL",     "CUSTOMER",   "CANCELLED"],
+        ["READY",     "PICK_UP",    "PARTNER",    "PICKED_UP"],
+        ["READY",     "CANCEL",     "CUSTOMER",   "CANCELLED"],
+        ["PICKED_UP", "DELIVER",    "PARTNER",    "DELIVERED"]
+      ];
+
+      var MINUTES = { ACCEPT: 2, REJECT: 1, START_PREP: 1, MARK_READY: 15, PICK_UP: 2, DELIVER: 18, CANCEL: 0 };
+
+      var BUTTONS = [
+        { id: "b-place",         ev: "PLACE",      who: "CUSTOMER",   label: "🙍 Place order" },
+        { id: "b-cancel",        ev: "CANCEL",     who: "CUSTOMER",   label: "🚫 Try to cancel" },
+        { id: "b-cust-deliver",  ev: "DELIVER",    who: "CUSTOMER",   label: "🙍 Deliver" },
+        { id: "b-accept",        ev: "ACCEPT",     who: "RESTAURANT", label: "🍳 Accept" },
+        { id: "b-reject",        ev: "REJECT",     who: "RESTAURANT", label: "🍳 Reject" },
+        { id: "b-prep",          ev: "START_PREP", who: "RESTAURANT", label: "🍳 Start preparing" },
+        { id: "b-ready",         ev: "MARK_READY", who: "RESTAURANT", label: "🍳 Mark ready" },
+        { id: "b-pick",          ev: "PICK_UP",    who: "PARTNER",    label: "🛵 Pick up" },
+        { id: "b-deliver",       ev: "DELIVER",    who: "PARTNER",    label: "🛵 Deliver" }
+      ];
+
+      var PACKAGING = 2000, DELIVERY = 3500, TAX_BPS = 500, DISCOUNT = 5000;
+      var EXTRA_CHANNELS = ["✉️ SMS", "💬 WhatsApp", "📧 Email"];
+      var RIDERS = {
+        near:  { nm: "Asha",   why: "free, eta 4 min" },
+        batch: { nm: "Vikram", why: "already going to this kitchen, room for 1 more" }
+      };
+
+      var orderState, elapsedMin, refundPaid, notifCount, frozenTotal, quotedTotal;
+      var paneerPaise, naanPaise, priceBumps, channels, extraIdx, webhookN;
+      var strategyKey, assignCount, riderName;
+
+      /* -------------------------------------------------------------- helpers */
+      function fmt(p) {
+        var neg = p < 0, a = Math.abs(p);
+        return (neg ? "−" : "") + "₹" + Math.floor(a / 100) + "." + ("0" + (a % 100)).slice(-2);
+      }
+      function bps(p, rate) { return Math.floor((p * rate + 5000) / 10000); }
+
+      function liveBill() {
+        var subtotal = paneerPaise + 2 * naanPaise;
+        var taxes = bps(subtotal + PACKAGING, TAX_BPS);
+        var discount = Math.min(DISCOUNT, subtotal);
+        return {
+          subtotal: subtotal, packaging: PACKAGING, delivery: DELIVERY,
+          taxes: taxes, discount: discount,
+          total: subtotal + PACKAGING + DELIVERY + taxes - discount
+        };
+      }
+
+      function refundBps(state) {
+        if (state === "PLACED" || state === "ACCEPTED") return 10000;
+        if (state === "PREPARING") return 5000;
+        if (state === "READY") return 2500;
+        return -1;
+      }
+
+      function isTerminal(s) { return s === "DELIVERED" || s === "CANCELLED" || s === "REJECTED"; }
+
+      /** The ONE place that decides legality — and tells the two failures apart. */
+      function nextState(from, ev, who) {
+        var owner = null, i;
+        for (i = 0; i < TABLE.length; i++) {
+          if (TABLE[i][0] !== from || TABLE[i][1] !== ev) continue;
+          owner = TABLE[i][2];
+          if (owner === who) return { ok: true, to: TABLE[i][3] };
+        }
+        if (owner === null) return { ok: false, kind: "missing", owner: null };
+        return { ok: false, kind: "actor", owner: owner };
+      }
+
+      function legalNow(ev, who) {
+        if (!orderState) return ev === "PLACE";
+        if (ev === "PLACE") return false;
+        if (isTerminal(orderState)) return false;
+        return nextState(orderState, ev, who).ok;
+      }
+
+      /* --------------------------------------------------------------- render */
+      function setExplain(t, h) {
+        document.getElementById("ex-title").textContent = t;
+        document.getElementById("ex-body").innerHTML = h;
+      }
+      function setCall(h) { document.getElementById("callline").innerHTML = h; }
+
+      function renderPills() {
+        var host = document.getElementById("pills");
+        host.innerHTML = "";
+        var reached = orderState ? FLOW.indexOf(orderState) : -1;
+        var i;
+        for (i = 0; i < FLOW.length; i++) {
+          if (i > 0) {
+            var arrow = document.createElement("span");
+            arrow.className = "st-arrow";
+            arrow.textContent = "›";
+            host.appendChild(arrow);
+          }
+          var pill = document.createElement("span");
+          pill.className = "st" + (i === reached ? " on" : i < reached ? " done" : "");
+          pill.textContent = FLOW[i];
+          host.appendChild(pill);
+        }
+        var exit = document.createElement("span");
+        exit.className = "exit";
+        exit.innerHTML = "<span class='lbl'>side exits</span>" +
+          "<span class='xt" + (orderState === "CANCELLED" ? " on" : "") + "'>CANCELLED</span>" +
+          "<span class='xt" + (orderState === "REJECTED" ? " on" : "") + "'>REJECTED</span>";
+        host.appendChild(exit);
+      }
+
+      function renderCounters() {
+        document.getElementById("s-state").textContent = orderState || "no order";
+        document.getElementById("s-min").textContent = elapsedMin + " min";
+        document.getElementById("s-refund").textContent = fmt(refundPaid);
+        document.getElementById("s-notif").textContent = String(notifCount);
+        document.getElementById("s-assign").textContent = riderName
+          ? riderName + " · " + (strategyKey === "near" ? "nearest" : "batched")
+          : "—";
+      }
+
+      function renderButtons() {
+        var legalCount = 0, i;
+        for (i = 0; i < BUTTONS.length; i++) {
+          var b = BUTTONS[i], el = document.getElementById(b.id);
+          var ok = legalNow(b.ev, b.who);
+          if (ok) legalCount++;
+          el.className = "act" + (ok ? " legal" : "");
+        }
+        document.getElementById("cap-legal").textContent =
+          legalCount + (legalCount === 1 ? " legal move" : " legal moves") + " from " + (orderState || "an empty cart");
+      }
+
+      function renderQuote() {
+        var q = document.getElementById("quote");
+        if (!orderState) { q.className = "quote"; q.textContent = "no order yet"; return; }
+        if (isTerminal(orderState)) {
+          q.className = "quote no";
+          q.innerHTML = orderState + " is terminal — <b>nothing follows it</b>";
+          return;
+        }
+        var rate = refundBps(orderState);
+        if (rate < 0) {
+          q.className = "quote no";
+          q.innerHTML = "cancel now → <b>refused</b> · no CANCEL edge from " + orderState;
+          return;
+        }
+        q.className = "quote";
+        q.innerHTML = "cancel now → <b>" + (rate / 100) + "%</b> · " + fmt(bps(frozenTotal, rate)) +
+          " back, " + fmt(frozenTotal - bps(frozenTotal, rate)) + " kept";
+      }
+
+      function renderMenu() {
+        var host = document.getElementById("menu");
+        host.innerHTML =
+          "<div class='mrow" + (priceBumps > 0 ? " bump" : "") + "'><span>🍛 Paneer Butter Masala ×1</span><b>" +
+            paneerPaise + "</b></div>" +
+          "<div class='mrow'><span>🫓 Butter Naan ×2</span><b>" + naanPaise + "</b></div>" +
+          "<div class='mrow'><span style='color:#6b7280'>cart holds (menuItemId, qty)</span>" +
+            "<span style='color:#6b7280'>no price</span></div>";
+      }
+
+      function renderBill() {
+        var b = liveBill();
+        var host = document.getElementById("bill");
+        var quoted = "";
+        if (quotedTotal !== null && quotedTotal !== b.total)
+          quoted = "<span class='old'>" + fmt(quotedTotal) + "</span>";
+        var frozenRow = frozenTotal
+          ? "<div class='brow frz'><span>order (frozen)</span><span>" + fmt(frozenTotal) +
+              "<span class='pin'>📌 Frozen</span></span></div>"
+          : "<div class='brow'><span>order (frozen)</span><span style='color:#6b7280'>— not placed</span></div>";
+        host.innerHTML =
+          "<div class='brow'><span>item subtotal</span><span>" + b.subtotal + "</span></div>" +
+          "<div class='brow'><span>packaging</span><span>+ " + b.packaging + "</span></div>" +
+          "<div class='brow'><span>delivery fee</span><span>+ " + b.delivery + "</span></div>" +
+          "<div class='brow'><span>taxes 5%</span><span>+ " + b.taxes + "</span></div>" +
+          "<div class='brow'><span>discount SAVE50</span><span>− " + b.discount + "</span></div>" +
+          "<div class='brow tot'><span>cart (live)</span><span>" + quoted + fmt(b.total) + "</span></div>" +
+          "<div class='sep'></div>" + frozenRow;
+        document.getElementById("cap-frozen").textContent = frozenTotal ? "frozen at PLACED" : "live";
+      }
+
+      function renderChannels() {
+        document.getElementById("chans").innerHTML = "<b>" + channels.length + "</b> registered: " + channels.join(" · ");
+        document.getElementById("c-near").className = "chip" + (strategyKey === "near" ? " on" : "");
+        document.getElementById("c-batch").className = "chip" + (strategyKey === "batch" ? " on" : "");
+      }
+
+      function render() {
+        renderPills(); renderCounters(); renderButtons();
+        renderQuote(); renderMenu(); renderBill(); renderChannels();
+      }
+
+      function refuse(id, title, body) {
+        var el = document.getElementById(id);
+        el.className = "act bad shake";
+        setTimeout(function () { renderButtons(); }, 430);   // bounded: one shot
+        setExplain(title, body);
+      }
+
+      /* ---------------------------------------------------------- the actions */
+      function notify(from, to) {
+        notifCount += channels.length;
+      }
+
+      function placeOrder() {
+        if (orderState) {
+          refuse("b-place", "ORD-1 already exists",
+            "A second tap does <span class='bad'>not</span> create a second order. " +
+            "<span class='sub'><code>placeOrder(cart, \"req-91f\")</code> is keyed by a request id the client generated — a retry returns the same object.</span>");
+          setCall("service.<b>placeOrder</b>(cart, <i>\"req-91f\"</i>) → <i>ORD-1</i>  <span style='color:#6b7280'>// idempotent: same order</span>");
+          return;
+        }
+        var b = liveBill();
+        frozenTotal = b.total;
+        quotedTotal = null;
+        orderState = "PLACED";
+        elapsedMin = 0;
+        notify(null, "PLACED");
+        render();
+        setCall("service.<b>placeOrder</b>(cart, <i>\"req-91f\"</i>, at=1200) → <i>ORD-1</i> · bill 📌 <i>" + b.total + "</i> paise");
+        setExplain("ORD-1 placed — and its total is now frozen",
+          "The bill was built from the <span class='hi'>current</span> menu: " + b.subtotal + " + " + b.packaging +
+          " + " + b.delivery + " + " + b.taxes + " − " + b.discount + " = <span class='good'>" + b.total + "</span> paise." +
+          "<span class='sub'>Press <b>💸 Menu price changed</b> now — the cart moves, the order does not.</span>");
+      }
+
+      function fire(btn) {
+        if (btn.ev === "PLACE") { placeOrder(); return; }
+
+        if (!orderState) {
+          refuse(btn.id, "There is no order yet",
+            "<span class='bad'>" + btn.ev + "</span> needs an order to act on. " +
+            "<span class='sub'>Press <b>🙍 Place order</b> first — the cart is a wish, the order is the object with a lifecycle.</span>");
+          setCall("<u>order is null</u> — <b>🙍 Place order</b> creates it");
+          return;
+        }
+
+        if (isTerminal(orderState)) {
+          refuse(btn.id, orderState + " is terminal",
+            "Nothing follows <span class='bad'>" + orderState + "</span>. " +
+            "<span class='sub'>Terminal states have no outgoing edges at all — that is what makes them terminal. Press <b>↺ Reset</b>.</span>");
+          setCall("order.<b>transition</b>(" + btn.ev + ", " + btn.who + ") → <u>✗ " + orderState + " is terminal</u>");
+          return;
+        }
+
+        var res = nextState(orderState, btn.ev, btn.who);
+
+        if (!res.ok && res.kind === "missing") {
+          refuse(btn.id, "Missing transition",
+            "<code>" + btn.ev + "</code> is <span class='bad'>not a legal event</span> from <span class='hi'>" + orderState + "</span>." +
+            "<span class='sub'>There is no row for that pair in the table — no actor could fire it from here.</span>");
+          setCall("order.<b>transition</b>(" + btn.ev + ", " + btn.who + ") → <u>✗ illegal from " + orderState + "</u>");
+          return;
+        }
+
+        if (!res.ok && res.kind === "actor") {
+          refuse(btn.id, "Wrong actor",
+            "<code>" + btn.ev + "</code> from <span class='hi'>" + orderState + "</span> is <span class='good'>" +
+            res.owner + "</span>'s move, not <span class='bad'>" + btn.who + "</span>'s." +
+            "<span class='sub'>The edge exists — it just belongs to somebody else. Different bug, different message.</span>");
+          setCall("order.<b>transition</b>(" + btn.ev + ", " + btn.who + ") → <u>✗ owner is " + res.owner + "</u>");
+          return;
+        }
+
+        /* CANCEL asks the policy how much money moves */
+        if (btn.ev === "CANCEL") {
+          var rate = refundBps(orderState);
+          var back = bps(frozenTotal, rate);
+          var kept = frozenTotal - back;
+          var was = orderState;
+          refundPaid = back;
+          orderState = res.to;
+          elapsedMin += MINUTES.CANCEL;
+          notify(was, res.to);
+          render();
+          setCall("policy.<b>refundBpsFor</b>(" + was + ") → <i>" + rate + "</i> bps  ·  refund <i>" + back + "</i> · kept <i>" + kept + "</i>");
+          setExplain("Cancelled from " + was + " — refund " + (rate / 100) + "%",
+            "<span class='good'>" + fmt(back) + "</span> back to the customer, <span class='hi'>" + fmt(kept) +
+            "</span> kept." +
+            "<span class='sub'>The <b>table</b> said cancelling was legal from " + was +
+            "; the <b>policy</b> decided the number. And " + back + " + " + kept + " = " + frozenTotal + ", exactly.</span>");
+          return;
+        }
+
+        var fromState = orderState;
+        orderState = res.to;
+        elapsedMin += (MINUTES[btn.ev] || 0);
+        if (res.to === "ACCEPTED") {          // the flow asks the strategy; it never names one
+          assignCount++;
+          riderName = RIDERS[strategyKey].nm;
+        }
+        notify(fromState, res.to);
+        render();
+        setCall("order.<b>transition</b>(" + btn.ev + ", " + btn.who + ", at=" + elapsedMin + ") → <i>" + res.to + "</i>");
+        setExplain(fromState + " → " + res.to,
+          "<span class='hi'>" + btn.who + "</span> fired <code>" + btn.ev + "</code>, and it was the only actor allowed to." +
+          "<span class='sub'>🔔 " + channels.length + " channel" + (channels.length === 1 ? "" : "s") +
+          " notified — <code>Order</code> never mentions any of them by name.</span>");
+      }
+
+      /* ------------------------------------------------------------- the menu */
+      function bumpPrice() {
+        quotedTotal = liveBill().total;          // what the customer was last shown
+        priceBumps++;
+        paneerPaise += 3000;
+        var b = liveBill();
+        render();
+        setCall("menu.get(<i>\"paneer\"</i>).pricePaise = <b>" + paneerPaise + "</b>  <span style='color:#6b7280'>// the kitchen edits its own menu</span>");
+        if (frozenTotal) {
+          setExplain("Menu moved to " + paneerPaise + " — the order did not",
+            "Cart (live) is now <span class='hi'>" + fmt(b.total) + "</span>, order (frozen) is still <span class='good'>" +
+            fmt(frozenTotal) + "</span>." +
+            "<span class='sub'>A receipt, a refund and a restaurant payout all point at that frozen number. Nothing may reach back and change it.</span>");
+        } else {
+          setExplain("Menu moved to " + paneerPaise + " paise",
+            "The cart stores <code>(menuItemId, qty)</code>, so the live total followed it to <span class='hi'>" + fmt(b.total) + "</span>." +
+            "<span class='sub'>Had the cart stored the old price, the customer would still be about to pay " +
+            fmt(quotedTotal) + ". Press <b>🧾 Checkout</b>.</span>");
+        }
+      }
+
+      function checkout() {
+        var b = liveBill();
+        var before = quotedTotal === null ? b.total : quotedTotal;
+        render();
+        setCall("bill = <b>BillCalculator.build</b>(cart, restaurant)  → <i>" + b.total + "</i>  <span style='color:#6b7280'>// reads the CURRENT menu</span>");
+        if (before === b.total) {
+          setExplain("Rebuilt from the current menu — " + fmt(b.total),
+            "Same numbers, because nothing has changed yet. " +
+            "<span class='sub'>" + b.subtotal + " + " + b.packaging + " + " + b.delivery + " + " + b.taxes +
+            " − " + b.discount + " = " + b.total + ". The total is <b>defined</b> as that sum, so the printed breakdown always adds up.</span>");
+        } else {
+          setExplain("Rebuilt: " + fmt(before) + " → " + fmt(b.total),
+            "Checkout never trusts an old number — it re-prices every line from the <span class='hi'>current</span> menu." +
+            "<span class='sub'>Taxes moved too (" + b.taxes + " paise), because they are 5% of a subtotal that moved. Every field is an integer of paise.</span>");
+        }
+      }
+
+      /* ------------------------------------------------- strategies + channels */
+      function setStrategy(key) {
+        strategyKey = key;
+        assignCount++;
+        riderName = RIDERS[key].nm;
+        render();
+        setCall("service.<b>setAssignmentStrategy</b>(new " +
+          (key === "near" ? "NearestFreeStrategy" : "BatchedPickupStrategy") + "())  → reassign #" + assignCount);
+        setExplain("Assigned " + riderName + " · " + (key === "near" ? "nearest free" : "batched"),
+          "Picked because they are <span class='hi'>" + RIDERS[key].why + "</span>." +
+          "<span class='sub'>Reassignment #" + assignCount + ". <b>order-flow code changed: 0 lines</b> — the flow calls " +
+          "<code>strategy.pick(order, candidates)</code> and has never heard of either class.</span>");
+      }
+
+      function addChannel() {
+        var added;
+        if (extraIdx < EXTRA_CHANNELS.length) { added = EXTRA_CHANNELS[extraIdx]; extraIdx++; }
+        else { webhookN++; added = "🔗 Webhook #" + webhookN; }
+        channels.push(added);
+        render();
+        setCall("order.<b>register</b>(new " + (added.indexOf("SMS") >= 0 ? "SmsNotifier" : "Notifier") +
+          "())  → <i>" + channels.length + "</i> observers");
+        setExplain(added + " registered",
+          "Now <span class='hi'>" + channels.length + "</span> observers fire on every transition — the 🔔 counter will jump by " +
+          channels.length + " next time." +
+          "<span class='sub'><b>Order class edited: 0 lines.</b> That is the whole point of the observer seam.</span>");
+      }
+
+      /* ---------------------------------------------------------------- reset */
+      function resetState() {
+        orderState = null;
+        elapsedMin = 0;
+        refundPaid = 0;
+        notifCount = 0;
+        frozenTotal = 0;
+        quotedTotal = null;
+        paneerPaise = 24000;
+        naanPaise = 6000;
+        priceBumps = 0;
+        channels = ["📱 Push"];
+        extraIdx = 0;
+        webhookN = 0;
+        strategyKey = "near";
+        assignCount = 0;
+        riderName = null;
+        render();
+      }
+
+      function resetAll() {
+        resetState();
+        setCall("// cart rebuilt, menu back to 24000 — press <b>🙍 Place order</b>");
+        setExplain("Fresh cart, no order yet",
+          "Everything is back: menu 24000, one push channel, nearest-free assignment." +
+          "<span class='sub'>Rebuild the run you want — the interesting ones are a cancel at each stage, and a 🛵 Pick up fired too early.</span>");
+      }
+
+      function boot() {
+        resetState();
+        setCall("// press <b>🙍 Place order</b> — the bill is built from the current menu, then frozen");
+        setExplain("One order, three actors",
+          "Press <b>🙍 Place order</b>, then hand the order to the kitchen and the rider." +
+          "<span class='sub'>Every button calls the same <code>order.transition(event, actor)</code> — nothing sets the state directly.</span>");
+      }
+
+      /* ------------------------------------------------------------- wiring up */
+      (function () {
+        var i;
+        for (i = 0; i < BUTTONS.length; i++) {
+          (function (b) {
+            document.getElementById(b.id).addEventListener("click", function () { fire(b); });
+          })(BUTTONS[i]);
+        }
+      })();
+
+      document.getElementById("b-price").addEventListener("click", bumpPrice);
+      document.getElementById("b-checkout").addEventListener("click", checkout);
+      document.getElementById("c-near").addEventListener("click", function () { setStrategy("near"); });
+      document.getElementById("c-batch").addEventListener("click", function () { setStrategy("batch"); });
+      document.getElementById("c-sms").addEventListener("click", addChannel);
+      document.getElementById("b-reset").addEventListener("click", resetAll);
+
+      boot();
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

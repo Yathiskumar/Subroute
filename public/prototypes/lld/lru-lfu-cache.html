@@ -1,0 +1,574 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cache (LRU / LFU) — live simulation — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a; --accent-soft: rgba(251,134,58,.12); --accent-border: rgba(251,134,58,.45);
+        --success: #5cc66f; --success-soft: rgba(92,198,111,.12);
+        --info: #5e9ff6; --info-soft: rgba(94,159,246,.12);
+        --danger: #f06868; --danger-soft: rgba(240,104,104,.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px; --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 14px 16px 20px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      .top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 9px; }
+      .mode { display: flex; gap: 5px; }
+      .chip { font-family: var(--mono); font-size: 11px; padding: 7px 12px; border-radius: var(--r-md);
+              background: var(--elevated); border: 1px solid var(--border-strong); color: var(--muted); cursor: pointer; }
+      .chip:hover { border-color: var(--accent); color: var(--fg); }
+      .chip.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); font-weight: 700; }
+      .chip.bad { background: var(--danger-soft); border-color: rgba(240,104,104,.45); color: var(--danger); font-weight: 700; }
+      .chip.sm { font-size: 10px; padding: 6px 9px; }
+      .stat { font-family: var(--mono); font-size: 10.5px; padding: 6px 10px; border-radius: 999px;
+              background: var(--surface); border: 1px solid var(--border); color: var(--muted); white-space: nowrap; }
+      .stat b { color: var(--fg); }
+      .stat.ok b { color: var(--success); }
+      .stat.no b { color: var(--danger); }
+      .stat.ev b { color: var(--accent); }
+      .stat.ratio { margin-left: auto; }
+      .stat.ratio b { color: var(--info); }
+
+      .callline { font-family: var(--mono); font-size: 11.5px; color: var(--subtle); background: #0a0b0e;
+                  border: 1px solid var(--border); border-radius: var(--r-md); padding: 7px 11px; margin-bottom: 10px;
+                  white-space: nowrap; overflow-x: auto; }
+      .callline b { color: var(--accent); }
+      .callline i { color: var(--success); font-style: normal; }
+      .callline u { color: var(--danger); text-decoration: none; }
+
+      .cols { display: grid; grid-template-columns: 190px 1fr; gap: 10px; align-items: start; }
+      .pane { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 11px; }
+      .cap { font-family: var(--mono); font-size: 9.5px; letter-spacing: .09em; text-transform: uppercase;
+             color: var(--subtle); margin-bottom: 9px; display: flex; justify-content: space-between; gap: 10px; }
+      .cap b { color: var(--accent); letter-spacing: 0; text-transform: none; }
+
+      /* hashmap */
+      .maprows { display: flex; flex-direction: column; gap: 5px; min-height: 128px; }
+      .mrow { font-family: var(--mono); font-size: 10.5px; color: var(--fg); background: var(--elevated);
+              border: 1px solid var(--border-strong); border-radius: 6px; padding: 6px 8px;
+              display: flex; justify-content: space-between; gap: 6px; }
+      .mrow span { color: var(--subtle); }
+      .mrow.hi { border-color: var(--info); background: var(--info-soft); }
+      .mrow.empty { border-style: dashed; color: var(--subtle); justify-content: center; }
+      .mapnote { font-family: var(--mono); font-size: 9px; color: var(--subtle); line-height: 1.6; margin-top: 9px; }
+
+      /* the list */
+      .listwrap { min-height: 150px; overflow-x: auto; padding-bottom: 4px; }
+      .ends { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 9.5px; margin-bottom: 5px; }
+      .ends .mru { color: var(--success); }
+      .ends .lru { color: var(--danger); }
+      .chain { display: flex; align-items: center; gap: 0; }
+      .sent { flex: none; width: 56px; height: 56px; border-radius: var(--r-md); background: #101216;
+              border: 1px dashed var(--border-strong); color: var(--muted); font-family: var(--mono); font-size: 9.5px;
+              display: flex; align-items: center; justify-content: center; }
+      .node { flex: none; width: 74px; height: 56px; border-radius: var(--r-md); background: var(--elevated);
+              border: 1px solid var(--border-strong); display: flex; flex-direction: column;
+              align-items: center; justify-content: center; gap: 2px;
+              transition: transform .26s ease, opacity .26s ease, border-color .26s, background .26s; }
+      .node .k { font-family: var(--mono); font-size: 15px; font-weight: 700; color: var(--fg); }
+      .node .v { font-family: var(--mono); font-size: 8.5px; color: var(--subtle); }
+      .node .f { font-family: var(--mono); font-size: 8.5px; color: var(--info); }
+      .node.lift { transform: translateY(-16px); opacity: .45; border-color: var(--accent); border-style: dashed; }
+      .node.land { border-color: var(--accent); background: var(--accent-soft); }
+      .node.land .k { color: var(--accent); }
+      .node.dying { border-color: var(--danger); background: var(--danger-soft); }
+      .node.dying .k { color: var(--danger); }
+      .link { flex: none; width: 30px; display: flex; flex-direction: column; align-items: center; gap: 2px;
+              font-family: var(--mono); font-size: 10px; line-height: 1; }
+      .link .nx { color: var(--accent); }
+      .link .pv { color: var(--muted); }
+      .link.mend .nx, .link.mend .pv { color: var(--success); }
+
+      /* lfu buckets */
+      .buckets { display: flex; gap: 10px; align-items: flex-start; }
+      .bkt { border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 7px; background: #101216; }
+      .bkt.min { border-color: var(--danger); }
+      .bkt-h { font-family: var(--mono); font-size: 9px; color: var(--muted); margin-bottom: 6px; text-align: center; }
+      .bkt.min .bkt-h { color: var(--danger); }
+      .bkt-row { display: flex; align-items: center; }
+      .emptybkt { font-family: var(--mono); font-size: 9px; color: var(--subtle); padding: 18px 10px; }
+
+      .pad { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 11px; }
+      .key { font-family: var(--mono); font-size: 13px; font-weight: 700; width: 46px; padding: 9px 0;
+             border-radius: var(--r-md); background: var(--elevated); border: 1px solid var(--border-strong);
+             color: var(--muted); cursor: pointer; }
+      .key:hover { border-color: var(--accent); color: var(--fg); }
+      .key.in { border-color: rgba(92,198,111,.45); color: var(--success); }
+      .padlbl { font-family: var(--mono); font-size: 9.5px; color: var(--subtle); align-self: center; margin-right: 4px; }
+
+      .explain { min-height: 74px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md);
+                 padding: 12px 15px; margin-top: 11px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .hi { color: var(--accent); font-weight: 700; }
+
+      .foot { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 11px; }
+      .btn { background: var(--elevated); color: var(--muted); font: 600 11.5px/1 var(--sans);
+             border: 1px solid var(--border); border-radius: var(--r-md); padding: 8px 12px; cursor: pointer; }
+      .btn:hover { border-color: var(--border-strong); color: var(--fg); }
+      .go { font-family: var(--mono); font-size: 12.5px; font-weight: 700; padding: 9px 18px; border-radius: var(--r-md);
+            cursor: pointer; background: var(--success-soft); border: 1px solid rgba(92,198,111,.45); color: var(--success); }
+      .go:active { transform: scale(.98); }
+      .go:disabled { opacity: .35; cursor: not-allowed; }
+      .hint { margin-left: auto; font-size: 11.5px; color: var(--muted); }
+      .hint .b { color: var(--accent); }
+
+      @media (max-width: 640px) { .cols { grid-template-columns: 1fr; } .hint { margin-left: 0; } }
+    </style>
+  </head>
+  <body>
+    <div class="top">
+      <div class="mode" id="mode"></div>
+      <div class="mode" id="caps"></div>
+      <span class="stat ok">hits <b id="s-hit">0</b></span>
+      <span class="stat no">misses <b id="s-miss">0</b></span>
+      <span class="stat ev">evictions <b id="s-ev">0</b></span>
+      <span class="stat ratio">hit ratio <b id="s-ratio">—</b></span>
+    </div>
+
+    <div class="callline" id="callline">// click a key to call <b>cache.get(key)</b></div>
+
+    <div class="cols">
+      <div class="pane">
+        <div class="cap"><span>HashMap</span><span>key → node</span></div>
+        <div class="maprows" id="maprows"></div>
+        <div class="mapnote">no order at all.<br />that is what the list is for.</div>
+      </div>
+
+      <div class="pane">
+        <div class="cap"><span id="cap-title">Doubly-linked list · by recency</span><span id="cap-mode">LRU</span></div>
+        <div class="listwrap">
+          <div class="ends" id="ends"><span class="mru">▲ MRU end — just used</span><span class="lru">LRU end — evict here ▼</span></div>
+          <div id="listhost"></div>
+        </div>
+        <div class="pad" id="pad"></div>
+      </div>
+    </div>
+
+    <div class="explain">
+      <div class="explain-title" id="ex-title">A capacity-3 cache, drawn as real pointers</div>
+      <div class="explain-body" id="ex-body">Click a key below to call <b>cache.get(key)</b>. A hit slides the node to the MRU end; a miss loads it and, if the cache is full, the tail dies.</div>
+    </div>
+
+    <div class="foot">
+      <button class="go" id="replay-btn">▶ Replay trace</button>
+      <button class="btn" id="reset-btn">↺ Reset</button>
+      <span class="hint"><span class="b">▸</span> Replay under 🔁 LRU, reset, then replay under 📊 LFU — a different key dies.</span>
+    </div>
+
+    <script>
+      var KEYS = ["A", "B", "C", "D", "E", "F"];
+      var TRACE = ["A", "A", "A", "B", "C", "B", "D", "E", "B", "A"];
+
+      var capNow, policyMode, listOrder, storeMap, freqOf, hitCount, missCount, evictCount, busyRun, replayAt, timers;
+
+      function setExplain(t, h) {
+        document.getElementById("ex-title").textContent = t;
+        document.getElementById("ex-body").innerHTML = h;
+      }
+      function setCall(h) { document.getElementById("callline").innerHTML = h; }
+      function later(fn, ms) { timers.push(setTimeout(fn, ms)); }
+      function clearTimers() {
+        for (var i = 0; i < timers.length; i++) clearTimeout(timers[i]);
+        timers = [];
+      }
+
+      /* ---------------- render ---------------- */
+      function renderChips() {
+        var host = document.getElementById("mode");
+        host.innerHTML = "";
+        [{ k: "lru", l: "🔁 LRU" }, { k: "lfu", l: "📊 LFU" }, { k: "fifo", l: "⚠️ FIFO bug" }].forEach(function (o) {
+          var b = document.createElement("button");
+          b.className = "chip" + (policyMode === o.k ? (o.k === "fifo" ? " bad" : " on") : "");
+          b.textContent = o.l;
+          b.addEventListener("click", function () { setPolicy(o.k); });
+          host.appendChild(b);
+        });
+
+        var chost = document.getElementById("caps");
+        chost.innerHTML = "";
+        [2, 3, 4].forEach(function (c) {
+          var b = document.createElement("button");
+          b.className = "chip sm" + (capNow === c ? " on" : "");
+          b.textContent = "cap " + c;
+          b.addEventListener("click", function () { setCap(c); });
+          chost.appendChild(b);
+        });
+
+        document.getElementById("cap-mode").textContent =
+          policyMode === "lru" ? "LRU" : policyMode === "lfu" ? "LFU · minFreq" : "FIFO (the bug)";
+        document.getElementById("cap-title").textContent =
+          policyMode === "lfu" ? "Frequency buckets · newest on the left" : "Doubly-linked list · by recency";
+        document.getElementById("ends").style.visibility = policyMode === "lfu" ? "hidden" : "visible";
+      }
+
+      function renderMap() {
+        var host = document.getElementById("maprows");
+        host.innerHTML = "";
+        var keys = listOrder.slice().sort();
+        if (!keys.length) {
+          var e = document.createElement("div");
+          e.className = "mrow empty";
+          e.textContent = "empty";
+          host.appendChild(e);
+          return;
+        }
+        keys.forEach(function (k) {
+          var r = document.createElement("div");
+          r.className = "mrow";
+          r.innerHTML = "\"" + k + "\" → <span>Node⬤</span>";
+          host.appendChild(r);
+        });
+      }
+
+      function nodeEl(k, marks) {
+        var el = document.createElement("div");
+        el.className = "node" + (marks && marks[k] ? " " + marks[k] : "");
+        var inner = "<span class='k'>" + k + "</span><span class='v'>" + storeMap[k] + "</span>";
+        if (policyMode === "lfu") inner += "<span class='f'>freq " + freqOf[k] + "</span>";
+        el.innerHTML = inner;
+        return el;
+      }
+
+      function linkEl(mend) {
+        var el = document.createElement("div");
+        el.className = "link" + (mend ? " mend" : "");
+        el.innerHTML = "<span class='nx'>──▸</span><span class='pv'>◂──</span>";
+        return el;
+      }
+
+      function liftedIndex(order, marks) {
+        if (!marks) return -1;
+        for (var i = 0; i < order.length; i++) if (marks[order[i]] === "lift") return i;
+        return -1;
+      }
+
+      function renderChain(order, marks) {
+        var lifted = liftedIndex(order, marks);
+        var row = document.createElement("div");
+        row.className = "chain";
+        var h = document.createElement("div");
+        h.className = "sent";
+        h.textContent = "HEAD";
+        row.appendChild(h);
+        order.forEach(function (k, i) {
+          row.appendChild(linkEl(lifted >= 0 && (i === lifted || i === lifted + 1)));
+          row.appendChild(nodeEl(k, marks));
+        });
+        row.appendChild(linkEl(lifted === order.length - 1));
+        var t = document.createElement("div");
+        t.className = "sent";
+        t.textContent = "TAIL";
+        row.appendChild(t);
+        return row;
+      }
+
+      function minFreq() {
+        var m = null;
+        for (var i = 0; i < listOrder.length; i++) {
+          var f = freqOf[listOrder[i]];
+          if (m === null || f < m) m = f;
+        }
+        return m;
+      }
+
+      function renderList(marks) {
+        var host = document.getElementById("listhost");
+        host.innerHTML = "";
+        if (policyMode !== "lfu") {
+          host.appendChild(renderChain(listOrder, marks));
+          return;
+        }
+        var levels = [];
+        listOrder.forEach(function (k) { if (levels.indexOf(freqOf[k]) < 0) levels.push(freqOf[k]); });
+        levels.sort(function (a, b) { return a - b; });
+        var mf = minFreq();
+        var wrap = document.createElement("div");
+        wrap.className = "buckets";
+        if (!levels.length) {
+          var e = document.createElement("div");
+          e.className = "emptybkt";
+          e.textContent = "no buckets yet";
+          wrap.appendChild(e);
+        }
+        levels.forEach(function (f) {
+          var b = document.createElement("div");
+          b.className = "bkt" + (f === mf ? " min" : "");
+          var head = document.createElement("div");
+          head.className = "bkt-h";
+          head.textContent = (f === mf ? "minFreq ▸ " : "") + "freq " + f;
+          b.appendChild(head);
+          var row = document.createElement("div");
+          row.className = "bkt-row";
+          var inBucket = listOrder.filter(function (k) { return freqOf[k] === f; });
+          inBucket.forEach(function (k, i) {
+            if (i) row.appendChild(linkEl(false));
+            row.appendChild(nodeEl(k, marks));
+          });
+          b.appendChild(row);
+          wrap.appendChild(b);
+        });
+        host.appendChild(wrap);
+      }
+
+      function renderPad() {
+        var host = document.getElementById("pad");
+        host.innerHTML = "";
+        var lbl = document.createElement("span");
+        lbl.className = "padlbl";
+        lbl.textContent = "cache.get(";
+        host.appendChild(lbl);
+        KEYS.forEach(function (k) {
+          var b = document.createElement("button");
+          b.className = "key" + (storeMap[k] !== undefined ? " in" : "");
+          b.textContent = k;
+          b.addEventListener("click", function () { access(k); });
+          host.appendChild(b);
+        });
+      }
+
+      function renderStats() {
+        document.getElementById("s-hit").textContent = hitCount;
+        document.getElementById("s-miss").textContent = missCount;
+        document.getElementById("s-ev").textContent = evictCount;
+        var total = hitCount + missCount;
+        document.getElementById("s-ratio").textContent = total ? Math.round((100 * hitCount) / total) + "%" : "—";
+      }
+
+      function render(marks) {
+        renderChips();
+        renderMap();
+        renderList(marks);
+        renderPad();
+        renderStats();
+      }
+
+      /* ---------------- policy ---------------- */
+      function victimKey() {
+        if (!listOrder.length) return null;
+        if (policyMode !== "lfu") return listOrder[listOrder.length - 1];
+        var mf = minFreq();
+        for (var i = listOrder.length - 1; i >= 0; i--) if (freqOf[listOrder[i]] === mf) return listOrder[i];
+        return listOrder[listOrder.length - 1];
+      }
+
+      function moveToFront(k) {
+        var i = listOrder.indexOf(k);
+        if (i >= 0) listOrder.splice(i, 1);
+        listOrder.unshift(k);
+      }
+
+      /* ---------------- one access ---------------- */
+      function access(k, after) {
+        if (busyRun) return;
+        busyRun = true;
+        document.getElementById("replay-btn").disabled = true;
+
+        var hit = storeMap[k] !== undefined;
+        var finish = function () {
+          busyRun = false;
+          document.getElementById("replay-btn").disabled = false;
+          if (after) after();
+        };
+
+        if (hit) {
+          hitCount++;
+          if (policyMode === "fifo") {
+            setCall("cache.<b>get</b>(\"" + k + "\") → <i>HIT</i>   policy.recordAccess(\"" + k + "\")  <u>// empty body</u>");
+            render(null);
+            setExplain("HIT — and nothing moved",
+              "<span class='bad'>recordAccess() does nothing</span> in this mode. <span class='dim'>The order is still insertion order. Nothing looks broken — watch the hit ratio.</span>");
+            later(finish, 420);
+            return;
+          }
+
+          var marks = {};
+          marks[k] = "lift";
+          setCall("cache.<b>get</b>(\"" + k + "\") → <i>HIT</i>   policy.<b>recordAccess</b>(\"" + k + "\")");
+          render(marks);
+          setExplain("Beat 1 — unlink",
+            "<code>n.prev.next = n.next</code> and <code>n.next.prev = n.prev</code>. <span class='dim'>The neighbours join across the gap. Two assignments, no walking.</span>");
+
+          later(function () {
+            if (policyMode === "lfu") freqOf[k] = freqOf[k] + 1;
+            moveToFront(k);
+            var m2 = {};
+            m2[k] = "land";
+            render(m2);
+            if (policyMode === "lfu") {
+              setCall("bucket[" + (freqOf[k] - 1) + "] → bucket[" + freqOf[k] + "]   minFreq = <i>" + minFreq() + "</i>");
+              setExplain("Beat 2 — promoted one bucket",
+                "<span class='hi'>" + k + "</span> moves from frequency " + (freqOf[k] - 1) + " to " + freqOf[k] + ". <span class='dim'>minFreq only moves up when its own bucket empties.</span>");
+            } else {
+              setExplain("Beat 2 — insert at head",
+                "<code>n.next = head.next; n.prev = head; head.next.prev = n; head.next = n;</code> <span class='dim'>Four assignments. That is the whole of O(1).</span>");
+            }
+            later(finish, 260);
+          }, 360);
+          return;
+        }
+
+        /* ---- miss ---- */
+        missCount++;
+        setCall("cache.<b>get</b>(\"" + k + "\") → <u>MISS</u>   store.get(\"" + k + "\") == null");
+        render(null);
+        setExplain("MISS — the slow path",
+          "Nothing in the map. <span class='dim'>The value comes from the origin, and then the cache fills itself — which is the only place eviction happens.</span>");
+
+        later(function () {
+          var victim = listOrder.length >= capNow ? victimKey() : null;
+          if (victim) {
+            var m = {};
+            m[victim] = "dying";
+            render(m);
+            if (policyMode === "lfu") {
+              setCall("policy.<b>evictCandidate</b>() → <u>\"" + victim + "\"</u>  <span style='color:#6b7280'>// oldest node in bucket[minFreq]</span>");
+              setExplain("Cache full — the least-frequently-used key dies",
+                "<span class='bad'>" + victim + "</span> sat at frequency " + freqOf[victim] + ". <span class='dim'>Ties inside a bucket are broken by recency — LFU has an LRU inside it.</span>");
+            } else if (policyMode === "fifo") {
+              setCall("policy.<b>evictCandidate</b>() → <u>\"" + victim + "\"</u>  <span style='color:#6b7280'>// oldest INSERTED, not oldest used</span>");
+              setExplain("Cache full — the oldest insert dies",
+                "<span class='bad'>" + victim + "</span> goes, even if it was used a moment ago. <span class='dim'>That is what LRU becomes without the move.</span>");
+            } else {
+              setCall("policy.<b>evictCandidate</b>() → <u>\"" + victim + "\"</u>  <span style='color:#6b7280'>// tail.prev — no scan</span>");
+              setExplain("Cache full — the tail dies",
+                "<span class='bad'>" + victim + "</span> is <code>tail.prev</code>. <span class='dim'>Evict first, then insert — the cache never holds capacity + 1.</span>");
+            }
+            later(function () { commitInsert(k, victim, finish); }, 380);
+          } else {
+            commitInsert(k, null, finish);
+          }
+        }, 380);
+      }
+
+      function commitInsert(k, victim, finish) {
+        if (victim) {
+          delete storeMap[victim];
+          delete freqOf[victim];
+          var vi = listOrder.indexOf(victim);
+          if (vi >= 0) listOrder.splice(vi, 1);
+          evictCount++;
+        }
+        storeMap[k] = "val";
+        freqOf[k] = 1;
+        listOrder.unshift(k);
+        var m = {};
+        m[k] = "land";
+        render(m);
+        setCall("store.put(\"" + k + "\", load(\"" + k + "\"))   policy.<b>recordInsert</b>(\"" + k + "\")");
+        setExplain("Inserted at the MRU end",
+          policyMode === "lfu"
+            ? "A new key starts at <span class='hi'>frequency 1</span>, so <code>minFreq = 1</code>. <span class='dim'>A fresh key is always the new minimum.</span>"
+            : "New keys start as the most-recently-used. <span class='dim'>Nothing was searched and nothing was compared.</span>");
+        later(finish, 300);
+      }
+
+      /* ---------------- replay ---------------- */
+      function replay() {
+        if (busyRun) return;
+        resetState();
+        replayAt = 0;
+        render(null);
+        setCall("// replaying " + TRACE.join(" ") + "  at capacity " + capNow);
+        setExplain("Replaying a fixed trace",
+          "Ten accesses, <span class='hi'>" + TRACE.join(" ") + "</span>. <span class='dim'>Run it here, then reset and run it under the other policy.</span>");
+        later(nextStep, 620);
+      }
+
+      function nextStep() {
+        if (replayAt >= TRACE.length) {
+          var total = hitCount + missCount;
+          var ratio = total ? Math.round((100 * hitCount) / total) : 0;
+          setCall("trace finished → <i>" + hitCount + " hits</i>, <u>" + missCount + " misses</u>, " + evictCount + " evictions, ratio <i>" + ratio + "%</i>");
+          setExplain("Trace finished — " + ratio + "% hit ratio",
+            policyMode === "fifo"
+              ? "The worst of the three, and nothing ever threw. <span class='dim'>Forgetting to move on get silently turns LRU into FIFO.</span>"
+              : policyMode === "lfu"
+                ? "<span class='good'>A survived</span> because it was used three times early. <span class='dim'>Reset and run the identical trace under 🔁 LRU — A gets evicted at step 7.</span>"
+                : "<span class='bad'>A was evicted at step 7</span> — the key it had just used three times. <span class='dim'>Reset and run the identical trace under 📊 LFU.</span>");
+          return;
+        }
+        var k = TRACE[replayAt];
+        replayAt++;
+        access(k, function () { later(nextStep, 120); });
+      }
+
+      /* ---------------- controls ---------------- */
+      function setPolicy(k) {
+        if (busyRun) return;
+        clearTimers();
+        policyMode = k;
+        resetState();
+        render(null);
+        setCall(k === "fifo"
+          ? "class FifoPolicy { <b>recordAccess</b>(key) { <u>/* nothing */</u> } }"
+          : "new Cache(" + capNow + ", new " + (k === "lfu" ? "LfuPolicy" : "LruPolicy") + "())");
+        setExplain(k === "lru" ? "LRU — order by recency" : k === "lfu" ? "LFU — order by frequency" : "FIFO — the bug that works",
+          k === "lru"
+            ? "The victim is <code>tail.prev</code>. <span class='dim'>Cache.get() did not change by one line — only the policy did.</span>"
+            : k === "lfu"
+              ? "Nodes carry a <span class='hi'>freq badge</span> and regroup into buckets with a <code>minFreq</code> pointer. <span class='dim'>Cache.get() still did not change.</span>"
+              : "<code>recordAccess()</code> is empty. <span class='bad'>Nothing looks broken.</span> <span class='dim'>Replay the trace and read the hit ratio.</span>");
+      }
+
+      function setCap(c) {
+        if (busyRun) return;
+        clearTimers();
+        capNow = c;
+        resetState();
+        render(null);
+        setCall("new Cache(<b>" + c + "</b>, policy)");
+        setExplain("capacity = " + c,
+          "<span class='dim'>Smaller capacity means more pressure, so the policy's choice matters more. Everything is reset.</span>");
+      }
+
+      function resetState() {
+        listOrder = [];
+        storeMap = {};
+        freqOf = {};
+        hitCount = 0;
+        missCount = 0;
+        evictCount = 0;
+        replayAt = 0;
+        busyRun = false;
+        document.getElementById("replay-btn").disabled = false;
+      }
+
+      function reset() {
+        clearTimers();
+        if (capNow === undefined) capNow = 3;
+        if (policyMode === undefined) policyMode = "lru";
+        resetState();
+        render(null);
+        setCall("// click a key to call <b>cache.get(key)</b>");
+        setExplain("A capacity-3 cache, drawn as real pointers",
+          "Click a key below to call <b>cache.get(key)</b>. A hit slides the node to the MRU end; a miss loads it and, if the cache is full, the tail dies.");
+      }
+
+      timers = [];
+      document.getElementById("replay-btn").addEventListener("click", replay);
+      document.getElementById("reset-btn").addEventListener("click", reset);
+      reset();
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

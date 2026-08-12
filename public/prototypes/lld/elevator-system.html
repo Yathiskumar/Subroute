@@ -1,0 +1,632 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Elevator system — live simulation — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a; --accent-soft: rgba(251,134,58,.12); --accent-border: rgba(251,134,58,.45);
+        --success: #5cc66f; --success-soft: rgba(92,198,111,.12);
+        --info: #5e9ff6; --info-soft: rgba(94,159,246,.12);
+        --danger: #f06868; --danger-soft: rgba(240,104,104,.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px; --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 14px 16px 20px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      .top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 9px; }
+      .mode { display: flex; gap: 5px; }
+      .chip { font-family: var(--mono); font-size: 11px; padding: 7px 11px; border-radius: var(--r-md);
+              background: var(--elevated); border: 1px solid var(--border-strong); color: var(--muted); cursor: pointer; }
+      .chip:hover { border-color: var(--accent); color: var(--fg); }
+      .chip.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); font-weight: 700; }
+      .chip.bad { background: var(--danger-soft); border-color: rgba(240,104,104,.45); color: var(--danger); font-weight: 700; }
+      .stat { font-family: var(--mono); font-size: 10.5px; padding: 6px 10px; border-radius: 999px;
+              background: var(--surface); border: 1px solid var(--border); color: var(--muted); white-space: nowrap; }
+      .stat b { color: var(--fg); }
+      .stat.ok b { color: var(--success); }
+      .stat.hi { margin-left: auto; }
+      .stat.hi b { color: var(--accent); }
+
+      .callline { font-family: var(--mono); font-size: 11.5px; color: var(--subtle); background: #0a0b0e;
+                  border: 1px solid var(--border); border-radius: var(--r-md); padding: 7px 11px; margin-bottom: 10px;
+                  white-space: nowrap; overflow-x: auto; }
+      .callline b { color: var(--accent); }
+      .callline i { color: var(--success); font-style: normal; }
+      .callline u { color: var(--danger); text-decoration: none; }
+
+      .cols { display: grid; grid-template-columns: 1fr 262px; gap: 10px; align-items: start; }
+      .pane { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 11px; }
+      .cap { font-family: var(--mono); font-size: 9.5px; letter-spacing: .09em; text-transform: uppercase;
+             color: var(--subtle); margin-bottom: 9px; display: flex; justify-content: space-between; gap: 10px; }
+
+      /* ---- building ---- */
+      .building { display: grid; grid-template-columns: 104px 1fr 1fr; gap: 8px; }
+      .ruler { display: flex; flex-direction: column; gap: 4px; }
+      .frow { height: 34px; display: flex; align-items: center; gap: 4px; }
+      .fnum { font-family: var(--mono); font-size: 10px; color: var(--subtle); width: 20px; text-align: right; }
+      .hb { font-family: var(--mono); font-size: 10px; width: 24px; height: 22px; border-radius: 5px; padding: 0;
+            background: var(--elevated); border: 1px solid var(--border); color: var(--muted); cursor: pointer; }
+      .hb:hover { border-color: var(--accent); color: var(--fg); }
+      .hb.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); font-weight: 700; }
+      .hb.gap { visibility: hidden; }
+
+      .shaft { position: relative; height: 376px; border-radius: 6px; background: #0f1114; border: 1px solid var(--border); }
+      .lane { position: absolute; left: 0; right: 0; height: 1px; background: var(--border); opacity: .55; }
+      .car { position: absolute; left: 4px; right: 4px; height: 30px; border-radius: 6px;
+             background: var(--elevated); border: 1px solid var(--border-strong); color: var(--muted);
+             display: flex; align-items: center; justify-content: space-between; padding: 0 8px;
+             font-family: var(--mono); font-size: 10.5px;
+             transition: top .3s ease, border-color .2s, background .2s, color .2s; }
+      .car.moving { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+      .car.doors { border-color: var(--success); background: var(--success-soft); color: var(--success); }
+      .car.flash { border-color: var(--info); background: var(--info-soft); color: var(--info); }
+
+      /* ---- car panels ---- */
+      .cc { background: var(--elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md);
+            padding: 9px; margin-bottom: 8px; }
+      .cc-h { display: flex; justify-content: space-between; align-items: center; font-family: var(--mono); font-size: 10.5px; color: var(--fg); }
+      .pill { font-size: 9px; padding: 3px 7px; border-radius: 999px; background: var(--surface);
+              border: 1px solid var(--border); color: var(--muted); }
+      .pill.moving { border-color: var(--accent-border); color: var(--accent); }
+      .pill.doors { border-color: rgba(92,198,111,.5); color: var(--success); }
+      .cc-dir { font-family: var(--mono); font-size: 9.5px; color: var(--subtle); margin: 5px 0 7px; }
+      .cc-dir b { color: var(--fg); }
+      .row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+      .lbl { font-family: var(--mono); font-size: 9px; color: var(--subtle); width: 62px; flex: none; }
+      .chips { display: flex; gap: 3px; flex-wrap: wrap; }
+      .chips i { font-style: normal; font-family: var(--mono); font-size: 9px; padding: 2px 6px; border-radius: 4px;
+                 background: rgba(92,198,111,.12); border: 1px solid rgba(92,198,111,.5); color: var(--success); }
+      .chips i.q { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+      .chips u { text-decoration: none; font-family: var(--mono); font-size: 9px; color: var(--subtle); }
+      .cc-pad { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; margin-top: 8px; }
+      .kb { font-family: var(--mono); font-size: 9px; padding: 4px 0; border-radius: 4px;
+            background: var(--surface); border: 1px solid var(--border); color: var(--muted); cursor: pointer; }
+      .kb:hover { border-color: var(--accent); color: var(--fg); }
+      .kb.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); font-weight: 700; }
+
+      .explain { min-height: 74px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md);
+                 padding: 12px 15px; margin-top: 11px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .hi { color: var(--accent); font-weight: 700; }
+
+      .foot { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 11px; }
+      .btn { background: var(--elevated); color: var(--muted); font: 600 11.5px/1 var(--sans);
+             border: 1px solid var(--border); border-radius: var(--r-md); padding: 8px 12px; cursor: pointer; }
+      .btn:hover { border-color: var(--border-strong); color: var(--fg); }
+      .go { font-family: var(--mono); font-size: 12.5px; font-weight: 700; padding: 9px 18px; border-radius: var(--r-md);
+            cursor: pointer; background: var(--success-soft); border: 1px solid rgba(92,198,111,.45); color: var(--success); }
+      .go:active { transform: scale(.98); }
+      .go:disabled { opacity: .35; cursor: not-allowed; }
+      .hint { margin-left: auto; font-size: 11.5px; color: var(--muted); }
+      .hint .b { color: var(--accent); }
+
+      @media (max-width: 640px) {
+        .cols { grid-template-columns: 1fr; }
+        .building { grid-template-columns: 96px 1fr 1fr; }
+        .hint { margin-left: 0; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="top">
+      <div class="mode" id="algo"></div>
+      <div class="mode" id="dispatch"></div>
+      <span class="stat ok">served <b id="s-served">0</b></span>
+      <span class="stat">pending <b id="s-pending">0</b></span>
+      <span class="stat hi">floors travelled <b id="s-floors">0</b></span>
+    </div>
+
+    <div class="callline" id="callline">// press <b>▲</b> or <b>▼</b> beside a floor to make a hall call</div>
+
+    <div class="cols">
+      <div class="pane">
+        <div class="cap"><span>10 floors · 2 cars</span><span id="cap-algo">LOOK · nearest</span></div>
+        <div class="building">
+          <div class="ruler" id="ruler"></div>
+          <div class="shaft" id="shaft-0"></div>
+          <div class="shaft" id="shaft-1"></div>
+        </div>
+      </div>
+
+      <div class="pane">
+        <div class="cap"><span>Cars</span></div>
+        <div id="cards"></div>
+      </div>
+    </div>
+
+    <div class="explain">
+      <div class="explain-title" id="ex-title">Two cars, one bank</div>
+      <div class="explain-body" id="ex-body">Press <b>▲</b> or <b>▼</b> beside a floor — that is a <b>hall call</b>. Press a number inside a car — that is a <b>car call</b>.</div>
+    </div>
+
+    <div class="foot">
+      <button class="go" id="run-btn">▶ Run</button>
+      <button class="btn" id="rush-btn">⚡ Rush hour</button>
+      <button class="btn" id="reset-btn">↺ Reset</button>
+      <span class="hint"><span class="b">▸</span> Rush hour → Run under each of 🧭 LOOK and 🔀 FIFO, and compare <b>floors travelled</b>.</span>
+    </div>
+
+    <script>
+      var FLOORS = 10;
+      var STARTS = [1, 7];
+      var ROW = 38;
+      var TICK_MS = 340;
+      var DETOUR = 100;
+      var PRESET = [[4, "DOWN"], [10, "DOWN"], [2, "UP"], [5, "DOWN"], [3, "DOWN"], [9, "UP"], [6, "UP"]];
+
+      var carList, algoMode, dispatchMode, requestLog, hallPressed;
+      var servedCount, floorsTravelled, running, runSteps, runTimer, lastRun;
+
+      function $(id) { return document.getElementById(id); }
+      function setExplain(t, h) { $("ex-title").textContent = t; $("ex-body").innerHTML = h; }
+      function setCall(h) { $("callline").innerHTML = h; }
+
+      /* ------------------------------------------------ model ------------ */
+      function newCars() {
+        carList = [];
+        for (var i = 0; i < STARTS.length; i++) {
+          carList.push({ id: i + 1, floor: STARTS[i], dir: "IDLE", state: "IDLE",
+                         up: [], down: [], order: [], travelled: 0 });
+        }
+      }
+      function has(a, f) { return a.indexOf(f) >= 0; }
+      function pendingOf(c) { return c.up.length + c.down.length; }
+      function allOf(c) { return c.up.concat(c.down); }
+      function anyAbove(c) { return allOf(c).some(function (f) { return f > c.floor; }); }
+      function anyBelow(c) { return allOf(c).some(function (f) { return f < c.floor; }); }
+      function busyCar(c) { return pendingOf(c) > 0 || c.state === "DOORS_OPEN"; }
+      function anyBusy() { return carList.some(busyCar); }
+      function totalPending() { var n = 0; carList.forEach(function (c) { n += pendingOf(c); }); return n; }
+
+      function addUp(c, f) {
+        if (!has(c.up, f)) { c.up.push(f); c.up.sort(function (a, b) { return a - b; }); }
+        if (!has(c.order, f)) c.order.push(f);
+      }
+      function addDown(c, f) {
+        if (!has(c.down, f)) { c.down.push(f); c.down.sort(function (a, b) { return b - a; }); }
+        if (!has(c.order, f)) c.order.push(f);
+      }
+      function addHall(c, floor, dir) { if (dir === "UP") addUp(c, floor); else addDown(c, floor); }
+      function addCarCall(c, floor) {
+        if (floor > c.floor) addUp(c, floor);
+        else if (floor < c.floor) addDown(c, floor);
+        else c.state = "DOORS_OPEN";
+      }
+      function drop(c, f) {
+        c.up = c.up.filter(function (x) { return x !== f; });
+        c.down = c.down.filter(function (x) { return x !== f; });
+        c.order = c.order.filter(function (x) { return x !== f; });
+      }
+
+      /* remove a request at this floor IF it matches where the car is going */
+      function serveHere(c) {
+        var bucket = null;
+        if (c.dir === "UP") {
+          if (has(c.up, c.floor)) bucket = "UP";
+          else if (has(c.down, c.floor) && !anyAbove(c)) bucket = "DOWN";
+        } else if (c.dir === "DOWN") {
+          if (has(c.down, c.floor)) bucket = "DOWN";
+          else if (has(c.up, c.floor) && !anyBelow(c)) bucket = "UP";
+        }
+        if (!bucket) return null;
+        drop(c, c.floor);
+        delete hallPressed[c.floor + bucket];
+        servedCount++;
+        return bucket;
+      }
+
+      function towardsNearest(c) {
+        var target = c.floor, best = 1e9;
+        allOf(c).forEach(function (f) {
+          if (Math.abs(f - c.floor) < best) { best = Math.abs(f - c.floor); target = f; }
+        });
+        return target >= c.floor ? "UP" : "DOWN";
+      }
+
+      /* ONE floor of movement — LOOK */
+      function stepLook(c) {
+        if (c.state === "DOORS_OPEN") { c.state = resumeState(c); return; }
+        if (!busyCar(c)) { c.dir = "IDLE"; c.state = "IDLE"; return; }
+
+        if (c.dir === "IDLE") c.dir = towardsNearest(c);
+        if (serveHere(c)) { c.state = "DOORS_OPEN"; return; }
+
+        if (!(c.dir === "UP" ? anyAbove(c) : anyBelow(c))) c.dir = c.dir === "UP" ? "DOWN" : "UP";
+        if (serveHere(c)) { c.state = "DOORS_OPEN"; return; }
+
+        c.floor += c.dir === "UP" ? 1 : -1;
+        c.travelled++; floorsTravelled++;
+        c.state = c.dir === "UP" ? "MOVING_UP" : "MOVING_DOWN";
+        if (serveHere(c)) c.state = "DOORS_OPEN";
+      }
+
+      /* ONE floor of movement — FIFO: head for order[0], ignore everything you pass */
+      function stepFifo(c) {
+        if (c.state === "DOORS_OPEN") { c.state = resumeState(c); return; }
+        if (!c.order.length) { c.dir = "IDLE"; c.state = "IDLE"; return; }
+
+        var target = c.order[0];
+        if (target === c.floor) { finishFifo(c, target); c.state = "DOORS_OPEN"; return; }
+
+        c.dir = target > c.floor ? "UP" : "DOWN";
+        c.floor += c.dir === "UP" ? 1 : -1;
+        c.travelled++; floorsTravelled++;
+        c.state = c.dir === "UP" ? "MOVING_UP" : "MOVING_DOWN";
+        if (c.order[0] === c.floor) { finishFifo(c, c.floor); c.state = "DOORS_OPEN"; }
+      }
+      function finishFifo(c, f) {
+        var bucket = has(c.up, f) ? "UP" : "DOWN";
+        drop(c, f);
+        delete hallPressed[f + bucket];
+        servedCount++;
+      }
+      function resumeState(c) {
+        if (pendingOf(c) === 0) { c.dir = "IDLE"; return "IDLE"; }
+        return c.dir === "UP" ? "MOVING_UP" : "MOVING_DOWN";
+      }
+      function stepCar(c) { if (algoMode === "fifo") stepFifo(c); else stepLook(c); }
+
+      /* ------------------------------------------------ dispatch --------- */
+      function costOf(c, floor, dir) {
+        var d = Math.abs(c.floor - floor);
+        if (dispatchMode === "load") {
+          return { cost: pendingOf(c) * DETOUR + d, why: pendingOf(c) + " pending, " + d + " away" };
+        }
+        if (c.dir === "IDLE") return { cost: d, why: "idle, " + d + " away" };
+        var towards = (c.dir === "UP" && floor >= c.floor) || (c.dir === "DOWN" && floor <= c.floor);
+        if (towards && c.dir === dir) return { cost: d, why: "already heading your way, " + d + " away" };
+        return { cost: d + DETOUR, why: "busy going the other way, " + d + " away" };
+      }
+      function pickCar(floor, dir) {
+        var best = null, bestCost = 1e9, notes = [];
+        carList.forEach(function (c) {
+          var r = costOf(c, floor, dir);
+          notes.push({ id: c.id, cost: r.cost, why: r.why });
+          if (r.cost < bestCost) { bestCost = r.cost; best = c; }
+        });
+        return { car: best, notes: notes };
+      }
+
+      /* ------------------------------------------------ actions ---------- */
+      function queueHall(floor, dir, silent) {
+        var picked = pickCar(floor, dir);
+        var c = picked.car;
+        addHall(c, floor, dir);
+        hallPressed[floor + dir] = true;
+        requestLog.push({ kind: "hall", floor: floor, dir: dir });
+        if (silent) return;
+        paint();
+        flashCar(c);
+        setCall("system.<b>request</b>(new HallCall(" + floor + ", " + dir + "))  " +
+                "<span style='color:#6b7280'>// → car #" + c.id + "</span>");
+        var lines = picked.notes.map(function (n) {
+          var win = n.id === c.id;
+          return "<span class='" + (win ? "good" : "dim") + "'>car #" + n.id + "</span> <span class='dim'>" +
+                 n.why + " → cost " + n.cost + "</span>";
+        }).join(" &nbsp;·&nbsp; ");
+        setExplain("Hall call · floor " + floor + " going " + dir.toLowerCase(),
+          "car <span class='hi'>#" + c.id + "</span> takes it. " + lines);
+      }
+
+      function queueCarCall(idx, floor, silent) {
+        var c = carList[idx];
+        if (floor === c.floor && !silent) {
+          setCall("car" + c.id + ".<b>addRequest</b>(new CarCall(" + floor + "))");
+          setExplain("Car #" + c.id + " is already on floor " + floor,
+            "<span class='dim'>Nothing to queue — the doors just open.</span>");
+          addCarCall(c, floor); paint(); return;
+        }
+        var above = floor > c.floor;
+        addCarCall(c, floor);
+        requestLog.push({ kind: "car", idx: idx, floor: floor });
+        if (silent) return;
+        paint();
+        setCall("car" + c.id + ".<b>addRequest</b>(new CarCall(" + floor + "))  " +
+                "<span style='color:#6b7280'>// no strategy is consulted</span>");
+        setExplain("Car call · car #" + c.id + " → floor " + floor,
+          "A car call carries <span class='hi'>no direction</span>. <span class='dim'>Floor " + floor + " is " +
+          (above ? "above" : "below") + " car #" + c.id + ", so it lands in </span><code>" +
+          (above ? "upRequests" : "downRequests") + "</code>.");
+      }
+
+      function flashCar(c) {
+        var el = $("carbox-" + (c.id - 1));
+        if (!el) return;
+        el.classList.add("flash");
+        setTimeout(function () { var e2 = $("carbox-" + (c.id - 1)); if (e2) e2.classList.remove("flash"); }, 640);
+      }
+
+      /* replay every request from t=0 — makes the two algorithms comparable */
+      function replay() {
+        var log = requestLog.slice();
+        newCars();
+        requestLog = []; hallPressed = {};
+        servedCount = 0; floorsTravelled = 0;
+        log.forEach(function (r) {
+          if (r.kind === "hall") queueHall(r.floor, r.dir, true);
+          else queueCarCall(r.idx, r.floor, true);
+        });
+        renderStatic();
+        paint();
+      }
+
+      /* ------------------------------------------------ run -------------- */
+      function runSim() {
+        if (running) return;
+        if (!anyBusy()) {
+          setExplain("Nothing pending",
+            "<span class='dim'>Press <b>⚡ Rush hour</b>, or make a few hall calls with <b>▲ ▼</b> first.</span>");
+          return;
+        }
+        running = true; runSteps = 0;
+        $("run-btn").disabled = true;
+        setCall("while (system.<b>busy</b>()) system.<b>tick</b>();  " +
+                "<span style='color:#6b7280'>// one floor per tick — time comes from outside</span>");
+        setExplain("Running · " + (algoMode === "fifo" ? "FIFO" : "LOOK"),
+          algoMode === "fifo"
+            ? "<span class='dim'>Each car heads for the <b>oldest</b> request and ignores everything it passes.</span>"
+            : "<span class='dim'>Each car drains the set matching its <b>direction</b>, then flips when nothing is ahead.</span>");
+        nextTick();
+      }
+
+      function nextTick() {
+        if (!running) return;
+        if (!anyBusy() || runSteps++ > 400) { finishRun(); return; }
+        carList.forEach(stepCar);
+        paint();
+        runTimer = setTimeout(nextTick, TICK_MS);
+      }
+
+      function finishRun() {
+        running = false;
+        $("run-btn").disabled = false;
+        paint();
+        var label = algoMode === "fifo" ? "FIFO" : "LOOK";
+        setCall("system.<b>busy</b>() === false  <span style='color:#6b7280'>// " + servedCount +
+                " served, " + floorsTravelled + " floors travelled</span>");
+        var body = "<span class='dim'>" + servedCount + " requests served in </span><span class='hi'>" +
+                   floorsTravelled + "</span><span class='dim'> floors of travel.</span>";
+        if (lastRun && lastRun.algo !== algoMode && lastRun.floors > 0) {
+          var other = lastRun.algo === "fifo" ? "FIFO" : "LOOK";
+          body += " <span class='dim'>The same requests under </span><b>" + other + "</b><span class='dim'> cost </span><span class='" +
+                  (lastRun.floors > floorsTravelled ? "bad" : "good") + "'>" + lastRun.floors + "</span><span class='dim'>.</span>";
+        } else {
+          body += " <span class='dim'>Now press <b>" + (algoMode === "fifo" ? "🧭 LOOK" : "🔀 FIFO") +
+                  "</b> — the same requests are replayed — and run it again.</span>";
+        }
+        lastRun = { algo: algoMode, floors: floorsTravelled, served: servedCount };
+        setExplain(label + " · done in " + floorsTravelled + " floors", body);
+      }
+
+      /* ------------------------------------------------ chips ------------ */
+      function setAlgo(k) {
+        if (running || algoMode === k) return;
+        algoMode = k;
+        replay();
+        setCall(k === "fifo"
+          ? "// FIFO: target = requests.get(0) — arrival order, nothing else"
+          : "// LOOK: drain upRequests ▲ ascending, then downRequests ▼ descending");
+        setExplain(k === "fifo" ? "🔀 FIFO — serve in arrival order" : "🧭 LOOK — keep going, serve on the way",
+          "<span class='dim'>The same " + requestLog.length + " requests were replayed from the start. Press <b>▶ Run</b> and read </span><span class='hi'>floors travelled</span><span class='dim'>.</span>");
+      }
+
+      function setDispatch(k) {
+        if (running || dispatchMode === k) return;
+        dispatchMode = k;
+        replay();
+        setCall("system.<b>setStrategy</b>(new " + (k === "load" ? "LeastLoadStrategy" : "NearestCarStrategy") + "())");
+        setExplain(k === "load" ? "⚖️ Least load — spread the work" : "🎯 Nearest car — fewest floors to you",
+          "<span class='good'>request() did not change.</span> <span class='dim'>One new class, zero edits to the caller — make a few hall calls and watch which car wins now.</span>");
+      }
+
+      function rushHour() {
+        if (running) return;
+        newCars();
+        requestLog = []; hallPressed = {};
+        servedCount = 0; floorsTravelled = 0;
+        PRESET.forEach(function (r) { queueHall(r[0], r[1], true); });
+        renderStatic();
+        paint();
+        setCall("// 7 hall calls, always the same ones: 4▼ 10▼ 2▲ 5▼ 3▼ 9▲ 6▲");
+        setExplain("⚡ Rush hour — 7 hall calls queued",
+          "<span class='dim'>Press <b>▶ Run</b>, note </span><span class='hi'>floors travelled</span><span class='dim'>, then switch algorithm and run the identical burst again.</span>");
+      }
+
+      /* ------------------------------------------------ render ----------- */
+      function renderChips() {
+        var a = $("algo"); a.innerHTML = "";
+        [{ k: "look", l: "🧭 LOOK" }, { k: "fifo", l: "🔀 FIFO" }].forEach(function (o) {
+          var b = document.createElement("button");
+          b.className = "chip" + (algoMode === o.k ? (o.k === "fifo" ? " bad" : " on") : "");
+          b.textContent = o.l;
+          b.addEventListener("click", function () { setAlgo(o.k); });
+          a.appendChild(b);
+        });
+        var d = $("dispatch"); d.innerHTML = "";
+        [{ k: "near", l: "🎯 Nearest car" }, { k: "load", l: "⚖️ Least load" }].forEach(function (o) {
+          var b = document.createElement("button");
+          b.className = "chip" + (dispatchMode === o.k ? " on" : "");
+          b.textContent = o.l;
+          b.addEventListener("click", function () { setDispatch(o.k); });
+          d.appendChild(b);
+        });
+        $("cap-algo").textContent = (algoMode === "fifo" ? "FIFO" : "LOOK") +
+          " · " + (dispatchMode === "load" ? "least-load" : "nearest");
+      }
+
+      function renderStatic() {
+        /* floor ruler with the two hall buttons */
+        var ruler = $("ruler"); ruler.innerHTML = "";
+        for (var f = FLOORS; f >= 1; f--) {
+          (function (floor) {
+            var row = document.createElement("div");
+            row.className = "frow";
+            var n = document.createElement("span");
+            n.className = "fnum"; n.textContent = String(floor);
+            row.appendChild(n);
+            ["UP", "DOWN"].forEach(function (dir) {
+              var b = document.createElement("button");
+              var missing = (dir === "UP" && floor === FLOORS) || (dir === "DOWN" && floor === 1);
+              b.className = "hb" + (missing ? " gap" : "");
+              b.id = "hb-" + floor + "-" + dir;
+              b.textContent = dir === "UP" ? "▲" : "▼";
+              if (!missing) b.addEventListener("click", function () { if (!running) queueHall(floor, dir, false); });
+              row.appendChild(b);
+            });
+            ruler.appendChild(row);
+          })(f);
+        }
+
+        /* shafts + car boxes */
+        for (var i = 0; i < carList.length; i++) {
+          (function (idx) {
+            var shaft = $("shaft-" + idx);
+            shaft.innerHTML = "";
+            for (var k = 1; k < FLOORS; k++) {
+              var lane = document.createElement("div");
+              lane.className = "lane";
+              lane.style.top = (k * ROW - 2) + "px";
+              shaft.appendChild(lane);
+            }
+            var box = document.createElement("div");
+            box.className = "car";
+            box.id = "carbox-" + idx;
+            shaft.appendChild(box);
+          })(i);
+        }
+
+        /* right-hand car panels */
+        var cards = $("cards"); cards.innerHTML = "";
+        for (var j = 0; j < carList.length; j++) {
+          (function (idx) {
+            var c = carList[idx];
+            var card = document.createElement("div");
+            card.className = "cc";
+            card.innerHTML =
+              "<div class='cc-h'><b>car #" + c.id + "</b><span class='pill' id='pill-" + idx + "'>IDLE</span></div>" +
+              "<div class='cc-dir' id='dir-" + idx + "'></div>" +
+              "<div id='sets-" + idx + "'></div>";
+            cards.appendChild(card);
+            var pad = document.createElement("div");
+            pad.className = "cc-pad";
+            pad.id = "pad-" + idx;
+            for (var f2 = 1; f2 <= FLOORS; f2++) {
+              (function (floor) {
+                var b = document.createElement("button");
+                b.className = "kb";
+                b.id = "kb-" + idx + "-" + floor;
+                b.textContent = String(floor);
+                b.addEventListener("click", function () { if (!running) queueCarCall(idx, floor, false); });
+                pad.appendChild(b);
+              })(f2);
+            }
+            card.appendChild(pad);
+          })(j);
+        }
+      }
+
+      function paint() {
+        renderChips();
+
+        carList.forEach(function (c, idx) {
+          var box = $("carbox-" + idx);
+          if (box) {
+            box.style.top = ((FLOORS - c.floor) * ROW + 2) + "px";
+            box.className = "car" + (c.state === "DOORS_OPEN" ? " doors"
+              : (c.state === "MOVING_UP" || c.state === "MOVING_DOWN") ? " moving" : "");
+            box.innerHTML = "<span>#" + c.id + " " + arrowFor(c) + "</span><span>" +
+              (c.state === "DOORS_OPEN" ? "▏ ▕" : c.floor) + "</span>";
+          }
+
+          var pill = $("pill-" + idx);
+          if (pill) {
+            pill.textContent = c.state;
+            pill.className = "pill" + (c.state === "DOORS_OPEN" ? " doors"
+              : (c.state === "MOVING_UP" || c.state === "MOVING_DOWN") ? " moving" : "");
+          }
+          var dir = $("dir-" + idx);
+          if (dir) dir.innerHTML = "floor <b>" + c.floor + "</b> · direction <b>" + c.dir + "</b> · travelled <b>" + c.travelled + "</b>";
+
+          var sets = $("sets-" + idx);
+          if (sets) sets.innerHTML = algoMode === "fifo"
+            ? row("queue ↓ order", c.order, "q")
+            : row("upRequests ▲", c.up, "") + row("downRequests ▼", c.down, "");
+
+          for (var f = 1; f <= FLOORS; f++) {
+            var kb = $("kb-" + idx + "-" + f);
+            if (kb) kb.className = "kb" + (has(c.up, f) || has(c.down, f) ? " on" : "");
+          }
+        });
+
+        for (var f2 = 1; f2 <= FLOORS; f2++) {
+          ["UP", "DOWN"].forEach(function (d) {
+            var b = $("hb-" + f2 + "-" + d);
+            if (!b) return;
+            var missing = (d === "UP" && f2 === FLOORS) || (d === "DOWN" && f2 === 1);
+            b.className = "hb" + (missing ? " gap" : (hallPressed[f2 + d] ? " on" : ""));
+          });
+        }
+
+        $("s-served").textContent = servedCount;
+        $("s-pending").textContent = totalPending();
+        $("s-floors").textContent = floorsTravelled;
+      }
+
+      function row(label, values, cls) {
+        var chips = values.length
+          ? values.map(function (v) { return "<i class='" + cls + "'>" + v + "</i>"; }).join("")
+          : "<u>empty</u>";
+        return "<div class='row'><span class='lbl'>" + label + "</span><span class='chips'>" + chips + "</span></div>";
+      }
+
+      function arrowFor(c) {
+        if (c.state === "DOORS_OPEN") return "open";
+        if (c.dir === "UP") return "▲";
+        if (c.dir === "DOWN") return "▼";
+        return "—";
+      }
+
+      /* ------------------------------------------------ reset ------------ */
+      function reset() {
+        running = false;
+        if (runTimer) clearTimeout(runTimer);
+        newCars();
+        if (algoMode === undefined) algoMode = "look";
+        if (dispatchMode === undefined) dispatchMode = "near";
+        requestLog = []; hallPressed = {};
+        servedCount = 0; floorsTravelled = 0; runSteps = 0; lastRun = null;
+        $("run-btn").disabled = false;
+        renderStatic();
+        paint();
+        setCall("// press <b>▲</b> or <b>▼</b> beside a floor to make a hall call");
+        setExplain("Two cars, one bank",
+          "Press <b>▲</b> or <b>▼</b> beside a floor — that is a <b>hall call</b>. Press a number inside a car — that is a <b>car call</b>.");
+      }
+
+      $("run-btn").addEventListener("click", runSim);
+      $("rush-btn").addEventListener("click", rushHour);
+      $("reset-btn").addEventListener("click", reset);
+      reset();
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

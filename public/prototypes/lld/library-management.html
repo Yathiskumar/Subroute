@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Library Management — live simulation — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a; --accent-soft: rgba(251,134,58,.12); --accent-border: rgba(251,134,58,.45);
+        --success: #5cc66f; --success-soft: rgba(92,198,111,.12);
+        --info: #5e9ff6; --info-soft: rgba(94,159,246,.12);
+        --danger: #f06868; --danger-soft: rgba(240,104,104,.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px; --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 14px 16px 20px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      .top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 9px; }
+      .mode { display: flex; gap: 5px; }
+      .chip { font-family: var(--mono); font-size: 11px; padding: 7px 11px; border-radius: var(--r-md);
+              background: var(--elevated); border: 1px solid var(--border-strong); color: var(--muted); cursor: pointer; }
+      .chip:hover { border-color: var(--accent); color: var(--fg); }
+      .chip.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); font-weight: 700; }
+      .stat { font-family: var(--mono); font-size: 10.5px; padding: 6px 10px; border-radius: 999px;
+              background: var(--surface); border: 1px solid var(--border); color: var(--muted); white-space: nowrap; }
+      .stat b { color: var(--fg); }
+      .stat.ok b { color: var(--accent); }
+      .stat.rs b { color: var(--info); }
+      .stat.no b { color: var(--danger); }
+      .stat.day { margin-left: auto; background: var(--info-soft); border-color: rgba(94,159,246,.4); }
+      .stat.day b { color: var(--info); }
+
+      .callline { font-family: var(--mono); font-size: 11.5px; color: var(--subtle); background: #0a0b0e;
+                  border: 1px solid var(--border); border-radius: var(--r-md); padding: 7px 11px; margin-bottom: 10px;
+                  white-space: nowrap; overflow-x: auto; }
+      .callline b { color: var(--accent); }
+      .callline i { color: var(--success); font-style: normal; }
+      .callline u { color: var(--danger); text-decoration: none; }
+
+      .cols { display: grid; grid-template-columns: 1fr 250px; gap: 10px; align-items: start; }
+      .pane { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 11px; }
+      .cap { font-family: var(--mono); font-size: 9.5px; letter-spacing: .09em; text-transform: uppercase;
+             color: var(--subtle); margin-bottom: 9px; display: flex; justify-content: space-between; gap: 10px; }
+
+      /* titles */
+      .titles { display: flex; flex-direction: column; gap: 8px; }
+      .title { background: var(--elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 9px; }
+      .th { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .tname { font-size: 12.5px; font-weight: 700; color: var(--fg); }
+      .tmeta { font-family: var(--mono); font-size: 9.5px; color: var(--subtle); }
+      .avail { font-family: var(--mono); font-size: 10px; color: var(--success); margin-left: auto; white-space: nowrap; }
+      .avail.none { color: var(--danger); }
+      .act { font-family: var(--mono); font-size: 10.5px; padding: 5px 9px; border-radius: 6px; cursor: pointer;
+             background: var(--accent-soft); border: 1px solid var(--accent-border); color: var(--accent); font-weight: 700; }
+      .act.res { background: var(--info-soft); border-color: rgba(94,159,246,.45); color: var(--info); }
+      .act:hover { filter: brightness(1.2); }
+
+      .chips { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 8px; }
+      .copy { font-family: var(--mono); font-size: 9.5px; text-align: left; line-height: 1.35;
+              padding: 5px 8px; border-radius: 6px; cursor: pointer; min-width: 104px;
+              background: var(--surface); border: 1px solid var(--border); color: var(--muted); }
+      .copy b { display: block; font-size: 10.5px; }
+      .copy small { color: var(--subtle); font-size: 8.5px; }
+      .copy.av { border-color: rgba(92,198,111,.5); background: var(--success-soft); }
+      .copy.av b { color: var(--success); }
+      .copy.ln { border-color: var(--accent-border); background: var(--accent-soft); }
+      .copy.ln b { color: var(--accent); }
+      .copy.od { border-color: rgba(240,104,104,.55); background: var(--danger-soft); }
+      .copy.od b { color: var(--danger); }
+      .copy.rs { border-color: rgba(94,159,246,.5); background: var(--info-soft); }
+      .copy.rs b { color: var(--info); }
+      .copy:hover { filter: brightness(1.25); }
+      .copy.flash { animation: pop .5s ease 1; }
+      @keyframes pop { 0% { transform: scale(.86); } 55% { transform: scale(1.07); } 100% { transform: scale(1); } }
+
+      .queue { font-family: var(--mono); font-size: 9.5px; color: var(--info); margin-top: 7px;
+               border-top: 1px dashed var(--border-strong); padding-top: 6px; }
+      .queue span { color: var(--subtle); }
+
+      /* members */
+      .mems { display: flex; flex-direction: column; gap: 7px; }
+      .mem { text-align: left; width: 100%; cursor: pointer; padding: 8px 9px; border-radius: var(--r-md);
+             background: var(--elevated); border: 1px solid var(--border-strong); color: var(--fg); }
+      .mem:hover { border-color: var(--accent); }
+      .mem.on { background: var(--accent-soft); border-color: var(--accent-border); }
+      .mh { font-size: 12px; font-weight: 700; display: flex; justify-content: space-between; }
+      .mh em { font-family: var(--mono); font-size: 9.5px; font-style: normal; color: var(--subtle); }
+      .ms { font-family: var(--mono); font-size: 9.5px; color: var(--muted); margin-top: 3px; }
+      .ms .full { color: var(--danger); font-weight: 700; }
+      .ms .owe { color: var(--danger); }
+      .mheld { font-family: var(--mono); font-size: 8.5px; color: var(--subtle); margin-top: 4px; min-height: 11px; }
+
+      .explain { min-height: 74px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md);
+                 padding: 12px 15px; margin-top: 11px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .hi { color: var(--accent); font-weight: 700; }
+      .explain-body .inf { color: var(--info); font-weight: 700; }
+
+      .foot { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 11px; }
+      .btn { background: var(--elevated); color: var(--muted); font: 600 11.5px/1 var(--sans);
+             border: 1px solid var(--border); border-radius: var(--r-md); padding: 8px 12px; cursor: pointer; }
+      .btn:hover { border-color: var(--border-strong); color: var(--fg); }
+      .btn.go { background: var(--info-soft); border-color: rgba(94,159,246,.45); color: var(--info); font-weight: 700; }
+      .hint { margin-left: auto; font-size: 11.5px; color: var(--muted); }
+      .hint .b { color: var(--accent); }
+
+      @media (max-width: 640px) {
+        .cols { grid-template-columns: 1fr; }
+        .hint { margin-left: 0; }
+        .stat.day { margin-left: 0; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="top">
+      <div class="mode" id="mode"></div>
+      <button class="chip" id="reset-btn">↺ Reset</button>
+      <span class="stat ok">out <b id="s-out">0</b></span>
+      <span class="stat rs">reserved <b id="s-res">0</b></span>
+      <span class="stat no">overdue <b id="s-od">0</b></span>
+      <span class="stat no">fines <b id="s-fine">0</b></span>
+      <span class="stat day">day <b id="s-day">1</b></span>
+    </div>
+
+    <div class="callline" id="callline">// pick a member on the right, then press <b>📕 Borrow</b> on a title</div>
+
+    <div class="cols">
+      <div class="pane">
+        <div class="cap"><span>Catalog — 3 titles, 8 physical copies</span><span>🟢 available · 🟠 loaned · 🔵 reserved</span></div>
+        <div class="titles" id="titles"></div>
+      </div>
+
+      <div class="pane">
+        <div class="cap"><span>Members</span><span id="cap-sel">M-1</span></div>
+        <div class="mems" id="mems"></div>
+      </div>
+    </div>
+
+    <div class="explain">
+      <div class="explain-title" id="ex-title">One title, three copies</div>
+      <div class="explain-body" id="ex-body">A <b>Book</b> is the catalogue record. A <b>BookItem</b> is one barcoded copy. Press <b>📕 Borrow</b> and watch which one she actually gets.</div>
+    </div>
+
+    <div class="foot">
+      <button class="btn" id="empty-btn">📚 Empty the shelf</button>
+      <button class="btn go" id="day-btn">⏩ +7 days</button>
+      <button class="btn" id="limit-btn">🚫 Fill to limit</button>
+      <span class="hint"><span class="b">▸</span> Get all three copies out, reserve, then return one — where does it go?</span>
+    </div>
+
+    <script>
+      var LOAN_DAYS = 14;
+      var MAX_LOANS = 5;
+      var MAX_FINE = 10000;
+
+      var TITLES = [
+        { isbn: "978-0-13", title: "Clean Code", author: "Robert C. Martin", icon: "📘" },
+        { isbn: "978-0-20", title: "The Pragmatic Programmer", author: "Andrew Hunt", icon: "📙" },
+        { isbn: "978-0-21", title: "Design Patterns", author: "Erich Gamma", icon: "📗" }
+      ];
+      var COPY_SEED = [
+        { barcode: "B-001", isbn: "978-0-13", price: 70000 },
+        { barcode: "B-002", isbn: "978-0-13", price: 70000 },
+        { barcode: "B-003", isbn: "978-0-13", price: 70000 },
+        { barcode: "P-001", isbn: "978-0-20", price: 60000 },
+        { barcode: "P-002", isbn: "978-0-20", price: 60000 },
+        { barcode: "D-001", isbn: "978-0-21", price: 90000 },
+        { barcode: "D-002", isbn: "978-0-21", price: 90000 },
+        { barcode: "D-003", isbn: "978-0-21", price: 90000 }
+      ];
+      var MEMBER_SEED = [
+        { id: "M-1", label: "Asha" },
+        { id: "M-2", label: "Ravi" },
+        { id: "M-3", label: "Meera" }
+      ];
+      var POLICIES = [
+        { key: "flat",   chip: "⏱ Flat ₹5/day", label: "FlatPerDayFine(500)" },
+        { key: "slab",   chip: "🪜 Slabs",       label: "SlabFine()" },
+        { key: "capped", chip: "🧢 Capped",      label: "CappedFine(flat, ₹20)" }
+      ];
+
+      var copyList, memberList, loanList, queueMap, dayNo, policyKey, selectedId, flashCode;
+
+      /* ---------------- helpers ---------------- */
+      function setExplain(t, h) {
+        document.getElementById("ex-title").textContent = t;
+        document.getElementById("ex-body").innerHTML = h;
+      }
+      function setCall(h) { document.getElementById("callline").innerHTML = h; }
+      function rupees(minor) { return "₹" + Math.floor(minor / 100) + "." + ("0" + (minor % 100)).slice(-2); }
+      function copyOf(barcode) { for (var i = 0; i < copyList.length; i++) if (copyList[i].barcode === barcode) return copyList[i]; return null; }
+      function memberOf(id) { for (var i = 0; i < memberList.length; i++) if (memberList[i].id === id) return memberList[i]; return null; }
+      function copiesOf(isbn) { return copyList.filter(function (c) { return c.isbn === isbn; }); }
+      function availableOf(isbn) { return copiesOf(isbn).filter(function (c) { return c.status === "AVAILABLE"; }); }
+      function queueOf(isbn) { return queueMap[isbn] || []; }
+      function openLoanFor(barcode) {
+        for (var i = 0; i < loanList.length; i++) if (loanList[i].open && loanList[i].barcode === barcode) return loanList[i];
+        return null;
+      }
+      function openLoansOf(id) { return loanList.filter(function (l) { return l.open && l.memberId === id; }); }
+      function daysLate(loan) { return Math.max(0, dayNo - loan.dueOn); }
+
+      /* the strategy seam — swapping this never touches returnItem() */
+      function fineFor(days, priceMinor) {
+        if (days <= 0) return 0;
+        if (policyKey === "slab") return Math.min(days, 7) * 200 + Math.max(0, days - 7) * 1000;
+        if (policyKey === "capped") return Math.min(days * 500, 2000, priceMinor);
+        return days * 500;
+      }
+      function fineOf(id) {
+        var total = 0;
+        loanList.forEach(function (l) {
+          if (l.memberId !== id) return;
+          total += l.open ? fineFor(daysLate(l), copyOf(l.barcode).price) : l.fineMinor;
+        });
+        return total;
+      }
+      function refusalFor(id) {
+        if (openLoansOf(id).length >= MAX_LOANS) return "loan limit reached (" + MAX_LOANS + "/" + MAX_LOANS + ")";
+        if (fineOf(id) > MAX_FINE) return "outstanding fine " + rupees(fineOf(id));
+        return null;
+      }
+
+      /* ---------------- render ---------------- */
+      function renderMode() {
+        var host = document.getElementById("mode");
+        host.innerHTML = "";
+        POLICIES.forEach(function (p) {
+          var b = document.createElement("button");
+          b.className = "chip" + (policyKey === p.key ? " on" : "");
+          b.textContent = p.chip;
+          b.addEventListener("click", function () { setPolicy(p.key); });
+          host.appendChild(b);
+        });
+      }
+
+      function renderTitles() {
+        var host = document.getElementById("titles");
+        host.innerHTML = "";
+        TITLES.forEach(function (t) {
+          var all = copiesOf(t.isbn), free = availableOf(t.isbn).length;
+          var held = copiesOf(t.isbn).filter(function (c) { return c.status === "RESERVED" && c.heldFor === selectedId; }).length;
+          var card = document.createElement("div");
+          card.className = "title";
+
+          var head = document.createElement("div");
+          head.className = "th";
+          head.innerHTML =
+            "<span class='tname'>" + t.icon + " " + t.title + "</span>" +
+            "<span class='tmeta'>" + t.author + " · " + t.isbn + "</span>" +
+            "<span class='avail" + (free === 0 && held === 0 ? " none" : "") + "'>" + free + " of " + all.length + " available</span>";
+          var act = document.createElement("button");
+          if (free > 0 || held > 0) {
+            act.className = "act";
+            act.textContent = "📕 Borrow";
+            act.addEventListener("click", function () { borrowTitle(t.isbn); });
+          } else {
+            act.className = "act res";
+            act.textContent = "🔖 Reserve";
+            act.addEventListener("click", function () { reserveTitle(t.isbn); });
+          }
+          head.appendChild(act);
+          card.appendChild(head);
+
+          var chips = document.createElement("div");
+          chips.className = "chips";
+          all.forEach(function (c) {
+            var loan = openLoanFor(c.barcode);
+            var late = loan ? daysLate(loan) : 0;
+            var cls = "copy " + (c.status === "AVAILABLE" ? "av" : c.status === "RESERVED" ? "rs" : (late > 0 ? "od" : "ln"));
+            if (flashCode === c.barcode) cls += " flash";
+            var dot = c.status === "AVAILABLE" ? "🟢" : c.status === "RESERVED" ? "🔵" : "🟠";
+            var sub;
+            if (c.status === "AVAILABLE") sub = "on the shelf · 📕 borrow";
+            else if (c.status === "RESERVED") sub = "held for " + memberOf(c.heldFor).label + " · 📕 collect";
+            else sub = memberOf(loan.memberId).label + " · due " + loan.dueOn +
+                       (late > 0 ? " · " + late + "d late" : "") + " · 📗 return";
+            var b = document.createElement("button");
+            b.className = cls;
+            b.innerHTML = "<b>" + dot + " " + c.barcode + "</b><small>" + sub + "</small>";
+            b.addEventListener("click", function () { clickCopy(c.barcode); });
+            chips.appendChild(b);
+          });
+          card.appendChild(chips);
+
+          var q = queueOf(t.isbn);
+          if (q.length) {
+            var qd = document.createElement("div");
+            qd.className = "queue";
+            qd.innerHTML = "🔖 <span>queue:</span> " + q.map(function (id, i) {
+              return (i === 0 ? "<b>" + memberOf(id).label + "</b>" : memberOf(id).label);
+            }).join(" → ");
+            card.appendChild(qd);
+          }
+          host.appendChild(card);
+        });
+      }
+
+      function renderMembers() {
+        var host = document.getElementById("mems");
+        host.innerHTML = "";
+        memberList.forEach(function (m) {
+          var loans = openLoansOf(m.id), fine = fineOf(m.id);
+          var b = document.createElement("button");
+          b.className = "mem" + (selectedId === m.id ? " on" : "");
+          var held = copyList.filter(function (c) { return c.status === "RESERVED" && c.heldFor === m.id; })
+                             .map(function (c) { return "🔵" + c.barcode; });
+          var carrying = loans.map(function (l) { return (daysLate(l) > 0 ? "🔴" : "🟠") + l.barcode; }).concat(held);
+          b.innerHTML =
+            "<div class='mh'>🧑 " + m.label + " <em>" + m.id + "</em></div>" +
+            "<div class='ms'>loans <span class='" + (loans.length >= MAX_LOANS ? "full" : "") + "'>" +
+              loans.length + "/" + MAX_LOANS + "</span> · fine <span class='" + (fine > 0 ? "owe" : "") + "'>" +
+              rupees(fine) + "</span></div>" +
+            "<div class='mheld'>" + (carrying.length ? carrying.join("  ") : "—") + "</div>";
+          b.addEventListener("click", function () { selectMember(m.id); });
+          host.appendChild(b);
+        });
+        document.getElementById("cap-sel").textContent = selectedId;
+      }
+
+      function renderStats() {
+        var out = 0, res = 0, od = 0, fines = 0;
+        copyList.forEach(function (c) {
+          if (c.status === "LOANED") out++;
+          if (c.status === "RESERVED") res++;
+        });
+        loanList.forEach(function (l) { if (l.open && daysLate(l) > 0) od++; });
+        memberList.forEach(function (m) { fines += fineOf(m.id); });
+        document.getElementById("s-out").textContent = out;
+        document.getElementById("s-res").textContent = res;
+        document.getElementById("s-od").textContent = od;
+        document.getElementById("s-fine").textContent = rupees(fines);
+        document.getElementById("s-day").textContent = dayNo;
+      }
+
+      function render() { renderMode(); renderTitles(); renderMembers(); renderStats(); flashCode = null; }
+
+      /* ---------------- actions ---------------- */
+      function issueCopy(copy, memberId) {
+        copy.status = "LOANED";
+        copy.heldFor = null;
+        var q = queueMap[copy.isbn];
+        if (q) {
+          var at = q.indexOf(memberId);
+          if (at >= 0) q.splice(at, 1);
+          if (!q.length) delete queueMap[copy.isbn];
+        }
+        var loan = { barcode: copy.barcode, memberId: memberId, issuedOn: dayNo, dueOn: dayNo + LOAN_DAYS, open: true, fineMinor: 0 };
+        loanList.push(loan);
+        flashCode = copy.barcode;
+        return loan;
+      }
+
+      function borrowTitle(isbn) {
+        var m = memberOf(selectedId);
+        var mine = copiesOf(isbn).filter(function (c) { return c.status === "RESERVED" && c.heldFor === selectedId; })[0];
+        var copy = mine || availableOf(isbn)[0];
+        if (!copy) {
+          render();
+          setCall("library.<b>issue</b>(\"" + isbn + "\", \"" + selectedId + "\", day=" + dayNo + ") → <u>no copy available</u>");
+          setExplain("Every copy is out", "<span class='dim'>Availability is a <b>count over items</b>, and it is zero. Press <b>🔖 Reserve</b> to join the queue.</span>");
+          return;
+        }
+        var why = refusalFor(selectedId);
+        if (why) {
+          render();
+          setCall("member.<b>canBorrow</b>(day=" + dayNo + ") → <u>false</u>  <span style='color:#6b7280'>// " + why + "</span>");
+          setExplain("Refused — by " + m.label + ", not by the service",
+            "<code>member.canBorrow(day)</code> said no: <span class='bad'>" + why + "</span>. <span class='dim'>The rule lives on <b>Member</b>, so raising the limit is one constant.</span>");
+          return;
+        }
+        var wasHeld = !!mine;
+        issueCopy(copy, selectedId);
+        render();
+        setCall("library.<b>issue</b>(\"" + isbn + "\", \"" + selectedId + "\", day=" + dayNo + ") → <i>BookItem#" + copy.barcode + "</i>");
+        setExplain(m.label + " has copy " + copy.barcode + (wasHeld ? " — the one held for her" : ""),
+          "Not <span class='dim'>“the book”</span> — <span class='hi'>" + copy.barcode + "</span>, a specific <code>BookItem</code>. " +
+          "<span class='dim'>The <b>Book</b> is one catalogue record; this is one of its copies. Due day " + (dayNo + LOAN_DAYS) + ".</span>");
+      }
+
+      function clickCopy(barcode) {
+        var c = copyOf(barcode);
+        if (c.status === "LOANED") { returnCopy(barcode); return; }
+        if (c.status === "RESERVED") {
+          var holder = c.heldFor;
+          selectedId = holder;
+          issueCopy(c, holder);
+          render();
+          setCall("library.<b>issue</b>(\"" + c.isbn + "\", \"" + holder + "\", day=" + dayNo + ") → <i>BookItem#" + barcode + "</i>");
+          setExplain(memberOf(holder).label + " collected the copy held for her",
+            "<span class='dim'>The hold is consumed and she leaves the queue. Everyone behind her moves up one place.</span>");
+          return;
+        }
+        var save = selectedId;
+        var why = refusalFor(selectedId);
+        if (why) { borrowTitle(c.isbn); return; }
+        issueCopy(c, save);
+        render();
+        setCall("library.<b>issue</b>(\"" + c.isbn + "\", \"" + save + "\", day=" + dayNo + ") → <i>BookItem#" + barcode + "</i>");
+        setExplain(memberOf(save).label + " took copy " + barcode + " specifically",
+          "<span class='dim'>A loan always points at a <b>barcode</b>. That is only possible because the copy is its own object.</span>");
+      }
+
+      function returnCopy(barcode) {
+        var c = copyOf(barcode), loan = openLoanFor(barcode);
+        if (!loan) return;
+        var late = daysLate(loan);
+        var fine = fineFor(late, c.price);
+        loan.open = false;
+        loan.returnedOn = dayNo;
+        loan.fineMinor = fine;
+        var q = queueOf(c.isbn);
+        flashCode = barcode;
+        if (q.length) {
+          var next = q[0];
+          c.status = "RESERVED";
+          c.heldFor = next;
+          render();
+          setCall("library.<b>returnItem</b>(\"" + barcode + "\", day=" + dayNo + ") → fine <i>" + rupees(fine) + "</i> · held for <i>" + next + "</i>");
+          setExplain(barcode + " does NOT go back on the shelf",
+            "Someone is queued, so the copy goes to the <span class='inf'>head of the queue</span> — held for <b>" + memberOf(next).label + "</b>. " +
+            "<span class='dim'>Shelve it instead and the next walk-in takes the book she waited weeks for.</span>");
+        } else {
+          c.status = "AVAILABLE";
+          c.heldFor = null;
+          render();
+          setCall("library.<b>returnItem</b>(\"" + barcode + "\", day=" + dayNo + ") → fine <i>" + rupees(fine) + "</i> · <i>AVAILABLE</i>");
+          setExplain(barcode + " is back on the shelf",
+            (late > 0
+              ? "<span class='bad'>" + late + " days late</span> → fine <span class='bad'>" + rupees(fine) + "</span>, from <code>dueOn</code> vs the day passed in. "
+              : "Returned on time. ") +
+            "<span class='dim'>Nobody is queued, so the copy simply becomes AVAILABLE. The lending is <b>closed, not deleted</b> — it is the history.</span>");
+        }
+      }
+
+      function reserveTitle(isbn) {
+        if (availableOf(isbn).length > 0) { borrowTitle(isbn); return; }
+        var q = queueMap[isbn] || (queueMap[isbn] = []);
+        if (q.indexOf(selectedId) < 0) q.push(selectedId);
+        render();
+        setCall("library.<b>reserve</b>(\"" + isbn + "\", \"" + selectedId + "\") → <i>position " + (q.indexOf(selectedId) + 1) + "</i>");
+        setExplain(memberOf(selectedId).label + " is #" + (q.indexOf(selectedId) + 1) + " in the queue",
+          "<span class='dim'>Reserve is offered only when the count is <b>zero</b> — otherwise she would just borrow. Now return one of the 🟠 copies and watch where it goes.</span>");
+      }
+
+      function advanceDays() {
+        dayNo += 7;
+        render();
+        var od = loanList.filter(function (l) { return l.open && daysLate(l) > 0; }).length;
+        setCall("clock.<b>advance</b>(7) → day=" + dayNo + "  <span style='color:#6b7280'>// the date is a parameter, never now()</span>");
+        setExplain("Day " + dayNo + (od ? " — " + od + " loan(s) overdue" : " — nothing overdue yet"),
+          od
+            ? "Fines come from <code>daysLate(day)</code>, <span class='dim'>computed from the day you pass in. That is why a ten-day-late charge is a one-line test.</span>"
+            : "<span class='dim'>Everything is still within its 14 days. Press <b>⏩ +7 days</b> again.</span>");
+      }
+
+      function fillToLimit() {
+        var before = openLoansOf(selectedId).length, guard = 0;
+        while (openLoansOf(selectedId).length < MAX_LOANS && guard++ < 20) {
+          var free = copyList.filter(function (c) { return c.status === "AVAILABLE"; })[0];
+          if (!free) break;
+          issueCopy(free, selectedId);
+        }
+        var now = openLoansOf(selectedId).length;
+        flashCode = null;
+        render();
+        var m = memberOf(selectedId);
+        if (now >= MAX_LOANS) {
+          setCall("member.<b>canBorrow</b>(day=" + dayNo + ") → <u>false</u>  <span style='color:#6b7280'>// loan limit reached (5/5)</span>");
+          setExplain(m.label + " is at " + now + " of " + MAX_LOANS + " — the next borrow is refused",
+            "<span class='dim'>Try borrowing anything now. The refusal comes from</span> <code>member.canBorrow(day)</code> <span class='dim'>— the rule is on <b>Member</b>, not buried in a service method.</span>");
+        } else {
+          setExplain(m.label + " now holds " + now + " (was " + before + ")",
+            "<span class='dim'>No copies left on the shelf to reach the limit. Return a few and try again.</span>");
+        }
+      }
+
+      function setPolicy(k) {
+        policyKey = k;
+        render();
+        var p = POLICIES.filter(function (x) { return x.key === k; })[0];
+        setCall("library.<b>setFinePolicy</b>(new " + p.label + ")  <span style='color:#6b7280'>// returnItem() unchanged</span>");
+        setExplain("Fine policy → " + p.chip,
+          "Every open fine re-priced instantly. <span class='dim'>One interface, three implementations, and <code>returnItem()</code> was not touched — that is the whole point of a strategy seam.</span>");
+      }
+
+      function selectMember(id) {
+        selectedId = id;
+        render();
+        var loans = openLoansOf(id);
+        setCall("// acting as <b>" + id + "</b> — " + loans.length + "/" + MAX_LOANS + " loans, fine " + rupees(fineOf(id)));
+        setExplain(memberOf(id).label + " selected",
+          "<span class='dim'>Borrow, reserve and return now act for <b>" + id + "</b>. Her card shows the exact barcodes she is carrying.</span>");
+      }
+
+      function reset() {
+        copyList = COPY_SEED.map(function (c) {
+          return { barcode: c.barcode, isbn: c.isbn, price: c.price, status: "AVAILABLE", heldFor: null };
+        });
+        memberList = MEMBER_SEED.map(function (m) { return { id: m.id, label: m.label }; });
+        loanList = [];
+        queueMap = {};
+        dayNo = 1;
+        policyKey = "flat";
+        selectedId = "M-1";
+        flashCode = null;
+        render();
+        setCall("// pick a member on the right, then press <b>📕 Borrow</b> on a title");
+        setExplain("One title, three copies",
+          "A <b>Book</b> is the catalogue record. A <b>BookItem</b> is one barcoded copy. Press <b>📕 Borrow</b> and watch which one she actually gets.");
+      }
+
+      function emptyShelf() {
+        var isbn = TITLES[0].isbn;
+        var free = availableOf(isbn), ids = ["M-1", "M-2", "M-3"], took = 0;
+        for (var i = 0; i < free.length && i < ids.length; i++) {
+          if (refusalFor(ids[i])) continue;
+          issueCopy(free[i], ids[i]);
+          took++;
+        }
+        flashCode = null;
+        render();
+        setCall("// " + took + " copies issued → <b>availableCount</b>(\"" + isbn + "\") = " + availableOf(isbn).length);
+        setExplain(availableOf(isbn).length === 0 ? "Every copy of Clean Code is out" : took + " copies went out",
+          availableOf(isbn).length === 0
+            ? "The header reads <span class='bad'>0 of 3 available</span> and the button became <b>🔖 Reserve</b>. <span class='dim'>Reserve for someone, then return a copy — it will not go back on the shelf.</span>"
+            : "<span class='dim'>Each member got a <b>different barcode</b>. Availability is a count over items, never a boolean on the title.</span>");
+      }
+
+      document.getElementById("empty-btn").addEventListener("click", emptyShelf);
+      document.getElementById("day-btn").addEventListener("click", advanceDays);
+      document.getElementById("limit-btn").addEventListener("click", fillToLimit);
+      document.getElementById("reset-btn").addEventListener("click", reset);
+      reset();
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>
