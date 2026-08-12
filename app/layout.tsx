@@ -15,6 +15,7 @@ import {
   WEBSITE_ID,
 } from "@/lib/site";
 import { JsonLd } from "@/components/shared/JsonLd";
+import { PageViewTracker } from "@/components/analytics/PageViewTracker";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -99,6 +100,7 @@ export default function RootLayout({
         </Providers>
         <Analytics />
         <SpeedInsights />
+        <PageViewTracker />
       </body>
     </html>
   );
