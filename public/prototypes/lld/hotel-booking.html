@@ -1,0 +1,763 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hotel booking — nightly availability — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a; --accent-soft: rgba(251,134,58,.12); --accent-border: rgba(251,134,58,.45);
+        --success: #5cc66f; --success-soft: rgba(92,198,111,.12);
+        --info: #5e9ff6; --info-soft: rgba(94,159,246,.12);
+        --danger: #f06868; --danger-soft: rgba(240,104,104,.12);
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px; --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 14px 16px 20px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      .top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 9px; }
+      .stat { font-family: var(--mono); font-size: 10.5px; padding: 6px 10px; border-radius: 999px;
+              background: var(--surface); border: 1px solid var(--border); color: var(--muted); white-space: nowrap; }
+      .stat b { color: var(--fg); }
+      .stat.hot { border-color: rgba(240,104,104,.55); color: var(--danger); }
+      .stat.hot b { color: var(--danger); }
+      .stat.tot { margin-left: auto; border-color: rgba(251,134,58,.4); }
+      .stat.tot b { color: var(--accent); }
+
+      .callline { font-family: var(--mono); font-size: 11.5px; color: var(--subtle); background: #0a0b0e;
+                  border: 1px solid var(--border); border-radius: var(--r-md); padding: 7px 11px; margin-bottom: 10px;
+                  white-space: nowrap; overflow-x: auto; }
+      .callline b { color: var(--accent); }
+      .callline i { color: var(--success); font-style: normal; }
+      .callline u { color: var(--danger); text-decoration: none; }
+
+      .chiprow { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+      .chiprow .lab { font-family: var(--mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase;
+                      color: var(--subtle); }
+      .chip { font-family: var(--mono); font-size: 10.5px; padding: 6px 10px; border-radius: var(--r-md);
+              background: var(--elevated); border: 1px solid var(--border-strong); color: var(--muted); cursor: pointer; }
+      .chip:hover { border-color: var(--accent); color: var(--fg); }
+      .chip.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); font-weight: 700; }
+      .chip.bug.on { background: var(--danger-soft); border-color: rgba(240,104,104,.55); color: var(--danger); }
+      .sep { width: 1px; height: 20px; background: var(--border-strong); margin: 0 3px; }
+
+      .cols { display: grid; grid-template-columns: 1fr 262px; gap: 10px; align-items: start; }
+      .pane { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 11px; }
+      .cap { font-family: var(--mono); font-size: 9.5px; letter-spacing: .09em; text-transform: uppercase;
+             color: var(--subtle); margin-bottom: 9px; display: flex; justify-content: space-between; gap: 10px; }
+      .cap b { color: var(--accent); font-weight: 700; }
+
+      .row { display: grid; grid-template-columns: 92px 1fr; gap: 8px; align-items: start; margin-bottom: 7px; }
+      .rlab { font-family: var(--mono); font-size: 10px; color: var(--fg); line-height: 1.35; padding-top: 5px; }
+      .rlab span { display: block; font-size: 8.5px; color: var(--subtle); }
+      .rlab.head { color: var(--subtle); font-size: 9px; }
+
+      .dates, .cells, .bars { display: grid; grid-template-columns: repeat(11, 1fr); gap: 3px; }
+      .bars { margin-top: 3px; }
+
+      .dt { font-family: var(--mono); font-size: 10px; padding: 5px 1px 4px; border-radius: 5px; text-align: center;
+            background: var(--elevated); border: 1px solid var(--border); color: var(--muted); cursor: pointer; }
+      .dt:hover { border-color: var(--accent); color: var(--fg); }
+      .dt i { display: block; font-style: normal; font-size: 7.5px; color: var(--subtle); }
+      .dt.in { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); font-weight: 700; }
+      .dt.out { background: var(--info-soft); border-color: rgba(94,159,246,.5); color: var(--info); font-weight: 700; }
+      .dt.co { opacity: .62; }
+
+      .cell { font-family: var(--mono); font-size: 12px; text-align: center; padding: 8px 1px; border-radius: 5px;
+              background: var(--elevated); border: 1px solid var(--border); color: var(--success); }
+      .cell.low { color: var(--accent); border-color: rgba(251,134,58,.35); }
+      .cell.zero { color: var(--danger); border-color: rgba(240,104,104,.5); background: var(--danger-soft); }
+      .cell.neg { color: var(--danger); border-color: var(--danger); background: rgba(240,104,104,.24); font-weight: 700; }
+      .cell.sel { box-shadow: inset 0 0 0 1px rgba(251,134,58,.55); }
+      .cell.chk { background: rgba(94,159,246,.26); border-color: var(--info); color: var(--info); }
+      .cell.take { background: rgba(251,134,58,.3); border-color: var(--accent); color: var(--accent); }
+      .cell.bad { background: rgba(240,104,104,.32); border-color: var(--danger); color: var(--danger); }
+      .cell.none { background: transparent; border: 1px dashed var(--border); color: var(--subtle); font-size: 10px; }
+
+      .bar { font-family: var(--mono); font-size: 8.5px; padding: 3px 5px; border-radius: 4px; overflow: hidden;
+             white-space: nowrap; background: var(--info-soft); border: 1px solid rgba(94,159,246,.5); color: var(--info); }
+      .bar.mine { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+      .bar.over { background: rgba(240,104,104,.2); border-color: var(--danger); color: var(--danger); }
+
+      .qrow { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 10px;
+              color: var(--muted); padding: 3px 0; border-bottom: 1px dashed var(--border); }
+      .qrow b { color: var(--fg); font-weight: 400; }
+      .qrow.fest b, .qrow.fest span { color: var(--accent); }
+      .qsum { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 12px;
+              color: var(--accent); font-weight: 700; margin-top: 7px; }
+      .qnote { font-family: var(--mono); font-size: 8.5px; color: var(--subtle); margin-top: 5px; }
+
+      .blist { margin-top: 11px; border-top: 1px dashed var(--border-strong); padding-top: 9px; }
+      .bk { font-family: var(--mono); font-size: 9.5px; color: var(--muted); border: 1px solid var(--border);
+            border-left: 2px solid var(--border-strong); border-radius: 5px; padding: 5px 7px; margin-bottom: 5px;
+            background: var(--elevated); }
+      .bk b { color: var(--fg); font-weight: 400; }
+      .bk.ok { border-left-color: var(--success); }
+      .bk.no { border-left-color: var(--danger); opacity: .55; }
+      .bk.over { border-left-color: var(--danger); background: var(--danger-soft); }
+
+      .explain { min-height: 76px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md);
+                 padding: 12px 15px; margin-top: 11px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .hi { color: var(--accent); font-weight: 700; }
+      .explain-body .sub { display: block; margin-top: 5px; font-size: 11.5px; color: var(--subtle); }
+
+      .foot { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 11px; }
+      .btn { background: var(--elevated); color: var(--muted); font: 600 11.5px/1 var(--sans);
+             border: 1px solid var(--border); border-radius: var(--r-md); padding: 8px 12px; cursor: pointer; }
+      .btn:hover { border-color: var(--border-strong); color: var(--fg); }
+      .go { font-family: var(--mono); font-size: 12.5px; font-weight: 700; padding: 9px 18px; border-radius: var(--r-md);
+            cursor: pointer; background: var(--success-soft); border: 1px solid rgba(92,198,111,.45); color: var(--success); }
+      .go:active { transform: scale(.98); }
+      .go:disabled { opacity: .4; cursor: not-allowed; }
+      .hint { margin-left: auto; font-size: 11.5px; color: var(--muted); }
+      .hint .b { color: var(--accent); }
+
+      @media (max-width: 720px) {
+        .cols { grid-template-columns: 1fr; }
+        .row { grid-template-columns: 66px 1fr; }
+        .hint { margin-left: 0; }
+        .stat.tot { margin-left: 0; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="top">
+      <span class="stat">free tonight <b id="s-free">3</b></span>
+      <span class="stat">nights held <b id="s-held">0</b></span>
+      <span class="stat" id="s-over-wrap">oversold <b id="s-over">0</b></span>
+      <span class="stat" id="s-leak-wrap">leaked <b id="s-leak">0</b></span>
+      <span class="stat tot">quote <b id="s-total">₹0.00</b></span>
+    </div>
+
+    <div class="callline" id="callline">// click a <b>check-in</b> date, then a <b>check-out</b> date on the strip</div>
+
+    <div class="chiprow">
+      <span class="lab">room type</span>
+      <span id="typechips"></span>
+      <span class="sep"></span>
+      <span class="lab">lock</span>
+      <button class="chip on" id="c-guarded">🔒 Guarded</button>
+      <button class="chip" id="c-unguarded">🔓 Unguarded</button>
+      <span class="sep"></span>
+      <span class="lab">rates</span>
+      <button class="chip" id="c-flat">📏 Flat × nights</button>
+      <button class="chip on" id="c-nightly">📅 Per-night rates</button>
+      <span class="sep"></span>
+      <span class="lab">bugs</span>
+      <button class="chip bug" id="c-onepass">🩹 One-pass (buggy)</button>
+      <button class="chip bug" id="c-inclusive">⚠️ Use &lt;= instead of &lt;</button>
+    </div>
+
+    <div class="cols">
+      <div class="pane">
+        <div class="cap"><span>Nightly inventory — August 2026</span><span id="cap-sel">no dates picked</span></div>
+        <div class="row">
+          <div class="rlab head">date →</div>
+          <div><div class="dates" id="dates"></div></div>
+        </div>
+        <div id="grid"></div>
+      </div>
+
+      <div class="pane">
+        <div class="cap"><span>Quote</span><span id="cap-mode">per-night</span></div>
+        <div id="quote"></div>
+        <div class="blist" id="blist"></div>
+      </div>
+    </div>
+
+    <div class="explain">
+      <div class="explain-title" id="ex-title">Availability is a range question</div>
+      <div class="explain-body" id="ex-body">
+        Click <b>12</b>, then <b>15</b> on the date strip. Watch how many nights light up.
+      </div>
+    </div>
+
+    <div class="foot">
+      <button class="go" id="book-btn">🛏 Book</button>
+      <button class="btn" id="sellout-btn">🔴 Sell out night 2</button>
+      <button class="btn" id="change-btn">↔️ Checkout day</button>
+      <button class="btn" id="race-btn">⚔️ Two guests, last room</button>
+      <button class="btn" id="cancel-btn">🚫 Cancel</button>
+      <button class="btn" id="reset-btn">↺ Reset</button>
+      <span class="hint"><span class="b">▸</span> 12 → 15 is <b>3</b> nights, not 4.</span>
+    </div>
+
+    <script>
+      /* ------------------------------------------------------------ data */
+      var TYPES = [
+        { k: "STANDARD", label: "Standard", icon: "🛏", total: 6 },
+        { k: "DELUXE",   label: "Deluxe",   icon: "✨", total: 3 },
+        { k: "SUITE",    label: "Suite",    icon: "👑", total: 2 }
+      ];
+      /* 11 header dates: 12..22 Aug. 10 bookable nights (index 0..9 = 12..21). */
+      var DATES = [12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22];
+      var NIGHTS = 10;
+      var TAGS = ["wk", "wk", "fest", "fest", "we", "wk", "wk", "wk", "wk", "we"];
+      var TAGLABEL = { wk: "wk", we: "we", fest: "🎆" };
+      var RATES = {
+        STANDARD: { wk: 400000,  we: 650000,  fest: 900000 },
+        DELUXE:   { wk: 650000,  we: 950000,  fest: 1400000 },
+        SUITE:    { wk: 1200000, we: 1800000, fest: 2500000 }
+      };
+
+      var bookedMap, bookings, selType, selIn, selOut;
+      var onePass, inclusiveEnd, guarded, rateMode;
+      var oversoldCount, leakedNights, busy, seq, flashState;
+
+      /* --------------------------------------------------------- helpers */
+      function fmtP(p) {
+        var sign = p < 0 ? "−" : "";
+        var a = Math.abs(p);
+        return sign + "₹" + Math.floor(a / 100).toLocaleString("en-IN") + "." + ("0" + (a % 100)).slice(-2);
+      }
+      function typeOf(k) {
+        for (var i = 0; i < TYPES.length; i++) if (TYPES[i].k === k) return TYPES[i];
+        return TYPES[0];
+      }
+      function keyOf(k, i) { return k + "@" + i; }
+      function takenOn(k, i) { var v = bookedMap[keyOf(k, i)]; return v === undefined ? 0 : v; }
+      function freeOn(k, i) { return typeOf(k).total - takenOn(k, i); }
+      function addBooked(k, i, n) { bookedMap[keyOf(k, i)] = takenOn(k, i) + n; }
+
+      /* The half-open night list. inclusiveEnd is THE BUG. */
+      function nightsBetween(a, b) {
+        var out = [];
+        if (a === null || b === null || b <= a) return out;
+        var last = inclusiveEnd ? b : b - 1;
+        for (var i = a; i <= last; i++) if (i < NIGHTS) out.push(i);
+        return out;
+      }
+      function selNights() { return nightsBetween(selIn, selOut); }
+
+      function rateOn(k, i) { return RATES[k][TAGS[i]]; }
+      function quoteFor(k, ns) {
+        var rows = [], total = 0, i;
+        if (rateMode === "flat") {
+          var flat = RATES[k].wk;
+          for (i = 0; i < ns.length; i++) { rows.push({ i: ns[i], p: flat, tag: "wk" }); total += flat; }
+        } else {
+          for (i = 0; i < ns.length; i++) {
+            var p = rateOn(k, ns[i]);
+            rows.push({ i: ns[i], p: p, tag: TAGS[ns[i]] });
+            total += p;
+          }
+        }
+        return { rows: rows, total: total };
+      }
+
+      /* ---------------------------------------------------------- render */
+      function setExplain(t, h) {
+        document.getElementById("ex-title").textContent = t;
+        document.getElementById("ex-body").innerHTML = h;
+      }
+      function setCall(h) { document.getElementById("callline").innerHTML = h; }
+
+      function renderChips() {
+        var host = document.getElementById("typechips");
+        host.innerHTML = "";
+        TYPES.forEach(function (t) {
+          var b = document.createElement("button");
+          b.className = "chip" + (selType === t.k ? " on" : "");
+          b.textContent = t.icon + " " + t.label;
+          b.addEventListener("click", function () { pickType(t.k); });
+          host.appendChild(b);
+        });
+        document.getElementById("c-guarded").className = "chip" + (guarded ? " on" : "");
+        document.getElementById("c-unguarded").className = "chip" + (guarded ? "" : " on");
+        document.getElementById("c-flat").className = "chip" + (rateMode === "flat" ? " on" : "");
+        document.getElementById("c-nightly").className = "chip" + (rateMode === "nightly" ? " on" : "");
+        document.getElementById("c-onepass").className = "chip bug" + (onePass ? " on" : "");
+        document.getElementById("c-inclusive").className = "chip bug" + (inclusiveEnd ? " on" : "");
+        document.getElementById("cap-mode").textContent = rateMode === "flat" ? "flat × nights" : "per-night";
+      }
+
+      function renderDates() {
+        var host = document.getElementById("dates");
+        host.innerHTML = "";
+        for (var i = 0; i < DATES.length; i++) {
+          var b = document.createElement("button");
+          var cls = "dt";
+          if (i === selIn) cls += " in";
+          else if (i === selOut) cls += " out";
+          if (i >= NIGHTS) cls += " co";
+          b.className = cls;
+          b.innerHTML = DATES[i] + "<i>" + (i < NIGHTS ? TAGLABEL[TAGS[i]] : "out") + "</i>";
+          (function (idx) { b.addEventListener("click", function () { pickDate(idx); }); })(i);
+          host.appendChild(b);
+        }
+      }
+
+      function renderGrid() {
+        var sel = selNights(), selSet = {}, i, j;
+        for (i = 0; i < sel.length; i++) selSet[sel[i]] = 1;
+
+        var html = "";
+        for (j = 0; j < TYPES.length; j++) {
+          var t = TYPES[j];
+          html += "<div class='row'><div class='rlab'>" + t.icon + " " + t.label +
+                  "<span>" + t.total + " rooms</span></div><div><div class='cells'>";
+          for (i = 0; i < DATES.length; i++) {
+            if (i >= NIGHTS) { html += "<div class='cell none'>·</div>"; continue; }
+            var f = freeOn(t.k, i);
+            var cls = "cell";
+            if (f < 0) cls += " neg";
+            else if (f === 0) cls += " zero";
+            else if (f === 1) cls += " low";
+            if (t.k === selType && selSet[i]) cls += " sel";
+            if (t.k === selType && flashState[i]) cls += " " + flashState[i];
+            html += "<div class='" + cls + "'>" + f + "</div>";
+          }
+          html += "</div><div class='bars'>";
+          for (i = 0; i < bookings.length; i++) {
+            var bk = bookings[i];
+            if (bk.t !== t.k || bk.cancelled) continue;
+            var start = bk.ns[0] + 1, span = bk.ns.length;
+            html += "<div class='bar" + (bk.mine ? " mine" : "") + (bk.over ? " over" : "") +
+                    "' style='grid-column:" + start + " / span " + span + "'>" +
+                    bk.guest + " ×" + bk.rooms + "</div>";
+          }
+          html += "</div></div></div>";
+        }
+        document.getElementById("grid").innerHTML = html;
+      }
+
+      function renderQuote() {
+        var ns = selNights();
+        var host = document.getElementById("quote");
+        if (!ns.length) {
+          host.innerHTML = "<div class='qnote'>pick a check-in and a check-out date</div>";
+          document.getElementById("s-total").textContent = "₹0.00";
+          return;
+        }
+        var q = quoteFor(selType, ns), html = "", i;
+        for (i = 0; i < q.rows.length; i++) {
+          var r = q.rows[i];
+          html += "<div class='qrow" + (r.tag === "fest" ? " fest" : "") + "'><span>" +
+                  DATES[r.i] + " Aug " + TAGLABEL[r.tag] + "</span><b>" + fmtP(r.p) + "</b></div>";
+        }
+        html += "<div class='qsum'><span>" + ns.length + " nights</span><span>" + fmtP(q.total) + "</span></div>";
+        html += "<div class='qnote'>" + (rateMode === "flat"
+          ? "weekday rate × nights — booking code changed: 0 lines"
+          : "Σ rateFor(type, night) — booking code changed: 0 lines") + "</div>";
+        host.innerHTML = html;
+        document.getElementById("s-total").textContent = fmtP(q.total);
+      }
+
+      function renderList() {
+        var html = "", i, shown = 0;
+        for (i = bookings.length - 1; i >= 0 && shown < 6; i--) {
+          var b = bookings[i];
+          if (!b.mine && !b.cancelled && !b.over && shown > 3) continue;
+          var cls = b.cancelled ? "bk no" : b.over ? "bk over" : "bk ok";
+          html += "<div class='" + cls + "'>" + b.id + " <b>" + b.guest + "</b> · " +
+                  typeOf(b.t).label + " · " + DATES[b.ns[0]] + "→" + DATES[b.ns[b.ns.length - 1] + 1] +
+                  " · " + b.ns.length + "n · " + fmtP(b.total) +
+                  (b.cancelled ? " · CANCELLED" : "") + (b.over ? " · ⚠ oversold" : "") + "</div>";
+          shown++;
+        }
+        document.getElementById("blist").innerHTML = html || "<div class='qnote'>no bookings yet</div>";
+      }
+
+      function renderStats() {
+        document.getElementById("s-free").textContent = freeOn(selType, 0);
+        var held = 0, i;
+        for (i = 0; i < bookings.length; i++)
+          if (!bookings[i].cancelled) held += bookings[i].ns.length * bookings[i].rooms;
+        document.getElementById("s-held").textContent = held;
+        document.getElementById("s-over").textContent = oversoldCount;
+        document.getElementById("s-leak").textContent = leakedNights;
+        document.getElementById("s-over-wrap").className = "stat" + (oversoldCount ? " hot" : "");
+        document.getElementById("s-leak-wrap").className = "stat" + (leakedNights ? " hot" : "");
+        var ns = selNights();
+        document.getElementById("cap-sel").textContent = ns.length
+          ? DATES[selIn] + " Aug → " + DATES[selOut] + " Aug · " + ns.length + " nights"
+          : (selIn === null ? "no dates picked" : "pick a check-out date");
+      }
+
+      function render() { renderChips(); renderDates(); renderGrid(); renderQuote(); renderList(); renderStats(); }
+
+      function setBusy(v) {
+        busy = v;
+        document.getElementById("book-btn").disabled = v;
+      }
+
+      /* ----------------------------------------------------- interactions */
+      function pickType(k) {
+        if (busy) return;
+        selType = k;
+        render();
+        setCall("roomType = <b>" + k + "</b>  <span style='color:#6b7280'>// you sell a TYPE, not room 402</span>");
+        setExplain(typeOf(k).label + " — " + typeOf(k).total + " interchangeable rooms",
+          "<span class='dim'>Nobody asks for room 402. So availability is one <b>counter per night</b> for the whole type — the room number is picked at check-in.</span>");
+      }
+
+      function pickDate(i) {
+        if (busy) return;
+        if (i >= NIGHTS && selIn === null) {
+          setCall("checkIn = <u>22 Aug</u>  <span style='color:#6b7280'>// there is no night after it</span>");
+          setExplain("22 Aug can only be a check-out",
+            "<span class='dim'>The last column is a check-out only — there is no night starting on it. Pick an earlier check-in first.</span>");
+          return;
+        }
+        if (selIn === null || selOut !== null || i <= selIn) {
+          selIn = i; selOut = null;
+          render();
+          setCall("checkIn = <b>" + DATES[i] + " Aug</b>  <span style='color:#6b7280'>// now pick a check-out</span>");
+          setExplain("Check-in " + DATES[i] + " Aug",
+            "<span class='dim'>Now click a later date as the <b>check-out</b>. The nights in between are what actually gets held.</span>");
+          return;
+        }
+        selOut = i;
+        var ns = selNights();
+        render();
+        setCall("inventory.<b>isAvailable</b>(" + selType + ", " + DATES[selIn] + " Aug → " + DATES[selOut] +
+                " Aug) → <i>" + ns.length + " nights checked</i>" +
+                (inclusiveEnd ? "  <u>// &lt;= bug is ON</u>" : ""));
+        var span = DATES[selOut] - DATES[selIn];
+        setExplain(DATES[selIn] + " → " + DATES[selOut] + " Aug is " + ns.length + " nights",
+          inclusiveEnd
+            ? "<span class='bad'>" + ns.length + " nights for a " + span + "-night stay.</span> <span class='dim'>The check-out day is being counted as a night — that extra cell is what makes every changeover day unsellable.</span>"
+            : "<span class='good'>" + ns.length + " nights</span>, not " + (span + 1) +
+              ". <span class='dim'>The range is half-open <code>[checkIn, checkOut)</code> — the day you leave is the day the next guest arrives.</span>" +
+              "<span class='sub'>Availability across the range = the MINIMUM free count across those nights.</span>");
+      }
+
+      function newBooking(k, ns, rooms, guest, mine, over) {
+        var q = quoteFor(k, ns);
+        var b = { id: "BK-" + (++seq), t: k, ns: ns.slice(), rooms: rooms, guest: guest,
+                  total: q.total * rooms, first: (q.rows.length ? q.rows[0].p : 0) * rooms,
+                  mine: !!mine, over: !!over, cancelled: false };
+        bookings.push(b);
+        return b;
+      }
+
+      /* -------- the centrepiece: two-pass vs one-pass, animated ---------- */
+      function doBook() {
+        if (busy) return;
+        var ns = selNights();
+        if (!ns.length) {
+          setCall("bookingService.<b>book</b>(...) → <u>no dates</u>");
+          setExplain("Pick a date range first",
+            "<span class='dim'>Click a <b>check-in</b> date and then a <b>check-out</b> date on the strip above.</span>");
+          return;
+        }
+        setBusy(true);
+        flashState = {};
+        if (onePass) { onePassBook(ns, 0); return; }
+        twoPassCheck(ns, 0);
+      }
+
+      function twoPassCheck(ns, i) {
+        if (i >= ns.length) {
+          flashState = {}; render();
+          setCall("pass 1 ✓ all " + ns.length + " nights have room → <i>pass 2: take ALL</i>");
+          setTimeout(function () { twoPassTake(ns, 0); }, 260);
+          return;
+        }
+        var idx = ns[i];
+        if (freeOn(selType, idx) < 1) {
+          flashState = {}; flashState[idx] = "bad"; render();
+          setCall("pass 1 → <u>free[" + DATES[idx] + " Aug] = 0</u> → return false  <span style='color:#6b7280'>// zero writes</span>");
+          setExplain("Refused in pass 1 — nothing was decremented",
+            "<span class='bad'>" + DATES[idx] + " Aug has 0 left.</span> <span class='dim'>Because every night is checked <b>before</b> any night is taken, the failure costs nothing: the grid is byte-for-byte what it was.</span>" +
+            "<span class='sub'>Now turn on 🩹 One-pass (buggy) and press 🛏 Book again.</span>");
+          setTimeout(function () { flashState = {}; render(); setBusy(false); }, 720);
+          return;
+        }
+        flashState[idx] = "chk"; render();
+        setCall("pass 1 · checking <b>" + DATES[idx] + " Aug</b> → free = " + freeOn(selType, idx) +
+                "  <span style='color:#6b7280'>// no writes yet</span>");
+        setTimeout(function () { twoPassCheck(ns, i + 1); }, 230);
+      }
+
+      function twoPassTake(ns, i) {
+        if (i >= ns.length) {
+          flashState = {};
+          var b = newBooking(selType, ns, 1, "you", true, false);
+          render();
+          setCall("bookingService.<b>book</b>(guest, " + selType + ", Stay(" + DATES[selIn] + ", " + DATES[selOut] +
+                  "), 1, at) → <i>" + b.id + "</i>");
+          setExplain("Confirmed — " + ns.length + " counters decremented, together",
+            "Pass 1 checked <span class='hi'>every</span> night, pass 2 took <span class='hi'>every</span> night. " +
+            "<span class='dim'>All-or-nothing: the only two outcomes are “all " + ns.length + " nights held” and “nothing touched”.</span>" +
+            "<span class='sub'>Total " + fmtP(b.total) + ", frozen on the booking — a later rate change cannot rewrite it.</span>");
+          setBusy(false);
+          return;
+        }
+        var idx = ns[i];
+        addBooked(selType, idx, 1);
+        flashState = {}; flashState[idx] = "take"; render();
+        setCall("pass 2 · taking <b>" + DATES[idx] + " Aug</b> → free = " + freeOn(selType, idx));
+        setTimeout(function () { twoPassTake(ns, i + 1); }, 230);
+      }
+
+      function onePassBook(ns, i) {
+        if (i >= ns.length) {
+          flashState = {};
+          var b = newBooking(selType, ns, 1, "you", true, false);
+          render();
+          setCall("one-pass take → <i>" + b.id + "</i>  <span style='color:#6b7280'>// happened to work this time</span>");
+          setExplain("Confirmed — but only because nothing failed",
+            "<span class='dim'>The one-pass version takes as it goes. It is fine until a later night is full. Press 🔴 Sell out night 2 and try again.</span>");
+          setBusy(false);
+          return;
+        }
+        var idx = ns[i];
+        if (freeOn(selType, idx) < 1) {
+          flashState = {}; flashState[idx] = "bad"; render();
+          setCall("one-pass → <u>free[" + DATES[idx] + " Aug] = 0</u> → abort  <span style='color:#6b7280'>// " + i + " night(s) already taken</span>");
+          setExplain("Failed on night " + (i + 1) + " — and " + i + " night(s) are now held for nobody",
+            "<span class='bad'>⚠ leaked: " + i + "</span> <span class='dim'>The earlier nights were decremented as the loop went, no booking exists, and nothing in the system will ever notice. Only ↺ Reset clears it.</span>" +
+            "<span class='sub'>This is exactly why book() has two loops instead of one.</span>");
+          leakedNights += i;
+          setTimeout(function () { flashState = {}; render(); setBusy(false); }, 760);
+          return;
+        }
+        addBooked(selType, idx, 1);
+        flashState = {}; flashState[idx] = "take"; render();
+        setCall("one-pass · check + take <b>" + DATES[idx] + " Aug</b> in the same step");
+        setTimeout(function () { onePassBook(ns, i + 1); }, 230);
+      }
+
+      /* --------------------------------------------------------- scenarios */
+      function selloutNight2() {
+        if (busy) return;
+        var ns = selNights();
+        if (ns.length < 2) {
+          setCall("// pick a range of at least 2 nights first");
+          setExplain("Need at least two nights",
+            "<span class='dim'>Pick a check-in and a check-out at least two days apart, then press 🔴 Sell out night 2.</span>");
+          return;
+        }
+        var idx = ns[1], f = freeOn(selType, idx);
+        if (f > 0) addBooked(selType, idx, f);
+        render();
+        setCall("inventory.booked[" + selType + "][" + DATES[idx] + " Aug] = capacity → <u>free = 0</u>");
+        setExplain(DATES[idx] + " Aug is now sold out",
+          "<span class='dim'>Night 2 of your selection has 0 rooms left. Press <b>🛏 Book</b> and watch it get refused in <b>pass 1</b> — then flip <b>🩹 One-pass (buggy)</b> and press it again.</span>");
+      }
+
+      function changeoverDemo() {
+        if (busy) return;
+        clearAll();
+        selType = "SUITE"; selIn = 0; selOut = 2;
+        var i;
+        for (i = 0; i < NIGHTS; i++) addBooked("SUITE", i, typeOf("SUITE").total - 1);   // exactly 1 left
+        var a = nightsBetween(0, 2);       // 12 → 14
+        var okA = takeAll("SUITE", a, 1);
+        if (okA) newBooking("SUITE", a, 1, "Meera", false, false);
+        var b = nightsBetween(2, 4);       // 14 → 16
+        var okB = takeAll("SUITE", b, 1);
+        if (okB) newBooking("SUITE", b, 1, "Kabir", false, false);
+        if (!okB) { flashState = {}; flashState[2] = "bad"; }
+        render();
+        setCall("Suite: 1 room left · book(12→14) = <i>" + (okA ? "CONFIRMED" : "sold out") +
+                "</i> · book(14→16) = " + (okB ? "<i>CONFIRMED</i>" : "<u>SOLD OUT</u>"));
+        if (okA && okB)
+          setExplain("Both stays fit — 14 Aug is a changeover, not a clash",
+            "<span class='good'>Meera checks out on 14 Aug and Kabir checks in on 14 Aug</span>, into the same last Suite. " +
+            "<span class='dim'>Half-open ranges make this legal by construction: 12→14 holds nights 12 and 13 only.</span>" +
+            "<span class='sub'>Now turn on ⚠️ Use &lt;= instead of &lt; and press ↔️ Checkout day again.</span>");
+        else
+          setExplain("Kabir refused — for a room standing empty",
+            "<span class='bad'>The &lt;= bug counted 14 Aug as a night of Meera's stay</span>, so the last Suite looks taken on the changeover day. " +
+            "<span class='dim'>Multiply that by every room and every changeover day: this is a hotel refusing bookings for empty rooms.</span>" +
+            "<span class='sub'>Turn the ⚠️ toggle off and press ↔️ Checkout day again.</span>");
+        setTimeout(function () { flashState = {}; render(); }, 900);
+      }
+
+      function takeAll(k, ns, rooms) {
+        var i;
+        for (i = 0; i < ns.length; i++) if (freeOn(k, ns[i]) < rooms) return false;   // pass 1
+        for (i = 0; i < ns.length; i++) addBooked(k, ns[i], rooms);                   // pass 2
+        return true;
+      }
+
+      function raceDemo() {
+        if (busy) return;
+        clearAll();
+        selType = "DELUXE"; selIn = 5; selOut = 6;                 // 17 → 18, one night
+        var ns = nightsBetween(5, 6);
+        var f = freeOn("DELUXE", ns[0]);
+        if (f > 1) addBooked("DELUXE", ns[0], f - 1);              // exactly 1 left
+        if (guarded) {
+          takeAll("DELUXE", ns, 1);
+          newBooking("DELUXE", ns, 1, "Aarti", false, false);
+          render();
+          setCall("🔒 lock(nights) → check → take → unlock · guest B reads <i>0</i> → <u>sold out</u>");
+          setExplain("One confirmation, one honest “sold out”",
+            "<span class='good'>Aarti gets the last Deluxe.</span> <span class='dim'>Guest B takes the same night lock a moment later, reads <b>0</b>, and is told immediately — with zero counters written.</span>" +
+            "<span class='sub'>The guarded region is three integer operations. Pricing and email happen outside it.</span>");
+        } else {
+          addBooked("DELUXE", ns[0], 1);                            // both read 1, both write
+          addBooked("DELUXE", ns[0], 1);
+          newBooking("DELUXE", ns, 1, "Aarti", false, false);
+          newBooking("DELUXE", ns, 1, "Guest B", false, true);
+          oversoldCount++;
+          render();
+          setCall("🔓 both read <i>free = 1</i> → both check 1 ≥ 1 ✓ → both write → <u>free = -1</u>");
+          setExplain("Both confirmed. The count is −1.",
+            "<span class='bad'>⚠ oversold: 1</span> <span class='dim'>Two confirmation emails, one room. The check and the take were not atomic, so guest B decided using a number that was already stale.</span>" +
+            "<span class='sub'>Switch to 🔒 Guarded and press ⚔️ Two guests, last room again.</span>");
+        }
+      }
+
+      function cancelLast() {
+        if (busy) return;
+        var i, b = null;
+        for (i = bookings.length - 1; i >= 0; i--) if (!bookings[i].cancelled) { b = bookings[i]; break; }
+        if (!b) {
+          setCall("bookingService.<b>cancel</b>() → <i>nothing to cancel</i>");
+          setExplain("No live bookings", "<span class='dim'>Press <b>🛏 Book</b> first, then cancel it.</span>");
+          return;
+        }
+        for (i = 0; i < b.ns.length; i++) addBooked(b.t, b.ns[i], -b.rooms);
+        b.cancelled = true;
+        if (b.over) { oversoldCount = Math.max(0, oversoldCount - 1); }
+        /* lead time from a fixed "now" of 10 Aug 12:00 */
+        var hours = (DATES[b.ns[0]] - 10) * 24 - 12;
+        var refund, band;
+        if (hours >= 48) { refund = b.total; band = "≥ 48h — full refund"; }
+        else if (hours >= 24) { refund = Math.max(0, b.total - b.first); band = "48–24h — one night kept"; }
+        else { refund = 0; band = "&lt; 24h — no refund"; }
+        render();
+        setCall("bookingService.<b>cancel</b>(\"" + b.id + "\", at) → refund <i>" + fmtP(refund) + "</i>");
+        setExplain("Cancelled — " + b.ns.length + " nights returned to the grid",
+          "<span class='dim'>Lead time <b>" + hours + "h</b> → policy band <b>" + band + "</b>. Total was " + fmtP(b.total) +
+          ", refund <span class='good'>" + fmtP(refund) + "</span>.</span>" +
+          "<span class='sub'>The money is a policy question; releasing the exact nights that were taken is the same code path every single time.</span>");
+      }
+
+      function setRateMode(m) {
+        if (busy) return;
+        rateMode = m;
+        var ns = selNights();
+        render();
+        if (!ns.length) {
+          setCall("ratePlan = <b>" + (m === "flat" ? "FlatRatePlan" : "SeasonalRatePlan") + "</b>");
+          setExplain(m === "flat" ? "Flat × nights" : "Per-night rates",
+            "<span class='dim'>Pick a date range to see the two totals differ.</span>");
+          return;
+        }
+        var q = quoteFor(selType, ns);
+        setCall("ratePlan = <b>" + (m === "flat" ? "FlatRatePlan" : "SeasonalRatePlan") +
+                "</b> → total <i>" + fmtP(q.total) + "</i>  <span style='color:#6b7280'>// booking code changed: 0 lines</span>");
+        if (m === "flat")
+          setExplain("Flat rate × " + ns.length + " nights = " + fmtP(q.total),
+            "<span class='dim'>One number, multiplied. Every night is priced as a Tuesday — including the festival ones.</span>" +
+            "<span class='sub'>Press 📅 Per-night rates and watch the total move.</span>");
+        else
+          setExplain("Σ rateFor(type, night) = " + fmtP(q.total),
+            "<span class='dim'>Read the breakdown on the right: weekday, weekend and 🎆 festival nights are different numbers, summed. Swapping the plan is <b>one object</b>.</span>" +
+            "<span class='sub'>The per-night rows are frozen onto the booking, in paise.</span>");
+      }
+
+      function toggleOnePass() {
+        if (busy) return;
+        onePass = !onePass;
+        render();
+        setCall(onePass
+          ? "take = <u>one pass</u>  <span style='color:#6b7280'>// check and take interleaved</span>"
+          : "take = <i>two passes</i>  <span style='color:#6b7280'>// check ALL, then take ALL</span>");
+        setExplain(onePass ? "One pass — the bug is armed" : "Two passes — all-or-nothing",
+          onePass
+            ? "<span class='dim'>Booking now takes each night as it checks it. Press <b>🔴 Sell out night 2</b> and then <b>🛏 Book</b> to watch a night leak.</span>"
+            : "<span class='dim'>Booking checks every night before it takes any night, so a failure leaves the grid untouched.</span>");
+      }
+
+      function toggleInclusive() {
+        if (busy) return;
+        inclusiveEnd = !inclusiveEnd;
+        var ns = selNights();
+        render();
+        setCall(inclusiveEnd
+          ? "nights: for (d = in; d <u>&lt;=</u> out; d++) → <u>" + ns.length + " nights</u>"
+          : "nights: for (d = in; d <i>&lt;</i> out; d++) → <i>" + ns.length + " nights</i>");
+        setExplain(inclusiveEnd ? "The check-out day is now counted as a night" : "Half-open again — [checkIn, checkOut)",
+          inclusiveEnd
+            ? "<span class='bad'>One character, one extra night held.</span> <span class='dim'>Press <b>↔️ Checkout day</b> to see it refuse a booking for a room that is standing empty.</span>"
+            : "<span class='good'>The day you check out is not a night you pay for.</span> <span class='dim'>Which is what makes the changeover day sellable twice.</span>");
+      }
+
+      /* -------------------------------------------------------------- boot */
+      function clearAll() {
+        bookedMap = {}; bookings = []; seq = 0;
+        oversoldCount = 0; leakedNights = 0; flashState = {};
+      }
+
+      function seed() {
+        clearAll();
+        var a = nightsBetween(1, 4);
+        takeAll("DELUXE", a, 1); newBooking("DELUXE", a, 1, "Ravi", false, false);
+        var b = nightsBetween(0, 2);
+        takeAll("STANDARD", b, 2); newBooking("STANDARD", b, 2, "Priya", false, false);
+        var c = nightsBetween(3, 5);
+        takeAll("SUITE", c, 1); newBooking("SUITE", c, 1, "Kabir", false, false);
+      }
+
+      function resetState() {
+        selType = "DELUXE"; selIn = 0; selOut = 3;
+        onePass = false; inclusiveEnd = false; guarded = true; rateMode = "nightly";
+        seed();
+        setBusy(false);
+        render();
+      }
+
+      function doReset() {
+        resetState();
+        setCall("// grid cleared · click a <b>check-in</b> date, then a <b>check-out</b> date");
+        setExplain("Reset — 12 → 15 Aug preselected",
+          "Three nights highlighted, not four. <span class='dim'>Press <b>🛏 Book</b> to watch the two passes, or <b>🔴 Sell out night 2</b> first to watch one of them refuse.</span>");
+      }
+
+      document.getElementById("book-btn").addEventListener("click", doBook);
+      document.getElementById("sellout-btn").addEventListener("click", selloutNight2);
+      document.getElementById("change-btn").addEventListener("click", changeoverDemo);
+      document.getElementById("race-btn").addEventListener("click", raceDemo);
+      document.getElementById("cancel-btn").addEventListener("click", cancelLast);
+      document.getElementById("reset-btn").addEventListener("click", doReset);
+      document.getElementById("c-flat").addEventListener("click", function () { setRateMode("flat"); });
+      document.getElementById("c-nightly").addEventListener("click", function () { setRateMode("nightly"); });
+      document.getElementById("c-onepass").addEventListener("click", toggleOnePass);
+      document.getElementById("c-inclusive").addEventListener("click", toggleInclusive);
+      document.getElementById("c-guarded").addEventListener("click", function () {
+        if (busy) return;
+        guarded = true; render();
+        setCall("mode = <i>guarded</i>  <span style='color:#6b7280'>// lock the nights, not the hotel</span>");
+        setExplain("Guarded — check-and-take is atomic",
+          "<span class='dim'>Press <b>⚔️ Two guests, last room</b>: one guest is confirmed and the other is told immediately.</span>");
+      });
+      document.getElementById("c-unguarded").addEventListener("click", function () {
+        if (busy) return;
+        guarded = false; render();
+        setCall("mode = <u>unguarded</u>  <span style='color:#6b7280'>// check-then-act across two threads</span>");
+        setExplain("Unguarded — the race is armed",
+          "<span class='dim'>Press <b>⚔️ Two guests, last room</b> and watch the counter go to <b>−1</b>.</span>");
+      });
+
+      resetState();
+      setCall("// click a <b>check-in</b> date, then a <b>check-out</b> date on the strip");
+      setExplain("Availability is a range question",
+        "12 → 15 Aug is preselected. <span class='dim'>Count the highlighted cells: <b>3</b> nights, not 4 — the check-out day belongs to the next guest.</span>");
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>

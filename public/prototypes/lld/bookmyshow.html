@@ -1,0 +1,595 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BookMyShow — one seat, two people — Subroute</title>
+    <style>
+      :root {
+        --bg: #0c0d10; --surface: #14161a; --elevated: #1a1d22;
+        --border: #232830; --border-strong: #2d333d;
+        --fg: #e8e4dc; --muted: #9099a8; --subtle: #6b7280;
+        --accent: #fb863a; --accent-soft: rgba(251,134,58,.12); --accent-border: rgba(251,134,58,.45);
+        --success: #5cc66f; --success-soft: rgba(92,198,111,.12);
+        --info: #5e9ff6; --info-soft: rgba(94,159,246,.12);
+        --danger: #f06868; --danger-soft: rgba(240,104,104,.12);
+        --silver: #7d8695; --gold: #d2a54a; --recliner: #9b7fd4;
+        --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --r-md: 8px; --r-lg: 12px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+      body {
+        padding: 14px 16px 20px;
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,.022) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,.022) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      .top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 9px; }
+      .stat { font-family: var(--mono); font-size: 10.5px; padding: 6px 10px; border-radius: 999px;
+              background: var(--surface); border: 1px solid var(--border); color: var(--muted); white-space: nowrap; }
+      .stat b { color: var(--fg); }
+      .dbl { font-family: var(--mono); font-size: 10.5px; padding: 6px 10px; border-radius: 999px;
+             background: var(--surface); border: 1px solid var(--border); color: var(--subtle); white-space: nowrap; }
+      .dbl.hot { background: var(--danger-soft); border-color: var(--danger); color: var(--danger); font-weight: 700; }
+      .total { margin-left: auto; font-family: var(--mono); font-size: 11px; padding: 6px 12px; border-radius: 999px;
+               background: var(--surface); border: 1px solid rgba(92,198,111,.4); color: var(--success); white-space: nowrap; }
+
+      .callline { font-family: var(--mono); font-size: 11.5px; color: var(--subtle); background: #0a0b0e;
+                  border: 1px solid var(--border); border-radius: var(--r-md); padding: 7px 11px; margin-bottom: 10px;
+                  white-space: nowrap; overflow-x: auto; }
+      .callline b { color: var(--accent); }
+      .callline i { color: var(--success); font-style: normal; }
+      .callline u { color: var(--danger); text-decoration: none; }
+
+      .cols { display: grid; grid-template-columns: 1fr 268px; gap: 10px; align-items: start; }
+      .pane { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 11px; }
+      .cap { font-family: var(--mono); font-size: 9.5px; letter-spacing: .09em; text-transform: uppercase;
+             color: var(--subtle); margin-bottom: 9px; display: flex; justify-content: space-between; gap: 10px; }
+
+      .screenbar { height: 12px; border-radius: 3px; background: var(--elevated);
+                   border: 1px solid var(--border-strong); margin-bottom: 4px; }
+      .screenlab { font-family: var(--mono); font-size: 8.5px; letter-spacing: .22em; color: var(--subtle);
+                   text-align: center; margin-bottom: 10px; }
+
+      .grid { display: grid; grid-template-columns: 16px repeat(8, 1fr); gap: 5px; }
+      .rowlab { font-family: var(--mono); font-size: 9px; color: var(--subtle); align-self: center; }
+      .seat { position: relative; font-family: var(--mono); font-size: 9.5px; padding: 7px 2px 12px;
+              border-radius: 6px; background: var(--surface); cursor: pointer; text-align: center;
+              border: 1px solid var(--border-strong); color: var(--muted); }
+      .seat.silver { border-color: var(--silver); color: var(--silver); }
+      .seat.gold { border-color: var(--gold); color: var(--gold); }
+      .seat.recliner { border-color: var(--recliner); color: var(--recliner); }
+      .seat:hover { background: var(--elevated); }
+      .seat .badge { position: absolute; left: 0; right: 0; bottom: 1px; font-size: 7.5px; color: var(--subtle); }
+      .seat.held { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 700; }
+      .seat.held .badge { color: var(--accent); }
+      .seat.mine { box-shadow: inset 0 0 0 1px var(--accent); }
+      .seat.booked { background: #0f1114; border-color: var(--border); color: var(--subtle); opacity: .55; cursor: default; }
+      .seat.booked .badge { color: var(--subtle); }
+      .seat.bad { background: var(--danger-soft); border-color: var(--danger); color: var(--danger); opacity: 1; font-weight: 700; }
+      .seat.bad .badge { color: var(--danger); }
+      .seat.shake { animation: sh .42s ease; }
+      @keyframes sh {
+        0%, 100% { transform: translateX(0); }
+        20% { transform: translateX(-4px); } 40% { transform: translateX(4px); }
+        60% { transform: translateX(-3px); } 80% { transform: translateX(3px); }
+      }
+
+      .legend { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px;
+                font-family: var(--mono); font-size: 9px; color: var(--subtle); }
+      .legend span b { font-weight: 400; }
+      .sw { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px;
+            border: 1px solid var(--border-strong); vertical-align: -1px; }
+
+      .frow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 9px; }
+      .lab { font-family: var(--mono); font-size: 9.5px; color: var(--subtle); width: 58px; flex: none; }
+      .chip { font-family: var(--mono); font-size: 10.5px; padding: 6px 9px; border-radius: var(--r-md);
+              background: var(--elevated); border: 1px solid var(--border-strong); color: var(--muted); cursor: pointer; }
+      .chip:hover { border-color: var(--accent); color: var(--fg); }
+      .chip.on { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); font-weight: 700; }
+      .chip.warn.on { background: var(--danger-soft); border-color: var(--danger); color: var(--danger); }
+
+      .rows { font-family: var(--mono); font-size: 9.5px; color: var(--subtle); line-height: 1.75; }
+      .rows b { color: var(--muted); }
+
+      .explain { min-height: 76px; background: #0a0b0e; border: 1px solid var(--border); border-radius: var(--r-md);
+                 padding: 12px 15px; margin-top: 11px; display: flex; flex-direction: column; justify-content: center; }
+      .explain-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+      .explain-body { font-size: 13px; line-height: 1.6; color: var(--fg); }
+      .explain-body code { font-family: var(--mono); background: var(--elevated); color: var(--fg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+      .explain-body .dim { color: var(--muted); }
+      .explain-body .good { color: var(--success); font-weight: 700; }
+      .explain-body .bad { color: var(--danger); font-weight: 700; }
+      .explain-body .hi { color: var(--accent); font-weight: 700; }
+      .explain-body .sub { display: block; margin-top: 5px; font-size: 11.5px; color: var(--subtle); }
+
+      .foot { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 11px; }
+      .btn { background: var(--elevated); color: var(--muted); font: 600 11.5px/1 var(--sans);
+             border: 1px solid var(--border); border-radius: var(--r-md); padding: 8px 12px; cursor: pointer; }
+      .btn:hover { border-color: var(--border-strong); color: var(--fg); }
+      .go { font-family: var(--mono); font-size: 12.5px; font-weight: 700; padding: 9px 16px; border-radius: var(--r-md);
+            cursor: pointer; background: var(--accent-soft); border: 1px solid var(--accent-border); color: var(--accent); }
+      .go:active { transform: scale(.98); }
+      .hint { margin-left: auto; font-size: 11.5px; color: var(--muted); }
+      .hint .b { color: var(--accent); }
+
+      @media (max-width: 680px) {
+        .cols { grid-template-columns: 1fr; }
+        .hint { margin-left: 0; }
+        .total { margin-left: 0; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="top">
+      <span class="stat">available <b id="s-av">40</b></span>
+      <span class="stat">held <b id="s-held">0</b></span>
+      <span class="stat">booked <b id="s-bk">0</b></span>
+      <span class="dbl" id="s-dbl">⚠ double-booked: 0</span>
+      <span class="total" id="s-total">total: ₹0.00</span>
+    </div>
+
+    <div class="callline" id="callline">// SH-6PM · “Dune” · Screen 2 — click a seat, or press <b>⚔️ Both click A5</b></div>
+
+    <div class="cols">
+      <div class="pane">
+        <div class="cap"><span>Seat map — Show SH-6PM</span><span id="cap-mode">🔒 guarded</span></div>
+        <div class="screenbar"></div>
+        <div class="screenlab">S C R E E N</div>
+        <div class="grid" id="grid"></div>
+        <div class="legend">
+          <span><i class="sw" style="border-color:#7d8695"></i>Silver</span>
+          <span><i class="sw" style="border-color:#d2a54a"></i>Gold</span>
+          <span><i class="sw" style="border-color:#9b7fd4"></i>Recliner</span>
+          <span><i class="sw" style="border-color:#fb863a;background:rgba(251,134,58,.12)"></i>HELD + countdown</span>
+          <span><i class="sw" style="background:#0f1114"></i>BOOKED</span>
+        </div>
+      </div>
+
+      <div class="pane">
+        <div class="cap"><span>Controls</span><span id="cap-user">U1</span></div>
+
+        <div class="frow"><span class="lab">you are</span><span id="users"></span></div>
+        <div class="frow"><span class="lab">seat CAS</span><span id="guards"></span></div>
+        <div class="frow"><span class="lab">pricing</span><span id="prices"></span></div>
+
+        <div class="cap"><span>Your selection</span><span id="cap-sel">0 seats</span></div>
+        <div class="rows" id="sel">nothing held yet</div>
+      </div>
+    </div>
+
+    <div class="explain">
+      <div class="explain-title" id="ex-title">One show, forty ShowSeats</div>
+      <div class="explain-body" id="ex-body">Click a seat to hold it for <b>👤 U1</b>. Then press <b>⚔️ Both click A5</b> — twice, once in each guard mode.</div>
+    </div>
+
+    <div class="foot">
+      <button class="go" id="race-btn">⚔️ Both click A5</button>
+      <button class="btn" id="expire-btn">⏳ Let the hold expire</button>
+      <button class="btn" id="pay-btn">💳 Pay</button>
+      <button class="btn" id="fail-btn">💥 Payment fails</button>
+      <button class="btn" id="fill-btn">⚡ Fill the show</button>
+      <button class="btn" id="reset-btn">↺ Reset</button>
+      <span class="hint"><span class="b">▸</span> Flip to <b>🔓 Unguarded</b>, then press ⚔️ again.</span>
+    </div>
+
+    <script>
+      var ROWS = [
+        { r: "A", tier: "silver" },
+        { r: "B", tier: "silver" },
+        { r: "C", tier: "gold" },
+        { r: "D", tier: "gold" },
+        { r: "E", tier: "recliner" }
+      ];
+      var PER_ROW = 8;
+      var TTL = 7000;                 // 7 simulated seconds — the hold window
+      var TICK = 500;
+
+      var seatList, simClock, activeUser, guarded, priceMode, dblBooked, bookSeq, tickTimer;
+
+      /* ------------------------------------------------------------- money */
+      function fmt(paise) {
+        var a = Math.abs(paise);
+        return (paise < 0 ? "−" : "") + "₹" + Math.floor(a / 100) + "." + ("0" + (a % 100)).slice(-2);
+      }
+      /* PricingStrategy — swapped without touching a single caller below. */
+      function priceOf(s) {
+        if (priceMode === "flat") return 20000;
+        var base = s.tier === "silver" ? 15000 : s.tier === "gold" ? 25000 : 45000;
+        return Math.floor((base * 130) / 100);        // this show starts at 6 PM
+      }
+
+      /* --------------------------------------------------------- ShowSeat */
+      function expireIfDue(s) {
+        if (s.status === "HELD" && simClock >= s.expiresAt) {
+          s.status = "AVAILABLE"; s.heldBy = null; s.expiresAt = 0; s.ghost = null;
+        }
+      }
+      function sweepNow() {
+        var freed = 0;
+        for (var i = 0; i < seatList.length; i++) {
+          var was = seatList[i].status === "HELD";
+          expireIfDue(seatList[i]);
+          if (was && seatList[i].status === "AVAILABLE") freed++;
+        }
+        return freed;
+      }
+      /* THE compare-and-set — or, with the guard off, a plain read-then-write. */
+      function tryHold(s, uid) {
+        expireIfDue(s);
+        if (!guarded) {
+          if (s.status === "HELD" && s.heldBy !== uid) { s.ghost = s.heldBy; dblBooked++; }
+          s.status = "HELD"; s.heldBy = uid; s.expiresAt = simClock + TTL;
+          return true;
+        }
+        if (s.status === "AVAILABLE") {
+          s.status = "HELD"; s.heldBy = uid; s.expiresAt = simClock + TTL; return true;
+        }
+        if (s.status === "HELD" && s.heldBy === uid) { s.expiresAt = simClock + TTL; return true; }
+        return false;
+      }
+
+      /* --------------------------------------------------------- queries */
+      function seatByLabel(l) {
+        for (var i = 0; i < seatList.length; i++) if (seatList[i].label === l) return seatList[i];
+        return null;
+      }
+      function heldByUser(uid) {
+        var out = [];
+        for (var i = 0; i < seatList.length; i++)
+          if (seatList[i].status === "HELD" && seatList[i].heldBy === uid) out.push(seatList[i]);
+        return out;
+      }
+      function countStatus(st) {
+        var n = 0;
+        for (var i = 0; i < seatList.length; i++) if (seatList[i].status === st) n++;
+        return n;
+      }
+      function anyHeld() { return countStatus("HELD") > 0; }
+      function secsLeft(s) { return Math.max(0, Math.ceil((s.expiresAt - simClock) / 1000)); }
+
+      /* ---------------------------------------------------------- render */
+      function setExplain(t, h) {
+        document.getElementById("ex-title").textContent = t;
+        document.getElementById("ex-body").innerHTML = h;
+      }
+      function setCall(h) { document.getElementById("callline").innerHTML = h; }
+
+      function renderGrid() {
+        var host = document.getElementById("grid");
+        host.innerHTML = "";
+        for (var r = 0; r < ROWS.length; r++) {
+          var lab = document.createElement("span");
+          lab.className = "rowlab";
+          lab.textContent = ROWS[r].r;
+          host.appendChild(lab);
+          for (var n = 0; n < PER_ROW; n++) {
+            var s = seatList[r * PER_ROW + n];
+            var cls = "seat " + s.tier;
+            var badge = fmt(priceOf(s));
+            if (s.status === "HELD") {
+              cls += " held";
+              if (s.heldBy === activeUser) cls += " mine";
+              badge = s.heldBy + " · " + secsLeft(s) + "s";
+              if (s.ghost) { cls += " bad"; badge = s.ghost + "✚" + s.heldBy; }
+            } else if (s.status === "BOOKED") {
+              cls += " booked";
+              badge = s.ghost ? s.ghost + "✚" + s.owner : "✓";
+              if (s.ghost) cls += " bad";
+            }
+            var b = document.createElement("button");
+            b.className = cls;
+            b.id = "seat-" + s.label;
+            b.innerHTML = s.label + "<span class='badge'>" + badge + "</span>";
+            bindSeat(b, s);
+            host.appendChild(b);
+          }
+        }
+      }
+      function bindSeat(el, s) {
+        el.addEventListener("click", function () { clickSeat(s); });
+      }
+
+      function renderChips() {
+        var host = document.getElementById("users");
+        host.innerHTML = "";
+        ["U1", "U2"].forEach(function (u) {
+          var b = document.createElement("button");
+          b.className = "chip" + (activeUser === u ? " on" : "");
+          b.textContent = "👤 " + u;
+          b.addEventListener("click", function () { setUser(u); });
+          host.appendChild(b);
+        });
+
+        host = document.getElementById("guards");
+        host.innerHTML = "";
+        var g = document.createElement("button");
+        g.className = "chip" + (guarded ? " on" : "");
+        g.textContent = "🔒 Guarded";
+        g.addEventListener("click", function () { setGuard(true); });
+        host.appendChild(g);
+        var u = document.createElement("button");
+        u.className = "chip warn" + (guarded ? "" : " on");
+        u.textContent = "🔓 Unguarded";
+        u.addEventListener("click", function () { setGuard(false); });
+        host.appendChild(u);
+
+        host = document.getElementById("prices");
+        host.innerHTML = "";
+        [["flat", "🎟 Flat"], ["tier", "🪜 Tier × time"]].forEach(function (p) {
+          var b = document.createElement("button");
+          b.className = "chip" + (priceMode === p[0] ? " on" : "");
+          b.textContent = p[1];
+          b.addEventListener("click", function () { setPrice(p[0]); });
+          host.appendChild(b);
+        });
+      }
+
+      function renderSide() {
+        var mine = heldByUser(activeUser), total = 0, html = "";
+        mine.forEach(function (s) {
+          total += priceOf(s);
+          html += "<b>" + s.label + "</b> " + s.tier + " · " + fmt(priceOf(s)) +
+                  " · <span style='color:#fb863a'>" + secsLeft(s) + "s</span><br>";
+        });
+        document.getElementById("sel").innerHTML = html || "nothing held yet";
+        document.getElementById("cap-sel").textContent = mine.length + " seats";
+        document.getElementById("s-total").textContent = "total: " + fmt(total);
+        document.getElementById("cap-user").textContent = activeUser;
+        document.getElementById("cap-mode").textContent = guarded ? "🔒 guarded" : "🔓 unguarded";
+      }
+
+      function renderStats() {
+        document.getElementById("s-av").textContent = countStatus("AVAILABLE");
+        document.getElementById("s-held").textContent = countStatus("HELD");
+        document.getElementById("s-bk").textContent = countStatus("BOOKED");
+        var d = document.getElementById("s-dbl");
+        d.textContent = "⚠ double-booked: " + dblBooked;
+        d.className = "dbl" + (dblBooked > 0 ? " hot" : "");
+      }
+
+      function render() { renderGrid(); renderChips(); renderSide(); renderStats(); }
+
+      /* ----------------------------------------------------- bounded tick */
+      function ensureTicker() {
+        if (tickTimer || !anyHeld()) return;
+        tickTimer = setTimeout(function () {
+          tickTimer = null;
+          simClock += TICK;
+          var freed = sweepNow();
+          render();
+          if (freed > 0)
+            setExplain(freed + " hold" + (freed === 1 ? "" : "s") + " ran out of time",
+              "<span class='dim'>Nobody pressed anything. <code>now ≥ expiresAt</code>, so the seat is back in the pool — that is what stops one abandoned tab from killing a chair for the evening.</span>");
+          ensureTicker();
+        }, TICK);
+      }
+
+      function shake(label) {
+        var el = document.getElementById("seat-" + label);
+        if (!el) return;
+        el.className = el.className + " shake";
+        setTimeout(function () {
+          var e2 = document.getElementById("seat-" + label);
+          if (e2) e2.className = e2.className.replace(" shake", "");
+        }, 460);
+      }
+
+      /* ---------------------------------------------------- interactions */
+      function clickSeat(s) {
+        sweepNow();
+        if (s.status === "BOOKED") {
+          render();
+          setCall("seatLock.<b>tryHold</b>(SH-6PM:" + s.label + ", " + activeUser + ", ttl=7s) → <u>false</u>");
+          setExplain(s.label + " is already sold",
+            "<span class='dim'>The CAS refuses anything that is not <code>AVAILABLE</code>. There is no <code>AVAILABLE → BOOKED</code> edge and no way to steal a booked seat — that missing edge is the safety argument.</span>");
+          return;
+        }
+        var ok = tryHold(s, activeUser);
+        render();
+        ensureTicker();
+        if (ok && s.ghost) {
+          setCall("seatLock.<b>tryHold</b>(SH-6PM:" + s.label + ", " + activeUser + ") → <u>true</u> " +
+                  "<span style='color:#6b7280'>// no compare — it just overwrote " + s.ghost + "</span>");
+          setExplain(s.label + " now belongs to two people",
+            "<span class='bad'>Unguarded.</span> <span class='dim'>The write did not check the current status first, so " +
+            s.ghost + "'s hold vanished without anybody being told. Watch the red counter.</span>");
+          return;
+        }
+        if (ok) {
+          setCall("seatLock.<b>tryHold</b>(SH-6PM:" + s.label + ", " + activeUser + ", ttl=7s) → <i>true</i>");
+          setExplain(s.label + " is held by " + activeUser + " for 7s",
+            "<span class='dim'>One atomic step flipped <code>AVAILABLE → HELD</code> and stamped <code>heldBy</code> and <code>expiresAt</code>. Nothing is booked and nothing is paid — press <b>💳 Pay</b> next.</span>");
+        } else {
+          shake(s.label);
+          setCall("seatLock.<b>tryHold</b>(SH-6PM:" + s.label + ", " + activeUser + ", ttl=7s) → <u>false</u>");
+          setExplain(s.label + " is held by " + s.heldBy,
+            "<span class='dim'>The compare failed, so nothing was written. " + activeUser +
+            " was told <code>false</code> in the same call — before typing a card number.</span>");
+        }
+      }
+
+      function raceA5() {
+        var s = seatByLabel("A5");
+        s.status = "AVAILABLE"; s.heldBy = null; s.ghost = null; s.owner = null; s.expiresAt = 0;
+        if (guarded) {
+          tryHold(s, "U1");
+          var second = tryHold(s, "U2");
+          render(); ensureTicker(); shake("A5");
+          setCall("tryHold(SH-6PM:A5, <b>U1</b>) → <i>true</i>  ·  tryHold(SH-6PM:A5, <b>U2</b>) → <u>" + second + "</u>");
+          setExplain("Same millisecond, same seat — one winner",
+            "<span class='good'>U1 got it.</span> <span class='dim'>U2's compare-and-set found the seat already <code>HELD</code>, wrote nothing, and returned <code>false</code> straight away. The card shook; U2 picks another seat.</span>" +
+            "<span class='sub'>double-booked stays at " + dblBooked + ". Now press <b>🔓 Unguarded</b> and try again.</span>");
+        } else {
+          s.status = "HELD"; s.heldBy = "U1"; s.expiresAt = simClock + TTL;   // U1 reads AVAILABLE, writes
+          s.status = "HELD"; s.heldBy = "U2"; s.expiresAt = simClock + TTL;   // U2 read AVAILABLE too, writes
+          s.ghost = "U1";
+          bookSeq++; var bk1 = "BK-" + bookSeq;
+          bookSeq++; var bk2 = "BK-" + bookSeq;
+          s.status = "BOOKED"; s.owner = "U2"; s.bookingId = bk1 + " / " + bk2;
+          dblBooked++;
+          render();
+          setCall("charge(" + bk1 + ") → <i>OK</i>  ·  charge(" + bk2 + ") → <i>OK</i>  " +
+                  "<span style='color:#6b7280'>// both confirmed. one chair.</span>");
+          setExplain("Both users were told “confirmed”",
+            "<span class='bad'>A5 is double-booked.</span> <span class='dim'>Both read <code>AVAILABLE</code> before either wrote, so both believed they had it and both paid. Nothing in the code noticed — the usher finds out at the door.</span>" +
+            "<span class='sub'>Press <b>🔒 Guarded</b> and press ⚔️ again: same two clicks, one winner, and this counter stays at " + dblBooked + ".</span>");
+        }
+      }
+
+      function expireHolds() {
+        if (!anyHeld()) {
+          setCall("sweeper.<b>sweepExpired</b>(SH-6PM, now) → <i>0 freed</i>");
+          setExplain("Nothing is held right now",
+            "<span class='dim'>Hold a couple of seats first, then press this to jump the clock past the 7-second TTL.</span>");
+          return;
+        }
+        simClock += TTL + 1000;
+        var freed = sweepNow();
+        render();
+        setCall("clock += 8s  ·  sweeper.<b>sweepExpired</b>(SH-6PM, now) → <i>" + freed + " seat(s) freed</i>");
+        setExplain(freed + " dead hold" + (freed === 1 ? "" : "s") + " returned to the pool",
+          "<span class='dim'>Nobody clicked anything. The hold carried <code>expiresAt</code>, so the seat healed itself — that is the difference between a hold and a lock you forgot to release.</span>" +
+          "<span class='sub'>The lazy version does the same check on every read, which is what makes it correct rather than merely tidy.</span>");
+      }
+
+      function pay() {
+        var mine = heldByUser(activeUser);
+        if (!mine.length) {
+          setCall("bookingService.<b>confirm</b>(…) → <u>nothing held</u>");
+          setExplain("Hold something first",
+            "<span class='dim'>Click a seat or two as <b>👤 " + activeUser + "</b>, then press <b>💳 Pay</b>.</span>");
+          return;
+        }
+        bookSeq++;
+        var id = "BK-" + bookSeq, total = 0;
+        mine.forEach(function (s) {
+          total += priceOf(s);
+          s.status = "BOOKED"; s.owner = s.heldBy; s.bookingId = id;
+          s.heldBy = null; s.expiresAt = 0; s.ghost = null;
+        });
+        render();
+        setCall("gateway.<b>charge</b>(" + id + ", <i>" + total + "</i>)  ·  confirm(" + id +
+                ", 'PAY-77') → <i>CONFIRMED</i>");
+        setExplain(id + " · " + mine.length + " seats · " + fmt(total),
+          "<span class='dim'>Each seat went <code>HELD → BOOKED</code>, and only because it was still held by " +
+          activeUser + ". The charge happened <b>between</b> the hold and the confirm, holding no lock at all.</span>" +
+          "<span class='sub'>A retried webhook with the same <code>PAY-77</code> would return this same booking — no second charge.</span>");
+      }
+
+      function payFail() {
+        var mine = heldByUser(activeUser);
+        if (!mine.length) {
+          setCall("gateway.<b>charge</b>(…) → <u>nothing held</u>");
+          setExplain("Hold something first",
+            "<span class='dim'>Click a seat or two as <b>👤 " + activeUser + "</b>, then press <b>💥 Payment fails</b>.</span>");
+          return;
+        }
+        var labels = [];
+        mine.forEach(function (s) {
+          labels.push(s.label);
+          s.status = "AVAILABLE"; s.heldBy = null; s.expiresAt = 0; s.ghost = null;
+        });
+        render();
+        setCall("gateway.<b>charge</b>(…) → <u>DECLINED</u>  ·  seatLock.<b>releaseAll</b>([" +
+                labels.join(", ") + "]) → <i>AVAILABLE</i>");
+        setExplain("Declined — " + labels.length + " seat(s) released on the spot",
+          "<span class='bad'>Nothing was booked.</span> <span class='dim'>The failure branch releases every seat this booking was holding, so the row lights up again for the next customer instead of waiting out the full TTL.</span>");
+      }
+
+      function setPrice(mode) {
+        priceMode = mode;
+        var mine = heldByUser(activeUser), total = 0;
+        mine.forEach(function (s) { total += priceOf(s); });
+        render();
+        setCall("pricing = <b>" + (mode === "flat" ? "FlatPricing(20000)" : "TierAndTimePricing()") +
+                "</b>  <span style='color:#6b7280'>// 0 lines of caller code changed</span>");
+        setExplain(mode === "flat" ? "Flat — every seat ₹200.00" : "Tier × time — silver / gold / recliner diverge",
+          "Your " + mine.length + " held seat(s) now total <span class='hi'>" + fmt(total) + "</span>. " +
+          "<span class='dim'>The strategy was swapped; <code>selectSeats</code> and <code>confirm</code> were not touched. " +
+          "Money is integer paise — " + (mode === "flat" ? "20000" : "58500 for a recliner") + " — formatted only at the edge.</span>");
+      }
+
+      function setUser(u) {
+        activeUser = u;
+        render();
+        setCall("session.<b>actAs</b>(" + u + ")  <span style='color:#6b7280'>// clicks now hold seats for " + u + "</span>");
+        setExplain("You are " + u + " now",
+          "<span class='dim'>" + heldByUser(u).length + " seat(s) currently held by " + u +
+          ". Click a seat the other user is holding to see the compare-and-set refuse you.</span>");
+      }
+
+      function setGuard(g) {
+        guarded = g;
+        render();
+        setCall("seatLock.mode = <b>" + (g ? "compare-and-set" : "read-then-write") + "</b>");
+        setExplain(g ? "🔒 Guarded — the take is one atomic step" : "🔓 Unguarded — read, then write",
+          g ? "<span class='dim'>Check and take happen together on that one seat, so exactly one of two simultaneous callers can win.</span>"
+            : "<span class='bad'>There is now a gap between the read and the write.</span> <span class='dim'>Press <b>⚔️ Both click A5</b> and watch what the system tells each user.</span>");
+      }
+
+      function fillShow() {
+        bookSeq++;
+        var id = "BK-" + bookSeq, n = 0;
+        for (var i = 0; i < seatList.length; i++) {
+          var s = seatList[i];
+          if (s.status !== "BOOKED") {
+            s.status = "BOOKED"; s.owner = s.heldBy || "U1"; s.bookingId = id;
+            s.heldBy = null; s.expiresAt = 0; s.ghost = null;
+            n++;
+          }
+        }
+        render();
+        setCall("bulkBook(SH-6PM) → <i>" + n + " seats BOOKED</i>  <span style='color:#6b7280'>// the show is full</span>");
+        setExplain("Sold out — every ShowSeat is BOOKED",
+          "<span class='dim'>Click any seat: the CAS refuses because the status is not <code>AVAILABLE</code>. " +
+          "The 9:00 PM show over these same forty chairs is still completely empty — it has its own forty ShowSeats.</span>");
+      }
+
+      /* ----------------------------------------------------------- setup */
+      function buildSeats() {
+        seatList = [];
+        for (var r = 0; r < ROWS.length; r++) {
+          for (var n = 1; n <= PER_ROW; n++) {
+            seatList.push({
+              label: ROWS[r].r + n, tier: ROWS[r].tier,
+              status: "AVAILABLE", heldBy: null, owner: null,
+              expiresAt: 0, bookingId: null, ghost: null
+            });
+          }
+        }
+      }
+
+      function resetAll() {
+        buildSeats();
+        simClock = 0; activeUser = "U1"; guarded = true; priceMode = "tier";
+        dblBooked = 0; bookSeq = 1040;
+        if (tickTimer) { clearTimeout(tickTimer); tickTimer = null; }
+        render();
+      }
+
+      function resetPressed() {
+        resetAll();
+        setCall("// SH-6PM · “Dune” · Screen 2 — click a seat, or press <b>⚔️ Both click A5</b>");
+        setExplain("Forty ShowSeats, all AVAILABLE",
+          "<span class='dim'>These forty objects belong to <b>this show only</b>. The chairs they point at are shared with the 9:00 PM show, which has its own forty.</span>");
+      }
+
+      document.getElementById("race-btn").addEventListener("click", raceA5);
+      document.getElementById("expire-btn").addEventListener("click", expireHolds);
+      document.getElementById("pay-btn").addEventListener("click", pay);
+      document.getElementById("fail-btn").addEventListener("click", payFail);
+      document.getElementById("fill-btn").addEventListener("click", fillShow);
+      document.getElementById("reset-btn").addEventListener("click", resetPressed);
+
+      resetAll();
+      setExplain("One show, forty ShowSeats",
+        "Click a seat to hold it for <b>👤 U1</b>. Then press <b>⚔️ Both click A5</b> — twice, once in each guard mode.");
+    </script>
+    <script>(function(){function p(){var h=Math.ceil(Math.max(document.body.scrollHeight,document.body.getBoundingClientRect().height));parent.postMessage({type:"prototype:height",height:h},"*");}if(window.ResizeObserver)new ResizeObserver(p).observe(document.body);window.addEventListener("load",p);})();</script>
+  </body>
+</html>
