@@ -547,7 +547,7 @@
           setExplain("No room free", "<span class='dim'>Skipped " + skipped.join(", ") + ".</span>");
           return;
         }
-        var nb = add(dayIdx, chosen.id, s, e, "yours " + s + "–" + e);
+        add(dayIdx, chosen.id, s, e, "yours " + s + "–" + e);
         statOk += 1; render();
         renderEvals(lastEvals, "Filter first (seats, features), then the overlap test — in that order.");
         setExplain("Booked " + chosen.id + " " + hh(s) + "–" + hh(e),
