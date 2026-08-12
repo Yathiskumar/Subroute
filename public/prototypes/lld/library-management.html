@@ -233,7 +233,6 @@
         return total;
       }
       function refusalFor(id) {
-        var m = memberOf(id);
         if (openLoansOf(id).length >= MAX_LOANS) return "loan limit reached (" + MAX_LOANS + "/" + MAX_LOANS + ")";
         if (fineOf(id) > MAX_FINE) return "outstanding fine " + rupees(fineOf(id));
         return null;

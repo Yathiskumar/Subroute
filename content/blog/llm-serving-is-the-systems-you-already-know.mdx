@@ -1,0 +1,282 @@
+---
+title: "vLLM reinvented the operating system, and nobody told you"
+slug: "llm-serving-is-the-systems-you-already-know"
+publishedAt: "2026-08-11"
+excerpt: "PagedAttention is virtual memory. Prefix-aware routing is consistent hashing. Continuous batching is a scheduler fighting head-of-line blocking. The AI infrastructure interview is an operating systems interview in a nicer jacket — here's the map, and the four places it genuinely breaks."
+readingTime: 12
+tags: ["system-design", "llm", "inference", "operating-systems", "caching", "interviews"]
+---
+
+A few weeks ago I was reading the vLLM scheduler source, and I got the specific kind of déjà vu you get when you walk into a stranger's house and their kitchen is laid out exactly like your grandmother's.
+
+There was a block table. There was a free list. There was a preemption path that could either swap a victim out to host memory or throw its work away and recompute it later. There was a fallback for when memory ran out mid-flight.
+
+I had read this code before. In 2009. It was called an operating systems textbook.
+
+This is not a criticism — it's the highest possible compliment, and it's also the most useful thing I can tell you if you're an engineer who feels like the ground moved under you in the last eighteen months. "AI infrastructure" sounds like a field you have to start over in. It mostly isn't. The dominant problems in LLM serving are memory fragmentation, cache affinity, queue scheduling, and rate limiting — and if you have ever tuned a JVM, sized a Redis cluster, or debugged a p99 that only spiked at 4pm, you already own the concepts.
+
+You just have to see the translation table. So here it is.
+
+## Why this suddenly matters
+
+The reason I'm writing this now rather than a year ago is that the interview loop changed.
+
+For years, "design a system that serves an ML model" was a question you got if you applied for an ML infrastructure role. In 2026 it turns up in general backend loops — "design a customer support chatbot on top of a third-party LLM," "design safeguards for an agent that can take actions for a user," "walk me through serving a 70B model to 10,000 concurrent users." The [guides tracking these loops](https://www.systemdesignhandbook.com/blog/ai-system-design-interview-questions/) describe the same shift: AI scenarios have moved out of specialist interviews and into standard ones, and cost-efficiency is now graded alongside latency and throughput rather than treated as a bonus.
+
+That last one is the tell. Cost-and-operations grading is what happens when a technology stops being a research demo and becomes a line item. And when something becomes a line item, the questions asked about it stop being novel and start being *the questions we have always asked about expensive machines.*
+
+Which is good news for you. Let's go through the four big ones.
+
+## 1. PagedAttention is virtual memory. Actually, literally.
+
+Start with the problem, because the problem is the fun part.
+
+When an LLM generates text, it keeps a running scratchpad for every request called the KV cache — the key and value tensors for every token processed so far. It grows by one entry per token, on every single step, for the entire life of the request. It is large: for a big model with a long context, we're talking gigabytes per request, living on a GPU that has maybe 80 of them.
+
+Here's the trap. Early serving systems stored each request's KV cache in one contiguous slab. Contiguous allocation needs a size up front. But you don't *know* the size up front — you have no idea whether the model will produce 12 tokens or 4,000. So the only safe move was to allocate for the maximum: reserve 2,048 tokens' worth of GPU memory for a request that might write 30.
+
+If you have ever sized a buffer for the worst case, you already know how this ends. The [vLLM paper](https://arxiv.org/abs/2309.06180) measured it: existing systems were using only about 20–38% of their KV cache memory for actual token state. The other 60–80% was fragmentation and over-reservation. Two thirds of the most expensive RAM on earth, sitting empty, reserved for tokens that were never generated.
+
+You have seen this bug. It is *the* allocator bug. Fixed-size slots waste the tail of every allocation (internal fragmentation); variable-size slots leave unusable gaps between live objects (external fragmentation); and the classic escape hatch is to stop demanding that a logical object be physically contiguous at all.
+
+Which is exactly what PagedAttention does. Chop the KV cache into fixed-size blocks — say 16 tokens each. Scatter those blocks anywhere in GPU memory. Keep a **block table** mapping each sequence's logical block *i* to whatever physical block actually holds it. The attention kernel gets taught to gather across that table.
+
+<figure className="diagram">
+  <svg viewBox="0 0 680 306" role="img" aria-labelledby="fig-paging-title">
+    <title id="fig-paging-title">Three requests each reserving a full contiguous slab with only a sliver written and the rest wasted, compared with the same three requests spread across a grid of fixed-size blocks that fills nearly every frame</title>
+
+    <text x="0" y="16" fontFamily="ui-monospace, monospace" fontSize="10" letterSpacing="1.2" fill="hsl(var(--subtle))">CONTIGUOUS SLAB — RESERVE FOR THE LONGEST ANSWER IT MIGHT GIVE</text>
+
+    <rect x="64" y="32" width="42" height="20" fill="hsl(var(--accent))" opacity="0.85" />
+    <rect x="106" y="32" width="490" height="20" fill="hsl(var(--danger))" opacity="0.14" stroke="hsl(var(--danger))" strokeWidth="1" strokeDasharray="3 3" />
+    <text x="0" y="47" fontSize="11" fill="hsl(var(--foreground))">req A</text>
+    <text x="606" y="47" fontFamily="ui-monospace, monospace" fontSize="10" fill="hsl(var(--muted))">180 tok</text>
+
+    <rect x="64" y="60" width="155" height="20" fill="hsl(var(--accent))" opacity="0.85" />
+    <rect x="219" y="60" width="377" height="20" fill="hsl(var(--danger))" opacity="0.14" stroke="hsl(var(--danger))" strokeWidth="1" strokeDasharray="3 3" />
+    <text x="0" y="75" fontSize="11" fill="hsl(var(--foreground))">req B</text>
+    <text x="606" y="75" fontFamily="ui-monospace, monospace" fontSize="10" fill="hsl(var(--muted))">620 tok</text>
+
+    <rect x="64" y="88" width="22" height="20" fill="hsl(var(--accent))" opacity="0.85" />
+    <rect x="86" y="88" width="510" height="20" fill="hsl(var(--danger))" opacity="0.14" stroke="hsl(var(--danger))" strokeWidth="1" strokeDasharray="3 3" />
+    <text x="0" y="103" fontSize="11" fill="hsl(var(--foreground))">req C</text>
+    <text x="606" y="103" fontFamily="ui-monospace, monospace" fontSize="10" fill="hsl(var(--muted))">90 tok</text>
+
+    <text x="64" y="126" fontSize="11" fill="hsl(var(--muted))">each slab reserved for 2,048 tokens — nobody knows the answer length up front</text>
+    <text x="64" y="144" fontSize="11" fontWeight="600" fill="hsl(var(--danger))">60–80% of the most expensive RAM on earth, holding nothing</text>
+
+    <text x="0" y="180" fontFamily="ui-monospace, monospace" fontSize="10" letterSpacing="1.2" fill="hsl(var(--subtle))">PAGED BLOCKS — 16 TOKENS EACH, SCATTERED ACROSS ANY FREE FRAME</text>
+
+    <rect x="64" y="192" width="32" height="30" rx="3" fill="hsl(var(--accent))" opacity="0.85" /><rect x="100" y="192" width="32" height="30" rx="3" fill="hsl(var(--info))" opacity="0.8" /><rect x="136" y="192" width="32" height="30" rx="3" fill="hsl(var(--accent))" opacity="0.85" /><rect x="172" y="192" width="32" height="30" rx="3" fill="hsl(var(--border))" opacity="0.4" /><rect x="208" y="192" width="32" height="30" rx="3" fill="hsl(var(--success))" opacity="0.75" /><rect x="244" y="192" width="32" height="30" rx="3" fill="hsl(var(--accent))" opacity="0.85" /><rect x="280" y="192" width="32" height="30" rx="3" fill="hsl(var(--info))" opacity="0.8" /><rect x="316" y="192" width="32" height="30" rx="3" fill="hsl(var(--info))" opacity="0.8" /><rect x="352" y="192" width="32" height="30" rx="3" fill="hsl(var(--border))" opacity="0.4" /><rect x="388" y="192" width="32" height="30" rx="3" fill="hsl(var(--success))" opacity="0.75" /><rect x="424" y="192" width="32" height="30" rx="3" fill="hsl(var(--accent))" opacity="0.85" /><rect x="460" y="192" width="32" height="30" rx="3" fill="hsl(var(--border))" opacity="0.4" />
+
+    <rect x="64" y="226" width="32" height="30" rx="3" fill="hsl(var(--info))" opacity="0.8" /><rect x="100" y="226" width="32" height="30" rx="3" fill="hsl(var(--accent))" opacity="0.85" /><rect x="136" y="226" width="32" height="30" rx="3" fill="hsl(var(--success))" opacity="0.75" /><rect x="172" y="226" width="32" height="30" rx="3" fill="hsl(var(--success))" opacity="0.75" /><rect x="208" y="226" width="32" height="30" rx="3" fill="hsl(var(--border))" opacity="0.4" /><rect x="244" y="226" width="32" height="30" rx="3" fill="hsl(var(--accent))" opacity="0.85" /><rect x="280" y="226" width="32" height="30" rx="3" fill="hsl(var(--info))" opacity="0.8" /><rect x="316" y="226" width="32" height="30" rx="3" fill="hsl(var(--border))" opacity="0.4" /><rect x="352" y="226" width="32" height="30" rx="3" fill="hsl(var(--success))" opacity="0.75" /><rect x="388" y="226" width="32" height="30" rx="3" fill="hsl(var(--accent))" opacity="0.85" /><rect x="424" y="226" width="32" height="30" rx="3" fill="hsl(var(--info))" opacity="0.8" /><rect x="460" y="226" width="32" height="30" rx="3" fill="hsl(var(--border))" opacity="0.4" />
+
+    <text x="0" y="211" fontSize="11" fill="hsl(var(--foreground))">GPU</text>
+    <text x="0" y="245" fontSize="11" fill="hsl(var(--foreground))">frames</text>
+
+    <text x="508" y="205" fontFamily="ui-monospace, monospace" fontSize="10" fill="hsl(var(--subtle))">block table</text>
+    <text x="508" y="222" fontFamily="ui-monospace, monospace" fontSize="10" fill="hsl(var(--muted))">A → 0,2,5,10,13…</text>
+    <text x="508" y="238" fontFamily="ui-monospace, monospace" fontSize="10" fill="hsl(var(--muted))">B → 1,6,7,12,18…</text>
+    <text x="508" y="254" fontFamily="ui-monospace, monospace" fontSize="10" fill="hsl(var(--muted))">C → 4,9,14,15…</text>
+
+    <rect x="64" y="276" width="10" height="10" rx="2" fill="hsl(var(--accent))" opacity="0.85" /><text x="79" y="285" fontSize="10" fill="hsl(var(--subtle))">req A</text>
+    <rect x="126" y="276" width="10" height="10" rx="2" fill="hsl(var(--info))" opacity="0.8" /><text x="141" y="285" fontSize="10" fill="hsl(var(--subtle))">req B</text>
+    <rect x="188" y="276" width="10" height="10" rx="2" fill="hsl(var(--success))" opacity="0.75" /><text x="203" y="285" fontSize="10" fill="hsl(var(--subtle))">req C</text>
+    <rect x="250" y="276" width="10" height="10" rx="2" fill="hsl(var(--border))" opacity="0.4" /><text x="265" y="285" fontSize="10" fill="hsl(var(--subtle))">free</text>
+    <text x="320" y="285" fontSize="11" fontWeight="600" fill="hsl(var(--success))">waste bounded to one partial block per request</text>
+  </svg>
+  <figcaption>The same three requests, twice. Contiguous allocation has to bet on the longest answer each request might produce, and loses that bet every time. Paging makes every frame interchangeable, so the only waste left is the tail of one block per sequence.</figcaption>
+</figure>
+
+If you swap four nouns, that paragraph is from a 1970s paper on demand paging. Logical blocks are pages. The block table is a page table. The GPU allocator is the frame allocator. And the payoff is the payoff paging always gives you: internal fragmentation is bounded to *at most one partial block per sequence* instead of one giant wasted reservation, and external fragmentation disappears entirely because every block is interchangeable. Waste drops to a few percent. More requests fit in memory. More requests in memory means bigger batches, and bigger batches on a GPU means throughput — the paper reports 2–4× against the state of the art at the time, at equal latency.
+
+Then it gets better, in a way that will make you grin if you've ever implemented copy-on-write. Two requests that share a system prompt have identical KV state for that prefix. Identical state, block table indirection, refcounts... so of course vLLM shares the physical blocks between them and only copies when one diverges. `fork()` for transformers.
+
+And when GPU memory runs out mid-generation — because a batch of requests all decided to be chatty at once — the engine preempts. It picks victims and either swaps their blocks out to CPU memory or discards them and recomputes from the prompt later. Swap or recompute. That is a page-replacement policy with an unusually honest cost model.
+
+> If you want to *feel* rather than read this: the [memory allocation playground](https://subroute.dev/topics/memory-allocation) lets you watch first-fit, best-fit, and buddy allocators shred a heap into unusable holes, and the [page replacement simulator](https://subroute.dev/topics/page-replacement) lets you run FIFO, LRU, Clock, and OPT against the same reference string and watch FIFO commit Bélády's anomaly in public. Same mechanics, smaller numbers.
+
+## 2. Prefix-aware routing is consistent hashing, rediscovered under pressure
+
+Now scale it out. One GPU becomes a fleet.
+
+Your instinct — a good instinct, earned honestly — is round-robin or least-connections in front of N identical replicas. Stateless workers, uniform work, spread it evenly. This is correct for essentially every web service you have ever operated.
+
+It is quietly terrible here, and the reason is that your replicas are not stateless. Each one has a warm KV cache full of prefixes it has already computed.
+
+Picture a support-bot deployment. Every request carries the same 6,000-token system prompt — policies, tone, tool definitions, few-shot examples. Processing those 6,000 tokens is the *prefill* phase, and it is real compute. If a request lands on a replica that already has that prefix cached, prefill is a table lookup and the user sees a first token almost immediately. If it lands on a cold replica, the GPU grinds through 6,000 tokens of attention before emitting a single character.
+
+Round-robin guarantees that every replica ends up caching every prefix, which means your effective cache size is *the size of one replica* no matter how many you buy. You have built an N-node cluster with 1 node's worth of cache. Meanwhile the requests bounce between them, evicting each other's work.
+
+<figure className="diagram">
+  <svg viewBox="0 0 680 300" role="img" aria-labelledby="fig-routing-title">
+    <title id="fig-routing-title">A round-robin router spreading four prefixes across four pods so every pod caches all four, compared with a prefix-aware router sending each prefix to one pod so each pod's cache is devoted to a single prefix family</title>
+
+    <text x="0" y="16" fontFamily="ui-monospace, monospace" fontSize="10" letterSpacing="1.2" fill="hsl(var(--subtle))">ROUND-ROBIN — SPREAD EVENLY, AND EVERY POD CACHES EVERYTHING</text>
+
+    <rect x="0" y="34" width="76" height="48" rx="6" fill="hsl(var(--surface-elevated))" stroke="hsl(var(--border))" strokeWidth="1" />
+    <text x="14" y="55" fontSize="11" fill="hsl(var(--foreground))">router</text>
+    <text x="10" y="70" fontFamily="ui-monospace, monospace" fontSize="10" fill="hsl(var(--muted))">by counter</text>
+
+    <line x1="76" y1="58" x2="148" y2="46" stroke="hsl(var(--border-strong))" strokeWidth="1.5" /><line x1="76" y1="58" x2="148" y2="58" stroke="hsl(var(--border-strong))" strokeWidth="1.5" /><line x1="76" y1="58" x2="148" y2="70" stroke="hsl(var(--border-strong))" strokeWidth="1.5" /><line x1="76" y1="58" x2="148" y2="82" stroke="hsl(var(--border-strong))" strokeWidth="1.5" />
+
+    <rect x="152" y="30" width="116" height="56" rx="6" fill="hsl(var(--surface-sunken))" stroke="hsl(var(--border))" strokeWidth="1" />
+    <text x="160" y="46" fontFamily="ui-monospace, monospace" fontSize="10" fill="hsl(var(--subtle))">pod 1</text>
+    <rect x="160" y="54" width="24" height="24" rx="3" fill="hsl(var(--accent))" opacity="0.85" /><rect x="188" y="54" width="24" height="24" rx="3" fill="hsl(var(--info))" opacity="0.8" /><rect x="216" y="54" width="24" height="24" rx="3" fill="hsl(var(--success))" opacity="0.75" /><rect x="244" y="54" width="24" height="24" rx="3" fill="hsl(var(--warning))" opacity="0.8" />
+
+    <rect x="288" y="30" width="116" height="56" rx="6" fill="hsl(var(--surface-sunken))" stroke="hsl(var(--border))" strokeWidth="1" />
+    <text x="296" y="46" fontFamily="ui-monospace, monospace" fontSize="10" fill="hsl(var(--subtle))">pod 2</text>
+    <rect x="296" y="54" width="24" height="24" rx="3" fill="hsl(var(--accent))" opacity="0.85" /><rect x="324" y="54" width="24" height="24" rx="3" fill="hsl(var(--info))" opacity="0.8" /><rect x="352" y="54" width="24" height="24" rx="3" fill="hsl(var(--success))" opacity="0.75" /><rect x="380" y="54" width="24" height="24" rx="3" fill="hsl(var(--warning))" opacity="0.8" />
+
+    <rect x="424" y="30" width="116" height="56" rx="6" fill="hsl(var(--surface-sunken))" stroke="hsl(var(--border))" strokeWidth="1" />
+    <text x="432" y="46" fontFamily="ui-monospace, monospace" fontSize="10" fill="hsl(var(--subtle))">pod 3</text>
+    <rect x="432" y="54" width="24" height="24" rx="3" fill="hsl(var(--accent))" opacity="0.85" /><rect x="460" y="54" width="24" height="24" rx="3" fill="hsl(var(--info))" opacity="0.8" /><rect x="488" y="54" width="24" height="24" rx="3" fill="hsl(var(--success))" opacity="0.75" /><rect x="516" y="54" width="24" height="24" rx="3" fill="hsl(var(--warning))" opacity="0.8" />
+
+    <rect x="560" y="30" width="116" height="56" rx="6" fill="hsl(var(--surface-sunken))" stroke="hsl(var(--border))" strokeWidth="1" />
+    <text x="568" y="46" fontFamily="ui-monospace, monospace" fontSize="10" fill="hsl(var(--subtle))">pod 4</text>
+    <rect x="568" y="54" width="24" height="24" rx="3" fill="hsl(var(--accent))" opacity="0.85" /><rect x="596" y="54" width="24" height="24" rx="3" fill="hsl(var(--info))" opacity="0.8" /><rect x="624" y="54" width="24" height="24" rx="3" fill="hsl(var(--success))" opacity="0.75" /><rect x="652" y="54" width="24" height="24" rx="3" fill="hsl(var(--warning))" opacity="0.8" />
+
+    <text x="152" y="106" fontSize="11" fontWeight="600" fill="hsl(var(--danger))">4 pods × the same 4 prefixes = one pod's worth of cache, bought four times</text>
+    <text x="152" y="122" fontSize="10" fill="hsl(var(--subtle))">every prefix evicts every other prefix, on every pod, forever</text>
+
+    <line x1="0" y1="148" x2="680" y2="148" stroke="hsl(var(--border-subtle))" strokeWidth="1" />
+
+    <text x="0" y="176" fontFamily="ui-monospace, monospace" fontSize="10" letterSpacing="1.2" fill="hsl(var(--subtle))">PREFIX-AWARE — HASH THE PREFIX, LET EACH POD SPECIALISE</text>
+
+    <rect x="0" y="194" width="76" height="48" rx="6" fill="hsl(var(--surface-elevated))" stroke="hsl(var(--accent))" strokeWidth="1.5" />
+    <text x="14" y="215" fontSize="11" fill="hsl(var(--foreground))">router</text>
+    <text x="10" y="230" fontFamily="ui-monospace, monospace" fontSize="10" fill="hsl(var(--accent))">by content</text>
+
+    <line x1="76" y1="218" x2="148" y2="206" stroke="hsl(var(--border-strong))" strokeWidth="1.5" /><line x1="76" y1="218" x2="148" y2="218" stroke="hsl(var(--border-strong))" strokeWidth="1.5" /><line x1="76" y1="218" x2="148" y2="230" stroke="hsl(var(--border-strong))" strokeWidth="1.5" /><line x1="76" y1="218" x2="148" y2="242" stroke="hsl(var(--border-strong))" strokeWidth="1.5" />
+
+    <rect x="152" y="190" width="116" height="56" rx="6" fill="hsl(var(--surface-sunken))" stroke="hsl(var(--border))" strokeWidth="1" />
+    <text x="160" y="206" fontFamily="ui-monospace, monospace" fontSize="10" fill="hsl(var(--subtle))">pod 1</text>
+    <rect x="160" y="214" width="24" height="24" rx="3" fill="hsl(var(--accent))" opacity="0.85" /><rect x="188" y="214" width="24" height="24" rx="3" fill="hsl(var(--accent))" opacity="0.85" /><rect x="216" y="214" width="24" height="24" rx="3" fill="hsl(var(--accent))" opacity="0.85" /><rect x="244" y="214" width="24" height="24" rx="3" fill="hsl(var(--accent))" opacity="0.85" />
+
+    <rect x="288" y="190" width="116" height="56" rx="6" fill="hsl(var(--surface-sunken))" stroke="hsl(var(--border))" strokeWidth="1" />
+    <text x="296" y="206" fontFamily="ui-monospace, monospace" fontSize="10" fill="hsl(var(--subtle))">pod 2</text>
+    <rect x="296" y="214" width="24" height="24" rx="3" fill="hsl(var(--info))" opacity="0.8" /><rect x="324" y="214" width="24" height="24" rx="3" fill="hsl(var(--info))" opacity="0.8" /><rect x="352" y="214" width="24" height="24" rx="3" fill="hsl(var(--info))" opacity="0.8" /><rect x="380" y="214" width="24" height="24" rx="3" fill="hsl(var(--info))" opacity="0.8" />
+
+    <rect x="424" y="190" width="116" height="56" rx="6" fill="hsl(var(--surface-sunken))" stroke="hsl(var(--border))" strokeWidth="1" />
+    <text x="432" y="206" fontFamily="ui-monospace, monospace" fontSize="10" fill="hsl(var(--subtle))">pod 3</text>
+    <rect x="432" y="214" width="24" height="24" rx="3" fill="hsl(var(--success))" opacity="0.75" /><rect x="460" y="214" width="24" height="24" rx="3" fill="hsl(var(--success))" opacity="0.75" /><rect x="488" y="214" width="24" height="24" rx="3" fill="hsl(var(--success))" opacity="0.75" /><rect x="516" y="214" width="24" height="24" rx="3" fill="hsl(var(--success))" opacity="0.75" />
+
+    <rect x="560" y="190" width="116" height="56" rx="6" fill="hsl(var(--surface-sunken))" stroke="hsl(var(--border))" strokeWidth="1" />
+    <text x="568" y="206" fontFamily="ui-monospace, monospace" fontSize="10" fill="hsl(var(--subtle))">pod 4</text>
+    <rect x="568" y="214" width="24" height="24" rx="3" fill="hsl(var(--warning))" opacity="0.8" /><rect x="596" y="214" width="24" height="24" rx="3" fill="hsl(var(--warning))" opacity="0.8" /><rect x="624" y="214" width="24" height="24" rx="3" fill="hsl(var(--warning))" opacity="0.8" /><rect x="652" y="214" width="24" height="24" rx="3" fill="hsl(var(--warning))" opacity="0.8" />
+
+    <text x="152" y="266" fontSize="11" fontWeight="600" fill="hsl(var(--success))">effective cache = the whole fleet — prefill becomes a lookup</text>
+    <text x="152" y="282" fontSize="10" fill="hsl(var(--subtle))">then balance load inside the matching set, or one hot prefix melts one pod</text>
+  </svg>
+  <figcaption>Your replicas are not stateless — each one holds a warm KV cache. Routing by counter makes every pod fight for the same cache lines; routing by content lets each pod keep what it already computed. The catch is in the last line: locality has to be a filter, with load as the tiebreaker.</figcaption>
+</figure>
+
+The fix is the thing you already know: **route by content, not by counter.** Hash the prefix, send matching prefixes to the same replica, let each node specialize. Cache affinity. That is consistent hashing wearing a name badge that says "prefix-aware routing," and the ecosystem converged on it from three directions at once:
+
+- **SGLang's router** tracks approximate prefix locality with a radix tree and falls back to shortest-queue routing when nodes get imbalanced.
+- **GKE's Inference Gateway** hashes the incoming token prefix and picks the replica most likely to hold it.
+- **[llm-d](https://llm-d.ai/blog/kvcache-wins-you-can-see)** goes exact: every vLLM pod publishes KV-cache events, the router maintains an index keyed by block hash, filters candidates down to pods that actually hold the prefix, and picks the least token-loaded pod *within that set*.
+
+Read that last one again, because the two-stage structure is the whole lesson. Filter by cache locality, *then* balance load inside the filtered set. Pure locality routing creates hotspots — one viral prefix melts one pod. Pure load balancing throws away the cache. You need both, and "both" means locality as a filter and load as a tiebreaker.
+
+Their published benchmark is eye-watering and I want to be precise about it rather than let you take home a number that doesn't survive contact with your workload: on 8 vLLM pods across 16 H100s, simulating 150 tenants with 6,000-token contexts, precise prefix-aware scheduling hit a P90 time-to-first-token of **0.54 seconds versus 31 seconds** for approximate routing and **92 seconds** for random. That's the 57× headline. Throughput roughly doubled against cache-blind configs.
+
+The caveat is doing a lot of work: total KV demand was 73% of cluster capacity — deliberate, heavy cache pressure, six times what any single pod could hold. Under light load with a tiny shared prefix, the gap shrinks toward nothing. Which is itself the familiar lesson: **cache-aware routing wins exactly when the cache is scarce and the workload is skewed**, and if you've ever argued about whether to shard by user ID, you have had this exact argument before.
+
+> The [consistent hashing simulator](https://subroute.dev/topics/consistent-hashing) is the fastest way to internalize the failure mode — add and remove nodes, watch how much of the keyspace remaps, and see why virtual nodes exist. The [load balancing playground](https://subroute.dev/topics/load-balancing) runs round-robin, least-connections, EWMA, and power-of-two-choices against one shared request stream so you can watch a skewed workload wreck a naive policy in real time.
+
+## 3. Continuous batching is a scheduler fighting head-of-line blocking
+
+Third problem, and this one is pure queueing theory.
+
+GPUs want big batches — that's how you amortize weight loading against arithmetic. So batch the requests. The naive version, **static batching**, collects N requests, runs them together until every one has finished generating, then starts the next batch.
+
+You have already spotted it. Request A wants 20 tokens, request B wants 2,000. A finishes at step 20 and its slot sits there, occupied and idle, burning GPU for 1,980 steps while B rambles. And every request that arrived at step 21 waits in line behind B for no reason at all.
+
+That is head-of-line blocking. Same phenomenon as one slow query pinning a connection pool, one fat HTTP/1.1 response stalling a pipelined connection, one giant job hogging a thread pool. Long job in front, short jobs starving behind it, utilization on the floor.
+
+<figure className="diagram">
+  <svg viewBox="0 0 680 322" role="img" aria-labelledby="fig-batching-title">
+    <title id="fig-batching-title">Static batching, where three of four slots finish early and sit idle until the longest request in the batch completes, compared with continuous batching, where a finished request leaves immediately and a queued request takes its slot at the next decode step</title>
+
+    <text x="0" y="16" fontFamily="ui-monospace, monospace" fontSize="10" letterSpacing="1.2" fill="hsl(var(--subtle))">STATIC — THE BATCH TURNS OVER ONLY WHEN ITS SLOWEST MEMBER FINISHES</text>
+
+    <rect x="56" y="30" width="122" height="20" rx="3" fill="hsl(var(--accent))" opacity="0.85" /><rect x="180" y="30" width="464" height="20" rx="3" fill="hsl(var(--danger))" opacity="0.14" stroke="hsl(var(--danger))" strokeWidth="1" strokeDasharray="3 3" />
+    <text x="0" y="45" fontSize="11" fill="hsl(var(--foreground))">slot 1</text><text x="62" y="44" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="600" fill="hsl(var(--surface-sunken))">R1</text>
+
+    <rect x="56" y="56" width="588" height="20" rx="3" fill="hsl(var(--info))" opacity="0.8" />
+    <text x="0" y="71" fontSize="11" fill="hsl(var(--foreground))">slot 2</text><text x="62" y="70" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="600" fill="hsl(var(--surface-sunken))">R2 — 2,000 tokens of rambling</text>
+
+    <rect x="56" y="82" width="180" height="20" rx="3" fill="hsl(var(--success))" opacity="0.75" /><rect x="238" y="82" width="406" height="20" rx="3" fill="hsl(var(--danger))" opacity="0.14" stroke="hsl(var(--danger))" strokeWidth="1" strokeDasharray="3 3" />
+    <text x="0" y="97" fontSize="11" fill="hsl(var(--foreground))">slot 3</text><text x="62" y="96" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="600" fill="hsl(var(--surface-sunken))">R3</text>
+
+    <rect x="56" y="108" width="88" height="20" rx="3" fill="hsl(var(--warning))" opacity="0.8" /><rect x="146" y="108" width="498" height="20" rx="3" fill="hsl(var(--danger))" opacity="0.14" stroke="hsl(var(--danger))" strokeWidth="1" strokeDasharray="3 3" />
+    <text x="0" y="123" fontSize="11" fill="hsl(var(--foreground))">slot 4</text><text x="62" y="122" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="600" fill="hsl(var(--surface-sunken))">R4</text>
+
+    <line x1="56" y1="136" x2="644" y2="136" stroke="hsl(var(--border))" strokeWidth="1" />
+    <text x="56" y="150" fontSize="10" fill="hsl(var(--subtle))">decode steps →</text>
+    <text x="228" y="150" fontSize="11" fontWeight="600" fill="hsl(var(--danger))">hatched = slot held, GPU idle, queue blocked behind R2</text>
+
+    <line x1="0" y1="168" x2="680" y2="168" stroke="hsl(var(--border-subtle))" strokeWidth="1" />
+
+    <text x="0" y="194" fontFamily="ui-monospace, monospace" fontSize="10" letterSpacing="1.2" fill="hsl(var(--subtle))">CONTINUOUS — THE BATCH IS A LIVING SET, RE-EVALUATED EVERY STEP</text>
+
+    <rect x="56" y="210" width="122" height="20" rx="3" fill="hsl(var(--accent))" opacity="0.85" /><rect x="180" y="210" width="142" height="20" rx="3" fill="hsl(var(--info))" opacity="0.8" /><rect x="324" y="210" width="150" height="20" rx="3" fill="hsl(var(--success))" opacity="0.75" /><rect x="476" y="210" width="168" height="20" rx="3" fill="hsl(var(--warning))" opacity="0.8" />
+    <text x="0" y="225" fontSize="11" fill="hsl(var(--foreground))">slot 1</text><text x="62" y="224" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="600" fill="hsl(var(--surface-sunken))">R1</text><text x="186" y="224" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="600" fill="hsl(var(--surface-sunken))">R5</text><text x="330" y="224" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="600" fill="hsl(var(--surface-sunken))">R9</text><text x="482" y="224" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="600" fill="hsl(var(--surface-sunken))">R13</text>
+
+    <rect x="56" y="236" width="588" height="20" rx="3" fill="hsl(var(--info))" opacity="0.8" />
+    <text x="0" y="251" fontSize="11" fill="hsl(var(--foreground))">slot 2</text><text x="62" y="250" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="600" fill="hsl(var(--surface-sunken))">R2 — still rambling, but blocking nobody</text>
+
+    <rect x="56" y="262" width="180" height="20" rx="3" fill="hsl(var(--success))" opacity="0.75" /><rect x="238" y="262" width="168" height="20" rx="3" fill="hsl(var(--accent))" opacity="0.85" /><rect x="408" y="262" width="236" height="20" rx="3" fill="hsl(var(--warning))" opacity="0.8" />
+    <text x="0" y="277" fontSize="11" fill="hsl(var(--foreground))">slot 3</text><text x="62" y="276" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="600" fill="hsl(var(--surface-sunken))">R3</text><text x="244" y="276" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="600" fill="hsl(var(--surface-sunken))">R6</text><text x="414" y="276" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="600" fill="hsl(var(--surface-sunken))">R10</text>
+
+    <rect x="56" y="288" width="88" height="20" rx="3" fill="hsl(var(--warning))" opacity="0.8" /><rect x="146" y="288" width="158" height="20" rx="3" fill="hsl(var(--success))" opacity="0.75" /><rect x="306" y="288" width="170" height="20" rx="3" fill="hsl(var(--accent))" opacity="0.85" /><rect x="478" y="288" width="166" height="20" rx="3" fill="hsl(var(--info))" opacity="0.8" />
+    <text x="0" y="303" fontSize="11" fill="hsl(var(--foreground))">slot 4</text><text x="62" y="302" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="600" fill="hsl(var(--surface-sunken))">R4</text><text x="152" y="302" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="600" fill="hsl(var(--surface-sunken))">R7</text><text x="312" y="302" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="600" fill="hsl(var(--surface-sunken))">R11</text><text x="484" y="302" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="600" fill="hsl(var(--surface-sunken))">R14</text>
+
+    <text x="56" y="319" fontSize="11" fontWeight="600" fill="hsl(var(--success))">no gaps — a request leaves the step it finishes, a queued one takes the slot</text>
+  </svg>
+  <figcaption>The top half is head-of-line blocking, the same shape as one slow query pinning a connection pool. The fix is not a bigger batch, it is a mutable one — which is only possible because paged KV blocks let you hand memory to a request whose final size nobody knows.</figcaption>
+</figure>
+
+**Continuous batching** — the design shared by vLLM, TGI, and SGLang — fixes it by making the batch composition mutable *every single decoding step*. A request finishes, it leaves immediately. A slot opens, a queued request joins mid-flight. The batch is a living set, not a cohort. Iteration-level scheduling rather than request-level.
+
+This has a prerequisite, and the prerequisite is section 1. You can only admit new work every step if you can hand out memory in small increments to a request whose final size you don't know — which is precisely what paged KV blocks give you. And you need preemption for the moment where you've admitted more work than will fit and something has to be evicted mid-generation. Paging and scheduling are co-dependent here, exactly as they are in an OS.
+
+From there the research goes exactly where an OS person would guess. [Chunked prefill](https://vllm.ai/blog/2025-09-05-anatomy-of-vllm) splits a huge prompt into pieces and interleaves them with ongoing decodes, so one 100k-token prompt doesn't stall everyone else — that's time-slicing a long-running job. FastServe assigns priority by prompt length using a skip-join multi-level feedback queue, which is MLFQ, unmodified, from the same textbook. Others are chasing predictive shortest-job-first by *guessing* output length, which is SJF with the classic asterisk: SJF is provably optimal for mean waiting time and requires knowing job length, which you never do.
+
+The entire arc — FCFS is bad, preemption helps, priority needs aging or it starves, SJF needs an oracle — is the scheduling chapter. It's just running on hardware that costs $30,000 a card, which is why people are suddenly willing to fund the research.
+
+## 4. Token-per-minute limits are a token bucket that can't price the job
+
+Last one, and this is where the analogy earns its keep by *breaking* in an interesting place.
+
+LLM providers meter on two axes: requests per minute and **tokens** per minute. RPM is the limiter you know. TPM is the one that actually binds, because a single 200k-context call can eat as much quota as fifty 4k-token calls — which is how you end up at 5% of your RPM, eating 429s all day.
+
+The algorithm underneath is the same token bucket that has been guarding APIs since forever. (The naming collision between "bucket tokens" and "LLM tokens" is the funniest accident in modern infrastructure and I refuse to stop enjoying it.) But a token bucket assumes **cost is known at admission time**: a request arrives, it costs one token, you check, you decide. With an LLM call you know the input size and nothing else — the output length is decided by the model, one token at a time, over the next several seconds. You are being asked to admit a job to a fixed-capacity system without knowing what it will cost.
+
+Every strategy from there is a bet. Reserve pessimistically and you throttle yourself for capacity nobody used; debit as you stream and the limit becomes advisory, discovered only after you have blown it.
+
+I went down this exact rabbit hole in [Why your LLM app gets 429s even when you're under the rate limit](https://subroute.dev/blog/llm-429-rate-limits-tokens-not-requests) — how each vendor accounts for it, the reserve-then-reconcile pattern, why your retry logic is making it worse, and what breaks once more than one worker shares the budget. For our purposes here the point is narrower, and it is the one thing on this list that your operating systems course genuinely did not prepare you for: **admission control without a price tag.**
+## Where the map actually tears
+
+I've spent 2,000 words arguing that this is all familiar, so let me be honest about the four places it genuinely isn't. These are the parts worth thinking hard about — and, not coincidentally, the parts that separate a good interview answer from a great one.
+
+**Allocations grow after they're made.** A `malloc` gives you a size and that size is a fact. A KV cache allocation grows by one block every few steps for the entire life of the request, and it stops growing at a moment nobody can predict. Your allocator is servicing a workload where every live object is slowly inflating. There's no classic analogue to "the heap is fine right now but will be full in eleven seconds because of objects that already exist."
+
+**Eviction cost isn't uniform.** LRU assumes a miss costs about the same regardless of which item you dropped. Evict a KV block and the cost of getting it back is proportional to how much prefix has to be recomputed — dropping a block from a 100k-token conversation is enormously more expensive than dropping one from a 500-token chat. The right policy has to weigh recompute cost, not just recency. (Weighted eviction exists in the classic literature, but it's the exception there and the default here.)
+
+**One machine runs two opposite workloads.** Prefill is compute-bound: a big parallel matrix crunch over the whole prompt. Decode is memory-bandwidth-bound: one token at a time, dragging the entire weight matrix across the bus for each. They want different batch sizes, have different SLOs (time-to-first-token versus time-per-output-token), and they're contending for the same silicon. It's as if your database ran OLAP and OLTP on the same box with no isolation — which is why the newer designs disaggregate them onto separate pools entirely.
+
+**Cost is a first-class design constraint, not an afterthought.** The reason interviewers grade cost explicitly now is that the arithmetic is brutal and unavoidable. Cache hit rates aren't a latency nicety here; a bad routing policy doesn't just make things slower, it multiplies your GPU bill. This is the part where "just add replicas" — the reflex that solves most web-tier problems — is the wrong answer, and being able to say why is the answer they're looking for.
+
+## The actual takeaway
+
+The pattern I keep landing on is this: **new hardware constraints don't invent new algorithms, they re-run the old tournament with different scoring.**
+
+Paging won on 1970s minicomputers because RAM was scarce and expensive. GPU memory is scarce and expensive, so paging won again. Cache affinity beats naive load balancing whenever recomputation is costly. Preemptive scheduling beats run-to-completion whenever job lengths vary wildly. These aren't facts about operating systems. They're facts about *resources under contention*, and transformers didn't repeal them.
+
+Which means the way to get good at AI infrastructure is not to memorize this year's serving frameworks — those will churn, and half the specific numbers in this post will be stale within eighteen months. It's to get so fluent in the underlying dynamics that you recognize them on sight when they show up wearing a new name. Fragmentation looks like fragmentation. Head-of-line blocking looks like head-of-line blocking. A cache with the wrong routing policy looks like a cache with the wrong routing policy, whether it's holding rows or attention keys.
+
+That fluency is the thing I've been trying to build at [Subroute](https://subroute.dev) — every algorithm is a live simulation you can run, tune, and break in the browser, because watching a policy fall over is worth more than reading about the failure mode. Right now it covers allocators, page replacement, cache eviction, rate limiting, load balancing, consistent hashing, and consensus, among others. Free, no signup.
+
+And if you've operated any of this at scale and something above doesn't match what you've seen in production, I want to hear it. The gap between the paper and the pager is where the interesting stuff lives.
